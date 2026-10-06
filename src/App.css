@@ -1,0 +1,11 @@
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+  text-align: center;
+}
+
+.hint {
+  color: #888;
+  font-size: 0.9rem;
+}

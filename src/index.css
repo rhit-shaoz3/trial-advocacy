@@ -2,15 +2,33 @@
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   color-scheme: light dark;
-  color: #213547;
-  background-color: #ffffff;
   -webkit-font-smoothing: antialiased;
+
+  --bg: #ffffff;
+  --fg: #213547;
+  --surface: #ffffff;
+  --subtle: #f1f3f5;
+  --border: #d0d7de;
+  --muted: #6b7280;
+  --accent: #4e2a84; /* Northwestern purple */
+  --error: #b42318;
+  --error-bg: #fef3f2;
+
+  color: var(--fg);
+  background-color: var(--bg);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    color: rgba(255, 255, 255, 0.87);
-    background-color: #1a1a1a;
+    --bg: #1a1a1a;
+    --fg: rgba(255, 255, 255, 0.87);
+    --surface: #242424;
+    --subtle: #2e2e2e;
+    --border: #3d3d3d;
+    --muted: #9ca3af;
+    --accent: #7c5cbf;
+    --error: #fda29b;
+    --error-bg: #3b1714;
   }
 }
 

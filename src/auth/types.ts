@@ -22,8 +22,8 @@ export interface LogInInput {
 
 /**
  * Everything the UI needs from an auth backend. The current implementation is
- * a localStorage mock; swap in one that calls the Heroku/Postgres API later
- * without touching the pages.
+ * `httpAuthService`, which calls the Express API in server/. Pages only depend
+ * on this interface, so the backend can change without touching them.
  */
 export interface AuthService {
   getCurrentUser(): Promise<User | null>

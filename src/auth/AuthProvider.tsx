@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AuthContext, type AuthContextValue } from './AuthContext'
-import { mockAuthService } from './mockAuthService'
+import { httpAuthService } from './httpAuthService'
 import type { AuthService, User } from './types'
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   service?: AuthService
 }
 
-export function AuthProvider({ children, service = mockAuthService }: Props) {
+export function AuthProvider({ children, service = httpAuthService }: Props) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -16,6 +16,7 @@ export function AuthProvider({ children, service = mockAuthService }: Props) {
     service
       .getCurrentUser()
       .then(setUser)
+      .catch(() => setUser(null)) // server unreachable: show the login page
       .finally(() => setLoading(false))
   }, [service])
 

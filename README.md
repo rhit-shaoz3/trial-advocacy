@@ -46,7 +46,26 @@ Then open the URL Vite prints (usually http://localhost:5173). Vite forwards `/a
 | `npm run db:migrate` | Apply `server/db/schema.sql` to the database         |
 | `npm run build`      | Type-check everything and build the web app (`dist/`) |
 | `npm start`          | Run the API in production (also serves `dist/`)      |
+| `npm test`           | Run all tests once                                   |
+| `npm run test:watch` | Re-run tests as files change                         |
 | `npm run lint`       | Run ESLint                                           |
+
+## Testing
+
+Tests use [Vitest](https://vitest.dev) and live next to the code they test (`*.test.ts(x)`):
+
+- **`server/**/*.test.ts`**: API tests that send real HTTP requests to the Express app and use a real Postgres database.
+- **`src/**/*.test.tsx`**: UI tests that render the React pages in a simulated browser against a fake auth service.
+
+The API tests wipe their tables between tests, so they use a separate database, `trial_advocacy_test`, never your dev one. Create it once:
+
+```bash
+createdb -U postgres trial_advocacy_test
+```
+
+By default the tests reuse the username and password from `DATABASE_URL` in `.env.local`. To point them somewhere else, set `TEST_DATABASE_URL`. The database name must end in `_test`, or the tests refuse to run.
+
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint, build and all tests on every pull request and on pushes to `main`, using a throwaway Postgres container.
 
 ## API
 

@@ -1,15 +1,13 @@
 import './App.css'
+import { useAuth } from './auth/useAuth'
+import { AuthPage } from './pages/AuthPage'
+import { HomePage } from './pages/HomePage'
 
 function App() {
-  return (
-    <main className="app">
-      <h1>Trial Advocacy</h1>
-      <p>Pre-trial litigation simulator for law students.</p>
-      <p className="hint">
-        Edit <code>src/App.tsx</code> to get started.
-      </p>
-    </main>
-  )
+  const { user, loading } = useAuth()
+
+  if (loading) return null
+  return user ? <HomePage /> : <AuthPage />
 }
 
 export default App

@@ -9,3 +9,14 @@
   color: #888;
   font-size: 0.9rem;
 }
+
+.logout {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

@@ -11,6 +11,7 @@
     "dev:client": "vite",
     "dev:server": "node --env-file-if-exists=.env.local --watch server/index.ts",
     "db:migrate": "node --env-file-if-exists=.env.local server/db/migrate.ts",
+    "db:seed": "node --env-file-if-exists=.env.local server/db/seed.ts",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:watch": "vitest",

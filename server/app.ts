@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler } from 'express'
 import { fileURLToPath } from 'node:url'
 import { authRouter } from './auth/routes.ts'
 import { isProduction } from './config.ts'
+import { coursesRouter } from './courses/routes.ts'
 import { HttpError } from './httpError.ts'
 import { sessionMiddleware } from './session.ts'
 
@@ -12,6 +13,7 @@ if (isProduction) app.set('trust proxy', 1)
 
 app.use('/api', express.json(), sessionMiddleware)
 app.use('/api/auth', authRouter)
+app.use('/api/courses', coursesRouter)
 
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found.')))
 

@@ -28,6 +28,12 @@ Requires Node.js 24+ and PostgreSQL.
    npm run db:migrate
    ```
 
+   Optionally add demo data (prints a demo student login and course entry codes):
+
+   ```bash
+   npm run db:seed
+   ```
+
 5. Start the API and the web app together:
 
    ```bash
@@ -44,6 +50,7 @@ Then open the URL Vite prints (usually http://localhost:5173). Vite forwards `/a
 | `npm run dev:client` | Start only the Vite dev server                       |
 | `npm run dev:server` | Start only the API (restarts on file changes)        |
 | `npm run db:migrate` | Apply `server/db/schema.sql` to the database         |
+| `npm run db:seed`    | Add a demo student and demo courses (dev only)       |
 | `npm run build`      | Type-check everything and build the web app (`dist/`) |
 | `npm start`          | Run the API in production (also serves `dist/`)      |
 | `npm test`           | Run all tests once                                   |
@@ -75,6 +82,10 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | POST   | `/api/auth/signup` | `{ name, email, password, role }`   | `201 { user }`, `409` if email taken |
 | POST   | `/api/auth/login`  | `{ email, password }`               | `{ user }`, `401` if wrong |
 | POST   | `/api/auth/logout` |                                     | `204`                     |
+| GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
+| POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
+
+The `/api/courses` routes return `401` when not logged in.
 
 Errors come back as `{ error: "message" }`. Logins are kept in an httpOnly session cookie stored in the `session` table.
 

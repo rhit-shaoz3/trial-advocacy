@@ -1,19 +1,22 @@
 import { useAuth } from '../auth/useAuth'
+import { NavBar } from '../components/NavBar'
+import { StudentDashboard } from './StudentDashboard'
 
 export function HomePage() {
-  const { user, logOut } = useAuth()
+  const { user } = useAuth()
   if (!user) return null
 
   return (
-    <main className="app">
-      <h1>Welcome, {user.name}</h1>
-      <p>
-        Signed in as <strong>{user.email}</strong> ({user.role})
-      </p>
-      <p className="hint">Case worlds will live here.</p>
-      <button type="button" className="logout" onClick={logOut}>
-        Log out
-      </button>
-    </main>
+    <>
+      <NavBar />
+      {user.role === 'student' ? (
+        <StudentDashboard />
+      ) : (
+        <main className="app">
+          <h1>Welcome, {user.name}</h1>
+          <p className="hint">The instructor dashboard is coming soon.</p>
+        </main>
+      )}
+    </>
   )
 }

@@ -11,7 +11,7 @@ export interface PublicUser {
   createdAt: string
 }
 
-interface UserRow {
+export interface UserRow {
   id: string
   name: string
   email: string

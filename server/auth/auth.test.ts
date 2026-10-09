@@ -23,7 +23,7 @@ async function countUsers() {
 }
 
 beforeEach(async () => {
-  await pool.query('TRUNCATE users, session')
+  await pool.query('TRUNCATE users, session CASCADE')
 })
 
 afterAll(async () => {

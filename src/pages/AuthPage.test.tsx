@@ -1,11 +1,12 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { AuthProvider } from '../auth/AuthProvider'
 import type { AuthService, User } from '../auth/types'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
-import type { CourseService } from '../courses/types'
+import { fakeCourseService } from '../test/fakeCourseService'
 
 const ada: User = {
   id: 'user-1',
@@ -25,19 +26,16 @@ function fakeService(overrides: Partial<AuthService> = {}): AuthService {
   }
 }
 
-const noCourses: CourseService = {
-  listMyCourses: vi.fn().mockResolvedValue([]),
-  joinCourse: vi.fn(),
-}
-
 async function renderApp(service = fakeService()) {
   const user = userEvent.setup()
   render(
-    <CourseServiceContext.Provider value={noCourses}>
-      <AuthProvider service={service}>
-        <App />
-      </AuthProvider>
-    </CourseServiceContext.Provider>,
+    <MemoryRouter>
+      <CourseServiceContext.Provider value={fakeCourseService()}>
+        <AuthProvider service={service}>
+          <App />
+        </AuthProvider>
+      </CourseServiceContext.Provider>
+    </MemoryRouter>,
   )
   // Wait for the initial "who is logged in?" check to finish.
   await screen.findByRole('heading', { level: 1 })
@@ -116,7 +114,7 @@ describe('sign up', () => {
     await user.click(screen.getByRole('button', { name: 'Create account' }))
 
     expect(service.signUp).toHaveBeenCalledWith(expect.objectContaining({ role: 'instructor' }))
-    expect(await screen.findByRole('heading', { name: 'Welcome, Ada Lawyer' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Create course' })).toBeInTheDocument()
     expect(screen.getByText('Instructor', { selector: '.navbar-role' })).toBeInTheDocument()
   })
 

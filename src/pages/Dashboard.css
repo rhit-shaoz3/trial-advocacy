@@ -1,0 +1,30 @@
+/* Shared by StudentDashboard and InstructorDashboard. */
+
+.dashboard-empty {
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.dashboard-empty p {
+  margin: 0.25rem 0;
+}
+
+.entry-code-input {
+  width: 14rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.course-code-input {
+  width: 9rem;
+}
+
+.course-title-input {
+  width: 18rem;
+}
+
+.year-input {
+  width: 6.5rem;
+}

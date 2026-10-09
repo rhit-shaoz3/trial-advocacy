@@ -1,18 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { CourseGrid } from '../components/CourseGrid'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { Course } from '../courses/types'
-import './StudentDashboard.css'
-
-/** Splits an already-sorted list into consecutive runs that share a term. */
-function groupByTerm(courses: Course[]) {
-  const groups: { term: string; courses: Course[] }[] = []
-  for (const course of courses) {
-    const last = groups.at(-1)
-    if (last?.term === course.term) last.courses.push(course)
-    else groups.push({ term: course.term, courses: [course] })
-  }
-  return groups
-}
+import './Dashboard.css'
 
 export function StudentDashboard() {
   const service = useCourseService()
@@ -38,8 +28,8 @@ export function StudentDashboard() {
   }
 
   return (
-    <main className="dashboard">
-      <div className="dashboard-header">
+    <main className="page">
+      <div className="page-header">
         <h1>Your courses</h1>
         {!joinOpen && (
           <button type="button" className="btn-primary" onClick={() => setJoinOpen(true)}>
@@ -51,33 +41,27 @@ export function StudentDashboard() {
       {joinOpen && <JoinCourseForm onJoined={handleJoined} onCancel={() => setJoinOpen(false)} />}
 
       {loadError ? (
-        <p className="dashboard-error" role="alert">
+        <p className="form-error" role="alert">
           Could not load your courses. {loadError}
         </p>
       ) : courses === null ? (
-        <p className="dashboard-muted">Loading courses…</p>
+        <p className="muted">Loading courses…</p>
       ) : courses.length === 0 ? (
         <div className="dashboard-empty">
           <p>You aren't enrolled in any courses yet.</p>
-          <p className="dashboard-muted">Ask your instructor for an entry code, then choose Enroll in course.</p>
+          <p className="muted">Ask your instructor for an entry code, then choose Enroll in course.</p>
         </div>
       ) : (
-        groupByTerm(courses).map(({ term, courses }, i) => (
-          <section key={`${i}-${term}`} className="term" aria-labelledby={`term-${i}`}>
-            <h2 id={`term-${i}`}>{term}</h2>
-            <ul className="course-grid">
-              {courses.map((course) => (
-                <li key={course.id} className="course-card">
-                  <span className="course-code">{course.code}</span>
-                  <span className="course-title">{course.title}</span>
-                  {course.instructorName && (
-                    <span className="course-instructor">{course.instructorName}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
+        <CourseGrid
+          courses={courses}
+          renderCard={(course) => (
+            <div className="course-card">
+              <span className="course-code">{course.code}</span>
+              <span className="course-title">{course.title}</span>
+              {course.instructorName && <span className="course-meta">{course.instructorName}</span>}
+            </div>
+          )}
+        />
       )}
     </main>
   )
@@ -108,11 +92,12 @@ function JoinCourseForm({
   }
 
   return (
-    <form className="join-form" onSubmit={handleSubmit}>
+    <form className="panel-form" onSubmit={handleSubmit}>
       <label>
         Course entry code
         <input
           type="text"
+          className="entry-code-input"
           value={entryCode}
           onChange={(e) => setEntryCode(e.target.value)}
           autoComplete="off"
@@ -122,7 +107,7 @@ function JoinCourseForm({
           autoFocus
         />
       </label>
-      <div className="join-actions">
+      <div className="panel-form-actions">
         <button type="submit" className="btn-primary" disabled={submitting}>
           {submitting ? 'Joining…' : 'Join'}
         </button>
@@ -131,7 +116,7 @@ function JoinCourseForm({
         </button>
       </div>
       {error && (
-        <p className="dashboard-error" role="alert">
+        <p className="form-error" role="alert">
           {error}
         </p>
       )}

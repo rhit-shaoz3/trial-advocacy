@@ -2,6 +2,7 @@ import request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
+import { resetDatabase } from '../test/helpers.ts'
 
 const SESSION_COOKIE = 'ta.sid'
 
@@ -22,9 +23,7 @@ async function countUsers() {
   return Number(rows[0].count)
 }
 
-beforeEach(async () => {
-  await pool.query('TRUNCATE users, session CASCADE')
-})
+beforeEach(resetDatabase)
 
 afterAll(async () => {
   await pool.end()

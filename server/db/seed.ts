@@ -1,43 +1,42 @@
-import { randomBytes } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { isProduction } from '../config.ts'
 import { pool } from './pool.ts'
 
 /**
  * Adds demo data for local development. Safe to re-run. Log in as the demo
- * student below, then join courses from the dashboard with the entry codes
- * printed below.
+ * instructor to manage the courses, or as the demo student and join them with
+ * the entry codes printed below.
  */
-const DEMO_STUDENT = { email: 'demo-student@example.com', password: 'demo-password' }
 if (isProduction) throw new Error('Refusing to seed demo data in production.')
 
+const DEMO_PASSWORD = 'demo-password'
+const DEMO_INSTRUCTOR = { name: 'Demo Instructor', email: 'demo-instructor@example.com', role: 'instructor' }
+const DEMO_STUDENT = { name: 'Demo Student', email: 'demo-student@example.com', role: 'student' }
+
 const COURSES = [
-  { code: 'LAW 540', title: 'Trial Advocacy', term: 'Fall 2026', termStart: '2026-09-22', entryCode: 'TRIAL1' },
-  { code: 'LAW 612', title: 'Pretrial Litigation', term: 'Fall 2026', termStart: '2026-09-22', entryCode: 'PRETRL' },
-  { code: 'LAW 520', title: 'Evidence', term: 'Spring 2026', termStart: '2026-03-30', entryCode: 'EVID26' },
+  { code: 'LAW 540', title: 'Trial Advocacy', term: 'Fall 2026', termStart: '2026-09-15', entryCode: 'TRIAL1' },
+  { code: 'LAW 612', title: 'Pretrial Litigation', term: 'Fall 2026', termStart: '2026-09-15', entryCode: 'PRETRL' },
+  { code: 'LAW 520', title: 'Evidence', term: 'Spring 2026', termStart: '2026-03-25', entryCode: 'EVID26' },
 ]
 
-try {
-  // Nobody can log in as the demo instructor: its password is random and discarded.
-  const hash = await bcrypt.hash(randomBytes(32).toString('hex'), 11)
+async function upsertUser(user: { name: string; email: string; role: string }) {
+  const hash = await bcrypt.hash(DEMO_PASSWORD, 11)
   await pool.query(
-    `INSERT INTO users (name, email, role, password_hash)
-     VALUES ('Demo Instructor', 'demo-instructor@example.com', 'instructor', $1)
-     ON CONFLICT ((lower(email))) DO NOTHING`,
-    [hash],
+    `INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4)
+     ON CONFLICT ((lower(email))) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+    [user.name, user.email, user.role, hash],
   )
-  const { rows } = await pool.query<{ id: string }>(
-    `SELECT id FROM users WHERE lower(email) = 'demo-instructor@example.com'`,
-  )
-  const instructorId = rows[0].id
+  const { rows } = await pool.query<{ id: string }>('SELECT id FROM users WHERE lower(email) = $1', [
+    user.email,
+  ])
+  console.log(`${user.role}: ${user.email} / ${DEMO_PASSWORD}`)
+  return rows[0].id
+}
 
-  await pool.query(
-    `INSERT INTO users (name, email, role, password_hash)
-     VALUES ('Demo Student', $1, 'student', $2)
-     ON CONFLICT ((lower(email))) DO NOTHING`,
-    [DEMO_STUDENT.email, await bcrypt.hash(DEMO_STUDENT.password, 11)],
-  )
-  console.log(`Demo student: ${DEMO_STUDENT.email} / ${DEMO_STUDENT.password}\n`)
+try {
+  const instructorId = await upsertUser(DEMO_INSTRUCTOR)
+  await upsertUser(DEMO_STUDENT)
+  console.log()
 
   for (const c of COURSES) {
     await pool.query(

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
 import type { Course, CourseService } from '../courses/types'
+import { fakeCourseService } from '../test/fakeCourseService'
 import { StudentDashboard } from './StudentDashboard'
 
 const trial: Course = {
@@ -21,14 +22,6 @@ const evidence: Course = {
   instructorName: null,
 }
 
-function fakeService(overrides: Partial<CourseService> = {}): CourseService {
-  return {
-    listMyCourses: vi.fn().mockResolvedValue([]),
-    joinCourse: vi.fn(),
-    ...overrides,
-  }
-}
-
 function renderDashboard(service: CourseService) {
   const user = userEvent.setup()
   render(
@@ -42,7 +35,7 @@ function renderDashboard(service: CourseService) {
 describe('StudentDashboard', () => {
   it('groups courses by term in the order the server returns them', async () => {
     renderDashboard(
-      fakeService({ listMyCourses: vi.fn().mockResolvedValue([trial, pretrial, evidence]) }),
+      fakeCourseService({ listMyCourses: vi.fn().mockResolvedValue([trial, pretrial, evidence]) }),
     )
 
     const terms = await screen.findAllByRole('region')
@@ -57,14 +50,14 @@ describe('StudentDashboard', () => {
   })
 
   it('explains what to do when there are no courses', async () => {
-    renderDashboard(fakeService())
+    renderDashboard(fakeCourseService())
 
     expect(await screen.findByText("You aren't enrolled in any courses yet.")).toBeInTheDocument()
   })
 
   it('shows an error if the courses cannot be loaded', async () => {
     renderDashboard(
-      fakeService({ listMyCourses: vi.fn().mockRejectedValue(new Error('Please log in.')) }),
+      fakeCourseService({ listMyCourses: vi.fn().mockRejectedValue(new Error('Please log in.')) }),
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load your courses.')
@@ -73,7 +66,7 @@ describe('StudentDashboard', () => {
   it('joins a course with an entry code and shows it', async () => {
     const listMyCourses = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([trial])
     const { user, service } = renderDashboard(
-      fakeService({ listMyCourses, joinCourse: vi.fn().mockResolvedValue(trial) }),
+      fakeCourseService({ listMyCourses, joinCourse: vi.fn().mockResolvedValue(trial) }),
     )
     await screen.findByText("You aren't enrolled in any courses yet.")
 
@@ -87,7 +80,7 @@ describe('StudentDashboard', () => {
 
   it('keeps the form open and shows the error for a bad code', async () => {
     const { user } = renderDashboard(
-      fakeService({
+      fakeCourseService({
         joinCourse: vi.fn().mockRejectedValue(new Error('No course matches that entry code.')),
       }),
     )
@@ -101,7 +94,7 @@ describe('StudentDashboard', () => {
   })
 
   it('closes the form on cancel', async () => {
-    const { user } = renderDashboard(fakeService())
+    const { user } = renderDashboard(fakeCourseService())
 
     await user.click(screen.getByRole('button', { name: 'Enroll in course' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))

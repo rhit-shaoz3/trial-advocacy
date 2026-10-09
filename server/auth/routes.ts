@@ -1,22 +1,18 @@
 import bcrypt from 'bcryptjs'
 import { Router, type Request } from 'express'
+import { claimPendingEnrollments } from '../courses/roster.ts'
 import { HttpError } from '../httpError.ts'
+import { EMAIL_PATTERN, readString } from '../validation.ts'
 import { createUser, findUserByEmail, findUserById, toPublicUser, type Role } from './users.ts'
 
 const BCRYPT_ROUNDS = 11
 const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_BYTES = 72 // bcrypt ignores anything past 72 bytes
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ROLES: Role[] = ['student', 'instructor']
 
 // Compared against when the email doesn't exist, so a failed login takes the
 // same time either way and doesn't reveal which emails are registered.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_ROUNDS)
-
-function readString(body: unknown, key: string) {
-  const value = (body as Record<string, unknown> | undefined)?.[key]
-  return typeof value === 'string' ? value : ''
-}
 
 /** Issues a fresh session ID on login to prevent session fixation. */
 function startSession(req: Request, userId: string) {
@@ -55,6 +51,9 @@ authRouter.post('/signup', async (req, res) => {
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
   const user = await createUser({ name, email, role, passwordHash })
   if (!user) throw new HttpError(409, 'An account with that email already exists.')
+
+  // Instructors may have added this student to courses before they signed up.
+  if (role === 'student') await claimPendingEnrollments(user.id, user.email)
 
   await startSession(req, user.id)
   res.status(201).json({ user: toPublicUser(user) })

@@ -35,9 +35,11 @@ const emptyHome: CourseHome = {
   stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
 }
 
-function renderCourse(courseService: CourseService, url = '/courses/c1') {
+const ruiz: User = { ...ada, id: 'user-2', name: 'Elena Ruiz', role: 'instructor' }
+
+function renderCourse(courseService: CourseService, url = '/courses/c1', signedIn: User = ada) {
   const auth: AuthService = {
-    getCurrentUser: vi.fn().mockResolvedValue(ada),
+    getCurrentUser: vi.fn().mockResolvedValue(signedIn),
     signUp: vi.fn(),
     logIn: vi.fn(),
     logOut: vi.fn().mockResolvedValue(undefined),
@@ -62,6 +64,72 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+describe('course workspace for the instructor', () => {
+  const taught = {
+    ...emptyHome.course,
+    season: 'Fall' as const,
+    year: 2026,
+    entryCode: 'K7PQ2M',
+    studentCount: 0,
+  }
+
+  it('shows the same dashboard with All cases and a Manage course tab', async () => {
+    renderCourse(
+      fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(emptyHome) }),
+      '/courses/c1',
+      ruiz,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Good morning, Elena.' })).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: 'Course' })
+    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual([
+      'Dashboard',
+      'All cases',
+      'Calendar',
+      'Resource library',
+      'Manage course',
+    ])
+    expect(screen.getByRole('heading', { name: 'All cases' })).toBeInTheDocument()
+    expect(screen.getByText('No cases yet.')).toBeInTheDocument()
+  })
+
+  it('opens the course management page as a tab', async () => {
+    const service = fakeCourseService({
+      getCourseHome: vi.fn().mockResolvedValue(emptyHome),
+      getCourse: vi.fn().mockResolvedValue(taught),
+    })
+    const { user } = renderCourse(service, '/courses/c1', ruiz)
+
+    await user.click(await screen.findByRole('link', { name: 'Manage course' }))
+
+    expect(await screen.findByRole('heading', { name: 'LAW 540: Trial Advocacy' })).toBeInTheDocument()
+    expect(screen.getByText('K7PQ2M')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Manage course' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('region', { name: /Students/ })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Fact patterns' })).toBeInTheDocument()
+  })
+
+  it('updates the sidebar after the course is renamed', async () => {
+    const renamed = { ...emptyHome, course: { ...emptyHome.course, title: 'Advanced Trial Advocacy' } }
+    const getCourseHome = vi.fn().mockResolvedValueOnce(emptyHome).mockResolvedValueOnce(renamed)
+    const service = fakeCourseService({
+      getCourseHome,
+      getCourse: vi.fn().mockResolvedValue(taught),
+      updateCourse: vi.fn().mockResolvedValue({ ...taught, title: 'Advanced Trial Advocacy' }),
+    })
+    const { user } = renderCourse(service, '/courses/c1/manage', ruiz)
+
+    await user.click(await screen.findByRole('button', { name: 'Edit course' }))
+    await user.clear(screen.getByLabelText('Course title'))
+    await user.type(screen.getByLabelText('Course title'), 'Advanced Trial Advocacy')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    const sidebar = screen.getByRole('complementary')
+    expect(await within(sidebar).findByText('Advanced Trial Advocacy')).toBeInTheDocument()
+    expect(getCourseHome).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('course workspace', () => {
@@ -179,6 +247,16 @@ describe('course workspace', () => {
     expect(await screen.findByRole('article', { name: 'Anderson v. Caldwell' })).toBeInTheDocument()
     expect(screen.getByRole('note')).toHaveTextContent('Showing sample cases')
     expect(screen.getByRole('link', { name: 'Calendar' })).toHaveAttribute('href', '/courses/c1/calendar?sample')
+  })
+
+  it('gives students no Manage course tab, even by URL', async () => {
+    renderCourse(
+      fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(emptyHome) }),
+      '/courses/c1/manage',
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Manage course' })).not.toBeInTheDocument()
   })
 
   it('logs out from the sidebar', async () => {

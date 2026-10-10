@@ -30,25 +30,25 @@ function App() {
   if (loading) return null
   if (!user) return <AuthPage />
 
+  const isInstructor = user.role === 'instructor'
+
   return (
     <Routes>
-      {user.role === 'student' && (
-        // Inside a course, students get the course workspace's own navigation.
-        <Route path="courses/:courseId" element={<WorkspaceLayout />}>
-          <Route index element={<CourseDashboard />} />
-          <Route path="cases" element={<ComingSoon title="My cases" />} />
-          <Route path="cases/:caseId" element={<ComingSoon title="Case workspace" />} />
-          <Route path="calendar" element={<ComingSoon title="Calendar" />} />
-          <Route path="resources" element={<ComingSoon title="Resource library" />} />
-          <Route
-            path="*"
-            element={<ComingSoon title="Page not found" message="That page does not exist." />}
-          />
-        </Route>
-      )}
+      {/* Inside a course, everyone gets the course workspace's own navigation. */}
+      <Route path="courses/:courseId" element={<WorkspaceLayout />}>
+        <Route index element={<CourseDashboard />} />
+        <Route path="cases" element={<ComingSoon title={isInstructor ? 'All cases' : 'My cases'} />} />
+        <Route path="cases/:caseId" element={<ComingSoon title="Case workspace" />} />
+        <Route path="calendar" element={<ComingSoon title="Calendar" />} />
+        <Route path="resources" element={<ComingSoon title="Resource library" />} />
+        {isInstructor && <Route path="manage" element={<CoursePage />} />}
+        <Route
+          path="*"
+          element={<ComingSoon title="Page not found" message="That page does not exist." />}
+        />
+      </Route>
       <Route element={<SignedInLayout />}>
         <Route index element={<HomePage />} />
-        {user.role === 'instructor' && <Route path="courses/:courseId" element={<CoursePage />} />}
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

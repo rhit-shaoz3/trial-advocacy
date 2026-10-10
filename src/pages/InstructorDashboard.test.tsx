@@ -19,8 +19,12 @@ const trial: TaughtCourse = {
   studentCount: 1,
 }
 
-function CourseStub() {
-  return <p>Course page for {useParams().courseId}</p>
+function CourseStub({ manage }: { manage?: boolean }) {
+  return (
+    <p>
+      {manage ? 'Manage page' : 'Course page'} for {useParams().courseId}
+    </p>
+  )
 }
 
 function renderDashboard(service: CourseService) {
@@ -31,6 +35,7 @@ function renderDashboard(service: CourseService) {
         <Routes>
           <Route index element={<InstructorDashboard />} />
           <Route path="courses/:courseId" element={<CourseStub />} />
+          <Route path="courses/:courseId/manage" element={<CourseStub manage />} />
         </Routes>
       </CourseServiceContext.Provider>
     </MemoryRouter>,
@@ -68,7 +73,7 @@ describe('InstructorDashboard', () => {
     expect(await screen.findByText("You haven't created any courses yet.")).toBeInTheDocument()
   })
 
-  it('creates a course, defaulting to the current term, and opens it', async () => {
+  it("creates a course, defaulting to the current term, and opens its Manage tab", async () => {
     const { user, service } = renderDashboard(
       fakeCourseService({ createCourse: vi.fn().mockResolvedValue({ ...trial, id: 'new-1' }) }),
     )
@@ -90,7 +95,7 @@ describe('InstructorDashboard', () => {
       season: 'Winter',
       year: 2027,
     })
-    expect(await screen.findByText('Course page for new-1')).toBeInTheDocument()
+    expect(await screen.findByText('Manage page for new-1')).toBeInTheDocument()
   })
 
   it('shows the server error and keeps the form', async () => {

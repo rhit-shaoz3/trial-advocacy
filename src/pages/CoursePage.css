@@ -1,17 +1,6 @@
-.back-link {
-  display: inline-block;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
-  text-decoration: none;
-}
-
-.back-link:hover {
-  text-decoration: underline;
-}
-
 .course-header {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
@@ -19,7 +8,7 @@
 }
 
 .course-header h1 {
-  margin: 0;
+  margin: 0.45rem 0 0;
   color: var(--ws-navy);
   font: 400 2.4rem/1.2 var(--ws-serif);
 }

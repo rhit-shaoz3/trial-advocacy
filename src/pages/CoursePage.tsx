@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useNavigate, useOutletContext, useParams } from 'react-router'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { TaughtCourse } from '../courses/types'
+import type { WorkspaceContext } from '../workspace/useWorkspace'
 import { CourseForm } from './course/CourseForm'
 import { FactPatternsSection } from './course/FactPatternsSection'
 import { RosterSection } from './course/RosterSection'
 import { NotFoundPage } from './NotFoundPage'
 import './CoursePage.css'
 
-/** The instructor's page for managing one course. */
+/** The instructor's "Manage course" tab: course details, roster, and fact patterns. */
 export function CoursePage() {
   const { courseId = '' } = useParams()
   const service = useCourseService()
+  // Present when shown inside the course workspace, whose sidebar shows the course name.
+  const workspace = useOutletContext<WorkspaceContext | undefined>()
   const [course, setCourse] = useState<TaughtCourse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -56,10 +59,6 @@ export function CoursePage() {
 
   return (
     <main className="page">
-      <Link to="/" className="back-link">
-        ← All courses
-      </Link>
-
       {loadError ? (
         <p className="form-error" role="alert">
           Could not load this course. {loadError}
@@ -77,6 +76,7 @@ export function CoursePage() {
               onSubmit={async (input) => {
                 setCourse(await service.updateCourse(course.id, input))
                 setEditing(false)
+                workspace?.reloadHome()
               }}
               onCancel={() => {
                 setEditing(false)
@@ -100,6 +100,7 @@ export function CoursePage() {
           ) : (
             <header className="course-header">
               <div>
+                <span className="ws-eyebrow">Manage course</span>
                 <h1>
                   {course.code}: {course.title}
                 </h1>

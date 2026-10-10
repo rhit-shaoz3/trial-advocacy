@@ -51,7 +51,8 @@ export function InstructorDashboard() {
           submittingLabel="Creating…"
           onSubmit={async (input) => {
             const course = await service.createCourse(input)
-            navigate(`/courses/${course.id}`)
+            // Straight to setup: roster and fact patterns.
+            navigate(`/courses/${course.id}/manage`)
           }}
           onCancel={() => setCreateOpen(false)}
         />

@@ -41,7 +41,10 @@ const STATUS_ORDER: Record<CaseStatus, number> = { active: 0, 'in-review': 1, cl
 const ACTIVITY_ICON = { task: ClipboardCheck, document: FileText, approval: BadgeCheck }
 const ACTIVITY_TONE = { task: 'blue', document: 'amber', approval: 'green' }
 
-/** The student's course home: greeting, stats, cases, recent activity, upcoming. */
+/**
+ * The course home: greeting, stats, cases, recent activity, upcoming. Students
+ * see their own cases; the instructor sees every team's.
+ */
 export function CourseDashboard({ now = new Date() }: { now?: Date }) {
   const { user } = useAuth()
   const { home, search } = useWorkspace()
@@ -57,6 +60,7 @@ export function CourseDashboard({ now = new Date() }: { now?: Date }) {
     .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
     .slice(0, MAX_CASES)
   const firstName = user?.name.split(/\s+/)[0] ?? ''
+  const isInstructor = user?.role === 'instructor'
 
   return (
     <main className="ws-page">
@@ -111,8 +115,8 @@ export function CourseDashboard({ now = new Date() }: { now?: Date }) {
       <section aria-labelledby="ws-cases-heading">
         <div className="ws-section-heading">
           <div>
-            <h2 id="ws-cases-heading">Your cases</h2>
-            <p>Continue where you left off</p>
+            <h2 id="ws-cases-heading">{isInstructor ? 'All cases' : 'Your cases'}</h2>
+            <p>{isInstructor ? 'Every team’s case in this course' : 'Continue where you left off'}</p>
           </div>
           {home.cases.length > 0 && (
             <Link to={`${base}/cases${search}`} className="ws-link">
@@ -123,10 +127,21 @@ export function CourseDashboard({ now = new Date() }: { now?: Date }) {
         </div>
         {cases.length === 0 ? (
           <div className="ws-empty">
-            <p>You haven’t been assigned to a case yet.</p>
-            <p className="ws-subtle">
-              Once your instructor puts you on a team, your cases will show up here.
-            </p>
+            {isInstructor ? (
+              <>
+                <p>No cases yet.</p>
+                <p className="ws-subtle">
+                  Cases you set up and assign to student teams will show up here.
+                </p>
+              </>
+            ) : (
+              <>
+                <p>You haven’t been assigned to a case yet.</p>
+                <p className="ws-subtle">
+                  Once your instructor puts you on a team, your cases will show up here.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <ul className="ws-cases">

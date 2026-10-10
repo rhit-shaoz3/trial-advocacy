@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { CourseGrid } from '../components/CourseGrid'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { Course } from '../courses/types'
+import { longDate } from '../workspace/format'
 import './Dashboard.css'
 
 export function StudentDashboard() {
@@ -31,7 +32,11 @@ export function StudentDashboard() {
   return (
     <main className="page">
       <div className="page-header">
-        <h1>Your courses</h1>
+        <div>
+          <span className="ws-eyebrow">{longDate(new Date())}</span>
+          <h1>Your courses</h1>
+          <p className="muted">Open a course to see your cases, deadlines, and team activity.</p>
+        </div>
         {!joinOpen && (
           <button type="button" className="btn-primary" onClick={() => setJoinOpen(true)}>
             Enroll in course

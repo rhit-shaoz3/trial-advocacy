@@ -103,7 +103,7 @@ describe('sign up', () => {
       role: 'student',
     })
     expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
-    expect(screen.getByText('Student', { selector: '.navbar-role' })).toBeInTheDocument()
+    expect(screen.getByText('Student', { selector: '.ws-profile small' })).toBeInTheDocument()
   })
 
   it('sends the instructor role when Instructor is picked', async () => {
@@ -115,7 +115,7 @@ describe('sign up', () => {
 
     expect(service.signUp).toHaveBeenCalledWith(expect.objectContaining({ role: 'instructor' }))
     expect(await screen.findByRole('button', { name: 'Create course' })).toBeInTheDocument()
-    expect(screen.getByText('Instructor', { selector: '.navbar-role' })).toBeInTheDocument()
+    expect(screen.getByText('Instructor', { selector: '.ws-profile small' })).toBeInTheDocument()
   })
 
   it('blocks mismatched passwords without calling the server', async () => {

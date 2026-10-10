@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { CourseGrid } from '../components/CourseGrid'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { TaughtCourse } from '../courses/types'
+import { longDate } from '../workspace/format'
 import { CourseForm } from './course/CourseForm'
 import './Dashboard.css'
 
@@ -31,7 +32,11 @@ export function InstructorDashboard() {
   return (
     <main className="page">
       <div className="page-header">
-        <h1>Your courses</h1>
+        <div>
+          <span className="ws-eyebrow">{longDate(new Date())}</span>
+          <h1>Your courses</h1>
+          <p className="muted">Manage rosters and fact patterns, or create a course for a new term.</p>
+        </div>
         {!createOpen && (
           <button type="button" className="btn-primary" onClick={() => setCreateOpen(true)}>
             Create course

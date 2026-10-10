@@ -12,7 +12,7 @@ import {
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
-import { Avatar } from './Avatar'
+import { Avatar } from '../components/Avatar'
 import {
   calendarDaysUntil,
   caseInitials,
@@ -25,6 +25,7 @@ import {
 } from './format'
 import type { ActivityItem, CaseStatus, CaseSummary, UpcomingItem } from './types'
 import { useWorkspace } from './useWorkspace'
+import './workspace.css'
 
 const MAX_CASES = 4
 const MAX_ACTIVITY = 5

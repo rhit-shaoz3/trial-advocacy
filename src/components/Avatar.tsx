@@ -1,4 +1,4 @@
-import { avatarTone, initials } from './format'
+import { avatarTone, initials } from '../workspace/format'
 
 export function Avatar({ name, size }: { name: string; size?: 'sm' }) {
   return (

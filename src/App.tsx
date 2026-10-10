@@ -1,7 +1,7 @@
+import { LayoutDashboard } from 'lucide-react'
 import { Outlet, Route, Routes } from 'react-router'
-import './App.css'
 import { useAuth } from './auth/useAuth'
-import { NavBar } from './components/NavBar'
+import { AppShell } from './components/AppShell'
 import { AuthPage } from './pages/AuthPage'
 import { CoursePage } from './pages/CoursePage'
 import { HomePage } from './pages/HomePage'
@@ -10,12 +10,17 @@ import { ComingSoon } from './workspace/ComingSoon'
 import { CourseDashboard } from './workspace/CourseDashboard'
 import { WorkspaceLayout } from './workspace/WorkspaceLayout'
 
+/** Pages outside a student's course workspace: the course list, instructor pages. */
 function SignedInLayout() {
   return (
-    <>
-      <NavBar />
+    <AppShell
+      subtitle="Pretrial simulator"
+      navLabel="Main"
+      navHeading="Menu"
+      nav={[{ to: '/', label: 'Courses', icon: LayoutDashboard, end: true }]}
+    >
       <Outlet />
-    </>
+    </AppShell>
   )
 }
 
@@ -28,7 +33,7 @@ function App() {
   return (
     <Routes>
       {user.role === 'student' && (
-        // Inside a course, students get the sidebar workspace instead of the top navbar.
+        // Inside a course, students get the course workspace's own navigation.
         <Route path="courses/:courseId" element={<WorkspaceLayout />}>
           <Route index element={<CourseDashboard />} />
           <Route path="cases" element={<ComingSoon title="My cases" />} />

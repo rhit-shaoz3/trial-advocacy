@@ -1,18 +1,19 @@
+/* Course cards on the main page, styled like the workspace's case cards. */
+
 .term + .term {
-  margin-top: 2rem;
+  margin-top: 2.4rem;
 }
 
 .term h2 {
-  margin: 0 0 0.75rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 1.1rem;
+  margin: 0 0 1rem;
+  color: var(--ws-navy);
+  font: 400 1.5rem var(--ws-serif);
 }
 
 .course-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1.1rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -26,39 +27,47 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  min-height: 120px;
-  padding: 1rem 1.1rem;
+  min-height: 9.5rem;
+  padding: 1.35rem;
   border: 1px solid var(--border);
-  border-top: 4px solid var(--accent);
-  border-radius: 10px;
+  border-top: 3px solid var(--ws-blue);
+  border-radius: 0.6rem;
   background: var(--surface);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   color: inherit;
   text-decoration: none;
+  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
 }
 
 a.course-card:hover {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  border-color: #c7ccd0;
+  border-top-color: var(--ws-blue);
+  box-shadow: var(--ws-shadow);
+  transform: translateY(-2px);
 }
 
 a.course-card:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid #608cb3;
   outline-offset: 2px;
 }
 
 .course-code {
-  font-size: 1.15rem;
-  font-weight: 700;
+  color: #7c8793;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .course-title {
-  color: var(--muted);
+  margin-top: 0.45rem;
+  color: var(--ws-navy);
+  font: 400 1.35rem/1.2 var(--ws-serif);
 }
 
 .course-meta {
   margin-top: auto;
-  padding-top: 0.75rem;
-  font-size: 0.85rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--ws-row-line);
   color: var(--muted);
+  font-size: 0.78rem;
 }

@@ -20,7 +20,8 @@
 
 .course-header h1 {
   margin: 0;
-  font-size: 1.6rem;
+  color: var(--ws-navy);
+  font: 400 2.4rem/1.2 var(--ws-serif);
 }
 
 .course-header p {
@@ -31,7 +32,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--accent);
+  color: var(--link);
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
@@ -54,7 +55,7 @@
   gap: 0.75rem;
   padding: 0.6rem 0.75rem 0.6rem 1rem;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0.6rem;
   background: var(--surface);
 }
 
@@ -81,7 +82,8 @@
 
 .course-section h2 {
   margin: 0 0 0.75rem;
-  font-size: 1.2rem;
+  color: var(--ws-navy);
+  font: 400 1.5rem var(--ws-serif);
 }
 
 .section-header {
@@ -142,7 +144,8 @@
 .table-scroll {
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0.6rem;
+  background: var(--surface);
 }
 
 .data-table {
@@ -185,26 +188,15 @@
   font-weight: 600;
 }
 
+/* Same colors as the workspace's Active / In review status pills. */
 .badge-joined {
-  background: #e6f4ea;
-  color: #1e6b34;
+  background: #e1eee7;
+  color: #426d59;
 }
 
 .badge-pending {
-  background: #fff4e0;
-  color: #8a5300;
-}
-
-@media (prefers-color-scheme: dark) {
-  .badge-joined {
-    background: #1f3a27;
-    color: #8fd19e;
-  }
-
-  .badge-pending {
-    background: #3d2e12;
-    color: #f2c46d;
-  }
+  background: #f2e8d8;
+  color: #8b692f;
 }
 
 .visually-hidden {

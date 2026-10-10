@@ -7,6 +7,7 @@ import {
   deleteCourse,
   enroll,
   findCourseByEntryCode,
+  findCourseForMember,
   findTaughtCourse,
   listCoursesForUser,
   listTaughtCourses,
@@ -103,6 +104,24 @@ coursesRouter.post('/join', async (req, res) => {
     throw new HttpError(409, 'You are already enrolled in that course.')
   }
   res.status(201).json({ course })
+})
+
+/**
+ * Everything a member's course home page shows. Cases, activity, and deadlines
+ * don't exist yet (they arrive with cases and teams), so those lists are empty
+ * for now; the shape is what the client already renders.
+ */
+coursesRouter.get('/:courseId/home', async (req, res) => {
+  const { courseId } = req.params
+  const course = isUuid(courseId) ? await findCourseForMember(courseId, req.user!.id) : null
+  if (!course) throw new HttpError(404, 'Course not found.')
+  res.json({
+    course,
+    cases: [],
+    activity: [],
+    upcoming: [],
+    stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+  })
 })
 
 // Everything below manages one course and is only for the instructor who teaches it.

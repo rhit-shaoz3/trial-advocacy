@@ -73,6 +73,18 @@ export async function findTaughtCourse(courseId: string, instructorId: string) {
   return rows[0] ?? null
 }
 
+/** Null unless the user has joined the course or teaches it. Pending roster rows don't count. */
+export async function findCourseForMember(courseId: string, userId: string) {
+  const { rows } = await pool.query<PublicCourse>(
+    `${SELECT_COURSE}
+     WHERE c.id = $1
+       AND (c.instructor_id = $2
+            OR EXISTS (SELECT 1 FROM enrollments e WHERE e.course_id = c.id AND e.user_id = $2))`,
+    [courseId, userId],
+  )
+  return rows[0] ?? null
+}
+
 export async function findCourseByEntryCode(entryCode: string) {
   const { rows } = await pool.query<PublicCourse>(
     `${SELECT_COURSE} WHERE c.entry_code = $1`,

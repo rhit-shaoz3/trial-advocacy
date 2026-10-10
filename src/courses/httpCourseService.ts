@@ -16,6 +16,10 @@ export const httpCourseService: CourseService = {
     return body.course
   },
 
+  async getCourseHome(courseId) {
+    return apiRequest(`${coursePath(courseId)}/home`)
+  },
+
   async listTaughtCourses() {
     return (await apiRequest('/courses/teaching')).courses
   },

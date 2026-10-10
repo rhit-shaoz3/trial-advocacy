@@ -204,6 +204,43 @@ describe('DELETE /api/courses/:courseId', () => {
   })
 })
 
+describe('GET /api/courses/:courseId/home', () => {
+  it('returns the course and (for now) empty case lists to an enrolled student', async () => {
+    const { agent: prof } = await signedInAgent('instructor', 'prof@example.com', 'Prof. Ruiz')
+    const course = await createCourseAs(prof)
+    const { agent } = await signedInAgent()
+    await agent.post('/api/courses/join').send({ entryCode: course.entryCode })
+
+    const res = await agent.get(`/api/courses/${course.id}/home`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      course: { id: course.id, code: 'LAW 540', title: 'Trial Advocacy', term: 'Fall 2026', instructorName: 'Prof. Ruiz' },
+      cases: [],
+      activity: [],
+      upcoming: [],
+      stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+    })
+  })
+
+  it('is open to the instructor who teaches the course', async () => {
+    const { agent: prof } = await signedInAgent('instructor')
+    const course = await createCourseAs(prof)
+
+    expect((await prof.get(`/api/courses/${course.id}/home`)).status).toBe(200)
+  })
+
+  it('404s for students who are not enrolled or give a bad id, and 401s when logged out', async () => {
+    const { agent: prof } = await signedInAgent('instructor')
+    const course = await createCourseAs(prof)
+    const { agent: outsider } = await signedInAgent('student', 'outsider@example.com')
+
+    expect((await outsider.get(`/api/courses/${course.id}/home`)).status).toBe(404)
+    expect((await outsider.get('/api/courses/nope/home')).status).toBe(404)
+    expect((await request(app).get(`/api/courses/${course.id}/home`)).status).toBe(401)
+  })
+})
+
 describe('GET /api/courses', () => {
   it('requires a login', async () => {
     const res = await request(app).get('/api/courses')

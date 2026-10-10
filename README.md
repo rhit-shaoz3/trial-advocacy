@@ -42,6 +42,8 @@ Requires Node.js 24+ and PostgreSQL.
 
 Then open the URL Vite prints (usually http://localhost:5173). Vite forwards `/api` requests to the API on port 3001.
 
+To preview a student's course home page with made-up cases, activity, and deadlines, add `?sample` to the course URL (e.g. `/courses/<id>?sample`). This only works in development; production builds leave the sample data out.
+
 ## Scripts
 
 | Command              | What it does                                         |
@@ -86,6 +88,7 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | POST   | `/api/auth/logout` |                                     | `204`                     |
 | GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
 | POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
+| GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Case data isn't stored yet, so those lists are empty for now |
 | GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode` and `studentCount` |
 | POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
 

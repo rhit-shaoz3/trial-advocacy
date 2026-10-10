@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
 import type { Course, CourseService } from '../courses/types'
@@ -25,9 +26,11 @@ const evidence: Course = {
 function renderDashboard(service: CourseService) {
   const user = userEvent.setup()
   render(
-    <CourseServiceContext.Provider value={service}>
-      <StudentDashboard />
-    </CourseServiceContext.Provider>,
+    <MemoryRouter>
+      <CourseServiceContext.Provider value={service}>
+        <StudentDashboard />
+      </CourseServiceContext.Provider>
+    </MemoryRouter>,
   )
   return { user, service }
 }
@@ -47,6 +50,7 @@ describe('StudentDashboard', () => {
     expect(within(terms[0]).getByText('Trial Advocacy')).toBeInTheDocument()
     expect(within(terms[0]).getAllByText('Prof. Ruiz')).toHaveLength(2)
     expect(within(terms[1]).getByText('LAW 520')).toBeInTheDocument()
+    expect(within(terms[1]).getByRole('link', { name: /LAW 520/ })).toHaveAttribute('href', '/courses/c3')
   })
 
   it('explains what to do when there are no courses', async () => {

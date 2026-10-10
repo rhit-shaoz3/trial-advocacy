@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { CourseGrid } from '../components/CourseGrid'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { Course } from '../courses/types'
@@ -55,11 +56,11 @@ export function StudentDashboard() {
         <CourseGrid
           courses={courses}
           renderCard={(course) => (
-            <div className="course-card">
+            <Link to={`/courses/${course.id}`} className="course-card">
               <span className="course-code">{course.code}</span>
               <span className="course-title">{course.title}</span>
               {course.instructorName && <span className="course-meta">{course.instructorName}</span>}
-            </div>
+            </Link>
           )}
         />
       )}

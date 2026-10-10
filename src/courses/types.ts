@@ -1,3 +1,5 @@
+import type { CourseHome } from '../workspace/types'
+
 export interface Course {
   id: string
   code: string
@@ -53,6 +55,8 @@ export interface CourseService {
   /** The current user's courses, newest term first. */
   listMyCourses(): Promise<Course[]>
   joinCourse(entryCode: string): Promise<Course>
+  /** Everything the course home page (the student's course dashboard) shows. */
+  getCourseHome(courseId: string): Promise<CourseHome>
 
   // Instructors
   /** Courses the current instructor teaches, newest term first. */

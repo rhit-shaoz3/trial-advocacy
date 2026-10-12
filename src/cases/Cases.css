@@ -1,0 +1,651 @@
+/* ---- Case lists ---- */
+
+.publish-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.new-case-form {
+  max-width: 640px;
+}
+
+/* ---- Instructor case page ---- */
+
+.publish-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-intro {
+  margin-bottom: 1rem;
+}
+
+.section-empty {
+  margin-top: 1rem;
+}
+
+.section-actions {
+  margin-top: 1.25rem;
+}
+
+.sub-heading {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.upload-row .drop-zone {
+  min-width: min(100%, 22rem);
+}
+
+.upload-side {
+  justify-content: center;
+}
+
+.character-form {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 0.9fr 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+@media (max-width: 1000px) {
+  .character-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.character-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.character-card.editing {
+  grid-column: 1 / -1;
+}
+
+.character-card.editing .character-form {
+  grid-template-columns: 1fr 1fr;
+}
+
+.character-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.character-name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.character-knows {
+  margin: 0.5rem 0 0;
+}
+
+.character-card-actions {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+}
+
+.grid-scroll {
+  margin-top: 1.5rem;
+  overflow-x: auto;
+}
+
+.knows-grid td {
+  text-align: center;
+}
+
+.knows-grid thead th:not(:first-child) {
+  max-width: 10rem;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.knows-grid input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+}
+
+.team-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.team-summary-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.team-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.team-summary-head h3 {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.mini-people {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.mini-people li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.avatar-sm {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 0.68rem;
+}
+
+.matchup-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.matchup-summary li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-sm);
+  background: var(--subtle);
+  font-weight: 600;
+}
+
+.dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+}
+
+.dot-plaintiff {
+  background: var(--plaintiff);
+}
+
+.dot-defendant {
+  background: var(--defendant);
+}
+
+/* ---- Builders ---- */
+
+.builder-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.team-size {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.team-size input {
+  width: 4.5rem;
+  min-height: 2.5rem;
+}
+
+.builder-hint {
+  margin-bottom: 1rem;
+}
+
+.builder {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .builder {
+    grid-template-columns: 1fr;
+  }
+}
+
+.builder-pool {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.builder-pool .panel-head {
+  margin-bottom: 0.25rem;
+}
+
+.builder-pool h2 {
+  font-size: 1.05rem;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.4rem;
+  border: none;
+  background: transparent;
+  outline: none;
+}
+
+.pool-hint {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 3px solid var(--plaintiff);
+}
+
+.team-card.team-defendant {
+  border-top-color: var(--defendant);
+}
+
+.team-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.team-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.team-name-input:hover,
+.team-name-input:focus {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.team-members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.drop-hint {
+  padding: 1rem;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  touch-action: none;
+}
+
+.member-row:hover {
+  background: var(--subtle);
+}
+
+.member-row .avatar {
+  width: 2.1rem;
+  height: 2.1rem;
+  font-size: 0.72rem;
+}
+
+.member-row .row-main > :first-child {
+  font-weight: 500;
+}
+
+.member-row .row-main > :nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-select {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+}
+
+.move-select:hover {
+  background: var(--subtle);
+  color: var(--fg);
+}
+
+.move-select:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The real <select> sits invisibly on top of the icon, so it opens on click. */
+.move-select select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.member-row.dragging {
+  position: relative;
+  z-index: 10;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 22px rgba(15, 23, 25, 0.18);
+}
+
+.drag-handle {
+  padding: 0 0.15rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drop-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.matchup-layout {
+  margin-bottom: 1.5rem;
+}
+
+.matchup-slots {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+}
+
+@media (max-width: 640px) {
+  .matchup-slots {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--plaintiff-tint);
+}
+
+.slot-defendant {
+  background: var(--defendant-tint);
+}
+
+.slot-label {
+  color: var(--plaintiff);
+}
+
+.slot-defendant .slot-label {
+  color: var(--defendant);
+}
+
+.slot-members {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.versus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--subtle);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transform: translate(-50%, -50%);
+}
+
+@media (max-width: 640px) {
+  .versus {
+    display: none;
+  }
+}
+
+.new-matchup-zone {
+  padding: 1.1rem;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-align: center;
+}
+
+.pool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 1rem;
+}
+
+.team-chip {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--plaintiff);
+}
+
+.team-chip.team-defendant {
+  border-left-color: var(--defendant);
+}
+
+.summary-title {
+  margin: 0.5rem 0 0;
+  font-size: 1.5rem;
+}
+
+.summary-list {
+  margin: 1rem 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.summary-list div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.45rem 0;
+  font-size: 0.92rem;
+}
+
+.summary-list dt {
+  color: var(--muted);
+}
+
+.summary-list dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.unmatched-row {
+  flex-wrap: wrap;
+}
+
+/* ---- Student case page ---- */
+
+.case-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+  padding: 1.75rem 2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--accent-tint);
+}
+
+@media (max-width: 700px) {
+  .case-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hero-eyebrow {
+  color: var(--accent);
+}
+
+.case-hero-name {
+  margin: 0.4rem 0 0.4rem;
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+}
+
+.case-hero-side {
+  min-width: 14rem;
+  padding-left: 2rem;
+  border-left: 1px solid var(--border-strong);
+}
+
+@media (max-width: 700px) {
+  .case-hero-side {
+    padding: 1rem 0 0;
+    border-top: 1px solid var(--border-strong);
+    border-left: none;
+  }
+}
+
+.case-hero-sidename {
+  margin: 0.3rem 0;
+  font-size: 2rem;
+}
+
+.side-plaintiff {
+  color: var(--plaintiff);
+}
+
+.side-defendant {
+  color: var(--defendant);
+}
+
+.matchup-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.matchup-side-team {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.opponent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.opponent + .opponent {
+  margin-top: 0.75rem;
+}

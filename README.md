@@ -1,4 +1,4 @@
-# Trial Advocacy
+# Getting to Trial
 
 A pre-trial litigation simulator for law students. CS 397 (Innovation Lab) quarter project.
 
@@ -72,9 +72,48 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | Method | Path               | Body                                | Result                    |
 | ------ | ------------------ | ----------------------------------- | ------------------------- |
 | GET    | `/api/auth/me`     |                                     | `{ user }` or `{ user: null }` |
-| POST   | `/api/auth/signup` | `{ name, email, password, role }`   | `201 { user }`, `409` if email taken |
+| POST   | `/api/auth/signup` | `{ name, email, password, role, classCode? }` | `201 { user }`, `409` if email taken, `404` if `classCode` matches no class |
 | POST   | `/api/auth/login`  | `{ email, password }`               | `{ user }`, `401` if wrong |
 | POST   | `/api/auth/logout` |                                     | `204`                     |
+
+### Classes
+
+All of these need a logged-in user. "Instructor" routes only work on classes that instructor teaches.
+
+| Method | Path | Who | Body | Result |
+| ------ | ---- | --- | ---- | ------ |
+| GET    | `/api/classes` | both | | `{ classes }`: an instructor gets each class with its join code, students, invitations and pending requests; a student gets the classes they're in |
+| POST   | `/api/classes` | instructor | `{ name, studentEmails }` | `201 { class, invited, withAccounts }`; creates a name-based join code (e.g. `EVID517`) and invites the emails |
+| POST   | `/api/classes/:id/requests` | instructor | `{ userIds, decision: 'admit' \| 'deny' }` | `{ updated }` |
+| POST   | `/api/classes/join` | student | `{ code }` | `{ status: 'requested' \| 'enrolled', className }`, `404` if no class has that code |
+| GET    | `/api/classes/inbox` | student | | `{ invitations, pendingRequests, denials }` |
+| POST   | `/api/classes/invitations/:id/accept` | student | | `204`, joins the class |
+| POST   | `/api/classes/invitations/:id/reject` | student | | `204`, removes the invitation |
+| POST   | `/api/classes/denials/:classId/dismiss` | student | | `204`, clears a "request denied" notice |
+
+### Cases
+
+A case belongs to a class. Instructors add documents, characters (witnesses), teams and matchups, then publish each section to students separately. Only the class's instructors can see or change a case; students see it once something is published.
+
+| Method | Path | Who | Body | Result |
+| ------ | ---- | --- | ---- | ------ |
+| GET    | `/api/cases` | both | | `{ cases }`: an instructor gets every case in their classes; a student gets published cases in classes they're in |
+| POST   | `/api/cases` | instructor | `{ name, classId }` | `201 { case }` |
+| GET    | `/api/cases/:id` | both | | `{ case }`: everything for the instructor; for a student, only published sections, filtered to their side |
+| PATCH  | `/api/cases/:id/publish` | instructor | `{ documents?, characters?, teams? }` (booleans) | `{ case }` |
+| POST   | `/api/cases/:id/documents` | instructor | multipart: `files` (up to 20, 20 MB each), `side` | `201 { documents }` |
+| PATCH  | `/api/cases/:id/documents/:docId` | instructor | `{ side }` | `{ document }` |
+| DELETE | `/api/cases/:id/documents/:docId` | instructor | | `204` |
+| GET    | `/api/cases/:id/documents/:docId/file` | both | | the file, as a download |
+| POST   | `/api/cases/:id/characters` | instructor | `{ name, title, role, side }` | `201 { character }` |
+| PATCH / DELETE | `/api/cases/:id/characters/:charId` | instructor | `{ name, title, role, side }` | `{ character }` / `204` |
+| PUT / DELETE | `/api/cases/:id/characters/:charId/documents/:docId` | instructor | | `204`; links or unlinks what the character knows |
+| PUT    | `/api/cases/:id/teams` | instructor | `{ teams: [{ id?, name, side, studentIds }] }` | `{ case }`; replaces all teams; every student must be on one |
+| PUT    | `/api/cases/:id/matchups` | instructor | `{ matchups: [{ plaintiffTeamId, defendantTeamId }] }` | `{ case }`; replaces all matchups |
+
+A character's `title` is their job title (e.g. "Police Officer") and `role` is `witness` or `investigator`. `side` is `plaintiff`, `defendant` or `both` for documents and characters, and `plaintiff` or `defendant` for teams. Students see items marked `both` once that section is published, and items for their own side once teams are published too.
+
+Uploaded files are stored in Postgres (the `stored_files` table) for now. Only `server/files/fileStore.ts` touches that table, so moving to S3 means replacing that one file.
 
 Errors come back as `{ error: "message" }`. Logins are kept in an httpOnly session cookie stored in the `session` table.
 

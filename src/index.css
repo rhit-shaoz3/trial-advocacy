@@ -1,35 +1,77 @@
+/* Design tokens from the "Trial-Ad-Simulation" Figma. The theme is set as
+   data-theme on <html> (see index.html and src/theme/theme.ts). */
 :root {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.5;
-  color-scheme: light dark;
-  -webkit-font-smoothing: antialiased;
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: Lora, Georgia, 'Times New Roman', serif;
 
-  --bg: #ffffff;
-  --fg: #213547;
+  --bg: #f6f4ef;
   --surface: #ffffff;
-  --subtle: #f1f3f5;
-  --border: #d0d7de;
-  --muted: #6b7280;
-  --accent: #4e2a84; /* Northwestern purple */
+  --subtle: #efede7;
+  --fg: #1e2d31;
+  --muted: #6b7377;
+  --border: #e4e1da;
+  --border-strong: #d3cfc6;
+  --accent: #20685f;
+  --accent-hover: #1a5850;
+  --on-accent: #ffffff;
+  --accent-tint: #eaf2ed;
+  --note: #e4eee9;
+  --plaintiff: #20685f;
+  --plaintiff-tint: #eaf2ed;
+  --defendant: #3e5266;
+  --defendant-tint: #ecf0f4;
+  --warning: #9a5b13;
+  --warning-tint: #fbf1e3;
   --error: #b42318;
   --error-bg: #fef3f2;
 
+  /* The sidebar and the sign-in panel stay dark in both themes. */
+  --sidebar: #202f33;
+  --sidebar-active: #334145;
+  --sidebar-card: #273639;
+  --sidebar-fg: #eef1ef;
+  --sidebar-muted: #a6b0b2;
+  --sidebar-border: #34444a;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+
+  color-scheme: light;
+  font-family: var(--font-sans);
+  line-height: 1.5;
   color: var(--fg);
   background-color: var(--bg);
+  -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1a1a1a;
-    --fg: rgba(255, 255, 255, 0.87);
-    --surface: #242424;
-    --subtle: #2e2e2e;
-    --border: #3d3d3d;
-    --muted: #9ca3af;
-    --accent: #7c5cbf;
-    --error: #fda29b;
-    --error-bg: #3b1714;
-  }
+:root[data-theme='dark'] {
+  --bg: #141c1f;
+  --surface: #1c272a;
+  --subtle: #24312f;
+  --fg: #e7ebe8;
+  --muted: #9aa5a8;
+  --border: #2e3b3f;
+  --border-strong: #3e4d51;
+  --accent: #5fb3a6;
+  --accent-hover: #74c2b5;
+  --on-accent: #0f1f1c;
+  --accent-tint: #1e3531;
+  --note: #1b302c;
+  --plaintiff: #6cc0b2;
+  --plaintiff-tint: #1e3531;
+  --defendant: #a9bbd0;
+  --defendant-tint: #232d38;
+  --warning: #f0b264;
+  --warning-tint: #3a2a14;
+  --error: #fda29b;
+  --error-bg: #3b1714;
+
+  --sidebar: #0f1719;
+  --sidebar-active: #22302f;
+  --sidebar-card: #18222a;
+  --sidebar-border: #24302f;
+
+  color-scheme: dark;
 }
 
 * {
@@ -39,4 +81,30 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background: var(--bg);
+}
+
+a {
+  color: var(--accent);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  line-height: 1.25;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

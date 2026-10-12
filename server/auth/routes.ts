@@ -1,22 +1,21 @@
 import bcrypt from 'bcryptjs'
 import { Router, type Request } from 'express'
+import { CLASS_NOT_FOUND, findClassByCode, joinClass } from '../classes/classes.ts'
+import { normalizeJoinCode } from '../classes/joinCode.ts'
+import { pool } from '../db/pool.ts'
+import { withTransaction } from '../db/transaction.ts'
 import { HttpError } from '../httpError.ts'
+import { EMAIL_PATTERN, readString } from '../validation.ts'
 import { createUser, findUserByEmail, findUserById, toPublicUser, type Role } from './users.ts'
 
 const BCRYPT_ROUNDS = 11
 const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_BYTES = 72 // bcrypt ignores anything past 72 bytes
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ROLES: Role[] = ['student', 'instructor']
 
 // Compared against when the email doesn't exist, so a failed login takes the
 // same time either way and doesn't reveal which emails are registered.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_ROUNDS)
-
-function readString(body: unknown, key: string) {
-  const value = (body as Record<string, unknown> | undefined)?.[key]
-  return typeof value === 'string' ? value : ''
-}
 
 /** Issues a fresh session ID on login to prevent session fixation. */
 function startSession(req: Request, userId: string) {
@@ -41,6 +40,7 @@ authRouter.post('/signup', async (req, res) => {
   const email = readString(req.body, 'email').trim().toLowerCase()
   const password = readString(req.body, 'password')
   const role = readString(req.body, 'role') as Role
+  const classCode = normalizeJoinCode(readString(req.body, 'classCode'))
 
   if (!name) throw new HttpError(400, 'Name is required.')
   if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter a valid email address.')
@@ -52,8 +52,17 @@ authRouter.post('/signup', async (req, res) => {
   }
   if (!ROLES.includes(role)) throw new HttpError(400, 'Choose student or instructor.')
 
+  // Check the class code before creating anything, so a typo doesn't leave
+  // behind an account that isn't in the class.
+  const cls = role === 'student' && classCode ? await findClassByCode(pool, classCode) : null
+  if (role === 'student' && classCode && !cls) throw new HttpError(404, CLASS_NOT_FOUND)
+
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
-  const user = await createUser({ name, email, role, passwordHash })
+  const user = await withTransaction(async (client) => {
+    const created = await createUser({ name, email, role, passwordHash }, client)
+    if (created && cls) await joinClass(client, cls, created)
+    return created
+  })
   if (!user) throw new HttpError(409, 'An account with that email already exists.')
 
   await startSession(req, user.id)

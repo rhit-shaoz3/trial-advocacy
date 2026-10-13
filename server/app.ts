@@ -2,6 +2,8 @@ import express, { type ErrorRequestHandler } from 'express'
 import { fileURLToPath } from 'node:url'
 import { authRouter } from './auth/routes.ts'
 import { isProduction } from './config.ts'
+import { MAX_FACT_PATTERN_BYTES } from './courses/factPatternRoutes.ts'
+import { coursesRouter } from './courses/routes.ts'
 import { HttpError } from './httpError.ts'
 import { sessionMiddleware } from './session.ts'
 
@@ -12,6 +14,7 @@ if (isProduction) app.set('trust proxy', 1)
 
 app.use('/api', express.json(), sessionMiddleware)
 app.use('/api/auth', authRouter)
+app.use('/api/courses', coursesRouter)
 
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found.')))
 
@@ -27,6 +30,11 @@ if (isProduction) {
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: err.message })
+    return
+  }
+  if (err?.type === 'entity.too.large') {
+    const limitMb = MAX_FACT_PATTERN_BYTES / (1024 * 1024)
+    res.status(413).json({ error: `That file is too large. The limit is ${limitMb} MB.` })
     return
   }
   if (err?.type === 'entity.parse.failed') {

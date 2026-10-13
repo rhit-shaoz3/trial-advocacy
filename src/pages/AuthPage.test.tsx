@@ -1,9 +1,12 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { AuthProvider } from '../auth/AuthProvider'
 import type { AuthService, User } from '../auth/types'
+import { CourseServiceContext } from '../courses/CourseServiceContext'
+import { fakeCourseService } from '../test/fakeCourseService'
 
 const ada: User = {
   id: 'user-1',
@@ -26,9 +29,13 @@ function fakeService(overrides: Partial<AuthService> = {}): AuthService {
 async function renderApp(service = fakeService()) {
   const user = userEvent.setup()
   render(
-    <AuthProvider service={service}>
-      <App />
-    </AuthProvider>,
+    <MemoryRouter>
+      <CourseServiceContext.Provider value={fakeCourseService()}>
+        <AuthProvider service={service}>
+          <App />
+        </AuthProvider>
+      </CourseServiceContext.Provider>
+    </MemoryRouter>,
   )
   // Wait for the initial "who is logged in?" check to finish.
   await screen.findByRole('heading', { level: 1 })
@@ -62,7 +69,7 @@ describe('initial screen', () => {
   it('goes straight to the home page when a session already exists', async () => {
     await renderApp(fakeService({ getCurrentUser: vi.fn().mockResolvedValue(ada) }))
 
-    expect(screen.getByRole('heading', { name: 'Welcome, Ada Lawyer' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
   })
 
   it('falls back to the login form if the server cannot be reached', async () => {
@@ -95,8 +102,8 @@ describe('sign up', () => {
       password: 'correct-horse',
       role: 'student',
     })
-    expect(await screen.findByRole('heading', { name: 'Welcome, Ada Lawyer' })).toBeInTheDocument()
-    expect(screen.getByText(/\(student\)/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
+    expect(screen.getByText('Student', { selector: '.ws-profile small' })).toBeInTheDocument()
   })
 
   it('sends the instructor role when Instructor is picked', async () => {
@@ -107,7 +114,8 @@ describe('sign up', () => {
     await user.click(screen.getByRole('button', { name: 'Create account' }))
 
     expect(service.signUp).toHaveBeenCalledWith(expect.objectContaining({ role: 'instructor' }))
-    expect(await screen.findByText(/\(instructor\)/)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Create course' })).toBeInTheDocument()
+    expect(screen.getByText('Instructor', { selector: '.ws-profile small' })).toBeInTheDocument()
   })
 
   it('blocks mismatched passwords without calling the server', async () => {
@@ -161,7 +169,7 @@ describe('sign up', () => {
     expect(service.signUp).toHaveBeenCalledTimes(1)
 
     finish(ada)
-    expect(await screen.findByRole('heading', { name: 'Welcome, Ada Lawyer' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
   })
 })
 
@@ -176,7 +184,7 @@ describe('log in', () => {
       email: 'ada@example.com',
       password: 'correct-horse',
     })
-    expect(await screen.findByRole('heading', { name: 'Welcome, Ada Lawyer' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
   })
 
   it('submits with the Enter key', async () => {
@@ -204,7 +212,7 @@ describe('log in', () => {
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect email or password.')
-    expect(screen.queryByRole('heading', { name: /Welcome/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Your courses' })).not.toBeInTheDocument()
   })
 
   it('clears the error and password when switching tabs', async () => {

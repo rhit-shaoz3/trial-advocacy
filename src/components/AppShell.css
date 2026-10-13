@@ -1,0 +1,516 @@
+/*
+ * The signed-in app frame (AppShell), after the Figma mock: navy sidebar,
+ * parchment page, DM Serif Display headings, Manrope text. Also the shared
+ * ws-* pieces (buttons, titles, avatars) that pages inside it use. The color
+ * palette itself lives in index.css. Light-only, like the mock.
+ */
+
+.ws {
+  --ws-sidebar-width: 16rem;
+
+  display: flex;
+  min-height: 100vh;
+  background: var(--ws-paper);
+  color: var(--ws-text);
+  font-family: var(--ws-sans);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.ws-page h1,
+.ws-page h2,
+.ws-page h3,
+.ws-page p {
+  margin: 0;
+}
+
+.ws svg {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.ws a:focus-visible,
+.ws button:focus-visible {
+  outline: 2px solid #608cb3;
+  outline-offset: 2px;
+}
+
+/* Sidebar */
+
+.ws-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: var(--ws-sidebar-width);
+  padding: 1.6rem 1.15rem 1.1rem;
+  background: var(--ws-navy);
+  color: #fff;
+  overflow-y: auto;
+}
+
+.ws-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-left: 0.35rem;
+  color: #fff;
+  text-decoration: none;
+}
+
+.ws-brand-icon {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.ws-brand strong {
+  display: block;
+  font: 1.35rem/1.05 var(--ws-serif);
+  letter-spacing: 0.02em;
+}
+
+.ws-brand small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+  opacity: 0.68;
+}
+
+.ws-sidebar nav {
+  margin-top: 2.75rem;
+}
+
+.ws-nav-label {
+  display: block;
+  margin: 0 0.75rem 0.75rem;
+  color: #677b92;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ws-sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.25rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.4rem;
+  color: #9babbc;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.ws-sidebar nav a:hover,
+.ws-sidebar nav a.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.ws-sidebar nav a.active {
+  box-shadow: inset 2px 0 var(--ws-red);
+}
+
+.ws-sidebar-bottom {
+  margin-top: auto;
+  padding-top: 1.5rem;
+}
+
+.ws-course-card {
+  margin-bottom: 0.5rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.ws-course-card span {
+  color: #8698aa;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ws-course-card strong {
+  display: block;
+  margin: 0.35rem 0;
+  font: 1.05rem/1.25 var(--ws-serif);
+  font-weight: 400;
+}
+
+.ws-course-card small {
+  display: block;
+  color: #8698aa;
+  font-size: 0.75rem;
+}
+
+.ws-all-courses {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+  padding: 0.45rem 0.35rem;
+  color: #9babbc;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.ws-all-courses:hover {
+  color: #fff;
+}
+
+.ws-all-courses svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ws-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 0.3rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ws-profile > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.ws-profile strong {
+  display: block;
+  overflow: hidden;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-profile small {
+  display: block;
+  margin-top: 0.1rem;
+  color: #7f91a5;
+  font-size: 0.7rem;
+}
+
+.ws-profile button {
+  display: grid;
+  place-items: center;
+  padding: 0.35rem;
+  border: 0;
+  border-radius: 0.3rem;
+  background: none;
+  color: #7f91a5;
+  cursor: pointer;
+}
+
+.ws-profile button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* Page area */
+
+.ws-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: var(--ws-sidebar-width);
+}
+
+.ws-sample-banner {
+  padding: 0.5rem 2.5rem;
+  background: #f1e7d4;
+  color: #7a5a24;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ws-page {
+  max-width: 82rem;
+  margin: 0 auto;
+  padding: 2.4rem 2.5rem 3.5rem;
+}
+
+.ws-eyebrow {
+  color: var(--ws-blue);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.ws-title {
+  margin: 0.45rem 0 0.4rem !important;
+  color: var(--ws-navy);
+  font: 400 2.4rem/1.2 var(--ws-serif);
+}
+
+.ws-subtle {
+  color: var(--ws-muted);
+  font-size: 0.9rem;
+}
+
+.ws-page > .ws-subtle + .ws-btn {
+  margin-top: 1.25rem;
+}
+
+.ws-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ws-blue);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.ws-link:hover {
+  text-decoration: underline;
+}
+
+.ws-link svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ws-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border: 0;
+  border-radius: 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+.ws-btn:hover {
+  transform: translateY(-1px);
+}
+
+.ws-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ws-btn-primary {
+  background: var(--ws-navy);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(16, 35, 63, 0.15);
+}
+
+.ws-btn-primary:hover {
+  background: var(--ws-navy-light);
+}
+
+.ws-btn-secondary {
+  border: 1px solid var(--ws-line);
+  background: #fff;
+  color: var(--ws-navy);
+}
+
+.ws-btn-secondary:hover {
+  border-color: #aeb5bc;
+}
+
+/* Section headings */
+
+.ws-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ws-section-heading h2,
+.ws-panel h2 {
+  color: var(--ws-navy);
+  font: 1.5rem var(--ws-serif);
+  font-weight: 400;
+}
+
+.ws-section-heading p,
+.ws-panel-sub {
+  margin-top: 0.2rem !important;
+  color: var(--ws-muted);
+  font-size: 0.78rem;
+}
+
+.ws-empty {
+  padding: 2.25rem 1.5rem;
+  border: 1px dashed #c9ccc8;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+.ws-empty p + p {
+  margin-top: 0.25rem;
+}
+
+/* Avatars */
+
+.ws-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.ws-sidebar .ws-avatar {
+  border-color: var(--ws-navy);
+}
+
+.ws-avatar-sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.62rem;
+}
+
+.ws-avatar-blue {
+  background: #d6e1eb;
+  color: #294d6e;
+}
+
+.ws-avatar-sand {
+  background: #eadfc9;
+  color: #785e32;
+}
+
+.ws-avatar-green {
+  background: #d2e0d8;
+  color: #3f6755;
+}
+
+.ws-avatar-rose {
+  background: #ead6d4;
+  color: #854840;
+}
+
+.ws-avatar-stack {
+  display: flex;
+}
+
+.ws-avatar-stack .ws-avatar {
+  margin-right: -0.45rem;
+}
+
+/* Narrower screens */
+
+@media (max-width: 1000px) {
+  .ws {
+    --ws-sidebar-width: 13.5rem;
+  }
+
+  .ws-page {
+    padding: 1.8rem;
+  }
+}
+
+/* Phones: the sidebar becomes a header bar with a scrolling row of links. */
+@media (max-width: 760px) {
+  .ws {
+    flex-direction: column;
+  }
+
+  .ws-sidebar {
+    position: relative;
+    width: auto;
+    padding: 0.9rem 1rem 0;
+    overflow: visible;
+  }
+
+  .ws-brand-icon {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .ws-brand strong {
+    font-size: 1.15rem;
+  }
+
+  .ws-sidebar nav {
+    display: flex;
+    gap: 0.25rem;
+    margin: 0.9rem -1rem 0;
+    padding: 0 1rem 0.6rem;
+    overflow-x: auto;
+  }
+
+  .ws-nav-label,
+  .ws-course-card,
+  .ws-all-courses {
+    display: none;
+  }
+
+  .ws-sidebar nav a {
+    flex: none;
+    margin: 0;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .ws-sidebar nav a.active {
+    box-shadow: inset 0 -2px var(--ws-red);
+  }
+
+  /* Keep just the log-out button, pinned to the brand row. */
+  .ws-sidebar-bottom {
+    position: absolute;
+    top: 0.9rem;
+    right: 1rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  .ws-profile {
+    padding: 0;
+    border: 0;
+  }
+
+  .ws-profile > span:nth-child(2),
+  .ws-profile .ws-avatar {
+    display: none;
+  }
+
+  .ws-main {
+    margin-left: 0;
+  }
+
+  .ws-sample-banner {
+    padding: 0.5rem 1rem;
+  }
+
+  .ws-page {
+    padding: 1.4rem 1rem 2.5rem;
+  }
+
+  .ws-title {
+    font-size: 1.9rem;
+  }
+
+  .ws-section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

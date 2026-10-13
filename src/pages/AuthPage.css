@@ -22,7 +22,8 @@
 
 .auth-header h1 {
   margin: 0;
-  font-size: 1.6rem;
+  color: var(--ws-navy);
+  font: 400 2.1rem/1.15 var(--ws-serif);
 }
 
 .auth-header p {

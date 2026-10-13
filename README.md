@@ -28,7 +28,7 @@ Requires Node.js 24+ and PostgreSQL.
    npm run db:migrate
    ```
 
-   Optionally add demo data (prints demo instructor and student logins, and course entry codes):
+   Optionally add demo data: a demo instructor, three courses, and a class of 31 demo students enrolled in LAW 540 (enough to practice pairing). Every demo account's password is `demo-password`; the script prints the logins and entry codes, and is safe to re-run:
 
    ```bash
    npm run db:seed

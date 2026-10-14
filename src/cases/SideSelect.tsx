@@ -5,7 +5,7 @@ export function SideSelect({
   value,
   onChange,
   label,
-  className = 'select-sm',
+  className = 'case-select-sm',
 }: {
   value: DocSide
   onChange(side: DocSide): void

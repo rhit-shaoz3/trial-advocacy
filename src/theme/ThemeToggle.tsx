@@ -1,6 +1,7 @@
 import { Moon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { chooseTheme, currentTheme, followSystemTheme } from './theme'
+import './ThemeToggle.css'
 
 /** Sun/moon button that switches between light and dark mode. */
 export function ThemeToggle({ className = '' }: { className?: string }) {

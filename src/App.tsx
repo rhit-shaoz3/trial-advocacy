@@ -1,41 +1,63 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { LayoutDashboard } from 'lucide-react'
+import { Outlet, Route, Routes } from 'react-router'
 import { useAuth } from './auth/useAuth'
 import { CasePage } from './cases/CasePage'
-import { CasesPage } from './cases/CasesPage'
+import { CasesListPage } from './cases/CasesListPage'
 import { MatchupBuilderPage } from './cases/MatchupBuilderPage'
-import { StudentCasesPage } from './cases/StudentCasesPage'
 import { TeamBuilderPage } from './cases/TeamBuilderPage'
-import { ClassesPage } from './dashboard/ClassesPage'
-import { InstructorOverview } from './dashboard/InstructorOverview'
-import { StudentClassesPage } from './dashboard/StudentClassesPage'
-import { StudentOverview } from './dashboard/StudentOverview'
-import { AppShell } from './layout/AppShell'
+import { AppShell } from './components/AppShell'
 import { AuthPage } from './pages/AuthPage'
+import { CoursePage } from './pages/CoursePage'
+import { HomePage } from './pages/HomePage'
+import { NotFoundPage } from './pages/NotFoundPage'
+import { ComingSoon } from './workspace/ComingSoon'
+import { CourseDashboard } from './workspace/CourseDashboard'
+import { WorkspaceLayout } from './workspace/WorkspaceLayout'
+
+/** Pages outside a student's course workspace: the course list, instructor pages. */
+function SignedInLayout() {
+  return (
+    <AppShell
+      subtitle="Pretrial simulator"
+      navLabel="Main"
+      navHeading="Menu"
+      nav={[{ to: '/', label: 'Courses', icon: LayoutDashboard, end: true }]}
+    >
+      <Outlet />
+    </AppShell>
+  )
+}
 
 function App() {
   const { user, loading } = useAuth()
 
   if (loading) return null
   if (!user) return <AuthPage />
-  const instructor = user.role === 'instructor'
+
+  const isInstructor = user.role === 'instructor'
+
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={instructor ? <InstructorOverview /> : <StudentOverview />} />
-          <Route path="classes" element={instructor ? <ClassesPage /> : <StudentClassesPage />} />
-          <Route path="cases" element={instructor ? <CasesPage /> : <StudentCasesPage />} />
-          <Route path="cases/:caseId" element={<CasePage />} />
-          {instructor && (
-            <>
-              <Route path="cases/:caseId/teams" element={<TeamBuilderPage />} />
-              <Route path="cases/:caseId/matchups" element={<MatchupBuilderPage />} />
-            </>
-          )}
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      {/* Inside a course, everyone gets the course workspace's own navigation. */}
+      <Route path="courses/:courseId" element={<WorkspaceLayout />}>
+        <Route index element={<CourseDashboard />} />
+        <Route path="cases" element={<CasesListPage />} />
+        <Route path="cases/:caseId" element={<CasePage />} />
+        {isInstructor && <Route path="cases/:caseId/teams" element={<TeamBuilderPage />} />}
+        {isInstructor && <Route path="cases/:caseId/matchups" element={<MatchupBuilderPage />} />}
+        <Route path="calendar" element={<ComingSoon title="Calendar" />} />
+        <Route path="resources" element={<ComingSoon title="Resource library" />} />
+        {isInstructor && <Route path="manage" element={<CoursePage />} />}
+        <Route
+          path="*"
+          element={<ComingSoon title="Page not found" message="That page does not exist." />}
+        />
+      </Route>
+      <Route element={<SignedInLayout />}>
+        <Route index element={<HomePage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   )
 }
 

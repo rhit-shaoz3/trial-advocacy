@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
-import { useParams } from 'react-router'
+import { ArrowLeft } from 'lucide-react'
+import { Link, useParams } from 'react-router'
 import { useLoad } from '../api/useLoad'
-import { PageFrame } from '../layout/PageFrame'
 import { useCasesApi } from './CasesApiContext'
 import { CharactersSection } from './CharactersSection'
 import { DocumentsSection } from './DocumentsSection'
@@ -10,7 +10,7 @@ import type { Section } from './types'
 import './Cases.css'
 
 export function InstructorCasePage() {
-  const { caseId = '' } = useParams()
+  const { courseId = '', caseId = '' } = useParams()
   const api = useCasesApi()
   const { data: c, error, reload, setData } = useLoad(
     useCallback(() => api.getInstructorCase(caseId), [api, caseId]),
@@ -21,7 +21,10 @@ export function InstructorCasePage() {
   }
 
   return (
-    <PageFrame crumbs={[{ label: 'Cases', to: '/cases' }, { label: c?.name ?? 'Case' }]}>
+    <main className="ws-page case-page">
+      <Link to={`/courses/${courseId}/cases`} className="ws-link case-back">
+        <ArrowLeft aria-hidden="true" /> All cases
+      </Link>
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -29,23 +32,23 @@ export function InstructorCasePage() {
       )}
       {c && (
         <>
-          <div className="page-header">
+          <div className="ws-welcome">
             <div>
-              <p className="eyebrow">Case · {c.className}</p>
-              <h1 className="page-title">{c.name}</h1>
-              <p className="page-lede">
+              <span className="ws-eyebrow">Case · {c.courseName}</span>
+              <h1 className="ws-title">{c.name}</h1>
+              <p className="ws-subtle">
                 {c.students.length} students · {c.documents.length} files · {c.characters.length}{' '}
                 characters · {c.teams.length} teams
               </p>
             </div>
           </div>
-          <div className="page-stack">
+          <div className="case-stack">
             <DocumentsSection c={c} onChanged={reload} onPublish={publish('documents')} />
             <CharactersSection c={c} onChanged={reload} onPublish={publish('characters')} />
             <TeamsSection c={c} onPublish={publish('teams')} />
           </div>
         </>
       )}
-    </PageFrame>
+    </main>
   )
 }

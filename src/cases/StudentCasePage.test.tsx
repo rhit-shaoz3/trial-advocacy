@@ -8,7 +8,7 @@ import type { StudentCase } from './types'
 const base: StudentCase = {
   id: 'case-1',
   name: 'Smith v. Jones',
-  className: 'Evidence',
+  courseName: 'LAW 540: Trial Advocacy',
   published: { documents: true, characters: false, teams: false },
   team: null,
   documents: [
@@ -27,8 +27,8 @@ const base: StudentCase = {
 async function renderPage(c: StudentCase) {
   renderWithProviders(<StudentCasePage />, {
     casesApi: fakeCasesApi({ getStudentCase: vi.fn().mockResolvedValue(c) }),
-    url: '/cases/case-1',
-    path: '/cases/:caseId',
+    url: '/courses/course-1/cases/case-1',
+    path: '/courses/:courseId/cases/:caseId',
   })
   await screen.findByRole('heading', { name: /Welcome to your case/ })
 }

@@ -1,9 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { Router, type Request } from 'express'
-import { CLASS_NOT_FOUND, findClassByCode, joinClass } from '../classes/classes.ts'
-import { normalizeJoinCode } from '../classes/joinCode.ts'
-import { pool } from '../db/pool.ts'
-import { withTransaction } from '../db/transaction.ts'
+import { claimPendingEnrollments } from '../courses/roster.ts'
 import { HttpError } from '../httpError.ts'
 import { EMAIL_PATTERN, readString } from '../validation.ts'
 import { createUser, findUserByEmail, findUserById, toPublicUser, type Role } from './users.ts'
@@ -40,7 +37,6 @@ authRouter.post('/signup', async (req, res) => {
   const email = readString(req.body, 'email').trim().toLowerCase()
   const password = readString(req.body, 'password')
   const role = readString(req.body, 'role') as Role
-  const classCode = normalizeJoinCode(readString(req.body, 'classCode'))
 
   if (!name) throw new HttpError(400, 'Name is required.')
   if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter a valid email address.')
@@ -52,18 +48,12 @@ authRouter.post('/signup', async (req, res) => {
   }
   if (!ROLES.includes(role)) throw new HttpError(400, 'Choose student or instructor.')
 
-  // Check the class code before creating anything, so a typo doesn't leave
-  // behind an account that isn't in the class.
-  const cls = role === 'student' && classCode ? await findClassByCode(pool, classCode) : null
-  if (role === 'student' && classCode && !cls) throw new HttpError(404, CLASS_NOT_FOUND)
-
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
-  const user = await withTransaction(async (client) => {
-    const created = await createUser({ name, email, role, passwordHash }, client)
-    if (created && cls) await joinClass(client, cls, created)
-    return created
-  })
+  const user = await createUser({ name, email, role, passwordHash })
   if (!user) throw new HttpError(409, 'An account with that email already exists.')
+
+  // Instructors may have added this student to courses before they signed up.
+  if (role === 'student') await claimPendingEnrollments(user.id, user.email)
 
   await startSession(req, user.id)
   res.status(201).json({ user: toPublicUser(user) })

@@ -1,6 +1,6 @@
 import { ArrowRight, Users } from 'lucide-react'
 import { Link } from 'react-router'
-import { initials } from '../layout/initials'
+import { Avatar } from '../components/Avatar'
 import { SIDE_LABELS } from './format'
 import { PublishControl } from './PublishControl'
 import type { InstructorCase } from './types'
@@ -17,8 +17,8 @@ export function TeamsSection({ c, onPublish }: Props) {
   const hasTeams = c.teams.length > 0
 
   return (
-    <section className="panel" aria-labelledby="teams-heading">
-      <div className="panel-head">
+    <section className="ws-panel case-panel" aria-labelledby="teams-heading">
+      <div className="case-panel-head">
         <h2 id="teams-heading">Teams &amp; match-ups</h2>
         <PublishControl
           label="teams and matchups"
@@ -28,17 +28,17 @@ export function TeamsSection({ c, onPublish }: Props) {
       </div>
 
       {hasTeams && unplaced.length > 0 && (
-        <p className="form-warning" role="status">
+        <p className="case-warning" role="status">
           {unplaced.length} student{unplaced.length === 1 ? " isn't" : "s aren't"} on a team:{' '}
           {unplaced.map((s) => s.name).join(', ')}
         </p>
       )}
 
       {!hasTeams && (
-        <p className="hint section-intro">
+        <p className="case-hint section-intro">
           {c.students.length === 0
             ? 'No students are in this class yet.'
-            : `${c.students.length} students in ${c.className} are waiting to be put on teams.`}
+            : `${c.students.length} students in ${c.courseName} are waiting to be put on teams.`}
         </p>
       )}
 
@@ -49,14 +49,12 @@ export function TeamsSection({ c, onPublish }: Props) {
               <div className="team-summary-head">
                 <Users size={18} aria-hidden className="muted" />
                 <h3>{team.name}</h3>
-                <span className={`badge badge-${team.side}`}>{SIDE_LABELS[team.side]}</span>
+                <span className={`case-badge case-badge-${team.side}`}>{SIDE_LABELS[team.side]}</span>
               </div>
               <ul className="mini-people">
                 {team.members.map((m) => (
                   <li key={m.id}>
-                    <span className="avatar avatar-sm" aria-hidden>
-                      {initials(m.name)}
-                    </span>
+                    <Avatar name={m.name} size="sm" />
                     {m.name}
                   </li>
                 ))}
@@ -70,7 +68,7 @@ export function TeamsSection({ c, onPublish }: Props) {
         <>
           <h3 className="sub-heading">Match-ups</h3>
           {c.matchups.length === 0 ? (
-            <p className="hint">No match-ups yet.</p>
+            <p className="case-hint">No match-ups yet.</p>
           ) : (
             <ul className="matchup-summary">
               {c.matchups.map((m) => (
@@ -86,16 +84,16 @@ export function TeamsSection({ c, onPublish }: Props) {
         </>
       )}
 
-      <div className="actions section-actions">
-        <Link to={`/cases/${c.id}/teams`} className="btn btn-primary">
+      <div className="case-actions section-actions">
+        <Link to={`/courses/${c.courseId}/cases/${c.id}/teams`} className="ws-btn ws-btn-primary">
           {hasTeams ? 'Edit teams' : 'Build teams'} <ArrowRight size={16} aria-hidden />
         </Link>
         {hasTeams ? (
-          <Link to={`/cases/${c.id}/matchups`} className="btn">
+          <Link to={`/courses/${c.courseId}/cases/${c.id}/matchups`} className="ws-btn ws-btn-secondary">
             Edit matchups
           </Link>
         ) : (
-          <button type="button" className="btn" disabled>
+          <button type="button" className="ws-btn ws-btn-secondary" disabled>
             Edit matchups
           </button>
         )}

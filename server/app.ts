@@ -1,10 +1,10 @@
 import express, { type ErrorRequestHandler } from 'express'
-import multer from 'multer'
 import { fileURLToPath } from 'node:url'
 import { authRouter } from './auth/routes.ts'
-import { casesRouter, MAX_FILE_MB } from './cases/routes.ts'
-import { classesRouter } from './classes/routes.ts'
+import { casesRouter } from './cases/routes.ts'
 import { isProduction } from './config.ts'
+import { MAX_FACT_PATTERN_BYTES } from './courses/factPatternRoutes.ts'
+import { coursesRouter } from './courses/routes.ts'
 import { HttpError } from './httpError.ts'
 import { sessionMiddleware } from './session.ts'
 
@@ -15,7 +15,7 @@ if (isProduction) app.set('trust proxy', 1)
 
 app.use('/api', express.json(), sessionMiddleware)
 app.use('/api/auth', authRouter)
-app.use('/api/classes', classesRouter)
+app.use('/api/courses', coursesRouter)
 app.use('/api/cases', casesRouter)
 
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found.')))
@@ -27,17 +27,6 @@ if (isProduction) {
   app.get('/{*splat}', (_req, res) => res.sendFile('index.html', { root: distDir }))
 }
 
-function uploadErrorMessage(err: multer.MulterError) {
-  switch (err.code) {
-    case 'LIMIT_FILE_SIZE':
-      return `Files must be ${MAX_FILE_MB} MB or smaller.`
-    case 'LIMIT_FILE_COUNT':
-      return 'Too many files at once. Upload them in smaller batches.'
-    default:
-      return 'The upload could not be read. Please try again.'
-  }
-}
-
 // Express only treats a handler as an error handler if it takes four arguments.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
@@ -45,8 +34,9 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(err.status).json({ error: err.message })
     return
   }
-  if (err instanceof multer.MulterError) {
-    res.status(400).json({ error: uploadErrorMessage(err) })
+  if (err?.type === 'entity.too.large') {
+    const limitMb = MAX_FACT_PATTERN_BYTES / (1024 * 1024)
+    res.status(413).json({ error: `That file is too large. The limit is ${limitMb} MB.` })
     return
   }
   if (err?.type === 'entity.parse.failed') {

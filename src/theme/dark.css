@@ -1,0 +1,144 @@
+/*
+ * Dark mode for the navy/parchment palette in src/index.css. Turned on by
+ * data-theme="dark" on <html> (see index.html and theme.ts). Kept in its own
+ * file so the light styles stay as they are; every rule is prefixed with the
+ * theme selector, so it wins over the light rules wherever they're loaded.
+ */
+:root[data-theme='dark'] {
+  /* Navy is used for headings, so in the dark it becomes a light ink. */
+  --ws-navy: #dce5f0;
+  --ws-navy-light: #c4d2e2;
+  --ws-blue: #86aed3;
+  --ws-red: #e4948b;
+  --ws-gold: #d9b26b;
+  --ws-paper: #0e1622;
+  --ws-text: #e2e8ef;
+  --ws-muted: #9aa6b5;
+  --ws-line: #283649;
+  --ws-row-line: #1f2b3b;
+  --ws-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+
+  --surface: #152031;
+  --subtle: #1c2a3d;
+  --accent: #86aed3;
+  --link: #8fb7dc;
+  --error: #e4948b;
+  --error-bg: #3a201f;
+
+  /* Darker shades of the same colors, for the things that sit on top. */
+  --dark-navy: #0a1220;
+  --dark-button: #3d6b97;
+  --dark-button-hover: #4a7aa8;
+  --dark-hover-border: #3b4c62;
+
+  color-scheme: dark;
+}
+
+/* Surfaces that are white in the light theme */
+:root[data-theme='dark'] :is(
+    .btn-secondary,
+    .ws-btn-secondary,
+    .panel-form textarea,
+    .ws-stat,
+    .ws-case,
+    .ws-panel
+  ) {
+  background: var(--surface);
+}
+
+/* Navy backgrounds stay dark */
+:root[data-theme='dark'] .ws-sidebar {
+  background: var(--dark-navy);
+}
+
+:root[data-theme='dark'] .ws-sidebar .ws-avatar {
+  border-color: var(--dark-navy);
+}
+
+:root[data-theme='dark'] :is(.btn-primary, .ws-btn-primary, .auth-submit) {
+  background: var(--dark-button);
+  color: #fff;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] :is(.btn-primary:hover:not(:disabled), .ws-btn-primary:hover, .auth-submit:hover:not(:disabled)) {
+  background: var(--dark-button-hover);
+}
+
+:root[data-theme='dark'] .ws-case-emblem {
+  background: #2c4b6c;
+}
+
+/* Hover borders and dashed empty states */
+:root[data-theme='dark'] :is(
+    .btn-secondary:hover:not(:disabled),
+    .ws-btn-secondary:hover,
+    .ws-case:hover,
+    a.course-card:hover
+  ) {
+  border-color: var(--dark-hover-border);
+}
+
+:root[data-theme='dark'] :is(.ws-empty, .dashboard-empty) {
+  border-color: var(--ws-line);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Grey text that was tuned for a light background */
+:root[data-theme='dark'] :is(
+    .panel-form label,
+    .ws-stat small,
+    .ws-case-number,
+    .ws-case-summary,
+    .ws-case-meta,
+    .ws-activity-row small,
+    .course-code
+  ) {
+  color: var(--ws-muted);
+}
+
+:root[data-theme='dark'] .panel-form label {
+  color: var(--ws-text);
+}
+
+:root[data-theme='dark'] .ws-progress {
+  background: #243246;
+}
+
+:root[data-theme='dark'] .ws-avatar {
+  border-color: var(--surface);
+}
+
+/* Tinted chips: same hues, dark background, light text */
+:root[data-theme='dark'] :is(.ws-tone-blue, .ws-avatar-blue, .ws-date-event) {
+  background: #1d3550;
+  color: #a9c8e6;
+}
+
+:root[data-theme='dark'] :is(.ws-tone-amber, .ws-avatar-sand, .ws-status-in-review, .badge-pending, .ws-sample-banner) {
+  background: #3a2f1c;
+  color: #e3c48c;
+}
+
+:root[data-theme='dark'] :is(.ws-tone-rose, .ws-avatar-rose, .ws-date-deadline) {
+  background: #3c2221;
+  color: #eaaba3;
+}
+
+:root[data-theme='dark'] :is(.ws-tone-green, .ws-avatar-green, .ws-status-active, .badge-joined) {
+  background: #1d3529;
+  color: #9fd0b5;
+}
+
+:root[data-theme='dark'] .ws-status-closed {
+  background: #253141;
+  color: #b4bfcb;
+}
+
+:root[data-theme='dark'] .ws-case-in-review .ws-progress-header strong {
+  color: #e3c48c;
+}
+
+:root[data-theme='dark'] :is(.auth-card, .auth-tabs button.active) {
+  box-shadow: none;
+}

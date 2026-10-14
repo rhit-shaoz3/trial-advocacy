@@ -11,8 +11,8 @@ export function makeCase(overrides: Partial<InstructorCase> = {}): InstructorCas
   return {
     id: 'case-1',
     name: 'Smith v. Jones',
-    classId: 'class-1',
-    className: 'Evidence',
+    courseId: 'course-1',
+    courseName: 'LAW 540: Trial Advocacy',
     published: { documents: false, characters: false, teams: false },
     students,
     documents: [],

@@ -1,0 +1,70 @@
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  color: var(--fg);
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* In the navy sidebar it looks like the "All courses" link. */
+.ws-sidebar .theme-toggle {
+  align-self: flex-start;
+  margin-bottom: 0.75rem;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: #9babbc;
+}
+
+.ws-sidebar .theme-toggle:hover {
+  color: #fff;
+}
+
+.auth-theme-toggle {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+}
+
+/*
+ * On narrow screens the sidebar becomes a top bar and its bottom section is
+ * pinned beside the brand (see AppShell.css), so sit next to the log-out
+ * button as an icon.
+ */
+@media (max-width: 760px) {
+  .ws-sidebar-bottom {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .ws-sidebar .theme-toggle {
+    margin: 0;
+    padding: 0.4rem;
+    border-color: transparent;
+  }
+
+  .ws-sidebar .theme-toggle span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}

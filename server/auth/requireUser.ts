@@ -1,11 +1,18 @@
-import type { Request } from 'express'
+import type { RequestHandler } from 'express'
 import { HttpError } from '../httpError.ts'
-import { findUserById, type Role } from './users.ts'
+import { findUserById, type UserRow } from './users.ts'
 
-/** Loads the logged-in user, or rejects with 401 (not logged in) or 403 (wrong role). */
-export async function requireUser(req: Request, role?: Role) {
+declare module 'express-serve-static-core' {
+  interface Request {
+    /** Set by `requireUser`. */
+    user?: UserRow
+  }
+}
+
+/** Rejects the request with 401 unless someone is logged in; sets `req.user`. */
+export const requireUser: RequestHandler = async (req, _res, next) => {
   const user = req.session.userId ? await findUserById(req.session.userId) : null
   if (!user) throw new HttpError(401, 'Please log in.')
-  if (role && user.role !== role) throw new HttpError(403, `Only ${role}s can do that.`)
-  return user
+  req.user = user
+  next()
 }

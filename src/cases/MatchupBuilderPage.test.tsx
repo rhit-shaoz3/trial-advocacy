@@ -21,8 +21,8 @@ async function renderBuilder(c: InstructorCase = threeTeams) {
   })
   const result = renderWithProviders(<MatchupBuilderPage />, {
     casesApi,
-    url: '/cases/case-1/matchups',
-    path: '/cases/:caseId/matchups',
+    url: '/courses/course-1/cases/case-1/matchups',
+    path: '/courses/:courseId/cases/:caseId/matchups',
   })
   await screen.findByRole('heading', { name: 'Give every team a worthy opponent.' })
   return result
@@ -50,7 +50,7 @@ describe('matchup builder', () => {
       { plaintiffTeamId: pairedId, defendantTeamId: 'd1' },
       { plaintiffTeamId: leftoverId, defendantTeamId: 'd1' },
     ])
-    expect(await screen.findByText('Navigated to /cases/case-1')).toBeInTheDocument()
+    expect(await screen.findByText('Navigated to /courses/course-1/cases/case-1')).toBeInTheDocument()
   })
 
   it('builds a matchup by hand and blocks incomplete ones', async () => {

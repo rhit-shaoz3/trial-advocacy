@@ -19,8 +19,8 @@ async function renderPage(c: InstructorCase, overrides: Partial<CasesApi> = {}) 
   const casesApi = fakeCasesApi({ getInstructorCase: vi.fn().mockResolvedValue(c), ...overrides })
   const result = renderWithProviders(<InstructorCasePage />, {
     casesApi,
-    url: '/cases/case-1',
-    path: '/cases/:caseId',
+    url: '/courses/course-1/cases/case-1',
+    path: '/courses/:courseId/cases/:caseId',
   })
   await screen.findByRole('heading', { name: 'Smith v. Jones' })
   return result
@@ -101,10 +101,13 @@ describe('instructor case page', () => {
     expect(screen.getByRole('status')).toHaveTextContent("1 student isn't on a team: Ed")
     expect(screen.getByText('Alpha').closest('li, div')).toBeInTheDocument()
     expect(screen.getByText(/vs/).closest('li')).toHaveTextContent('Alpha vs Beta')
-    expect(screen.getByRole('link', { name: 'Edit teams' })).toHaveAttribute('href', '/cases/case-1/teams')
+    expect(screen.getByRole('link', { name: 'Edit teams' })).toHaveAttribute(
+      'href',
+      '/courses/course-1/cases/case-1/teams',
+    )
     expect(screen.getByRole('link', { name: 'Edit matchups' })).toHaveAttribute(
       'href',
-      '/cases/case-1/matchups',
+      '/courses/course-1/cases/case-1/matchups',
     )
   })
 

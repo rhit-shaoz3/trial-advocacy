@@ -1,23 +1,25 @@
 // Match the shapes returned by server/cases/cases.ts.
-import type { Person } from '../classes/types'
+
+/** A student who has joined the course. */
+export interface Person {
+  id: string
+  name: string
+  email: string
+}
 
 export type Side = 'plaintiff' | 'defendant'
 export type DocSide = Side | 'both'
 export type CharacterRole = 'witness' | 'investigator'
 export type Section = 'documents' | 'characters' | 'teams'
 
-export interface CaseSummary {
+/** A case in a course's case list. */
+export interface CaseListItem {
   id: string
   name: string
-  classId: string
-  className: string
+  courseId: string
+  /** e.g. "LAW 540: Trial Advocacy" */
+  courseName: string
   published: Record<Section, boolean>
-}
-
-export interface StudentCaseSummary {
-  id: string
-  name: string
-  className: string
 }
 
 export interface CaseDocument {
@@ -59,7 +61,7 @@ export interface Matchup {
   defendantTeamId: string
 }
 
-export interface InstructorCase extends CaseSummary {
+export interface InstructorCase extends CaseListItem {
   students: Person[]
   documents: CaseDocument[]
   characters: Character[]
@@ -70,7 +72,7 @@ export interface InstructorCase extends CaseSummary {
 export interface StudentCase {
   id: string
   name: string
-  className: string
+  courseName: string
   published: Record<Section, boolean>
   /** null until teams are published, or if the student isn't on a team. */
   team: {
@@ -100,9 +102,9 @@ export interface MatchupInput {
 
 /** Everything the case pages need from the API; tests swap in a fake. */
 export interface CasesApi {
-  listInstructorCases(): Promise<CaseSummary[]>
-  listStudentCases(): Promise<StudentCaseSummary[]>
-  createCase(input: { name: string; classId: string }): Promise<CaseSummary>
+  /** The course's cases; students only get ones with something published. */
+  listCourseCases(courseId: string): Promise<CaseListItem[]>
+  createCase(courseId: string, name: string): Promise<CaseListItem>
   getInstructorCase(caseId: string): Promise<InstructorCase>
   getStudentCase(caseId: string): Promise<StudentCase>
   setPublished(caseId: string, changes: Partial<Record<Section, boolean>>): Promise<InstructorCase>

@@ -17,8 +17,8 @@ async function renderBuilder(c: InstructorCase = makeCase()) {
   })
   const result = renderWithProviders(<TeamBuilderPage />, {
     casesApi,
-    url: '/cases/case-1/teams',
-    path: '/cases/:caseId/teams',
+    url: '/courses/course-1/cases/case-1/teams',
+    path: '/courses/:courseId/cases/:caseId/teams',
   })
   await screen.findByRole('heading', { name: 'Good advocacy starts with a team.' })
   return result
@@ -76,7 +76,7 @@ describe('team builder', () => {
         studentIds: ['s1', 's2', 's3', 's4', 's5'],
       },
     ])
-    expect(await screen.findByText('Navigated to /cases/case-1/matchups')).toBeInTheDocument()
+    expect(await screen.findByText('Navigated to /courses/course-1/cases/case-1/matchups')).toBeInTheDocument()
   })
 
   it('edits saved teams, keeping their ids', async () => {

@@ -1,5 +1,4 @@
 import { pool } from '../db/pool.ts'
-import type { Db } from '../db/transaction.ts'
 
 export type Role = 'student' | 'instructor'
 
@@ -12,7 +11,7 @@ export interface PublicUser {
   createdAt: string
 }
 
-interface UserRow {
+export interface UserRow {
   id: string
   name: string
   email: string
@@ -45,11 +44,13 @@ export async function findUserByEmail(email: string) {
 }
 
 /** Returns null if the email is already taken. */
-export async function createUser(
-  input: { name: string; email: string; role: Role; passwordHash: string },
-  db: Db = pool,
-) {
-  const { rows } = await db.query<UserRow>(
+export async function createUser(input: {
+  name: string
+  email: string
+  role: Role
+  passwordHash: string
+}) {
+  const { rows } = await pool.query<UserRow>(
     `INSERT INTO users (name, email, role, password_hash)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT ((lower(email))) DO NOTHING

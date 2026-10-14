@@ -1,6 +1,6 @@
 import { Pencil, Plus, Trash2, UserRound } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { errorMessage } from '../dashboard/errorMessage'
+import { errorMessage } from '../api/useLoad'
 import { useCasesApi } from './CasesApiContext'
 import { characterBadge, ROLE_LABELS } from './format'
 import { PublishControl } from './PublishControl'
@@ -47,7 +47,7 @@ function CharacterForm({
     <form className="character-form" onSubmit={handleSubmit} aria-label={submitLabel}>
       <input
         type="text"
-        className="input"
+        className="case-input"
         aria-label="Name"
         placeholder="Name, e.g. Elena Rivera"
         value={input.name}
@@ -57,7 +57,7 @@ function CharacterForm({
       />
       <input
         type="text"
-        className="input"
+        className="case-input"
         aria-label="Title"
         placeholder="Title, e.g. Police Officer"
         value={input.title}
@@ -66,7 +66,7 @@ function CharacterForm({
         required
       />
       <select
-        className="input"
+        className="case-input"
         aria-label="Role"
         value={input.role}
         onChange={(e) => setInput({ ...input, role: e.target.value as CharacterRole })}
@@ -79,16 +79,16 @@ function CharacterForm({
       </select>
       <SideSelect
         label="Character visible to"
-        className="input"
+        className="case-input"
         value={input.side}
         onChange={(side) => setInput({ ...input, side })}
       />
-      <div className="actions">
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+      <div className="case-actions">
+        <button type="submit" className="ws-btn ws-btn-primary" disabled={busy}>
           {!onCancel && <Plus size={16} aria-hidden />} {submitLabel}
         </button>
         {onCancel && (
-          <button type="button" className="btn" onClick={onCancel}>
+          <button type="button" className="ws-btn ws-btn-secondary" onClick={onCancel}>
             Cancel
           </button>
         )}
@@ -131,12 +131,12 @@ export function CharactersSection({ c, onChanged, onPublish }: Props) {
   }
 
   return (
-    <section className="panel" aria-labelledby="characters-heading">
-      <div className="panel-head">
+    <section className="ws-panel case-panel" aria-labelledby="characters-heading">
+      <div className="case-panel-head">
         <h2 id="characters-heading">Characters</h2>
         <PublishControl label="characters" published={c.published.characters} onChange={onPublish} />
       </div>
-      <p className="hint section-intro">
+      <p className="case-hint section-intro">
         Witnesses and investigators students can interview. Tick the documents each one knows
         about. (AI role-play comes later.)
       </p>
@@ -170,20 +170,20 @@ export function CharactersSection({ c, onChanged, onPublish }: Props) {
             ) : (
               <li key={ch.id} className="character-card">
                 <div className="character-card-top">
-                  <span className="avatar avatar-muted" aria-hidden>
+                  <span className="case-avatar case-avatar-muted" aria-hidden>
                     <UserRound size={18} />
                   </span>
-                  <span className={`badge ${ch.side === 'defendant' ? 'badge-defendant' : ''}`}>
+                  <span className={`case-badge ${ch.side === 'defendant' ? 'case-badge-defendant' : ''}`}>
                     {characterBadge(ch.role, ch.side)}
                   </span>
                 </div>
                 <p className="character-name">{ch.name}</p>
-                <p className="hint">{ch.title}</p>
+                <p className="case-hint">{ch.title}</p>
                 <p className="character-knows">
                   {ch.documentIds.length === 0 ? (
-                    <span className="badge badge-warning">Knows nothing yet</span>
+                    <span className="case-badge case-badge-warning">Knows nothing yet</span>
                   ) : (
-                    <span className="hint">
+                    <span className="case-hint">
                       Knows {ch.documentIds.length} document{ch.documentIds.length === 1 ? '' : 's'}
                     </span>
                   )}
@@ -191,7 +191,7 @@ export function CharactersSection({ c, onChanged, onPublish }: Props) {
                 <div className="character-card-actions">
                   <button
                     type="button"
-                    className="icon-btn"
+                    className="case-icon-btn"
                     aria-label={`Edit ${ch.name}`}
                     onClick={() => setEditing(ch.id)}
                   >
@@ -199,7 +199,7 @@ export function CharactersSection({ c, onChanged, onPublish }: Props) {
                   </button>
                   <button
                     type="button"
-                    className="icon-btn"
+                    className="case-icon-btn"
                     aria-label={`Delete ${ch.name}`}
                     onClick={() => {
                       if (window.confirm(`Delete ${ch.name}?`)) {
@@ -218,7 +218,7 @@ export function CharactersSection({ c, onChanged, onPublish }: Props) {
 
       {c.characters.length > 0 && c.documents.length > 0 && (
         <div className="grid-scroll">
-          <table className="data-table knows-grid">
+          <table className="case-table knows-grid">
             <caption>What each character knows</caption>
             <thead>
               <tr>
@@ -251,7 +251,7 @@ export function CharactersSection({ c, onChanged, onPublish }: Props) {
         </div>
       )}
       {c.characters.length > 0 && c.documents.length === 0 && (
-        <p className="hint">Upload case files to choose what each character knows.</p>
+        <p className="case-hint">Upload case files to choose what each character knows.</p>
       )}
     </section>
   )

@@ -28,6 +28,12 @@ Requires Node.js 24+ and PostgreSQL.
    npm run db:migrate
    ```
 
+   Optionally add demo data: a demo instructor, three courses, and a class of 31 demo students enrolled in LAW 540 (enough to practice pairing). Every demo account's password is `demo-password`; the script prints the logins and entry codes, and is safe to re-run:
+
+   ```bash
+   npm run db:seed
+   ```
+
 5. Start the API and the web app together:
 
    ```bash
@@ -35,6 +41,8 @@ Requires Node.js 24+ and PostgreSQL.
    ```
 
 Then open the URL Vite prints (usually http://localhost:5173). Vite forwards `/api` requests to the API on port 3001.
+
+To preview a student's course home page with made-up cases, activity, and deadlines, add `?sample` to the course URL (e.g. `/courses/<id>?sample`). This only works in development; production builds leave the sample data out.
 
 ## Scripts
 
@@ -44,6 +52,7 @@ Then open the URL Vite prints (usually http://localhost:5173). Vite forwards `/a
 | `npm run dev:client` | Start only the Vite dev server                       |
 | `npm run dev:server` | Start only the API (restarts on file changes)        |
 | `npm run db:migrate` | Apply `server/db/schema.sql` to the database         |
+| `npm run db:seed`    | Add demo accounts and courses (dev only)             |
 | `npm run build`      | Type-check everything and build the web app (`dist/`) |
 | `npm start`          | Run the API in production (also serves `dist/`)      |
 | `npm test`           | Run all tests once                                   |
@@ -55,7 +64,9 @@ Then open the URL Vite prints (usually http://localhost:5173). Vite forwards `/a
 Tests use [Vitest](https://vitest.dev) and live next to the code they test (`*.test.ts(x)`):
 
 - **`server/**/*.test.ts`**: API tests that send real HTTP requests to the Express app and use a real Postgres database.
-- **`src/**/*.test.tsx`**: UI tests that render the React pages in a simulated browser against a fake auth service.
+- **`src/**/*.test.tsx`**: UI tests that render the React pages in a simulated browser against fake services (see `src/test/fakeCourseService.ts`).
+
+Shared test setup lives in `server/test/` and `src/test/`; the tests themselves stay beside their code.
 
 The API tests wipe their tables between tests, so they use a separate database, `trial_advocacy_test`, never your dev one. Create it once:
 
@@ -72,48 +83,54 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | Method | Path               | Body                                | Result                    |
 | ------ | ------------------ | ----------------------------------- | ------------------------- |
 | GET    | `/api/auth/me`     |                                     | `{ user }` or `{ user: null }` |
-| POST   | `/api/auth/signup` | `{ name, email, password, role, classCode? }` | `201 { user }`, `409` if email taken, `404` if `classCode` matches no class |
+| POST   | `/api/auth/signup` | `{ name, email, password, role }`   | `201 { user }`, `409` if email taken |
 | POST   | `/api/auth/login`  | `{ email, password }`               | `{ user }`, `401` if wrong |
 | POST   | `/api/auth/logout` |                                     | `204`                     |
+| GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
+| POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
+| GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. `cases` are the course's case cards (students only see released ones); activity and deadlines aren't stored yet, so those lists are empty for now |
+| GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode` and `studentCount` |
+| POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
 
-### Classes
+These manage one course and are only for the instructor who teaches it (anyone else gets `404`):
 
-All of these need a logged-in user. "Instructor" routes only work on classes that instructor teaches.
-
-| Method | Path | Who | Body | Result |
-| ------ | ---- | --- | ---- | ------ |
-| GET    | `/api/classes` | both | | `{ classes }`: an instructor gets each class with its join code, students, invitations and pending requests; a student gets the classes they're in |
-| POST   | `/api/classes` | instructor | `{ name, studentEmails }` | `201 { class, invited, withAccounts }`; creates a name-based join code (e.g. `EVID517`) and invites the emails |
-| POST   | `/api/classes/:id/requests` | instructor | `{ userIds, decision: 'admit' \| 'deny' }` | `{ updated }` |
-| POST   | `/api/classes/join` | student | `{ code }` | `{ status: 'requested' \| 'enrolled', className }`, `404` if no class has that code |
-| GET    | `/api/classes/inbox` | student | | `{ invitations, pendingRequests, denials }` |
-| POST   | `/api/classes/invitations/:id/accept` | student | | `204`, joins the class |
-| POST   | `/api/classes/invitations/:id/reject` | student | | `204`, removes the invitation |
-| POST   | `/api/classes/denials/:classId/dismiss` | student | | `204`, clears a "request denied" notice |
+| Method | Path                                         | Body / headers                   | Result |
+| ------ | -------------------------------------------- | -------------------------------- | ------ |
+| GET    | `/api/courses/:id`                           |                                  | `{ course }` |
+| PATCH  | `/api/courses/:id`                           | `{ code, title, season, year }`  | `{ course }`; entry code and roster unchanged |
+| DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster and fact patterns |
+| GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined }] }` |
+| POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | `{ added, skipped: [{ email, reason }], roster }` |
+| DELETE | `/api/courses/:id/roster/:email`             |                                  | `204`, `404` if not on the roster |
+| GET    | `/api/courses/:id/fact-patterns`             |                                  | `{ factPatterns: [{ id, filename, sizeBytes, uploadedAt }] }` |
+| POST   | `/api/courses/:id/fact-patterns`             | Raw file body; `X-Filename` (URI-encoded) | `201 { factPattern }`; `413` over 10 MB, `415` not PDF/Word/text |
+| GET    | `/api/courses/:id/fact-patterns/:fileId/file` |                                 | The file, as a download |
+| DELETE | `/api/courses/:id/fact-patterns/:fileId`     |                                  | `204` |
 
 ### Cases
 
-A case belongs to a class. Instructors add documents, characters (witnesses), teams and matchups, then publish each section to students separately. Only the class's instructors can see or change a case; students see it once something is published.
+A course's instructor builds each case (files, characters, teams, match-ups) and releases each section to students separately. Students only see cases with something released.
 
 | Method | Path | Who | Body | Result |
 | ------ | ---- | --- | ---- | ------ |
-| GET    | `/api/cases` | both | | `{ cases }`: an instructor gets every case in their classes; a student gets published cases in classes they're in |
-| POST   | `/api/cases` | instructor | `{ name, classId }` | `201 { case }` |
-| GET    | `/api/cases/:id` | both | | `{ case }`: everything for the instructor; for a student, only published sections, filtered to their side |
-| PATCH  | `/api/cases/:id/publish` | instructor | `{ documents?, characters?, teams? }` (booleans) | `{ case }` |
-| POST   | `/api/cases/:id/documents` | instructor | multipart: `files` (up to 20, 20 MB each), `side` | `201 { documents }` |
-| PATCH  | `/api/cases/:id/documents/:docId` | instructor | `{ side }` | `{ document }` |
-| DELETE | `/api/cases/:id/documents/:docId` | instructor | | `204` |
-| GET    | `/api/cases/:id/documents/:docId/file` | both | | the file, as a download |
-| POST   | `/api/cases/:id/characters` | instructor | `{ name, title, role, side }` | `201 { character }` |
-| PATCH / DELETE | `/api/cases/:id/characters/:charId` | instructor | `{ name, title, role, side }` | `{ character }` / `204` |
-| PUT / DELETE | `/api/cases/:id/characters/:charId/documents/:docId` | instructor | | `204`; links or unlinks what the character knows |
-| PUT    | `/api/cases/:id/teams` | instructor | `{ teams: [{ id?, name, side, studentIds }] }` | `{ case }`; replaces all teams; every student must be on one |
-| PUT    | `/api/cases/:id/matchups` | instructor | `{ matchups: [{ plaintiffTeamId, defendantTeamId }] }` | `{ case }`; replaces all matchups |
+| GET    | `/api/courses/:id/cases` | members | | `{ cases }`; students only get cases with something published |
+| POST   | `/api/courses/:id/cases` | instructor | `{ name }` | `201 { case }` |
+| GET    | `/api/cases/:caseId` | members | | `{ case }`: everything for the instructor; for a student, only published sections, filtered to their side |
+| PATCH  | `/api/cases/:caseId/publish` | instructor | `{ documents?, characters?, teams? }` (booleans) | `{ case }` |
+| POST   | `/api/cases/:caseId/documents?side=` | instructor | Raw file body; `X-Filename` (URI-encoded), same rules as fact patterns | `201 { document }` |
+| PATCH / DELETE | `/api/cases/:caseId/documents/:docId` | instructor | `{ side }` | `{ document }` / `204` |
+| GET    | `/api/cases/:caseId/documents/:docId/file` | members | | The file, as a download (students only get their side's and shared files) |
+| POST   | `/api/cases/:caseId/characters` | instructor | `{ name, title, role, side }` | `201 { character }` |
+| PATCH / DELETE | `/api/cases/:caseId/characters/:charId` | instructor | `{ name, title, role, side }` | `{ character }` / `204` |
+| PUT / DELETE | `/api/cases/:caseId/characters/:charId/documents/:docId` | instructor | | `204`; links or unlinks what the character knows |
+| PUT    | `/api/cases/:caseId/teams` | instructor | `{ teams: [{ id?, name, side, studentIds }] }` | `{ case }`; replaces all teams; every joined student must be on one |
+| PUT    | `/api/cases/:caseId/matchups` | instructor | `{ matchups: [{ plaintiffTeamId, defendantTeamId }] }` | `{ case }`; replaces all match-ups |
 
 A character's `title` is their job title (e.g. "Police Officer") and `role` is `witness` or `investigator`. `side` is `plaintiff`, `defendant` or `both` for documents and characters, and `plaintiff` or `defendant` for teams. Students see items marked `both` once that section is published, and items for their own side once teams are published too.
 
-Uploaded files are stored in Postgres (the `stored_files` table) for now. Only `server/files/fileStore.ts` touches that table, so moving to S3 means replacing that one file.
+All `/api/courses` and `/api/cases` routes return `401` when not logged in.
+
+**Rosters are keyed by email.** An instructor can add a student who has no account yet; that roster row is "pending" until someone signs up with the email (or joins with the entry code), and then it links to their account automatically.
 
 Errors come back as `{ error: "message" }`. Logins are kept in an httpOnly session cookie stored in the `session` table.
 

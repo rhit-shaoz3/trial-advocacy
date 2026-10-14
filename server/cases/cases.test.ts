@@ -2,6 +2,7 @@ import request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
+import { createCourseAs, resetDatabase } from '../test/helpers.ts'
 
 type Role = 'student' | 'instructor'
 
@@ -15,30 +16,33 @@ async function signUp(name: string, role: Role) {
 
 type User = Awaited<ReturnType<typeof signUp>>
 
-/** An instructor with a class of the named students and one case. */
+/** An instructor with a course the named students have joined, and one case in it. */
 async function setup(studentNames = ['Ana', 'Bo', 'Cy', 'Di']) {
   const ivy = await signUp('Ivy', 'instructor')
-  const cls = await ivy.agent.post('/api/classes').send({ name: 'Evidence' })
-  const classId = cls.body.class.id as string
+  const course = await createCourseAs(ivy.agent)
   const students: User[] = []
   for (const name of studentNames) {
     const s = await signUp(name, 'student')
-    await pool.query('INSERT INTO class_students (class_id, user_id) VALUES ($1, $2)', [
-      classId,
-      s.id,
-    ])
+    await s.agent.post('/api/courses/join').send({ entryCode: course.entryCode })
     students.push(s)
   }
-  const created = await ivy.agent.post('/api/cases').send({ name: 'Smith v. Jones', classId })
-  return { ivy, students, classId, caseId: created.body.case.id as string }
+  const created = await ivy.agent
+    .post(`/api/courses/${course.id}/cases`)
+    .send({ name: 'Smith v. Jones' })
+  return { ivy, students, courseId: course.id, caseId: created.body.case.id as string }
+}
+
+function sendFile(agent: User['agent'], caseId: string, name: string, data: Buffer, side = 'both') {
+  return agent
+    .post(`/api/cases/${caseId}/documents?side=${side}`)
+    .set('X-Filename', encodeURIComponent(name))
+    .set('Content-Type', 'application/octet-stream')
+    .send(data)
 }
 
 async function upload(agent: User['agent'], caseId: string, name: string, side = 'both') {
-  const res = await agent
-    .post(`/api/cases/${caseId}/documents`)
-    .field('side', side)
-    .attach('files', Buffer.from(`contents of ${name}`), name)
-  return res.body.documents?.[0]
+  const res = await sendFile(agent, caseId, name, Buffer.from(`contents of ${name}`), side)
+  return res.body.document
 }
 
 async function count(table: string) {
@@ -47,7 +51,7 @@ async function count(table: string) {
 }
 
 beforeEach(async () => {
-  await pool.query('TRUNCATE users, session, stored_files CASCADE')
+  await resetDatabase()
 })
 
 afterAll(async () => {
@@ -55,8 +59,8 @@ afterAll(async () => {
 })
 
 describe('creating and viewing cases', () => {
-  it('creates a case for one of the instructor’s classes', async () => {
-    const { ivy, caseId, classId } = await setup([])
+  it('creates a case in a course the instructor teaches', async () => {
+    const { ivy, caseId, courseId } = await setup([])
 
     const res = await ivy.agent.get(`/api/cases/${caseId}`)
 
@@ -64,34 +68,36 @@ describe('creating and viewing cases', () => {
     expect(res.body.case).toMatchObject({
       id: caseId,
       name: 'Smith v. Jones',
-      classId,
-      className: 'Evidence',
+      courseId,
+      courseName: 'LAW 540: Trial Advocacy',
       published: { documents: false, characters: false, teams: false },
       documents: [],
       characters: [],
       teams: [],
       matchups: [],
     })
-    expect((await ivy.agent.get('/api/cases')).body.cases).toHaveLength(1)
+    expect((await ivy.agent.get(`/api/courses/${courseId}/cases`)).body.cases).toHaveLength(1)
   })
 
-  it('refuses a class the instructor does not teach', async () => {
-    const { classId } = await setup([])
+  it('refuses a course the instructor does not teach', async () => {
+    const { courseId } = await setup([])
     const other = await signUp('Oscar', 'instructor')
 
-    const res = await other.agent.post('/api/cases').send({ name: 'X', classId })
+    const res = await other.agent.post(`/api/courses/${courseId}/cases`).send({ name: 'X' })
 
-    expect(res.status).toBe(400)
-    expect(res.body.error).toBe('Choose one of your classes.')
+    expect(res.status).toBe(404)
+    expect(res.body.error).toBe('Course not found.')
   })
 
   it('hides the case from other instructors and stops students creating cases', async () => {
-    const { caseId, classId, students } = await setup(['Ana'])
+    const { caseId, courseId, students } = await setup(['Ana'])
     const other = await signUp('Oscar', 'instructor')
 
     expect((await other.agent.get(`/api/cases/${caseId}`)).status).toBe(404)
     expect((await other.agent.patch(`/api/cases/${caseId}/publish`).send({ teams: true })).status).toBe(404)
-    expect((await students[0].agent.post('/api/cases').send({ name: 'X', classId })).status).toBe(403)
+    expect(
+      (await students[0].agent.post(`/api/courses/${courseId}/cases`).send({ name: 'X' })).status,
+    ).toBe(403)
     expect((await request(app).get(`/api/cases/${caseId}`)).status).toBe(401)
   })
 })
@@ -117,28 +123,31 @@ describe('documents', () => {
     expect((file.body as Buffer).toString()).toBe('contents of Exhibit Ñ.pdf')
   })
 
-  it('rejects file types that are not allowed', async () => {
+  it('rejects file types that are not allowed, like fact patterns do', async () => {
     const { ivy, caseId } = await setup([])
-    const res = await ivy.agent
-      .post(`/api/cases/${caseId}/documents`)
-      .attach('files', Buffer.from('<script>'), 'evil.html')
+    const res = await sendFile(ivy.agent, caseId, 'evil.html', Buffer.from('<script>'))
 
-    expect(res.status).toBe(400)
-    expect(res.body.error).toMatch(/evil.html isn't a supported file type/)
+    expect(res.status).toBe(415)
+    expect(res.body.error).toBe('Upload a PDF, Word document, or text file.')
     expect(await count('case_documents')).toBe(0)
   })
 
   it('rejects files over the size limit', async () => {
     const { ivy, caseId } = await setup([])
-    const res = await ivy.agent
-      .post(`/api/cases/${caseId}/documents`)
-      .attach('files', Buffer.alloc(20 * 1024 * 1024 + 1), 'big.pdf')
+    const res = await sendFile(ivy.agent, caseId, 'big.pdf', Buffer.alloc(10 * 1024 * 1024 + 1))
 
-    expect(res.status).toBe(400)
-    expect(res.body.error).toBe('Files must be 20 MB or smaller.')
+    expect(res.status).toBe(413)
+    expect(res.body.error).toBe('That file is too large. The limit is 10 MB.')
   })
 
-  it('changes a document’s side and deletes it along with the stored file', async () => {
+  it('only lets the course’s instructor upload', async () => {
+    const { caseId, students } = await setup(['Ana'])
+    const res = await sendFile(students[0].agent, caseId, 'x.pdf', Buffer.from('x'))
+
+    expect(res.status).toBe(403)
+  })
+
+  it('changes a document’s side and deletes it', async () => {
     const { ivy, caseId } = await setup([])
     const doc = await upload(ivy.agent, caseId, 'memo.txt')
 
@@ -149,7 +158,6 @@ describe('documents', () => {
 
     expect((await ivy.agent.delete(`/api/cases/${caseId}/documents/${doc.id}`)).status).toBe(204)
     expect(await count('case_documents')).toBe(0)
-    expect(await count('stored_files')).toBe(0)
   })
 })
 
@@ -183,8 +191,8 @@ describe('characters', () => {
   })
 
   it('will not link a document from another case', async () => {
-    const { ivy, caseId, classId } = await setup([])
-    const otherCase = await ivy.agent.post('/api/cases').send({ name: 'Other', classId })
+    const { ivy, caseId, courseId } = await setup([])
+    const otherCase = await ivy.agent.post(`/api/courses/${courseId}/cases`).send({ name: 'Other' })
     const doc = await upload(ivy.agent, otherCase.body.case.id, 'x.pdf')
     const created = await ivy.agent
       .post(`/api/cases/${caseId}/characters`)
@@ -305,7 +313,7 @@ describe('teams', () => {
     })
 
     expect(res.status).toBe(400)
-    expect(res.body.error).toBe("A has a student who isn't in this class.")
+    expect(res.body.error).toBe("A has a student who isn't in this course.")
   })
 
   it('keeps matchups when a team is renamed, and drops them when its side changes', async () => {
@@ -417,8 +425,8 @@ describe('matchups', () => {
   })
 
   it('rejects a team from another case', async () => {
-    const { ivy, classId, p1, d1 } = await withTeams()
-    const other = await ivy.agent.post('/api/cases').send({ name: 'Other', classId })
+    const { ivy, courseId, p1, d1 } = await withTeams()
+    const other = await ivy.agent.post(`/api/courses/${courseId}/cases`).send({ name: 'Other' })
 
     const res = await ivy.agent
       .put(`/api/cases/${other.body.case.id}/matchups`)
@@ -457,18 +465,24 @@ describe('what students see', () => {
   }
 
   it('shows nothing until something is published', async () => {
-    const { ana, caseId } = await fullCase()
+    const { ana, caseId, courseId } = await fullCase()
 
-    expect((await ana.agent.get('/api/cases')).body.cases).toEqual([])
+    expect((await ana.agent.get(`/api/courses/${courseId}/cases`)).body.cases).toEqual([])
     expect((await ana.agent.get(`/api/cases/${caseId}`)).status).toBe(404)
   })
 
   it('shows only shared documents before teams are published', async () => {
-    const { ana, caseId, publish } = await fullCase()
+    const { ana, caseId, courseId, publish } = await fullCase()
     await publish({ documents: true })
 
-    expect((await ana.agent.get('/api/cases')).body.cases).toEqual([
-      { id: caseId, name: 'Smith v. Jones', className: 'Evidence' },
+    expect((await ana.agent.get(`/api/courses/${courseId}/cases`)).body.cases).toEqual([
+      {
+        id: caseId,
+        name: 'Smith v. Jones',
+        courseId,
+        courseName: 'LAW 540: Trial Advocacy',
+        published: { documents: true, characters: false, teams: false },
+      },
     ])
     const view = (await ana.agent.get(`/api/cases/${caseId}`)).body.case
     expect(view.team).toBeNull()
@@ -524,12 +538,41 @@ describe('what students see', () => {
     expect(view.documents.map((d: { filename: string }) => d.filename)).toEqual(['complaint.pdf'])
   })
 
-  it('does not show the case to students in other classes', async () => {
-    const { caseId, publish } = await fullCase()
+  it('does not show the case to students outside the course', async () => {
+    const { caseId, courseId, publish } = await fullCase()
     await publish({ documents: true })
     const outsider = await signUp('Zed', 'student')
 
     expect((await outsider.agent.get(`/api/cases/${caseId}`)).status).toBe(404)
-    expect((await outsider.agent.get('/api/cases')).body.cases).toEqual([])
+    expect((await outsider.agent.get(`/api/courses/${courseId}/cases`)).status).toBe(404)
+  })
+
+  it('fills the course dashboard with case cards for each role', async () => {
+    const { ivy, ana, courseId, publish } = await fullCase()
+
+    const before = await ana.agent.get(`/api/courses/${courseId}/home`)
+    expect(before.body.cases).toEqual([])
+
+    await publish({ teams: true })
+    const instructorHome = await ivy.agent.get(`/api/courses/${courseId}/home`)
+    expect(instructorHome.body.cases).toEqual([
+      expect.objectContaining({
+        title: 'Smith v. Jones',
+        caseType: '3 files · 2 characters',
+        summary: 'Published to students: teams.',
+        status: 'active',
+        progress: null,
+      }),
+    ])
+
+    const studentHome = await ana.agent.get(`/api/courses/${courseId}/home`)
+    expect(studentHome.body.cases).toEqual([
+      expect.objectContaining({
+        title: 'Smith v. Jones',
+        caseType: 'Plaintiff · P1',
+        summary: 'Against D1.',
+        participants: [{ name: 'Ana' }, { name: 'Bo' }],
+      }),
+    ])
   })
 })

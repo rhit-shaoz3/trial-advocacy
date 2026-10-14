@@ -13,7 +13,7 @@ export function DropZone({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   return (
-    <div ref={setNodeRef} className={`${className ?? ''}${isOver ? ' drop-over' : ''}`}>
+    <div ref={setNodeRef} className={`${className ?? ''}${isOver ? 'drop-over' : ''}`}>
       {children}
     </div>
   )
@@ -35,7 +35,7 @@ export function Draggable({
   return (
     <div
       ref={setNodeRef}
-      className={`${className ?? ''}${isDragging ? ' dragging' : ''}`}
+      className={`${className ?? ''}${isDragging ? 'dragging' : ''}`}
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
     >
       <button type="button" className="drag-handle" aria-label={label} {...attributes} {...listeners}>

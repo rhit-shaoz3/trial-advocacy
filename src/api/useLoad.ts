@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { errorMessage } from '../dashboard/errorMessage'
+
+export function errorMessage(err: unknown) {
+  return err instanceof Error ? err.message : 'Something went wrong.'
+}
 
 /**
  * Loads data when the component mounts. `load` must be stable (wrap it in

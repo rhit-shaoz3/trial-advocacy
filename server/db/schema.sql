@@ -11,93 +11,76 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
 
--- Login sessions, in the format connect-pg-simple expects.
-CREATE TABLE IF NOT EXISTS session (
-  sid    varchar      PRIMARY KEY,
-  sess   json         NOT NULL,
-  expire timestamp(6) NOT NULL
+-- A course offering in one term, e.g. LAW 540 in Fall 2026. Students join
+-- with the entry code, which is stored uppercase.
+CREATE TABLE IF NOT EXISTS courses (
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  code          text        NOT NULL,
+  title         text        NOT NULL,
+  term          text        NOT NULL,
+  term_start    date        NOT NULL,
+  entry_code    text        NOT NULL UNIQUE,
+  instructor_id uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS session_expire_idx ON session (expire);
+CREATE INDEX IF NOT EXISTS courses_instructor_idx ON courses (instructor_id);
 
--- A class is taught by one or more instructors. Students get in either by an
--- instructor's email invitation or by entering the class's join code.
-CREATE TABLE IF NOT EXISTS classes (
-  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  name       text        NOT NULL,
-  join_code  text        NOT NULL UNIQUE,
-  created_by uuid        NOT NULL REFERENCES users (id),
-  created_at timestamptz NOT NULL DEFAULT now()
+-- The course roster, keyed by (lowercase) email so an instructor can add a
+-- student before they have an account. `user_id` stays NULL ("pending") until
+-- someone signs up with that email or joins with the entry code.
+CREATE TABLE IF NOT EXISTS enrollments (
+  course_id uuid        NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+  email     text        NOT NULL,
+  user_id   uuid        REFERENCES users (id) ON DELETE CASCADE,
+  added_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (course_id, email)
 );
 
-CREATE TABLE IF NOT EXISTS class_instructors (
-  class_id uuid NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
-  user_id  uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  PRIMARY KEY (class_id, user_id)
+CREATE INDEX IF NOT EXISTS enrollments_user_idx ON enrollments (user_id);
+CREATE INDEX IF NOT EXISTS enrollments_pending_email_idx ON enrollments (email) WHERE user_id IS NULL;
+
+-- Course documents. Stored in the database because Heroku's filesystem is
+-- wiped on every restart; move to object storage if files get large.
+CREATE TABLE IF NOT EXISTS fact_patterns (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id    uuid        NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+  filename     text        NOT NULL,
+  content_type text        NOT NULL,
+  size_bytes   integer     NOT NULL,
+  data         bytea       NOT NULL,
+  uploaded_by  uuid        REFERENCES users (id) ON DELETE SET NULL,
+  uploaded_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- The class roster.
-CREATE TABLE IF NOT EXISTS class_students (
-  class_id  uuid        NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
-  user_id   uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  joined_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (class_id, user_id)
-);
+CREATE INDEX IF NOT EXISTS fact_patterns_course_idx ON fact_patterns (course_id);
 
--- Instructor -> student invitations. Keyed by email so people can be invited
--- before they have an account. Accepting moves the student into class_students;
--- accepting or rejecting deletes the invitation.
-CREATE TABLE IF NOT EXISTS class_invitations (
-  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  class_id   uuid        NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
-  email      text        NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS class_invitations_class_email_key
-  ON class_invitations (class_id, lower(email));
-
--- Student -> instructor requests made with a join code. Admitting moves the
--- student into class_students and deletes the request. Denying keeps the row as
--- 'denied' until the student has seen the notice and dismissed it.
-CREATE TABLE IF NOT EXISTS class_join_requests (
-  class_id   uuid        NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
-  user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  status     text        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'denied')),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (class_id, user_id)
-);
-
--- A case belongs to one class. Instructors build it up (documents, characters,
--- teams, matchups) and publish each section to students separately; a NULL
+-- A case in a course. The instructor builds it up (documents, characters,
+-- teams, matchups) and publishes each section to students separately; a NULL
 -- *_published_at means students can't see that section yet.
 CREATE TABLE IF NOT EXISTS cases (
   id                      uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  class_id                uuid        NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+  course_id               uuid        NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
   name                    text        NOT NULL,
-  created_by              uuid        NOT NULL REFERENCES users (id),
+  created_by              uuid        REFERENCES users (id) ON DELETE SET NULL,
   created_at              timestamptz NOT NULL DEFAULT now(),
   documents_published_at  timestamptz,
   characters_published_at timestamptz,
   teams_published_at      timestamptz
 );
 
--- Uploaded file contents. Only server/files/fileStore.ts reads or writes this
--- table, so moving files to S3 later means replacing that one module.
-CREATE TABLE IF NOT EXISTS stored_files (
-  key        text        PRIMARY KEY,
-  content    bytea       NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+CREATE INDEX IF NOT EXISTS cases_course_idx ON cases (course_id);
 
+-- Case documents, stored like fact patterns. `side` limits which students see one.
 CREATE TABLE IF NOT EXISTS case_documents (
   id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
   filename     text        NOT NULL,
   content_type text        NOT NULL,
   size_bytes   integer     NOT NULL,
-  storage_key  text        NOT NULL UNIQUE,
+  data         bytea       NOT NULL,
   side         text        NOT NULL DEFAULT 'both' CHECK (side IN ('plaintiff', 'defendant', 'both')),
+  uploaded_by  uuid        REFERENCES users (id) ON DELETE SET NULL,
   uploaded_at  timestamptz NOT NULL DEFAULT now()
 );
 
@@ -149,3 +132,12 @@ CREATE TABLE IF NOT EXISTS matchups (
   created_at        timestamptz NOT NULL DEFAULT now(),
   UNIQUE (plaintiff_team_id, defendant_team_id)
 );
+
+-- Login sessions, in the format connect-pg-simple expects.
+CREATE TABLE IF NOT EXISTS session (
+  sid    varchar      PRIMARY KEY,
+  sess   json         NOT NULL,
+  expire timestamp(6) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS session_expire_idx ON session (expire);

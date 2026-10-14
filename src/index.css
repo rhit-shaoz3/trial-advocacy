@@ -1,77 +1,40 @@
-/* Design tokens from the "Trial-Ad-Simulation" Figma. The theme is set as
-   data-theme on <html> (see index.html and src/theme/theme.ts). */
+/*
+ * One palette for the whole app, from the Figma mock: navy, parchment, and
+ * restrained red/gold accents. Light-only, like the mock.
+ */
 :root {
-  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-serif: Lora, Georgia, 'Times New Roman', serif;
+  --ws-navy: #10233f;
+  --ws-navy-light: #193453;
+  --ws-blue: #315e86;
+  --ws-red: #a84b43;
+  --ws-gold: #b98b42;
+  --ws-paper: #f5f3ee;
+  --ws-text: #1c293a;
+  --ws-muted: #6e7885;
+  --ws-line: #deded9;
+  --ws-row-line: #eeeeec;
+  --ws-shadow: 0 12px 34px rgba(20, 35, 59, 0.08);
+  --ws-serif: 'DM Serif Display', Georgia, serif;
+  --ws-sans: Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --bg: #f6f4ef;
+  /* Generic names used by the forms, tables, and cards. */
+  --bg: var(--ws-paper);
+  --fg: var(--ws-text);
   --surface: #ffffff;
-  --subtle: #efede7;
-  --fg: #1e2d31;
-  --muted: #6b7377;
-  --border: #e4e1da;
-  --border-strong: #d3cfc6;
-  --accent: #20685f;
-  --accent-hover: #1a5850;
-  --on-accent: #ffffff;
-  --accent-tint: #eaf2ed;
-  --note: #e4eee9;
-  --plaintiff: #20685f;
-  --plaintiff-tint: #eaf2ed;
-  --defendant: #3e5266;
-  --defendant-tint: #ecf0f4;
-  --warning: #9a5b13;
-  --warning-tint: #fbf1e3;
-  --error: #b42318;
-  --error-bg: #fef3f2;
+  --subtle: #efece5;
+  --border: var(--ws-line);
+  --muted: var(--ws-muted);
+  --accent: var(--ws-navy);
+  --link: var(--ws-blue);
+  --error: var(--ws-red);
+  --error-bg: #f3e4e2;
 
-  /* The sidebar and the sign-in panel stay dark in both themes. */
-  --sidebar: #202f33;
-  --sidebar-active: #334145;
-  --sidebar-card: #273639;
-  --sidebar-fg: #eef1ef;
-  --sidebar-muted: #a6b0b2;
-  --sidebar-border: #34444a;
-
-  --radius: 10px;
-  --radius-sm: 6px;
-
-  color-scheme: light;
-  font-family: var(--font-sans);
+  font-family: var(--ws-sans);
   line-height: 1.5;
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
   color: var(--fg);
   background-color: var(--bg);
-  -webkit-font-smoothing: antialiased;
-}
-
-:root[data-theme='dark'] {
-  --bg: #141c1f;
-  --surface: #1c272a;
-  --subtle: #24312f;
-  --fg: #e7ebe8;
-  --muted: #9aa5a8;
-  --border: #2e3b3f;
-  --border-strong: #3e4d51;
-  --accent: #5fb3a6;
-  --accent-hover: #74c2b5;
-  --on-accent: #0f1f1c;
-  --accent-tint: #1e3531;
-  --note: #1b302c;
-  --plaintiff: #6cc0b2;
-  --plaintiff-tint: #1e3531;
-  --defendant: #a9bbd0;
-  --defendant-tint: #232d38;
-  --warning: #f0b264;
-  --warning-tint: #3a2a14;
-  --error: #fda29b;
-  --error-bg: #3b1714;
-
-  --sidebar: #0f1719;
-  --sidebar-active: #22302f;
-  --sidebar-card: #18222a;
-  --sidebar-border: #24302f;
-
-  color-scheme: dark;
 }
 
 * {
@@ -81,30 +44,190 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
 }
 
 a {
-  color: var(--accent);
+  color: var(--link);
 }
 
-h1,
-h2,
-h3,
-h4 {
+/* Shared building blocks for signed-in pages (inside AppShell). */
+
+.page {
+  max-width: 82rem;
+  margin: 0 auto;
+  padding: 2.4rem 2.5rem 3.5rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.page-header h1 {
+  margin: 0.45rem 0 0.4rem;
+  color: var(--ws-navy);
+  font: 400 2.4rem/1.2 var(--ws-serif);
+}
+
+.page-header p {
   margin: 0;
-  line-height: 1.25;
 }
 
-button,
-input,
-select,
-textarea {
+.muted {
+  color: var(--muted);
+}
+
+.form-error {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.4rem;
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border-radius: 0.45rem;
   font: inherit;
-  color: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.2s, background-color 0.2s, border-color 0.2s;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
+.btn-primary {
+  border: none;
+  background: var(--ws-navy);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(16, 35, 63, 0.15);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--ws-navy-light);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ws-navy);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: #aeb5bc;
+  transform: translateY(-1px);
+}
+
+.btn-danger {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--error);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--error);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-danger:focus-visible {
+  outline: 2px solid #608cb3;
   outline-offset: 2px;
+}
+
+/* An inline form in a white panel (enroll, create course, add students). */
+.panel-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.9rem;
+  margin-bottom: 1.75rem;
+  padding: 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.panel-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: #384454;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.panel-form input,
+.panel-form select,
+.panel-form textarea {
+  max-width: 100%;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: #fff;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.panel-form input:focus-visible,
+.panel-form select:focus-visible,
+.panel-form textarea:focus-visible {
+  outline: 2px solid #608cb3;
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.panel-form-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.panel-form .form-error {
+  flex-basis: 100%;
+}
+
+@media (max-width: 1000px) {
+  .page {
+    padding: 1.8rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 1.4rem 1rem 2.5rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.9rem;
+  }
 }

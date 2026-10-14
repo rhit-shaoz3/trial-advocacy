@@ -1,6 +1,5 @@
 import { pool } from '../db/pool.ts'
 import type { Db } from '../db/transaction.ts'
-import { putFile } from '../files/fileStore.ts'
 import { HttpError } from '../httpError.ts'
 import { isUuid } from '../validation.ts'
 
@@ -13,8 +12,10 @@ export const CHARACTER_ROLES: CharacterRole[] = ['witness', 'investigator']
 
 export interface CaseRow {
   id: string
-  class_id: string
-  class_name: string
+  course_id: string
+  /** e.g. "LAW 540: Trial Advocacy" */
+  course_name: string
+  instructor_id: string | null
   name: string
   documents_published_at: Date | null
   characters_published_at: Date | null
@@ -32,7 +33,6 @@ interface DocumentRow {
   filename: string
   content_type: string
   size_bytes: number
-  storage_key: string
   side: DocSide
   uploaded_at: Date
 }
@@ -79,16 +79,20 @@ function toSummary(c: CaseRow) {
   return {
     id: c.id,
     name: c.name,
-    classId: c.class_id,
-    className: c.class_name,
+    courseId: c.course_id,
+    courseName: c.course_name,
     published: published(c),
   }
 }
 
 const SELECT_CASE = `
-  SELECT ca.id, ca.class_id, cl.name AS class_name, ca.name,
-         ca.documents_published_at, ca.characters_published_at, ca.teams_published_at
-  FROM cases ca JOIN classes cl ON cl.id = ca.class_id`
+  SELECT ca.id, ca.course_id, co.code || ': ' || co.title AS course_name, co.instructor_id,
+         ca.name, ca.documents_published_at, ca.characters_published_at, ca.teams_published_at
+  FROM cases ca JOIN courses co ON co.id = ca.course_id`
+
+const ANY_PUBLISHED = `(ca.documents_published_at IS NOT NULL
+  OR ca.characters_published_at IS NOT NULL
+  OR ca.teams_published_at IS NOT NULL)`
 
 export async function findCase(caseId: string) {
   if (!isUuid(caseId)) return null
@@ -96,55 +100,46 @@ export async function findCase(caseId: string) {
   return rows[0] ?? null
 }
 
-export async function createCase(input: { name: string; classId: string; createdBy: string }) {
+export async function createCase(input: { name: string; courseId: string; createdBy: string }) {
   const { rows } = await pool.query<{ id: string }>(
-    'INSERT INTO cases (class_id, name, created_by) VALUES ($1, $2, $3) RETURNING id',
-    [input.classId, input.name, input.createdBy],
+    'INSERT INTO cases (course_id, name, created_by) VALUES ($1, $2, $3) RETURNING id',
+    [input.courseId, input.name, input.createdBy],
   )
   return toSummary((await findCase(rows[0].id))!)
 }
 
-/** Cases in every class the instructor teaches, newest first. */
-export async function listInstructorCases(instructorId: string) {
+/**
+ * The course's cases, newest first. Students only get cases with at least
+ * one section published.
+ */
+export async function listCourseCases(courseId: string, onlyPublished: boolean) {
   const { rows } = await pool.query<CaseRow>(
     `${SELECT_CASE}
-     JOIN class_instructors ci ON ci.class_id = ca.class_id
-     WHERE ci.user_id = $1
+     WHERE ca.course_id = $1 ${onlyPublished ? `AND ${ANY_PUBLISHED}` : ''}
      ORDER BY ca.created_at DESC`,
-    [instructorId],
+    [courseId],
   )
   return rows.map(toSummary)
 }
 
-/** Cases in the student's classes that have at least one section published. */
-export async function listStudentCases(studentId: string) {
-  const { rows } = await pool.query<CaseRow>(
-    `${SELECT_CASE}
-     JOIN class_students cs ON cs.class_id = ca.class_id
-     WHERE cs.user_id = $1
-       AND (ca.documents_published_at IS NOT NULL
-            OR ca.characters_published_at IS NOT NULL
-            OR ca.teams_published_at IS NOT NULL)
-     ORDER BY ca.created_at DESC`,
-    [studentId],
-  )
-  return rows.map(({ id, name, class_name }) => ({ id, name, className: class_name }))
-}
-
-async function classStudents(classId: string) {
-  const { rows } = await pool.query<Person>(
+/** Students who have joined the course (pending roster emails don't count). */
+async function courseStudents(db: Db, courseId: string) {
+  const { rows } = await db.query<Person>(
     `SELECT u.id, u.name, u.email
-     FROM class_students cs JOIN users u ON u.id = cs.user_id
-     WHERE cs.class_id = $1
+     FROM enrollments e JOIN users u ON u.id = e.user_id
+     WHERE e.course_id = $1
      ORDER BY u.name`,
-    [classId],
+    [courseId],
   )
   return rows
 }
 
+// Everything but the file contents.
+const DOCUMENT_COLUMNS = 'id, filename, content_type, size_bytes, side, uploaded_at'
+
 async function listDocuments(caseId: string) {
   const { rows } = await pool.query<DocumentRow>(
-    'SELECT * FROM case_documents WHERE case_id = $1 ORDER BY uploaded_at, filename',
+    `SELECT ${DOCUMENT_COLUMNS} FROM case_documents WHERE case_id = $1 ORDER BY uploaded_at, filename`,
     [caseId],
   )
   return rows
@@ -204,7 +199,7 @@ async function listMatchups(caseId: string) {
 /** Everything the instructor's case page needs. */
 export async function getInstructorCase(c: CaseRow) {
   const [students, documents, characters, teams, matchups] = await Promise.all([
-    classStudents(c.class_id),
+    courseStudents(pool, c.course_id),
     listDocuments(c.id),
     listCharacters(c.id),
     listTeams(c.id),
@@ -222,30 +217,37 @@ export async function getInstructorCase(c: CaseRow) {
 
 // ---- Documents ----
 
-export async function addDocuments(
-  db: Db,
-  caseId: string,
-  files: { filename: string; contentType: string; content: Buffer }[],
-  side: DocSide,
-) {
-  const added = []
-  for (const file of files) {
-    const key = await putFile(db, file.content)
-    const { rows } = await db.query<DocumentRow>(
-      `INSERT INTO case_documents (case_id, filename, content_type, size_bytes, storage_key, side)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [caseId, file.filename, file.contentType, file.content.length, key, side],
-    )
-    added.push(toDocument(rows[0]))
-  }
-  return added
+export async function addDocument(input: {
+  caseId: string
+  filename: string
+  contentType: string
+  data: Buffer
+  side: DocSide
+  uploadedBy: string
+}) {
+  const { rows } = await pool.query<DocumentRow>(
+    `INSERT INTO case_documents (case_id, filename, content_type, size_bytes, data, side, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING ${DOCUMENT_COLUMNS}`,
+    [input.caseId, input.filename, input.contentType, input.data.length, input.data, input.side, input.uploadedBy],
+  )
+  return toDocument(rows[0])
 }
 
+/** The document's details, without its contents. */
 export async function findDocument(caseId: string, documentId: string) {
   if (!isUuid(documentId)) return null
   const { rows } = await pool.query<DocumentRow>(
-    'SELECT * FROM case_documents WHERE id = $1 AND case_id = $2',
+    `SELECT ${DOCUMENT_COLUMNS} FROM case_documents WHERE id = $1 AND case_id = $2`,
+    [documentId, caseId],
+  )
+  return rows[0] ?? null
+}
+
+export async function findDocumentFile(caseId: string, documentId: string) {
+  const { rows } = await pool.query<{ filename: string; contentType: string; data: Buffer }>(
+    `SELECT filename, content_type AS "contentType", data
+     FROM case_documents WHERE id = $1 AND case_id = $2`,
     [documentId, caseId],
   )
   return rows[0] ?? null
@@ -253,20 +255,20 @@ export async function findDocument(caseId: string, documentId: string) {
 
 export async function setDocumentSide(caseId: string, documentId: string, side: DocSide) {
   const { rows } = await pool.query<DocumentRow>(
-    'UPDATE case_documents SET side = $3 WHERE id = $1 AND case_id = $2 RETURNING *',
+    `UPDATE case_documents SET side = $3 WHERE id = $1 AND case_id = $2 RETURNING ${DOCUMENT_COLUMNS}`,
     [documentId, caseId, side],
   )
   return rows[0] ? toDocument(rows[0]) : null
 }
 
-/** Deletes the document row and returns its storage key, or null if it wasn't found. */
-export async function deleteDocument(db: Db, caseId: string, documentId: string) {
-  if (!isUuid(documentId)) return null
-  const { rows } = await db.query<{ storage_key: string }>(
-    'DELETE FROM case_documents WHERE id = $1 AND case_id = $2 RETURNING storage_key',
+/** Returns false if there was no such document. */
+export async function deleteDocument(caseId: string, documentId: string) {
+  if (!isUuid(documentId)) return false
+  const { rowCount } = await pool.query(
+    'DELETE FROM case_documents WHERE id = $1 AND case_id = $2',
     [documentId, caseId],
   )
-  return rows[0]?.storage_key ?? null
+  return rowCount === 1
 }
 
 // ---- Characters ----
@@ -345,15 +347,12 @@ export interface TeamInput {
  * their matchups, unless their side changed); teams left out are deleted.
  */
 export async function saveTeams(db: Db, c: CaseRow, teams: TeamInput[]) {
-  const [students, existing] = await Promise.all([
-    db.query<{ id: string; name: string }>(
-      `SELECT u.id, u.name FROM class_students cs JOIN users u ON u.id = cs.user_id
-       WHERE cs.class_id = $1 ORDER BY u.name`,
-      [c.class_id],
-    ),
-    db.query<{ id: string; side: Side }>('SELECT id, side FROM teams WHERE case_id = $1', [c.id]),
-  ])
-  const enrolled = new Map(students.rows.map((s) => [s.id, s.name]))
+  const students = await courseStudents(db, c.course_id)
+  const existing = await db.query<{ id: string; side: Side }>(
+    'SELECT id, side FROM teams WHERE case_id = $1',
+    [c.id],
+  )
+  const enrolled = new Map(students.map((s) => [s.id, s.name]))
   const existingSide = new Map(existing.rows.map((t) => [t.id, t.side]))
 
   const names = new Set<string>()
@@ -371,13 +370,13 @@ export async function saveTeams(db: Db, c: CaseRow, teams: TeamInput[]) {
     }
     for (const studentId of team.studentIds) {
       const name = enrolled.get(studentId)
-      if (!name) throw new HttpError(400, `${team.name} has a student who isn't in this class.`)
+      if (!name) throw new HttpError(400, `${team.name} has a student who isn't in this course.`)
       const other = placed.get(studentId)
       if (other) throw new HttpError(400, `${name} is on both ${other} and ${team.name}.`)
       placed.set(studentId, team.name)
     }
   }
-  const unplaced = students.rows.filter((s) => !placed.has(s.id)).map((s) => s.name)
+  const unplaced = students.filter((s) => !placed.has(s.id)).map((s) => s.name)
   if (unplaced.length) {
     throw new HttpError(400, `Every student must be on a team. Not placed: ${unplaced.join(', ')}`)
   }
@@ -528,5 +527,71 @@ export async function getStudentCase(c: CaseRow, studentId: string) {
         .map(({ id, name, title, role }) => ({ id, name, title, role }))
     : null
 
-  return { id: c.id, name: c.name, className: c.class_name, published: isPublished, team, documents, characters }
+  return {
+    id: c.id,
+    name: c.name,
+    courseName: c.course_name,
+    published: isPublished,
+    team,
+    documents,
+    characters,
+  }
+}
+
+// ---- Course dashboard cards ----
+
+const SIDE_NAMES: Record<Side, string> = { plaintiff: 'Plaintiff', defendant: 'Defendant' }
+
+/**
+ * The cases shown on the course dashboard, in the shape of `CaseSummary` in
+ * src/workspace/types.ts. The instructor sees every case and how far along it
+ * is; a student sees published cases from their side of the table.
+ */
+export async function listDashboardCases(courseId: string, user: { id: string; role: string }) {
+  const isInstructor = user.role === 'instructor'
+  const cases = await listCourseCases(courseId, !isInstructor)
+
+  return Promise.all(
+    cases.map(async (c) => {
+      const [teams, matchups, counts] = await Promise.all([
+        listTeams(c.id),
+        listMatchups(c.id),
+        pool.query<{ documents: number; characters: number }>(
+          `SELECT (SELECT count(*)::int FROM case_documents WHERE case_id = $1) AS documents,
+                  (SELECT count(*)::int FROM case_characters WHERE case_id = $1) AS characters`,
+          [c.id],
+        ),
+      ])
+      const base = { id: c.id, caseNumber: null, title: c.name, status: 'active' as const, progress: null, nextMilestone: null }
+
+      if (isInstructor) {
+        const { documents, characters } = counts.rows[0]
+        const live = (Object.keys(c.published) as Section[]).filter((s) => c.published[s])
+        return {
+          ...base,
+          caseType: `${documents} file${documents === 1 ? '' : 's'} · ${characters} character${characters === 1 ? '' : 's'}`,
+          summary: live.length
+            ? `Published to students: ${live.map((s) => (s === 'documents' ? 'case files' : s)).join(', ')}.`
+            : 'Draft. Students can’t see this case yet.',
+          participants: teams.flatMap((t) => t.members.map((m) => ({ name: m.name }))),
+        }
+      }
+
+      const mine = c.published.teams
+        ? teams.find((t) => t.members.some((m) => m.id === user.id))
+        : undefined
+      const opponentIds = new Set(
+        matchups.flatMap((m) =>
+          m.plaintiffTeamId === mine?.id ? [m.defendantTeamId] : m.defendantTeamId === mine?.id ? [m.plaintiffTeamId] : [],
+        ),
+      )
+      const opponents = teams.filter((t) => opponentIds.has(t.id)).map((t) => t.name)
+      return {
+        ...base,
+        caseType: mine ? `${SIDE_NAMES[mine.side]} · ${mine.name}` : 'Team assignment coming soon',
+        summary: opponents.length ? `Against ${opponents.join(' and ')}.` : '',
+        participants: mine ? mine.members.map((m) => ({ name: m.name })) : [],
+      }
+    }),
+  )
 }

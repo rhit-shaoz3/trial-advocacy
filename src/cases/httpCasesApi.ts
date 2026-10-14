@@ -1,8 +1,8 @@
-import { request } from '../api/request'
+import { apiRequest } from '../api/request'
 import type { CasesApi } from './types'
 
 const send = (method: string, path: string, body?: unknown) =>
-  request(path, { method, body: body === undefined ? undefined : JSON.stringify(body) })
+  apiRequest(path, { method, body: body === undefined ? undefined : JSON.stringify(body) })
 
 /** Link target for downloading a case document. */
 export function documentUrl(caseId: string, documentId: string) {
@@ -10,24 +10,20 @@ export function documentUrl(caseId: string, documentId: string) {
 }
 
 export const httpCasesApi: CasesApi = {
-  async listInstructorCases() {
-    return (await request('/cases')).cases
+  async listCourseCases(courseId) {
+    return (await apiRequest(`/courses/${courseId}/cases`)).cases
   },
 
-  async listStudentCases() {
-    return (await request('/cases')).cases
-  },
-
-  async createCase(input) {
-    return (await send('POST', '/cases', input)).case
+  async createCase(courseId, name) {
+    return (await send('POST', `/courses/${courseId}/cases`, { name })).case
   },
 
   async getInstructorCase(caseId) {
-    return (await request(`/cases/${caseId}`)).case
+    return (await apiRequest(`/cases/${caseId}`)).case
   },
 
   async getStudentCase(caseId) {
-    return (await request(`/cases/${caseId}`)).case
+    return (await apiRequest(`/cases/${caseId}`)).case
   },
 
   async setPublished(caseId, changes) {
@@ -35,10 +31,21 @@ export const httpCasesApi: CasesApi = {
   },
 
   async uploadDocuments(caseId, files, side) {
-    const form = new FormData()
-    form.append('side', side)
-    for (const file of files) form.append('files', file)
-    return (await request(`/cases/${caseId}/documents`, { method: 'POST', body: form })).documents
+    // One request per file, the same way fact patterns are uploaded: the raw
+    // file is the body and its (URI-encoded) name goes in a header.
+    const uploaded = []
+    for (const file of files) {
+      const body = await apiRequest(`/cases/${caseId}/documents?side=${side}`, {
+        method: 'POST',
+        body: file,
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-Filename': encodeURIComponent(file.name),
+        },
+      })
+      uploaded.push(body.document)
+    }
+    return uploaded
   },
 
   async setDocumentSide(caseId, documentId, side) {

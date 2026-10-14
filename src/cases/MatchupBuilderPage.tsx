@@ -2,8 +2,7 @@ import { DndContext, type DragEndEvent } from '@dnd-kit/core'
 import { ArrowLeft, Check, Info, Plus, Shuffle, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { errorMessage } from '../dashboard/errorMessage'
-import { PageFrame } from '../layout/PageFrame'
+import { errorMessage } from '../api/useLoad'
 import { autoMatchups } from './autoMatch'
 import { useCasesApi } from './CasesApiContext'
 import { Draggable, DropZone } from './dnd'
@@ -44,7 +43,8 @@ function findProblems(matchups: DraftMatchup[]) {
 }
 
 export function MatchupBuilderPage() {
-  const { caseId = '' } = useParams()
+  const { courseId = '', caseId = '' } = useParams()
+  const caseUrl = `/courses/${courseId}/cases/${caseId}`
   const api = useCasesApi()
   const navigate = useNavigate()
   const sensors = useDragSensors()
@@ -74,13 +74,13 @@ export function MatchupBuilderPage() {
 
   if (!c) {
     return (
-      <PageFrame crumbs={[{ label: 'Cases', to: '/cases' }, { label: 'Match-ups' }]}>
+      <main className="ws-page case-page">
         {error && (
           <p className="form-error" role="alert">
             {error}
           </p>
         )}
-      </PageFrame>
+      </main>
     )
   }
 
@@ -150,7 +150,7 @@ export function MatchupBuilderPage() {
         caseId,
         matchups.map((m) => ({ plaintiffTeamId: m.plaintiff!, defendantTeamId: m.defendant! })),
       )
-      navigate(`/cases/${caseId}`)
+      navigate(caseUrl)
     } catch (err) {
       setError(errorMessage(err))
       setSubmitting(false)
@@ -164,18 +164,15 @@ export function MatchupBuilderPage() {
   const complete = matchups.filter((m) => m.plaintiff && m.defendant).length
 
   return (
-    <PageFrame
-      crumbs={[
-        { label: 'Cases', to: '/cases' },
-        { label: c.name, to: `/cases/${caseId}` },
-        { label: 'Match-ups' },
-      ]}
-    >
+    <main className="ws-page case-page">
+      <Link to={caseUrl} className="ws-link case-back">
+        <ArrowLeft aria-hidden="true" /> Back to {c.name}
+      </Link>
       <Stepper current={2} />
-      <div className="page-header">
+      <div className="ws-welcome">
         <div>
-          <h1 className="page-title">Give every team a worthy opponent.</h1>
-          <p className="page-lede">
+          <h1 className="ws-title">Give every team a worthy opponent.</h1>
+          <p className="ws-subtle">
             Pair each plaintiff team with a defendant team. Drag teams into a match, or pick them
             from the dropdowns.
           </p>
@@ -183,44 +180,44 @@ export function MatchupBuilderPage() {
       </div>
 
       {c.teams.length === 0 ? (
-        <p className="hint">Build teams first.</p>
+        <p className="case-hint">Build teams first.</p>
       ) : (
         <>
           <div className="builder-toolbar">
-            <span className={unmatched.length === 0 ? 'badge' : 'badge badge-warning'}>
+            <span className={unmatched.length === 0 ? 'case-badge' : 'case-badge case-badge-warning'}>
               {matchedTeams} of {c.teams.length} teams matched
             </span>
-            <div className="actions">
-              <button type="button" className="btn" onClick={runAutoMatch}>
+            <div className="case-actions">
+              <button type="button" className="ws-btn ws-btn-secondary" onClick={runAutoMatch}>
                 <Shuffle size={16} aria-hidden /> Auto-match
               </button>
-              <button type="button" className="btn" onClick={() => addMatchup()}>
+              <button type="button" className="ws-btn ws-btn-secondary" onClick={() => addMatchup()}>
                 <Plus size={16} aria-hidden /> Add match-up
               </button>
             </div>
           </div>
           {notice && (
-            <p className="form-warning" role="status">
+            <p className="case-warning" role="status">
               {notice}
             </p>
           )}
 
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-            <div className="two-col matchup-layout">
-              <div className="page-stack">
+            <div className="case-two-col matchup-layout">
+              <div className="case-stack">
                 {matchups.map((m, i) => {
                   const ready = Boolean(m.plaintiff && m.defendant)
                   return (
-                    <section key={m.key} className="panel matchup-card" aria-label={matchLabel(i)}>
-                      <div className="panel-head">
+                    <section key={m.key} className="ws-panel case-panel matchup-card" aria-label={matchLabel(i)}>
+                      <div className="case-panel-head">
                         <h2>{matchLabel(i)}</h2>
-                        <div className="actions">
-                          <span className={ready ? 'badge' : 'badge badge-warning'}>
+                        <div className="case-actions">
+                          <span className={ready ? 'case-badge' : 'case-badge case-badge-warning'}>
                             {ready ? 'Ready' : 'Incomplete'}
                           </span>
                           <button
                             type="button"
-                            className="icon-btn"
+                            className="case-icon-btn"
                             aria-label={`Remove matchup ${i + 1}`}
                             onClick={() => setMatchups(matchups.filter((x) => x.key !== m.key))}
                           >
@@ -233,9 +230,9 @@ export function MatchupBuilderPage() {
                           const team = m[side] ? teamById.get(m[side]!) : undefined
                           return (
                             <DropZone key={side} id={slotId(m.key, side)} className={`slot slot-${side}`}>
-                              <p className="eyebrow slot-label">{SIDE_LABELS[side]}</p>
+                              <p className="ws-eyebrow slot-label">{SIDE_LABELS[side]}</p>
                               <select
-                                className="input"
+                                className="case-input"
                                 aria-label={`${SIDE_LABELS[side]} team for matchup ${i + 1}`}
                                 value={m[side] ?? ''}
                                 onChange={(e) => setSlot(m.key, side, e.target.value || null)}
@@ -263,21 +260,21 @@ export function MatchupBuilderPage() {
                 <DropZone id={NEW_MATCHUP} className="new-matchup-zone">
                   Drop a team here to start a new match-up
                 </DropZone>
-                <p className="note">
+                <p className="case-note">
                   <Info size={18} aria-hidden />
                   Each match-up pairs one plaintiff team with one defendant team. A team can be in
                   more than one match-up if you need to double up.
                 </p>
               </div>
 
-              <aside className="page-stack">
-                <section className="panel" aria-labelledby="teams-pool-heading">
-                  <h2 id="teams-pool-heading" className="panel-title">
+              <aside className="case-stack">
+                <section className="ws-panel case-panel" aria-labelledby="teams-pool-heading">
+                  <h2 id="teams-pool-heading" className="case-panel-title">
                     Teams
                   </h2>
                   {(['plaintiff', 'defendant'] as const).map((side) => (
                     <div key={side} className="pool-group">
-                      <p className="eyebrow">{SIDE_LABELS[side]}</p>
+                      <p className="ws-eyebrow">{SIDE_LABELS[side]}</p>
                       {bySide(side).map((team) => (
                         <Draggable
                           key={team.id}
@@ -285,7 +282,7 @@ export function MatchupBuilderPage() {
                           label={`Drag ${team.name}`}
                           className={`member-row team-chip team-${side}`}
                         >
-                          <span className="row-main">
+                          <span className="case-row-main">
                             <span>{team.name}</span>
                             <span>
                               {countFor(team.id) === 0 ? 'unmatched' : `in ${countFor(team.id)}`}
@@ -297,12 +294,12 @@ export function MatchupBuilderPage() {
                   ))}
                 </section>
 
-                <section className="panel summary-card" aria-labelledby="summary-heading">
-                  <p className="eyebrow" id="summary-heading">
+                <section className="ws-panel case-panel summary-card" aria-labelledby="summary-heading">
+                  <p className="ws-eyebrow" id="summary-heading">
                     Ready for the classroom
                   </p>
-                  <p className="serif summary-title">{c.name}</p>
-                  <p className="hint">{c.className}</p>
+                  <p className="case-serif summary-title">{c.name}</p>
+                  <p className="case-hint">{c.courseName}</p>
                   <dl className="summary-list">
                     <div>
                       <dt>Students</dt>
@@ -318,32 +315,32 @@ export function MatchupBuilderPage() {
                     </div>
                   </dl>
                   {unmatched.length === 0 && problems.length === 0 && matchups.length > 0 && (
-                    <span className="badge">
+                    <span className="case-badge">
                       <Check size={14} aria-hidden /> Every team has an opponent
                     </span>
                   )}
                 </section>
 
                 {unmatched.length > 0 && (
-                  <section className="panel" aria-labelledby="unmatched-heading">
-                    <h2 id="unmatched-heading" className="panel-title">
+                  <section className="ws-panel case-panel" aria-labelledby="unmatched-heading">
+                    <h2 id="unmatched-heading" className="case-panel-title">
                       Unmatched
                     </h2>
-                    <p className="hint">
+                    <p className="case-hint">
                       Leave a team unmatched, or double it up with an opposing team that's already
                       in a match-up.
                     </p>
-                    <ul className="rows">
+                    <ul className="case-rows">
                       {unmatched.map((team) => {
                         const opponents = bySide(team.side === 'plaintiff' ? 'defendant' : 'plaintiff')
                         return (
                           <li key={team.id} className="unmatched-row">
-                            <span className="row-main">
+                            <span className="case-row-main">
                               <span>{team.name}</span>
                               <span>{SIDE_LABELS[team.side]}</span>
                             </span>
                             <select
-                              className="select-sm"
+                              className="case-select-sm"
                               aria-label={`Match ${team.name} with`}
                               value=""
                               onChange={(e) => e.target.value && matchWith(team, e.target.value)}
@@ -366,7 +363,7 @@ export function MatchupBuilderPage() {
           </DndContext>
 
           {problems.length > 0 && (
-            <ul className="problems" aria-label="Before you can save">
+            <ul className="case-problems" aria-label="Before you can save">
               {problems.map((p) => (
                 <li key={p}>{p}</li>
               ))}
@@ -378,13 +375,13 @@ export function MatchupBuilderPage() {
             </p>
           )}
 
-          <div className="footer-bar">
-            <Link to={`/cases/${caseId}/teams`} className="btn">
+          <div className="case-footer">
+            <Link to={`${caseUrl}/teams`} className="ws-btn ws-btn-secondary">
               <ArrowLeft size={16} aria-hidden /> Back to teams
             </Link>
             <button
               type="button"
-              className="btn btn-primary"
+              className="ws-btn ws-btn-primary"
               onClick={submit}
               disabled={submitting || problems.length > 0}
             >
@@ -393,6 +390,6 @@ export function MatchupBuilderPage() {
           </div>
         </>
       )}
-    </PageFrame>
+    </main>
   )
 }

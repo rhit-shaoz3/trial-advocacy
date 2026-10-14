@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
-import { errorMessage } from '../dashboard/errorMessage'
+import { errorMessage } from '../api/useLoad'
 
 interface Props {
   label: string
@@ -27,12 +27,12 @@ export function PublishControl({ label, published, onChange }: Props) {
 
   return (
     <div className="publish-control">
-      <span className={published ? 'badge' : 'badge badge-muted'}>
+      <span className={published ? 'case-badge' : 'case-badge case-badge-muted'}>
         {published ? 'Published' : 'Draft · only you can see this'}
       </span>
       <button
         type="button"
-        className={published ? 'btn btn-small' : 'btn btn-small btn-primary'}
+        className={published ? 'ws-btn ws-btn-secondary case-btn-sm' : 'ws-btn case-btn-sm ws-btn-primary'}
         onClick={toggle}
         disabled={busy}
         aria-label={`${published ? 'Unpublish' : 'Publish'} ${label}`}

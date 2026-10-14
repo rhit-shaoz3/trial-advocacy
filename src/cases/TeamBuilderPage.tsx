@@ -2,16 +2,14 @@ import { DndContext, type DragEndEvent } from '@dnd-kit/core'
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Plus, Search, Shuffle, Trash2, Users, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import type { Person } from '../classes/types'
-import { errorMessage } from '../dashboard/errorMessage'
-import { initials } from '../layout/initials'
-import { PageFrame } from '../layout/PageFrame'
+import { errorMessage } from '../api/useLoad'
+import { Avatar } from '../components/Avatar'
 import { autoTeams } from './autoMatch'
 import { useCasesApi } from './CasesApiContext'
 import { Draggable, DropZone } from './dnd'
 import { SIDE_LABELS } from './format'
 import { Stepper } from './Stepper'
-import type { InstructorCase, Side, TeamInput } from './types'
+import type { InstructorCase, Person, Side, TeamInput } from './types'
 import { useDragSensors } from './useDragSensors'
 import './Cases.css'
 
@@ -54,10 +52,8 @@ interface ChipProps {
 function StudentChip({ student, currentKey, targets, onMove, onRemove, teamName }: ChipProps) {
   return (
     <Draggable id={student.id} label={`Drag ${student.name}`} className="member-row">
-      <span className="avatar" aria-hidden>
-        {initials(student.name)}
-      </span>
-      <span className="row-main">
+      <Avatar name={student.name} />
+      <span className="case-row-main">
         <span>{student.name}</span>
         <span>{student.email}</span>
       </span>
@@ -79,7 +75,7 @@ function StudentChip({ student, currentKey, targets, onMove, onRemove, teamName 
       {onRemove && (
         <button
           type="button"
-          className="icon-btn"
+          className="case-icon-btn"
           aria-label={`Remove ${student.name} from ${teamName}`}
           onClick={onRemove}
         >
@@ -91,7 +87,8 @@ function StudentChip({ student, currentKey, targets, onMove, onRemove, teamName 
 }
 
 export function TeamBuilderPage() {
-  const { caseId = '' } = useParams()
+  const { courseId = '', caseId = '' } = useParams()
+  const caseUrl = `/courses/${courseId}/cases/${caseId}`
   const api = useCasesApi()
   const navigate = useNavigate()
   const sensors = useDragSensors()
@@ -124,13 +121,13 @@ export function TeamBuilderPage() {
 
   if (!c) {
     return (
-      <PageFrame crumbs={[{ label: 'Cases', to: '/cases' }, { label: 'Teams' }]}>
+      <main className="ws-page case-page">
         {error && (
           <p className="form-error" role="alert">
             {error}
           </p>
         )}
-      </PageFrame>
+      </main>
     )
   }
 
@@ -196,7 +193,7 @@ export function TeamBuilderPage() {
           studentIds,
         })),
       )
-      navigate(`/cases/${caseId}/matchups`)
+      navigate(`${caseUrl}/matchups`)
     } catch (err) {
       setError(errorMessage(err))
       setSubmitting(false)
@@ -218,64 +215,61 @@ export function TeamBuilderPage() {
   const placedCount = c.students.length - unassigned.length
 
   return (
-    <PageFrame
-      crumbs={[
-        { label: 'Cases', to: '/cases' },
-        { label: c.name, to: `/cases/${caseId}` },
-        { label: 'Teams' },
-      ]}
-    >
+    <main className="ws-page case-page">
+      <Link to={caseUrl} className="ws-link case-back">
+        <ArrowLeft aria-hidden="true" /> Back to {c.name}
+      </Link>
       <Stepper current={1} />
-      <div className="page-header">
+      <div className="ws-welcome">
         <div>
-          <h1 className="page-title">Good advocacy starts with a team.</h1>
-          <p className="page-lede">
-            Put every student in {c.className} on a team for {c.name}. Sides alternate when you
+          <h1 className="ws-title">Good advocacy starts with a team.</h1>
+          <p className="ws-subtle">
+            Put every student in {c.courseName} on a team for {c.name}. Sides alternate when you
             auto-pair; you can change anything before continuing.
           </p>
         </div>
       </div>
 
       <div className="builder-toolbar">
-        <div className="actions">
-          <span className={unassigned.length === 0 ? 'badge' : 'badge badge-warning'}>
+        <div className="case-actions">
+          <span className={unassigned.length === 0 ? 'case-badge' : 'case-badge case-badge-warning'}>
             {placedCount} of {c.students.length} students assigned
           </span>
-          <span className="hint">
+          <span className="case-hint">
             {teams.length} teams · {plaintiffCount} plaintiff · {teams.length - plaintiffCount}{' '}
             defendant
           </span>
         </div>
-        <div className="actions">
+        <div className="case-actions">
           <label className="team-size">
             Students per team
             <input
               type="number"
-              className="input"
+              className="case-input"
               min={1}
               value={teamSize}
               onChange={(e) => setTeamSize(e.target.value)}
             />
           </label>
-          <button type="button" className="btn" onClick={runAutoMatch}>
+          <button type="button" className="ws-btn ws-btn-secondary" onClick={runAutoMatch}>
             <Shuffle size={16} aria-hidden /> Auto-pair students
           </button>
-          <button type="button" className="btn" onClick={addTeam}>
+          <button type="button" className="ws-btn ws-btn-secondary" onClick={addTeam}>
             <Plus size={16} aria-hidden /> New team
           </button>
         </div>
       </div>
 
       {c.matchups.length > 0 && (
-        <p className="hint builder-hint">
+        <p className="case-hint builder-hint">
           Removing a team or changing its side also removes the match-ups it's in.
         </p>
       )}
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="builder">
-          <DropZone id={UNASSIGNED} className="panel builder-pool">
-            <div className="panel-head">
+          <DropZone id={UNASSIGNED} className="ws-panel case-panel builder-pool">
+            <div className="case-panel-head">
               <h2>Unassigned ({unassigned.length})</h2>
             </div>
             {unassigned.length > 0 && (
@@ -291,7 +285,7 @@ export function TeamBuilderPage() {
               </label>
             )}
             {unassigned.length === 0 ? (
-              <p className="hint">Everyone is on a team.</p>
+              <p className="case-hint">Everyone is on a team.</p>
             ) : (
               shownUnassigned.map((s) => (
                 <StudentChip
@@ -303,23 +297,23 @@ export function TeamBuilderPage() {
                 />
               ))
             )}
-            <p className="hint pool-hint">
+            <p className="case-hint pool-hint">
               Drag a student by the grip onto a team, or use the ⇄ button to pick one.
             </p>
           </DropZone>
 
           <div className="team-grid">
             {teams.length === 0 && (
-              <div className="panel empty-state">
-                <p className="serif empty-title">No teams yet.</p>
-                <p className="hint">Auto-pair students, or add a team and drag students into it.</p>
+              <div className="ws-panel case-panel ws-empty">
+                <p className="case-serif case-empty-title">No teams yet.</p>
+                <p className="case-hint">Auto-pair students, or add a team and drag students into it.</p>
               </div>
             )}
             {teams.map((team, i) => {
               const label = team.name.trim() || `Team ${i + 1}`
               const count = team.studentIds.length
               return (
-                <DropZone key={team.key} id={team.key} className={`panel team-card team-${team.side}`}>
+                <DropZone key={team.key} id={team.key} className={`ws-panel case-panel team-card team-${team.side}`}>
                   <div className="team-card-head">
                     <Users size={18} aria-hidden className="muted" />
                     <input
@@ -332,20 +326,20 @@ export function TeamBuilderPage() {
                     />
                     <button
                       type="button"
-                      className="icon-btn"
+                      className="case-icon-btn"
                       aria-label={`Remove ${label}`}
                       onClick={() => setTeams(teams.filter((t) => t.key !== team.key))}
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
-                  <div className="actions">
-                    <span className={count ? 'badge' : 'badge badge-warning'}>
+                  <div className="case-actions">
+                    <span className={count ? 'case-badge' : 'case-badge case-badge-warning'}>
                       {count} member{count === 1 ? '' : 's'}
                       {count ? ' · Ready' : ''}
                     </span>
                     <select
-                      className="select-sm"
+                      className="case-select-sm"
                       aria-label={`Side of ${label}`}
                       value={team.side}
                       onChange={(e) => updateTeam(team.key, { side: e.target.value as Side })}
@@ -356,7 +350,7 @@ export function TeamBuilderPage() {
                   </div>
                   <div className="team-members">
                     {count === 0 ? (
-                      <p className="hint drop-hint">Drag students here.</p>
+                      <p className="case-hint drop-hint">Drag students here.</p>
                     ) : (
                       team.studentIds.map((id) => {
                         const student = studentById.get(id)
@@ -382,7 +376,7 @@ export function TeamBuilderPage() {
       </DndContext>
 
       {problems.length > 0 && (
-        <ul className="problems" aria-label="Before you can continue">
+        <ul className="case-problems" aria-label="Before you can continue">
           {problems.map((p) => (
             <li key={p}>{p}</li>
           ))}
@@ -394,19 +388,19 @@ export function TeamBuilderPage() {
         </p>
       )}
 
-      <div className="footer-bar">
-        <Link to={`/cases/${caseId}`} className="btn">
+      <div className="case-footer">
+        <Link to={caseUrl} className="ws-btn ws-btn-secondary">
           <ArrowLeft size={16} aria-hidden /> Back to case
         </Link>
         <button
           type="button"
-          className="btn btn-primary"
+          className="ws-btn ws-btn-primary"
           onClick={submit}
           disabled={submitting || problems.length > 0}
         >
           {submitting ? 'Saving…' : 'Continue to match-ups'} <ArrowRight size={16} aria-hidden />
         </button>
       </div>
-    </PageFrame>
+    </main>
   )
 }

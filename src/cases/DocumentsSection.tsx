@@ -1,6 +1,6 @@
 import { CloudUpload, FileText, Trash2 } from 'lucide-react'
 import { useState, type ChangeEvent, type DragEvent } from 'react'
-import { errorMessage } from '../dashboard/errorMessage'
+import { errorMessage } from '../api/useLoad'
 import { useCasesApi } from './CasesApiContext'
 import { formatBytes, SIDE_LABELS } from './format'
 import { documentUrl } from './httpCasesApi'
@@ -8,8 +8,9 @@ import { PublishControl } from './PublishControl'
 import { SideSelect } from './SideSelect'
 import type { DocSide, InstructorCase } from './types'
 
-const MAX_FILE_MB = 20 // matches server/cases/routes.ts
-const ACCEPT = '.pdf,.doc,.docx,.txt,.rtf,.png,.jpg,.jpeg,.xlsx,.csv'
+// Same rules as fact patterns (server/courses/factPatternRoutes.ts).
+const MAX_FILE_MB = 10
+const ACCEPT = '.pdf,.doc,.docx,.txt'
 
 interface Props {
   c: InstructorCase
@@ -59,15 +60,15 @@ export function DocumentsSection({ c, onChanged, onPublish }: Props) {
   }
 
   return (
-    <section className="panel" aria-labelledby="documents-heading">
-      <div className="panel-head">
+    <section className="ws-panel case-panel" aria-labelledby="documents-heading">
+      <div className="case-panel-head">
         <h2 id="documents-heading">Case files</h2>
         <PublishControl label="case files" published={c.published.documents} onChange={onPublish} />
       </div>
 
       <div className="upload-row">
         <label
-          className={`drop-zone${dragging ? ' drop-over' : ''}`}
+          className={`case-drop-zone${dragging ? 'drop-over' : ''}`}
           onDragOver={(e) => {
             e.preventDefault()
             setDragging(true)
@@ -76,25 +77,25 @@ export function DocumentsSection({ c, onChanged, onPublish }: Props) {
           onDrop={handleDrop}
         >
           <CloudUpload size={24} aria-hidden />
-          <span className="drop-zone-text">
+          <span className="case-drop-zone-text">
             <strong>Upload files: drop them here, or browse</strong>
-            <span className="hint">
-              PDF, Word, text, images or spreadsheets · up to {MAX_FILE_MB} MB each
+            <span className="case-hint">
+              PDF, Word or text files · up to {MAX_FILE_MB} MB each
             </span>
           </span>
           <input type="file" multiple accept={ACCEPT} onChange={handleFiles} disabled={uploading} />
         </label>
-        <label className="field upload-side">
+        <label className="case-field upload-side">
           Visible to
           <SideSelect
             label="Visible to (new uploads)"
             value={uploadSide}
             onChange={setUploadSide}
-            className="input"
+            className="case-input"
           />
         </label>
       </div>
-      {uploading && <p className="hint">Uploading…</p>}
+      {uploading && <p className="case-hint">Uploading…</p>}
 
       {error && (
         <p className="form-error" role="alert">
@@ -103,16 +104,16 @@ export function DocumentsSection({ c, onChanged, onPublish }: Props) {
       )}
 
       {c.documents.length === 0 ? (
-        <p className="hint section-empty">No files yet.</p>
+        <p className="case-hint section-empty">No files yet.</p>
       ) : (
-        <ul className="rows">
+        <ul className="case-rows">
           {c.documents.map((doc) => (
             <li key={doc.id}>
-              <span className="icon-tile" aria-hidden>
+              <span className="case-icon-tile" aria-hidden>
                 <FileText size={18} />
               </span>
-              <span className="row-main">
-                <a href={documentUrl(c.id, doc.id)} className="row-link">
+              <span className="case-row-main">
+                <a href={documentUrl(c.id, doc.id)} className="case-row-link">
                   {doc.filename}
                 </a>
                 <span>
@@ -126,7 +127,7 @@ export function DocumentsSection({ c, onChanged, onPublish }: Props) {
               />
               <button
                 type="button"
-                className="icon-btn"
+                className="case-icon-btn"
                 aria-label={`Delete ${doc.filename}`}
                 onClick={() => {
                   if (window.confirm(`Delete ${doc.filename}?`)) {

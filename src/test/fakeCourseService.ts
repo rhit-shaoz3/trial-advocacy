@@ -24,6 +24,14 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     getCase: vi.fn(),
     updateCase: vi.fn(),
     deleteCase: vi.fn().mockResolvedValue(undefined),
+    listTeams: vi.fn().mockResolvedValue({ teams: [], unpaired: [] }),
+    createTeam: vi.fn(),
+    autoPair: vi.fn(),
+    clearTeams: vi.fn(),
+    deleteTeam: vi.fn(),
+    addTeamMember: vi.fn(),
+    removeTeamMember: vi.fn(),
+    listMyCases: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
 }

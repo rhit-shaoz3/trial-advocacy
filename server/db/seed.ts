@@ -6,7 +6,7 @@ import { pool } from './pool.ts'
  * Adds demo data for local development. Safe to re-run: existing accounts,
  * courses, and enrollments are left as they are (demo account passwords are
  * reset to the demo password). Log in as the demo instructor to manage the
- * courses, or as any demo student.
+ * courses, or as any demo student. LAW 540 also gets a draft placeholder case.
  */
 if (isProduction) throw new Error('Refusing to seed demo data in production.')
 
@@ -43,6 +43,15 @@ function demoEmail(name: string) {
     .split(/\s+/)
     .join('.')
   return `${local}@example.com`
+}
+
+/** A placeholder case shell; its facts arrive with the structured fact pattern. */
+const DEMO_CASE = {
+  title: 'Rivera v. Thrill Park',
+  summary:
+    'A rollercoaster stalls at the top of its lift hill, and a rider is injured during the ' +
+    'evacuation. The rider sues the park for negligence. Placeholder case: the full fact ' +
+    'pattern is still to come.',
 }
 
 const CLASS = CLASS_NAMES.map((name) => ({ name, email: demoEmail(name), role: 'student' }))
@@ -92,6 +101,14 @@ try {
       [classCourse.id, student.email, userId],
     )
   }
+
+  // A draft case to pair the class into. Matched by title so re-seeding doesn't duplicate it.
+  await pool.query(
+    `INSERT INTO cases (course_id, title, summary)
+     SELECT $1, $2, $3
+     WHERE NOT EXISTS (SELECT 1 FROM cases WHERE course_id = $1 AND title = $2)`,
+    [classCourse.id, DEMO_CASE.title, DEMO_CASE.summary],
+  )
 
   const { rows: counts } = await pool.query<{ total: number }>(
     'SELECT count(*)::int AS total FROM enrollments WHERE course_id = $1 AND user_id IS NOT NULL',

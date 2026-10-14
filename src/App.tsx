@@ -5,6 +5,7 @@ import { AppShell } from './components/AppShell'
 import { AuthPage } from './pages/AuthPage'
 import { CaseDetailPage } from './pages/cases/CaseDetailPage'
 import { CasesPage } from './pages/cases/CasesPage'
+import { MyCasesPage } from './pages/cases/MyCasesPage'
 import { CoursePage } from './pages/CoursePage'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -39,10 +40,7 @@ function App() {
       {/* Inside a course, everyone gets the course workspace's own navigation. */}
       <Route path="courses/:courseId" element={<WorkspaceLayout />}>
         <Route index element={<CourseDashboard />} />
-        <Route
-          path="cases"
-          element={isInstructor ? <CasesPage /> : <ComingSoon title="My cases" />}
-        />
+        <Route path="cases" element={isInstructor ? <CasesPage /> : <MyCasesPage />} />
         <Route
           path="cases/:caseId"
           element={isInstructor ? <CaseDetailPage /> : <ComingSoon title="Case workspace" />}

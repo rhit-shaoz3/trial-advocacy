@@ -4,6 +4,7 @@ import type { CourseService } from './types'
 const coursePath = (courseId: string) => `/courses/${encodeURIComponent(courseId)}`
 const casePath = (courseId: string, caseId: string) =>
   `${coursePath(courseId)}/cases/${encodeURIComponent(caseId)}`
+const teamsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/teams`
 
 export const httpCourseService: CourseService = {
   async listMyCourses() {
@@ -116,5 +117,46 @@ export const httpCourseService: CourseService = {
 
   async deleteCase(courseId, caseId) {
     await apiRequest(casePath(courseId, caseId), { method: 'DELETE' })
+  },
+
+  async listTeams(courseId, caseId) {
+    return apiRequest(teamsPath(courseId, caseId))
+  },
+
+  async createTeam(courseId, caseId, emails) {
+    return apiRequest(teamsPath(courseId, caseId), {
+      method: 'POST',
+      body: JSON.stringify({ emails }),
+    })
+  },
+
+  async autoPair(courseId, caseId) {
+    return apiRequest(`${teamsPath(courseId, caseId)}/auto`, { method: 'POST' })
+  },
+
+  async clearTeams(courseId, caseId) {
+    return apiRequest(teamsPath(courseId, caseId), { method: 'DELETE' })
+  },
+
+  async deleteTeam(courseId, caseId, teamId) {
+    return apiRequest(`${teamsPath(courseId, caseId)}/${encodeURIComponent(teamId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async addTeamMember(courseId, caseId, teamId, email) {
+    return apiRequest(`${teamsPath(courseId, caseId)}/${encodeURIComponent(teamId)}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  },
+
+  async removeTeamMember(courseId, caseId, teamId, email) {
+    const path = `${teamsPath(courseId, caseId)}/${encodeURIComponent(teamId)}/members/${encodeURIComponent(email)}`
+    return apiRequest(path, { method: 'DELETE' })
+  },
+
+  async listMyCases(courseId) {
+    return (await apiRequest(`${coursePath(courseId)}/my-cases`)).cases
   },
 }

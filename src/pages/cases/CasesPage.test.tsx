@@ -100,7 +100,8 @@ describe('CaseDetailPage', () => {
     expect(service.getCase).toHaveBeenCalledWith('c1', 'k1')
     expect(screen.getByText('Draft')).toBeInTheDocument()
     expect(screen.getByText('A rollercoaster stalls mid-loop.')).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Teams and case worlds' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Teams' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Case worlds' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'All cases' })).toHaveAttribute('href', '/courses/c1/cases')
   })
 

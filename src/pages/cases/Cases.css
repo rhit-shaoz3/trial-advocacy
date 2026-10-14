@@ -35,7 +35,7 @@
   text-decoration: none;
 }
 
-.case-row:hover {
+a.case-row:hover {
   border-color: #608cb3;
 }
 
@@ -102,4 +102,154 @@
 .badge-case-closed {
   background: #e6e9ee;
   color: #4f5b6b;
+}
+
+.teams-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.course-section h3 {
+  margin: 0;
+  color: var(--ws-navy);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.team-student {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.team-student-name {
+  overflow-wrap: anywhere;
+}
+
+.unpaired-panel {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.2rem;
+  border: 1px dashed #c9b893;
+  border-radius: 0.6rem;
+  background: #fbf7ef;
+}
+
+.unpaired-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.unpaired-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.35rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.unpaired-list label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.team-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.team-card-header .link-button {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.team-members {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.team-members li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.icon-button {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.3rem;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.icon-button svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--subtle);
+  color: #a33b3b;
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid #608cb3;
+  outline-offset: 1px;
+}
+
+.team-add {
+  margin-top: auto;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.my-case-team {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
 }

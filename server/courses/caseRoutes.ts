@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type RequestHandler } from 'express'
 import { HttpError } from '../httpError.ts'
 import { isUuid, readString } from '../validation.ts'
 import {
@@ -10,7 +10,16 @@ import {
   updateCase,
   type CaseFields,
   type CaseStatus,
+  type CourseCase,
 } from './cases.ts'
+import { teamsRouter } from './teamRoutes.ts'
+
+declare module 'express-serve-static-core' {
+  interface Request {
+    /** Set by `loadCase` on /api/courses/:courseId/cases/:caseId/* routes. */
+    courseCase?: CourseCase
+  }
+}
 
 const MAX_TITLE_LENGTH = 120
 const MAX_SUMMARY_LENGTH = 2000
@@ -69,3 +78,17 @@ casesRouter.delete('/:caseId', async (req, res) => {
   }
   res.status(204).end()
 })
+
+/** 404s unless the case belongs to the (already loaded) course. */
+const loadCase: RequestHandler = async (req, _res, next) => {
+  const { caseId } = req.params
+  const found = isUuid(caseId) ? await findCase(req.course!.id, caseId) : null
+  if (!found) throw new HttpError(404, 'Case not found.')
+  req.courseCase = found
+  next()
+}
+
+const caseRouter = Router({ mergeParams: true })
+caseRouter.use(loadCase)
+caseRouter.use('/teams', teamsRouter)
+casesRouter.use('/:caseId', caseRouter)

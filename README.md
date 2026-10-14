@@ -89,6 +89,7 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
 | POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
 | GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Case data isn't stored yet, so those lists are empty for now |
+| GET    | `/api/courses/:id/my-cases` |                             | Members: `{ cases: [{ id, title, summary, status, team }] }`, without drafts; `team` is `{ number, members }` (each member has `you`) or `null` before pairing |
 | GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode` and `studentCount` |
 | POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
 
@@ -111,10 +112,17 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | GET    | `/api/courses/:id/cases/:caseId`             |                                  | `{ case }` |
 | PATCH  | `/api/courses/:id/cases/:caseId`             | `{ title, summary, status }`     | `{ case }`; status is required here |
 | DELETE | `/api/courses/:id/cases/:caseId`             |                                  | `204` |
+| GET    | `/api/courses/:id/cases/:caseId/teams`       |                                  | `{ teams: [{ id, number, members }], unpaired }` (members and unpaired are roster entries) |
+| POST   | `/api/courses/:id/cases/:caseId/teams`       | `{ emails: string[] }` (1–3)     | `201`, the teams; `400` not on the roster, `409` already on a team |
+| POST   | `/api/courses/:id/cases/:caseId/teams/auto`  |                                  | The teams, after pairing every unpaired student at random; `409` if nobody is left |
+| DELETE | `/api/courses/:id/cases/:caseId/teams`       |                                  | The teams (now none): unpairs everyone |
+| DELETE | `/api/courses/:id/cases/:caseId/teams/:teamId` |                                | The teams, without that one |
+| POST   | `/api/courses/:id/cases/:caseId/teams/:teamId/members` | `{ email }`              | The teams; `409` if the team already has 3 |
+| DELETE | `/api/courses/:id/cases/:caseId/teams/:teamId/members/:email` |                   | The teams; a team left empty is deleted |
 
 All `/api/courses` routes return `401` when not logged in.
 
-**Cases** are shared by the whole class; students will be paired into teams per case, and each matchup of two teams becomes a case world. A case's `status` is `draft` (hidden from students), `active`, or `closed`. For now a case is only a shell (title and summary).
+**Cases** are shared by the whole class. A case's `status` is `draft` (hidden from students), `active`, or `closed`. Students are paired into **teams** per case: usually two, with one team of three for an odd class. Team members are roster entries, so pending students can be paired too, and removing a student from the roster takes them off their teams. Auto-pairing avoids repeating partners from the course's other cases where it can. A closed case's teams can't change (`409`). Matchups (case worlds) come next.
 
 **Rosters are keyed by email.** An instructor can add a student who has no account yet; that roster row is "pending" until someone signs up with the email (or joins with the entry code), and then it links to their account automatically.
 

@@ -18,6 +18,7 @@ import {
 import { casesRouter } from './caseRoutes.ts'
 import { factPatternsRouter } from './factPatternRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
+import { listMyCases } from './teams.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -123,6 +124,14 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
     upcoming: [],
     stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
   })
+})
+
+/** A member's cases (drafts are hidden) and their team in each, or null before pairing. */
+coursesRouter.get('/:courseId/my-cases', async (req, res) => {
+  const { courseId } = req.params
+  const course = isUuid(courseId) ? await findCourseForMember(courseId, req.user!.id) : null
+  if (!course) throw new HttpError(404, 'Course not found.')
+  res.json({ cases: await listMyCases(course.id, req.user!.id) })
 })
 
 // Everything below manages one course and is only for the instructor who teaches it.

@@ -8,10 +8,11 @@ import { NotFoundPage } from '../NotFoundPage'
 import { CaseForm } from './CaseForm'
 import { CaseStatusBadge } from './CaseStatusBadge'
 import { STATUS_HINT } from './caseStatus'
+import { TeamsSection } from './TeamsSection'
 import '../CoursePage.css'
 import './Cases.css'
 
-/** One case, as its instructor manages it. Teams and case worlds will live here. */
+/** One case, as its instructor manages it: details, teams, and (soon) case worlds. */
 export function CaseDetailPage() {
   const { courseId = '', caseId = '' } = useParams()
   const service = useCourseService()
@@ -123,11 +124,17 @@ export function CaseDetailPage() {
             </header>
           )}
 
-          <section className="course-section" aria-labelledby="teams-heading">
-            <h2 id="teams-heading">Teams and case worlds</h2>
+          <TeamsSection
+            courseId={courseId}
+            caseId={courseCase.id}
+            closed={courseCase.status === 'closed'}
+          />
+
+          <section className="course-section" aria-labelledby="worlds-heading">
+            <h2 id="worlds-heading">Case worlds</h2>
             <p className="muted">
-              Pairing comes next: you will pair students into teams of two, then set teams against
-              each other as plaintiff and defense. Each matchup becomes one case world.
+              Coming next: set teams against each other as plaintiff and defense. Each matchup
+              becomes one case world.
             </p>
           </section>
         </>

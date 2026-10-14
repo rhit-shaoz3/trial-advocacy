@@ -73,6 +73,32 @@ export interface CaseInput {
   status?: CourseCaseStatus
 }
 
+/** Students paired for one case: usually two, three for the odd one out. */
+export interface Team {
+  id: string
+  /** The label, as in "Team 3". */
+  number: number
+  members: RosterEntry[]
+}
+
+export const MAX_TEAM_SIZE = 3
+
+/** A case's teams, plus the roster students not on one yet. */
+export interface CaseTeams {
+  teams: Team[]
+  unpaired: RosterEntry[]
+}
+
+/** A case as a student sees it, with their team. Drafts are never included. */
+export interface MyCase {
+  id: string
+  title: string
+  summary: string
+  status: Exclude<CourseCaseStatus, 'draft'>
+  /** Null until the instructor pairs this student for the case. */
+  team: { number: number; members: (RosterEntry & { you: boolean })[] } | null
+}
+
 /** Everything the UI needs from the courses backend. See `httpCourseService`. */
 export interface CourseService {
   // Students
@@ -103,4 +129,18 @@ export interface CourseService {
   getCase(courseId: string, caseId: string): Promise<CourseCase>
   updateCase(courseId: string, caseId: string, input: Required<CaseInput>): Promise<CourseCase>
   deleteCase(courseId: string, caseId: string): Promise<void>
+  // Teams for one case. Every change resolves to the case's teams afterwards.
+  listTeams(courseId: string, caseId: string): Promise<CaseTeams>
+  createTeam(courseId: string, caseId: string, emails: string[]): Promise<CaseTeams>
+  /** Pairs every unpaired student at random, avoiding past partners. */
+  autoPair(courseId: string, caseId: string): Promise<CaseTeams>
+  clearTeams(courseId: string, caseId: string): Promise<CaseTeams>
+  deleteTeam(courseId: string, caseId: string, teamId: string): Promise<CaseTeams>
+  addTeamMember(courseId: string, caseId: string, teamId: string, email: string): Promise<CaseTeams>
+  /** A team left with nobody is deleted. */
+  removeTeamMember(courseId: string, caseId: string, teamId: string, email: string): Promise<CaseTeams>
+
+  // Students
+  /** The current student's non-draft cases and their team in each. */
+  listMyCases(courseId: string): Promise<MyCase[]>
 }

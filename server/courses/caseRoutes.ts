@@ -12,6 +12,7 @@ import {
   type CaseStatus,
   type CourseCase,
 } from './cases.ts'
+import { matchupsRouter } from './matchupRoutes.ts'
 import { teamsRouter } from './teamRoutes.ts'
 
 declare module 'express-serve-static-core' {
@@ -91,4 +92,5 @@ const loadCase: RequestHandler = async (req, _res, next) => {
 const caseRouter = Router({ mergeParams: true })
 caseRouter.use(loadCase)
 caseRouter.use('/teams', teamsRouter)
+caseRouter.use('/matchups', matchupsRouter)
 casesRouter.use('/:caseId', caseRouter)

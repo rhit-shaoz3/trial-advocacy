@@ -1,26 +1,46 @@
 import { useEffect, useState } from 'react'
-import { useOutletContext, useParams } from 'react-router'
+import { Link, useOutletContext, useParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import type { MyCase } from '../../courses/types'
+import type { MyCase, MyTeamMember } from '../../courses/types'
+import { ROLE_LABEL, worldLabel } from '../../courses/worldLabel'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { CaseStatusBadge } from './CaseStatusBadge'
 import '../CoursePage.css'
 import './Cases.css'
 
-function TeamLine({ team }: { team: MyCase['team'] }) {
-  if (!team) return <p className="muted my-case-team">Not on a team yet.</p>
-  const teammates = team.members.filter((m) => !m.you)
+const names = (members: MyTeamMember[]) => members.map((m) => m.name ?? m.email).join(' and ')
+
+/** The student's pairing, role, case world, and opposition in one case. */
+function Assignment({ team, world }: Pick<MyCase, 'team' | 'world'>) {
+  const rows: [string, string][] = !team
+    ? [['Pairing', 'Not assigned yet']]
+    : world
+      ? [
+          ['Pairing', names(team.members)],
+          ['Role', ROLE_LABEL[world.side]],
+          ['Case world', worldLabel(world.number)],
+          ['Opposition', names(world.opponents.members)],
+        ]
+      : [
+          ['Pairing', names(team.members)],
+          ['Case world', 'Not assigned yet'],
+        ]
   return (
-    <p className="my-case-team">
-      <strong>Team {team.number}</strong>
-      {teammates.length === 0
-        ? ': you are working solo.'
-        : `: you and ${teammates.map((m) => m.name ?? m.email).join(' and ')}`}
-    </p>
+    <dl className="my-case-assignment">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd className={value === 'Not assigned yet' ? 'muted' : undefined}>{value}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
-/** The student's "My cases" tab: the course's open and finished cases, with their team in each. */
+/**
+ * The student's "My cases" tab: the course's open and finished cases, with
+ * their team and case world in each.
+ */
 export function MyCasesPage() {
   const { courseId = '' } = useParams()
   const service = useCourseService()
@@ -60,13 +80,19 @@ export function MyCasesPage() {
       ) : (
         <ul className="case-list" aria-label="Cases">
           {cases.map((c) => (
-            <li key={c.id} className="case-row" aria-label={c.title}>
-              <div className="case-row-heading">
-                <h2>{c.title}</h2>
-                <CaseStatusBadge status={c.status} />
-              </div>
-              {c.summary && <p className="case-row-summary">{c.summary}</p>}
-              <TeamLine team={c.team} />
+            <li key={c.id} aria-label={c.title}>
+              {/* The same case page the dashboard's "Enter case" opens. */}
+              <Link
+                to={`/courses/${courseId}/cases/${c.id}${workspace?.search ?? ''}`}
+                className="case-row"
+              >
+                <div className="case-row-heading">
+                  <h2>{c.title}</h2>
+                  <CaseStatusBadge status={c.status} />
+                </div>
+                {c.summary && <p className="case-row-summary">{c.summary}</p>}
+                <Assignment team={c.team} world={c.world} />
+              </Link>
             </li>
           ))}
         </ul>

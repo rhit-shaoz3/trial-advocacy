@@ -95,6 +95,78 @@ describe('course workspace for the instructor', () => {
     expect(screen.getByText('No cases yet.')).toBeInTheDocument()
   })
 
+  it("shows each launched case with how many case worlds it has", async () => {
+    const home: CourseHome = {
+      ...emptyHome,
+      cases: [
+        {
+          id: 'k1',
+          title: 'Rivera v. Thrill Park',
+          summary: '',
+          status: 'active',
+          world: null,
+          worldCount: 8,
+          progress: null,
+          nextMilestone: null,
+          participants: Array.from({ length: 32 }, (_, i) => ({ name: `Student ${i + 1}` })),
+        },
+      ],
+    }
+    renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(home) }), '/courses/c1', ruiz)
+
+    const rivera = await screen.findByRole('article', { name: 'Rivera v. Thrill Park' })
+    expect(rivera).toHaveTextContent('8 case worlds')
+    expect(rivera).toHaveTextContent('32 participants')
+    expect(rivera).toHaveTextContent('+28')
+    expect(rivera).not.toHaveTextContent('Awaiting opposition')
+  })
+
+  it('shows a case on the dashboard as soon as it is made active, without a reload', async () => {
+    const draft = {
+      id: 'k1',
+      title: 'Rivera v. Thrill Park',
+      summary: '',
+      status: 'draft' as const,
+      createdAt: '2026-10-01T15:00:00.000Z',
+      updatedAt: '2026-10-01T15:00:00.000Z',
+    }
+    const withCase: CourseHome = {
+      ...emptyHome,
+      cases: [
+        {
+          id: 'k1',
+          title: 'Rivera v. Thrill Park',
+          summary: '',
+          status: 'active',
+          world: null,
+          worldCount: 0,
+          progress: null,
+          nextMilestone: null,
+          participants: [],
+        },
+      ],
+    }
+    const getCourseHome = vi.fn().mockResolvedValueOnce(emptyHome).mockResolvedValue(withCase)
+    const { user } = renderCourse(
+      fakeCourseService({
+        getCourseHome,
+        getCase: vi.fn().mockResolvedValue(draft),
+        updateCase: vi.fn().mockResolvedValue({ ...draft, status: 'active' }),
+      }),
+      '/courses/c1/cases/k1',
+      ruiz,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Edit case' }))
+    await user.selectOptions(screen.getByLabelText('Status'), 'Active')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('button', { name: 'Edit case' })
+    await user.click(within(screen.getByRole('navigation', { name: 'Course' })).getByRole('link', { name: 'Dashboard' }))
+
+    expect(await screen.findByRole('article', { name: 'Rivera v. Thrill Park' })).toHaveTextContent('0 case worlds')
+    expect(getCourseHome).toHaveBeenCalledTimes(2)
+  })
+
   it('opens the course management page as a tab', async () => {
     const service = fakeCourseService({
       getCourseHome: vi.fn().mockResolvedValue(emptyHome),
@@ -225,6 +297,56 @@ describe('course workspace', () => {
 
     expect(await screen.findByRole('heading', { name: 'Course not found' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to your courses' })).toHaveAttribute('href', '/')
+  })
+
+  it("shows a launched case with the student's case world and role", async () => {
+    const home: CourseHome = {
+      ...emptyHome,
+      cases: [
+        {
+          id: 'k1',
+          title: 'Rivera v. Thrill Park',
+          summary: 'A rollercoaster stalls.',
+          status: 'active',
+          world: { number: 4, side: 'defense' },
+          worldCount: null,
+          progress: null,
+          nextMilestone: null,
+          participants: ['Ada Lawyer', 'Kai Nakamura', 'Daniel Rivera', 'Isabella Rossi', 'Extra Person'].map(
+            (name) => ({ name }),
+          ),
+        },
+        {
+          id: 'k2',
+          title: 'State v. Hale',
+          summary: '',
+          status: 'active',
+          world: null,
+          worldCount: null,
+          progress: null,
+          nextMilestone: null,
+          participants: [{ name: 'Ada Lawyer' }, { name: 'Kai Nakamura' }],
+        },
+      ],
+    }
+    renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(home) }))
+
+    const rivera = await screen.findByRole('article', { name: 'Rivera v. Thrill Park' })
+    expect(rivera).toHaveTextContent('Case world D')
+    expect(rivera).toHaveTextContent('Role: Defendant')
+    expect(rivera).toHaveTextContent('5 participants')
+    // No progress is tracked yet, so no bar; four avatars and a count of the rest.
+    expect(within(rivera).queryByRole('progressbar')).not.toBeInTheDocument()
+    expect(rivera).toHaveTextContent('+1')
+    expect(within(rivera).getByRole('link', { name: 'Enter case: Rivera v. Thrill Park' })).toHaveAttribute(
+      'href',
+      '/courses/c1/cases/k1',
+    )
+
+    const hale = screen.getByRole('article', { name: 'State v. Hale' })
+    expect(hale).toHaveTextContent('Case world not assigned yet')
+    expect(hale).toHaveTextContent('Awaiting opposition')
+    expect(screen.getByRole('region', { name: 'Summary' })).toHaveTextContent('2Active cases')
   })
 
   it('opens placeholder pages from the sidebar', async () => {

@@ -3,7 +3,7 @@ import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
 
 export async function resetDatabase() {
-  await pool.query('TRUNCATE users, session, courses, enrollments, fact_patterns, cases, teams, team_members CASCADE')
+  await pool.query('TRUNCATE users, session, courses, enrollments, fact_patterns, cases, teams, team_members, matchups, matchup_teams CASCADE')
 }
 
 /** Signs up a new account and returns an agent that stays logged in as it. */

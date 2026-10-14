@@ -18,7 +18,7 @@ import {
 import { casesRouter } from './caseRoutes.ts'
 import { factPatternsRouter } from './factPatternRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
-import { listMyCases } from './teams.ts'
+import { homeCasesForInstructor, homeCasesForStudent, listMyCases } from './myCases.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -109,9 +109,10 @@ coursesRouter.post('/join', async (req, res) => {
 })
 
 /**
- * Everything a member's course home page shows. Cases, activity, and deadlines
- * don't exist yet (they arrive with cases and teams), so those lists are empty
- * for now; the shape is what the client already renders.
+ * Everything a member's course home page shows. Students get the launched
+ * cases they're on a team in; the instructor (the only instructor who can be
+ * a member) gets every launched case. Activity and deadlines aren't stored
+ * yet, so those lists are empty for now.
  */
 coursesRouter.get('/:courseId/home', async (req, res) => {
   const { courseId } = req.params
@@ -119,14 +120,17 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
   if (!course) throw new HttpError(404, 'Course not found.')
   res.json({
     course,
-    cases: [],
+    cases:
+      req.user!.role === 'instructor'
+        ? await homeCasesForInstructor(course.id)
+        : await homeCasesForStudent(course.id, req.user!.id),
     activity: [],
     upcoming: [],
     stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
   })
 })
 
-/** A member's cases (drafts are hidden) and their team in each, or null before pairing. */
+/** A member's cases (drafts are hidden) with their team and case world in each, or null before pairing. */
 coursesRouter.get('/:courseId/my-cases', async (req, res) => {
   const { courseId } = req.params
   const course = isUuid(courseId) ? await findCourseForMember(courseId, req.user!.id) : null

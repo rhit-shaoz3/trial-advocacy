@@ -5,6 +5,7 @@ const coursePath = (courseId: string) => `/courses/${encodeURIComponent(courseId
 const casePath = (courseId: string, caseId: string) =>
   `${coursePath(courseId)}/cases/${encodeURIComponent(caseId)}`
 const teamsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/teams`
+const matchupsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/matchups`
 
 export const httpCourseService: CourseService = {
   async listMyCourses() {
@@ -154,6 +155,33 @@ export const httpCourseService: CourseService = {
   async removeTeamMember(courseId, caseId, teamId, email) {
     const path = `${teamsPath(courseId, caseId)}/${encodeURIComponent(teamId)}/members/${encodeURIComponent(email)}`
     return apiRequest(path, { method: 'DELETE' })
+  },
+
+  async createMatchup(courseId, caseId, plaintiffTeamId, defenseTeamId) {
+    return apiRequest(matchupsPath(courseId, caseId), {
+      method: 'POST',
+      body: JSON.stringify({ plaintiffTeamId, defenseTeamId }),
+    })
+  },
+
+  async autoMatch(courseId, caseId) {
+    return apiRequest(`${matchupsPath(courseId, caseId)}/auto`, { method: 'POST' })
+  },
+
+  async clearMatchups(courseId, caseId) {
+    return apiRequest(matchupsPath(courseId, caseId), { method: 'DELETE' })
+  },
+
+  async swapSides(courseId, caseId, matchupId) {
+    return apiRequest(`${matchupsPath(courseId, caseId)}/${encodeURIComponent(matchupId)}/swap`, {
+      method: 'POST',
+    })
+  },
+
+  async deleteMatchup(courseId, caseId, matchupId) {
+    return apiRequest(`${matchupsPath(courseId, caseId)}/${encodeURIComponent(matchupId)}`, {
+      method: 'DELETE',
+    })
   },
 
   async listMyCases(courseId) {

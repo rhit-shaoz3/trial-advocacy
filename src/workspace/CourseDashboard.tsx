@@ -13,6 +13,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
+import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import {
   calendarDaysUntil,
   caseInitials,
@@ -28,6 +29,7 @@ import { useWorkspace } from './useWorkspace'
 import './workspace.css'
 
 const MAX_CASES = 4
+const MAX_AVATARS = 4
 const MAX_ACTIVITY = 5
 const MAX_UPCOMING = 4
 
@@ -216,12 +218,31 @@ function StatCard({
   )
 }
 
+/** Top-left of a case card: the student's world, a docket number, or the instructor's world count. */
+function caseLabel(c: CaseSummary) {
+  if (c.world) return `Case world ${worldLabel(c.world.number)}`
+  if (c.caseNumber) return `Case ${c.caseNumber}`
+  if (c.worldCount != null) return c.worldCount === 1 ? '1 case world' : `${c.worldCount} case worlds`
+  return 'Case world not assigned yet'
+}
+
+/** Under the title: the student's role, or the sample data's case type. */
+function caseSubtitle(c: CaseSummary) {
+  if (c.world) return `Role: ${ROLE_LABEL[c.world.side]}`
+  if (c.caseType) return c.caseType
+  if (c.worldCount == null) return 'Awaiting opposition'
+  return null
+}
+
 function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: string }) {
   const progressLabel = `${c.title} progress`
+  const subtitle = caseSubtitle(c)
+  const shown = c.participants.slice(0, MAX_AVATARS)
+  const hidden = c.participants.length - shown.length
   return (
     <article className={`ws-case ws-case-${c.status}`} aria-label={c.title}>
       <div className="ws-case-top">
-        <span className="ws-case-number">Case {c.caseNumber}</span>
+        <span className="ws-case-number">{caseLabel(c)}</span>
         <span className={`ws-status ws-status-${c.status}`}>
           <i aria-hidden="true" />
           {STATUS_LABEL[c.status]}
@@ -234,25 +255,29 @@ function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: st
         </span>
         <div>
           <h3>{c.title}</h3>
-          <p>{c.caseType}</p>
+          {subtitle && <p>{subtitle}</p>}
         </div>
       </div>
       <p className="ws-case-summary">{c.summary}</p>
 
-      <div className="ws-progress-header">
-        <span>Case progress</span>
-        <strong>{c.progress}%</strong>
-      </div>
-      <div
-        className="ws-progress"
-        role="progressbar"
-        aria-label={progressLabel}
-        aria-valuenow={c.progress}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <span style={{ width: `${Math.max(0, Math.min(100, c.progress))}%` }} />
-      </div>
+      {c.progress !== null && (
+        <>
+          <div className="ws-progress-header">
+            <span>Case progress</span>
+            <strong>{c.progress}%</strong>
+          </div>
+          <div
+            className="ws-progress"
+            role="progressbar"
+            aria-label={progressLabel}
+            aria-valuenow={c.progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <span style={{ width: `${Math.max(0, Math.min(100, c.progress))}%` }} />
+          </div>
+        </>
+      )}
 
       <div className="ws-case-meta">
         {c.nextMilestone && (
@@ -269,9 +294,10 @@ function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: st
 
       <div className="ws-case-footer">
         <span className="ws-avatar-stack" aria-label={c.participants.map((p) => p.name).join(', ')}>
-          {c.participants.map((p) => (
+          {shown.map((p) => (
             <Avatar key={p.name} name={p.name} size="sm" />
           ))}
+          {hidden > 0 && <span className="ws-avatar-more">+{hidden}</span>}
         </span>
         <Link
           to={href}

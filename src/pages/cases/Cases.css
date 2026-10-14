@@ -188,7 +188,8 @@ a.case-row:hover {
   justify-content: space-between;
 }
 
-.team-card-header .link-button {
+.team-card-header .link-button,
+.world-actions .link-button {
   font-size: 0.8rem;
   color: var(--muted);
 }
@@ -249,7 +250,117 @@ a.case-row:hover {
   font-size: 0.85rem;
 }
 
-.my-case-team {
-  margin: 0.5rem 0 0;
+
+.waiting-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 0.25rem 1rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
   font-size: 0.9rem;
+}
+
+.world-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+}
+
+.world-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: #384454;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.world-form select {
+  min-width: 10rem;
+  min-height: 2.4rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: #fff;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.world-grid {
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+}
+
+.world-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.world-sides {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.world-side {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+}
+
+.world-side dt {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.world-side dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.world-side-plaintiff {
+  background: #e8eff7;
+}
+
+.world-side-plaintiff dt {
+  color: #2f5b86;
+}
+
+.world-side-defense {
+  background: #f6ece6;
+}
+
+.world-side-defense dt {
+  color: #8a4f2f;
+}
+
+.my-case-assignment {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.6rem 0 0;
+  font-size: 0.9rem;
+}
+
+.my-case-assignment div {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.5rem;
+}
+
+.my-case-assignment dt {
+  font-weight: 700;
+}
+
+.my-case-assignment dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }

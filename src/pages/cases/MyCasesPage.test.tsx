@@ -35,15 +35,46 @@ describe('MyCasesPage', () => {
             { email: 'ben@example.com', name: 'Ben Counsel', joined: true, you: false },
           ],
         },
+        world: {
+          number: 2,
+          side: 'defense',
+          opponents: {
+            number: 7,
+            members: [{ email: 'cy@example.com', name: 'Cy Advocate', joined: true, you: false }],
+          },
+        },
       },
-      { id: 'k2', title: 'State v. Hale', summary: '', status: 'active', team: null },
+      { id: 'k2', title: 'State v. Hale', summary: '', status: 'active', team: null, world: null },
     ])
 
     const rivera = await screen.findByRole('listitem', { name: 'Rivera v. Thrill Park' })
     expect(service.listMyCases).toHaveBeenCalledWith('c1')
-    expect(rivera).toHaveTextContent('Team 4: you and Ben Counsel')
+    expect(rivera).toHaveTextContent('PairingMe Student and Ben Counsel')
+    expect(rivera).toHaveTextContent('RoleDefendant')
+    expect(rivera).toHaveTextContent('Case worldB')
+    expect(rivera).toHaveTextContent('OppositionCy Advocate')
+    expect(rivera).not.toHaveTextContent(/\byou\b/i)
     expect(within(rivera).getByText('Active')).toBeInTheDocument()
-    expect(screen.getByRole('listitem', { name: 'State v. Hale' })).toHaveTextContent('Not on a team yet.')
+    expect(within(rivera).getByRole('link')).toHaveAttribute('href', '/courses/c1/cases/k1')
+    expect(screen.getByRole('listitem', { name: 'State v. Hale' })).toHaveTextContent('PairingNot assigned yet')
+  })
+
+  it('says when a paired student has no opponents yet', async () => {
+    renderPage([
+      {
+        id: 'k1',
+        title: 'Rivera v. Thrill Park',
+        summary: '',
+        status: 'active',
+        team: { number: 1, members: [{ email: 'me@example.com', name: 'Me', joined: true, you: true }] },
+        world: null,
+      },
+    ])
+
+    const rivera = await screen.findByRole('listitem', { name: 'Rivera v. Thrill Park' })
+    expect(rivera).toHaveTextContent('PairingMe')
+    expect(rivera).toHaveTextContent('Case worldNot assigned yet')
+    expect(rivera).not.toHaveTextContent('Role')
   })
 
   it('says when there are no cases yet', async () => {

@@ -191,7 +191,7 @@ describe('roster changes and case status', () => {
 
     const res = await prof.post(`${teamsUrl()}/auto`)
     expect(res.status).toBe(409)
-    expect(res.body.error).toBe('This case is closed, so its teams can no longer change.')
+    expect(res.body.error).toBe('This case is closed, so its teams and case worlds can no longer change.')
     expect((await prof.delete(teamsUrl())).status).toBe(409)
     expect((await prof.get(teamsUrl())).body.teams).toHaveLength(1)
   })
@@ -273,8 +273,9 @@ describe("a student's cases", () => {
             { email: cy, name: null, joined: false, you: false },
           ],
         },
+        world: null,
       },
-      { id: second, title: 'State v. Hale', summary: '', status: 'active', team: null },
+      { id: second, title: 'State v. Hale', summary: '', status: 'active', team: null, world: null },
     ])
   })
 

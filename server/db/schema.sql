@@ -105,6 +105,33 @@ CREATE TABLE IF NOT EXISTS team_members (
 
 CREATE INDEX IF NOT EXISTS team_members_roster_idx ON team_members (course_id, email);
 
+-- Two teams of a case set against each other: one "case world". `number` is
+-- the label (1 = World A), unique within the case. The world's own content
+-- (its variation of the facts, AI witness state) arrives later.
+CREATE TABLE IF NOT EXISTS matchups (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id    uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  number     integer     NOT NULL CHECK (number > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (case_id, number),
+  UNIQUE (id, case_id)
+);
+
+-- Which team argues which side in a matchup. The side lives here rather than
+-- on the team so a pair can be plaintiff in one case and defense in the next.
+-- A team is in at most one matchup. Deleting a team removes its row here, and
+-- the app then deletes the matchup it leaves one-sided.
+CREATE TABLE IF NOT EXISTS matchup_teams (
+  matchup_id uuid NOT NULL,
+  case_id    uuid NOT NULL,
+  team_id    uuid NOT NULL UNIQUE,
+  side       text NOT NULL CHECK (side IN ('plaintiff', 'defense')),
+  -- Deferrable so swapping sides in one UPDATE is checked once, at the end.
+  PRIMARY KEY (matchup_id, side) DEFERRABLE,
+  FOREIGN KEY (matchup_id, case_id) REFERENCES matchups (id, case_id) ON DELETE CASCADE,
+  FOREIGN KEY (team_id, case_id) REFERENCES teams (id, case_id) ON DELETE CASCADE
+);
+
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (
   sid    varchar      PRIMARY KEY,

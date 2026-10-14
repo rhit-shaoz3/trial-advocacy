@@ -1,8 +1,8 @@
-import type { Course } from '../courses/types'
+import type { Course, Side } from '../courses/types'
 
-// What a student's course home page shows. The server sends this from
-// GET /api/courses/:id/home. Cases, activity, and deadlines aren't stored yet,
-// so for now those lists come back empty (see sampleData.ts for dev previews).
+// What a course home page shows. The server sends this from
+// GET /api/courses/:id/home. Activity, deadlines, and case progress aren't
+// stored yet, so those come back empty (see sampleData.ts for dev previews).
 
 export type CaseStatus = 'active' | 'in-review' | 'closed'
 
@@ -12,16 +12,20 @@ export interface CaseParticipant {
 
 export interface CaseSummary {
   id: string
-  /** Docket-style number, e.g. "24-CV-1847". */
-  caseNumber: string
+  /** Docket-style number, e.g. "24-CV-1847". Only in sample data so far. */
+  caseNumber?: string
   /** e.g. "Anderson v. Caldwell" */
   title: string
-  /** e.g. "Premises liability · Civil" */
-  caseType: string
+  /** e.g. "Premises liability · Civil". Only in sample data so far. */
+  caseType?: string
   summary: string
   status: CaseStatus
-  /** 0–100 */
-  progress: number
+  /** A student's case world and their role in it, once their team is matched. */
+  world?: { number: number; side: Side } | null
+  /** How many case worlds the case has; set for the instructor. */
+  worldCount?: number | null
+  /** 0–100, or null while progress isn't tracked. */
+  progress: number | null
   /** The next thing that matters, e.g. "Discovery due Oct 13" or "Awaiting instructor review". */
   nextMilestone: string | null
   participants: CaseParticipant[]

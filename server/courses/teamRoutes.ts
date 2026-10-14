@@ -33,10 +33,10 @@ function readTeamId(teamId: string) {
   return teamId
 }
 
-/** A closed case keeps its teams as pairing history, so they can't change. */
-const assertOpen: RequestHandler = (req, _res, next) => {
+/** A closed case keeps its teams and worlds as pairing history, so they can't change. */
+export const assertOpen: RequestHandler = (req, _res, next) => {
   if (req.courseCase!.status === 'closed') {
-    throw new HttpError(409, 'This case is closed, so its teams can no longer change.')
+    throw new HttpError(409, 'This case is closed, so its teams and case worlds can no longer change.')
   }
   next()
 }

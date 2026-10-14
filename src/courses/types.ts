@@ -83,20 +83,35 @@ export interface Team {
 
 export const MAX_TEAM_SIZE = 3
 
-/** A case's teams, plus the roster students not on one yet. */
+export type Side = 'plaintiff' | 'defense'
+
+/** One case world: two teams of a case on opposite sides. `number` 1 is World A. */
+export interface Matchup {
+  id: string
+  number: number
+  plaintiffTeamId: string
+  defenseTeamId: string
+}
+
+/** How a case is paired: its teams, the roster students not on one yet, and the case worlds. */
 export interface CaseTeams {
   teams: Team[]
   unpaired: RosterEntry[]
+  matchups: Matchup[]
 }
 
-/** A case as a student sees it, with their team. Drafts are never included. */
+export type MyTeamMember = RosterEntry & { you: boolean }
+
+/** A case as a student sees it, with their team and world. Drafts are never included. */
 export interface MyCase {
   id: string
   title: string
   summary: string
   status: Exclude<CourseCaseStatus, 'draft'>
   /** Null until the instructor pairs this student for the case. */
-  team: { number: number; members: (RosterEntry & { you: boolean })[] } | null
+  team: { number: number; members: MyTeamMember[] } | null
+  /** Null until their team is matched. `number` 1 is World A. */
+  world: { number: number; side: Side; opponents: { number: number; members: MyTeamMember[] } } | null
 }
 
 /** Everything the UI needs from the courses backend. See `httpCourseService`. */
@@ -139,6 +154,18 @@ export interface CourseService {
   addTeamMember(courseId: string, caseId: string, teamId: string, email: string): Promise<CaseTeams>
   /** A team left with nobody is deleted. */
   removeTeamMember(courseId: string, caseId: string, teamId: string, email: string): Promise<CaseTeams>
+  // Case worlds (matchups). Changes also resolve to the case's teams.
+  createMatchup(
+    courseId: string,
+    caseId: string,
+    plaintiffTeamId: string,
+    defenseTeamId: string,
+  ): Promise<CaseTeams>
+  /** Matches every waiting team, avoiding past opponents and alternating sides. */
+  autoMatch(courseId: string, caseId: string): Promise<CaseTeams>
+  clearMatchups(courseId: string, caseId: string): Promise<CaseTeams>
+  swapSides(courseId: string, caseId: string, matchupId: string): Promise<CaseTeams>
+  deleteMatchup(courseId: string, caseId: string, matchupId: string): Promise<CaseTeams>
 
   // Students
   /** The current student's non-draft cases and their team in each. */

@@ -12,7 +12,7 @@ import { TeamsSection } from './TeamsSection'
 import '../CoursePage.css'
 import './Cases.css'
 
-/** One case, as its instructor manages it: details, teams, and (soon) case worlds. */
+/** One case, as its instructor manages it: details, teams, and case worlds. */
 export function CaseDetailPage() {
   const { courseId = '', caseId = '' } = useParams()
   const service = useCourseService()
@@ -46,6 +46,7 @@ export function CaseDetailPage() {
     setDeleting(true)
     try {
       await service.deleteCase(courseId, courseCase.id)
+      workspace?.reloadHome()
       navigate(allCasesPath)
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -87,6 +88,8 @@ export function CaseDetailPage() {
                   }),
                 )
                 setEditing(false)
+                // The dashboard lists active and closed cases, so keep it current.
+                workspace?.reloadHome()
               }}
               onCancel={() => {
                 setEditing(false)
@@ -128,15 +131,8 @@ export function CaseDetailPage() {
             courseId={courseId}
             caseId={courseCase.id}
             closed={courseCase.status === 'closed'}
+            onChange={workspace?.reloadHome}
           />
-
-          <section className="course-section" aria-labelledby="worlds-heading">
-            <h2 id="worlds-heading">Case worlds</h2>
-            <p className="muted">
-              Coming next: set teams against each other as plaintiff and defense. Each matchup
-              becomes one case world.
-            </p>
-          </section>
         </>
       )}
     </main>

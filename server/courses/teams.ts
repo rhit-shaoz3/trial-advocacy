@@ -7,20 +7,30 @@ import type { RosterEntry } from './roster.ts'
 /** Two is the norm; three only absorbs the odd student out. */
 export const MAX_TEAM_SIZE = 3
 
-// Shapes sent to the client; match `Team` and `CaseTeams` in src/courses/types.ts.
+// Shapes sent to the client; match `Team`, `Matchup`, and `CaseTeams` in src/courses/types.ts.
 export interface Team {
   id: string
   number: number
   members: RosterEntry[]
 }
 
+/** One case world: two teams on opposite sides. `number` 1 is World A. */
+export interface Matchup {
+  id: string
+  number: number
+  plaintiffTeamId: string
+  defenseTeamId: string
+}
+
+/** Everything about how a case is paired. Every team or matchup change responds with this. */
 export interface CaseTeams {
   teams: Team[]
   /** Roster students not on a team for this case yet. */
   unpaired: RosterEntry[]
+  matchups: Matchup[]
 }
 
-/** The case's teams by number, plus everyone on the roster still unpaired. */
+/** The case's teams by number, everyone on the roster still unpaired, and the matchups. */
 export async function listTeams(courseId: string, caseId: string, db: Pick<PoolClient, 'query'> = pool) {
   const { rows: teams } = await db.query<Team>(
     `SELECT t.id, t.number,
@@ -47,15 +57,25 @@ export async function listTeams(courseId: string, caseId: string, db: Pick<PoolC
      ORDER BY e.user_id IS NULL, lower(u.name), e.email`,
     [courseId, caseId],
   )
-  return { teams, unpaired } satisfies CaseTeams
+  const { rows: matchups } = await db.query<Matchup>(
+    `SELECT mu.id, mu.number, p.team_id AS "plaintiffTeamId", d.team_id AS "defenseTeamId"
+     FROM matchups mu
+     JOIN matchup_teams p ON p.matchup_id = mu.id AND p.side = 'plaintiff'
+     JOIN matchup_teams d ON d.matchup_id = mu.id AND d.side = 'defense'
+     WHERE mu.case_id = $1
+     ORDER BY mu.number`,
+    [caseId],
+  )
+  return { teams, unpaired, matchups } satisfies CaseTeams
 }
 
 /**
  * Runs `change` in a transaction holding the case's row lock, so concurrent
- * edits to one case's teams (and their numbers) happen one at a time, and
- * returns the teams afterwards.
+ * edits to one case's teams and matchups (and their numbers) happen one at a
+ * time, and returns the pairing afterwards. A matchup that lost a team is
+ * deleted, putting its other team back in the pool.
  */
-async function changeTeams(
+export async function changeTeams(
   courseId: string,
   caseId: string,
   change: (client: PoolClient) => Promise<void>,
@@ -65,6 +85,11 @@ async function changeTeams(
     await client.query('BEGIN')
     await client.query('SELECT 1 FROM cases WHERE id = $1 FOR UPDATE', [caseId])
     await change(client)
+    await client.query(
+      `DELETE FROM matchups mu
+       WHERE mu.case_id = $1 AND (SELECT count(*) FROM matchup_teams mt WHERE mt.matchup_id = mu.id) < 2`,
+      [caseId],
+    )
     const result = await listTeams(courseId, caseId, client)
     await client.query('COMMIT')
     return result
@@ -140,7 +165,7 @@ export function addMember(courseId: string, caseId: string, teamId: string, emai
   })
 }
 
-/** Takes a student off a team; a team left with no one is deleted. */
+/** Takes a student off a team; a team left with no one is deleted, with its matchup. */
 export function removeMember(courseId: string, caseId: string, teamId: string, email: string) {
   return changeTeams(courseId, caseId, async (client) => {
     const { rowCount } = await client.query(
@@ -152,6 +177,7 @@ export function removeMember(courseId: string, caseId: string, teamId: string, e
   })
 }
 
+/** Also deletes the team's matchup. */
 export function deleteTeam(courseId: string, caseId: string, teamId: string) {
   return changeTeams(courseId, caseId, async (client) => {
     const { rowCount } = await client.query('DELETE FROM teams WHERE id = $1 AND case_id = $2', [
@@ -162,7 +188,7 @@ export function deleteTeam(courseId: string, caseId: string, teamId: string) {
   })
 }
 
-/** Unpairs everyone in the case. */
+/** Unpairs everyone in the case, which also removes the matchups. */
 export function clearTeams(courseId: string, caseId: string) {
   return changeTeams(courseId, caseId, async (client) => {
     await client.query('DELETE FROM teams WHERE case_id = $1', [caseId])
@@ -234,41 +260,4 @@ export function pairStudents(
     else groups.push([last])
   }
   return groups
-}
-
-// Shape sent to the client; matches `MyCase` in src/courses/types.ts.
-export interface MyCase {
-  id: string
-  title: string
-  summary: string
-  status: 'active' | 'closed'
-  /** Null until the instructor pairs this student for the case. */
-  team: { number: number; members: (RosterEntry & { you: boolean })[] } | null
-}
-
-/** A student's view of the course's cases: everything but drafts, with their team in each. */
-export async function listMyCases(courseId: string, userId: string) {
-  const { rows } = await pool.query<MyCase>(
-    `SELECT c.id, c.title, c.summary, c.status,
-            (SELECT json_build_object(
-                      'number', t.number,
-                      'members', (SELECT json_agg(
-                                           json_build_object('email', m.email, 'name', u.name,
-                                                             'joined', e.user_id IS NOT NULL,
-                                                             'you', e.user_id IS NOT DISTINCT FROM $2::uuid)
-                                           ORDER BY e.user_id IS DISTINCT FROM $2::uuid, lower(u.name), m.email)
-                                  FROM team_members m
-                                  JOIN enrollments e ON e.course_id = m.course_id AND e.email = m.email
-                                  LEFT JOIN users u ON u.id = e.user_id
-                                  WHERE m.team_id = t.id))
-             FROM team_members mine
-             JOIN enrollments me ON me.course_id = mine.course_id AND me.email = mine.email
-             JOIN teams t ON t.id = mine.team_id
-             WHERE mine.case_id = c.id AND me.user_id = $2) AS team
-     FROM cases c
-     WHERE c.course_id = $1 AND c.status <> 'draft'
-     ORDER BY c.created_at, c.title`,
-    [courseId, userId],
-  )
-  return rows
 }

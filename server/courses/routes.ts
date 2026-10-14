@@ -4,15 +4,17 @@ import { listDashboardCases } from '../cases/cases.ts'
 import { courseCasesRouter } from '../cases/routes.ts'
 import { HttpError } from '../httpError.ts'
 import { isUuid, readString } from '../validation.ts'
+import { answerInvitation, dismissDenial, getInbox } from './roster.ts'
 import {
   createCourse,
   deleteCourse,
-  enroll,
   findCourseByEntryCode,
   findCourseForMember,
   findTaughtCourse,
   listCoursesForUser,
   listTaughtCourses,
+  NO_COURSE_FOR_CODE,
+  requestToJoin,
   updateCourse,
   type CourseFields,
   type TaughtCourse,
@@ -101,11 +103,35 @@ coursesRouter.post('/join', async (req, res) => {
   if (!entryCode) throw new HttpError(400, 'Enter an entry code.')
 
   const course = await findCourseByEntryCode(entryCode)
-  if (!course) throw new HttpError(404, 'No course matches that entry code.')
-  if (!(await enroll(req.user!, course.id))) {
-    throw new HttpError(409, 'You are already enrolled in that course.')
+  if (!course) throw new HttpError(404, NO_COURSE_FOR_CODE)
+  const result = await requestToJoin(req.user!, course.id)
+  if (result === 'already-joined') throw new HttpError(409, 'You are already enrolled in that course.')
+  if (result === 'already-requested') {
+    throw new HttpError(409, 'You already asked to join that course. Your instructor will decide soon.')
   }
-  res.status(201).json({ course })
+  // 'joined' if the instructor had already invited them, otherwise 'requested'.
+  res.status(201).json({ course, status: result })
+})
+
+/** A student's invitations, waiting requests, and denied requests. */
+coursesRouter.get('/inbox', async (req, res) => {
+  res.json(await getInbox(req.user!.id))
+})
+
+for (const [action, accept] of [['accept', true], ['reject', false]] as const) {
+  coursesRouter.post(`/:courseId/invitation/${action}`, async (req, res) => {
+    const { courseId } = req.params
+    if (!isUuid(courseId) || !(await answerInvitation(courseId, req.user!.id, accept))) {
+      throw new HttpError(404, 'Invitation not found.')
+    }
+    res.status(204).end()
+  })
+}
+
+coursesRouter.post('/:courseId/denial/dismiss', async (req, res) => {
+  const { courseId } = req.params
+  if (isUuid(courseId)) await dismissDenial(courseId, req.user!.id)
+  res.status(204).end()
 })
 
 /**

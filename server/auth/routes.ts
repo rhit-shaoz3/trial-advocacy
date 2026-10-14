@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { Router, type Request } from 'express'
+import { findCourseByEntryCode, NO_COURSE_FOR_CODE, requestToJoin } from '../courses/courses.ts'
 import { claimPendingEnrollments } from '../courses/roster.ts'
 import { HttpError } from '../httpError.ts'
 import { EMAIL_PATTERN, readString } from '../validation.ts'
@@ -37,6 +38,7 @@ authRouter.post('/signup', async (req, res) => {
   const email = readString(req.body, 'email').trim().toLowerCase()
   const password = readString(req.body, 'password')
   const role = readString(req.body, 'role') as Role
+  const entryCode = readString(req.body, 'classCode').trim().toUpperCase()
 
   if (!name) throw new HttpError(400, 'Name is required.')
   if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter a valid email address.')
@@ -48,12 +50,18 @@ authRouter.post('/signup', async (req, res) => {
   }
   if (!ROLES.includes(role)) throw new HttpError(400, 'Choose student or instructor.')
 
+  // Check a course code before creating anything, so a typo doesn't leave
+  // behind an account that isn't in the course.
+  const course = role === 'student' && entryCode ? await findCourseByEntryCode(entryCode) : null
+  if (role === 'student' && entryCode && !course) throw new HttpError(404, NO_COURSE_FOR_CODE)
+
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
   const user = await createUser({ name, email, role, passwordHash })
   if (!user) throw new HttpError(409, 'An account with that email already exists.')
 
   // Instructors may have added this student to courses before they signed up.
   if (role === 'student') await claimPendingEnrollments(user.id, user.email)
+  if (course) await requestToJoin(user, course.id)
 
   await startSession(req, user.id)
   res.status(201).json({ user: toPublicUser(user) })

@@ -20,6 +20,20 @@ export async function signedInAgent(
 
 export const fallTrial = { code: 'LAW 540', title: 'Trial Advocacy', season: 'Fall', year: 2026 }
 
+/** The student enters the entry code and the instructor admits them, so they've joined. */
+export async function joinCourse(
+  student: request.Agent,
+  instructor: request.Agent,
+  course: { id: string; entryCode: string },
+) {
+  await student.post('/api/courses/join').send({ entryCode: course.entryCode })
+  const me = await student.get('/api/auth/me')
+  const res = await instructor
+    .post(`/api/courses/${course.id}/roster/requests`)
+    .send({ userIds: [me.body.user.id], decision: 'admit' })
+  if (res.status !== 200) throw new Error(`Admit failed: ${JSON.stringify(res.body)}`)
+}
+
 /** Creates a course through the API as `instructor` and returns it. */
 export async function createCourseAs(
   instructor: request.Agent,

@@ -86,15 +86,15 @@ try {
     const userId = await upsertUser(student, hash)
     // Claims a pending roster row for this email if the instructor already added one.
     await pool.query(
-      `INSERT INTO enrollments (course_id, email, user_id) VALUES ($1, $2, $3)
-       ON CONFLICT (course_id, email) DO UPDATE SET user_id = EXCLUDED.user_id
-         WHERE enrollments.user_id IS NULL`,
+      `INSERT INTO enrollments (course_id, email, user_id, status) VALUES ($1, $2, $3, 'joined')
+       ON CONFLICT (course_id, email) DO UPDATE SET user_id = EXCLUDED.user_id, status = 'joined'
+         WHERE enrollments.status <> 'joined'`,
       [classCourse.id, student.email, userId],
     )
   }
 
   const { rows: counts } = await pool.query<{ total: number }>(
-    'SELECT count(*)::int AS total FROM enrollments WHERE course_id = $1 AND user_id IS NOT NULL',
+    `SELECT count(*)::int AS total FROM enrollments WHERE course_id = $1 AND status = 'joined'`,
     [classCourse.id],
   )
   console.log()

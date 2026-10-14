@@ -1,13 +1,14 @@
 import { Router } from 'express'
 import { HttpError } from '../httpError.ts'
-import { EMAIL_PATTERN } from '../validation.ts'
-import { addToRoster, listRoster, removeFromRoster } from './roster.ts'
+import { EMAIL_PATTERN, isUuid, readString } from '../validation.ts'
+import { addToRoster, decideRequests, listRoster, removeFromRoster } from './roster.ts'
 
 const MAX_EMAILS_PER_REQUEST = 500
 
 const SKIP_REASONS = {
   invalid: 'Not a valid email address.',
   'already-enrolled': 'Already on the roster.',
+  'already-invited': 'Already invited.',
   instructor: 'Belongs to an instructor account.',
 }
 
@@ -18,7 +19,10 @@ rosterRouter.get('/', async (req, res) => {
   res.json({ roster: await listRoster(req.course!.id) })
 })
 
-/** Body: `{ emails: string[] }`. Adds what it can and reports what it skipped. */
+/**
+ * Body: `{ emails: string[] }`. Invites what it can and reports what it skipped.
+ * Students accept the invitation before they join.
+ */
 rosterRouter.post('/', async (req, res) => {
   const raw = (req.body as Record<string, unknown> | undefined)?.emails
   const emails = [
@@ -43,6 +47,20 @@ rosterRouter.post('/', async (req, res) => {
   }
 
   res.json({ added, skipped, roster: await listRoster(req.course!.id) })
+})
+
+/** Body: `{ userIds: string[], decision: 'admit' | 'deny' }` for students who entered the entry code. */
+rosterRouter.post('/requests', async (req, res) => {
+  const userIds = (req.body as Record<string, unknown> | undefined)?.userIds
+  const decision = readString(req.body, 'decision')
+  if (!Array.isArray(userIds) || userIds.length === 0 || !userIds.every(isUuid)) {
+    throw new HttpError(400, 'Choose at least one student.')
+  }
+  if (decision !== 'admit' && decision !== 'deny') {
+    throw new HttpError(400, 'Decision must be admit or deny.')
+  }
+  const updated = await decideRequests(req.course!.id, userIds, decision === 'admit')
+  res.json({ updated, roster: await listRoster(req.course!.id) })
 })
 
 rosterRouter.delete('/:email', async (req, res) => {

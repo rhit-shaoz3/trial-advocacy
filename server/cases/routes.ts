@@ -25,6 +25,7 @@ import {
   getInstructorCase,
   getStudentCase,
   listCourseCases,
+  listUserCases,
   saveMatchups,
   saveTeams,
   setCharacterKnows,
@@ -135,6 +136,11 @@ courseCasesRouter.post('/', async (req, res) => {
 export const casesRouter = Router()
 
 casesRouter.use(requireUser)
+
+/** Every case the user can open, across their courses (for the sidebar's Cases page). */
+casesRouter.get('/', async (req, res) => {
+  res.json({ cases: await listUserCases(req.user!) })
+})
 
 casesRouter.get('/:caseId', async (req, res) => {
   if (req.user!.role === 'instructor') return sendInstructorCase(req, res)

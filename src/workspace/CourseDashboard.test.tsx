@@ -73,6 +73,8 @@ describe('course workspace for the instructor', () => {
     year: 2026,
     entryCode: 'K7PQ2M',
     studentCount: 0,
+    requestCount: 0,
+    invitedCount: 0,
   }
 
   it('shows the same dashboard with All cases and a Manage course tab', async () => {
@@ -111,7 +113,7 @@ describe('course workspace for the instructor', () => {
     expect(screen.getByRole('region', { name: 'Fact patterns' })).toBeInTheDocument()
   })
 
-  it('updates the sidebar after the course is renamed', async () => {
+  it('updates the course header after the course is renamed', async () => {
     const renamed = { ...emptyHome, course: { ...emptyHome.course, title: 'Advanced Trial Advocacy' } }
     const getCourseHome = vi.fn().mockResolvedValueOnce(emptyHome).mockResolvedValueOnce(renamed)
     const service = fakeCourseService({
@@ -126,28 +128,29 @@ describe('course workspace for the instructor', () => {
     await user.type(screen.getByLabelText('Course title'), 'Advanced Trial Advocacy')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    const sidebar = screen.getByRole('complementary')
-    expect(await within(sidebar).findByText('Advanced Trial Advocacy')).toBeInTheDocument()
+    expect(
+      await screen.findByText('LAW 540: Advanced Trial Advocacy', { selector: '.course-band-name' }),
+    ).toBeInTheDocument()
     expect(getCourseHome).toHaveBeenCalledTimes(2)
   })
 })
 
 describe('course workspace', () => {
-  it('shows the course in the sidebar with workspace navigation', async () => {
+  it('shows the course and its tabs inside the app sidebar', async () => {
     const service = fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(emptyHome) })
     renderCourse(service)
 
     await screen.findByRole('heading', { name: 'Good morning, Ada.' })
     expect(service.getCourseHome).toHaveBeenCalledWith('c1')
-    const sidebar = screen.getByRole('complementary')
-    expect(within(sidebar).getByText('Fall 2026')).toBeInTheDocument()
-    expect(within(sidebar).getByText('Prof. Ruiz')).toBeInTheDocument()
-    const nav = within(sidebar).getByRole('navigation', { name: 'Course' })
+    expect(screen.getByText('Fall 2026', { selector: '.course-band .ws-eyebrow' })).toBeInTheDocument()
+    expect(screen.getByText('Prof. Ruiz', { selector: '.course-band .ws-subtle' })).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: 'Course' })
     expect(within(nav).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
     expect(within(nav).getByRole('link', { name: 'My cases' })).toHaveAttribute('href', '/courses/c1/cases')
-    expect(within(sidebar).getByRole('link', { name: 'All courses' })).toHaveAttribute('href', '/')
-    // No top navbar inside the workspace.
-    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' })
+    expect(within(crumbs).getByRole('link', { name: 'My courses' })).toHaveAttribute('href', '/courses')
+    // The app's own sidebar stays, with its Main navigation.
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
   })
 
   it('explains the empty state before any cases exist', async () => {
@@ -224,7 +227,7 @@ describe('course workspace', () => {
     )
 
     expect(await screen.findByRole('heading', { name: 'Course not found' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Back to your courses' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Back to your courses' })).toHaveAttribute('href', '/courses')
   })
 
   it('opens placeholder pages from the sidebar', async () => {
@@ -267,6 +270,6 @@ describe('course workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Log out' }))
 
     expect(auth.logOut).toHaveBeenCalledTimes(1)
-    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 })

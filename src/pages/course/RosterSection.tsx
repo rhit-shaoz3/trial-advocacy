@@ -1,7 +1,14 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import { readEmailsFromFile } from '../../courses/emails'
-import type { AddStudentsResult, RosterEntry } from '../../courses/types'
+import { AdmissionTable } from '../../dashboard/AdmissionTable'
+import type { AddStudentsResult, RosterEntry, RosterStatus } from '../../courses/types'
+
+const STATUS_BADGE: Record<RosterStatus, { label: string; className: string }> = {
+  joined: { label: 'Joined', className: 'badge badge-joined' },
+  invited: { label: 'Invited', className: 'badge badge-pending' },
+  requested: { label: 'Asked to join', className: 'badge badge-pending' },
+}
 
 /** Splits pasted text on commas, semicolons and whitespace (one per line works too). */
 function parseEmails(text: string) {
@@ -84,9 +91,21 @@ export function RosterSection({ courseId }: { courseId: string }) {
     }
   }
 
+  // People asking to join get their own table; everyone else is listed below.
+  const requests = roster?.filter((r) => r.status === 'requested') ?? []
+  const members = roster?.filter((r) => r.status !== 'requested') ?? null
+
   return (
     <section className="course-section" aria-labelledby="roster-heading">
-      <h2 id="roster-heading">Students{roster ? ` (${roster.length})` : ''}</h2>
+      <h2 id="roster-heading">Students{members ? ` (${members.length})` : ''}</h2>
+
+      {requests.length > 0 && (
+        <AdmissionTable
+          courseId={courseId}
+          requests={requests}
+          onDecided={() => service.listRoster(courseId).then(setRoster).catch(() => {})}
+        />
+      )}
 
       <form className="panel-form roster-form" onSubmit={handleAdd}>
         <label>
@@ -99,18 +118,18 @@ export function RosterSection({ courseId }: { courseId: string }) {
             required
           />
         </label>
+        <button type="submit" className="btn-primary" disabled={adding || !emails.trim()}>
+          {adding ? 'Adding…' : 'Add'}
+        </button>
         <label className="roster-file">
           Or upload a spreadsheet of emails (.xlsx or .csv)
           <input type="file" accept=".xlsx,.csv" onChange={handleFile} />
         </label>
         {fileNote && <p className="muted roster-hint">{fileNote}</p>}
-        <button type="submit" className="btn-primary" disabled={adding || !emails.trim()}>
-          {adding ? 'Adding…' : 'Add'}
-        </button>
         <p className="muted roster-hint">
-          One per line, or separated by commas. Students without an account show as pending and
-          join automatically when they sign up with that email. Students can also join themselves
-          with the entry code.
+          One per line, or separated by commas. Each student gets an invitation to accept when they
+          log in (or after they sign up with that email). Students can also ask to join with the
+          entry code, and you admit or deny them above.
         </p>
       </form>
 
@@ -140,7 +159,7 @@ export function RosterSection({ courseId }: { courseId: string }) {
         </p>
       ) : roster === null ? (
         <p className="muted">Loading roster…</p>
-      ) : roster.length === 0 ? (
+      ) : members!.length === 0 ? (
         <p className="muted">No students yet.</p>
       ) : (
         <div className="table-scroll">
@@ -156,16 +175,16 @@ export function RosterSection({ courseId }: { courseId: string }) {
               </tr>
             </thead>
             <tbody>
-              {roster.map((entry) => (
+              {members!.map((entry) => (
                 <tr key={entry.email}>
                   <td>{entry.name ?? <span className="muted">—</span>}</td>
                   <td>{entry.email}</td>
                   <td>
-                    {entry.joined ? (
-                      <span className="badge badge-joined">Joined</span>
-                    ) : (
-                      <span className="badge badge-pending">Pending sign-up</span>
-                    )}
+                    <span className={STATUS_BADGE[entry.status].className}>
+                      {entry.status === 'invited' && !entry.userId
+                        ? 'Invited · no account yet'
+                        : STATUS_BADGE[entry.status].label}
+                    </span>
                   </td>
                   <td className="cell-actions">
                     <button

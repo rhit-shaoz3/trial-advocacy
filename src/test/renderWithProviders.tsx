@@ -7,7 +7,10 @@ import { AuthContext } from '../auth/AuthContext'
 import type { User } from '../auth/types'
 import { CasesApiContext } from '../cases/CasesApiContext'
 import type { CasesApi } from '../cases/types'
+import { CourseServiceContext } from '../courses/CourseServiceContext'
+import type { CourseService } from '../courses/types'
 import { fakeCasesApi } from './fakeCasesApi'
+import { fakeCourseService } from './fakeCourseService'
 import { NavigatedTo } from './NavigatedTo'
 
 export const testInstructor: User = {
@@ -30,18 +33,25 @@ interface Options {
   /** The logged-in user; defaults to an instructor. */
   user?: User
   casesApi?: CasesApi
+  courseService?: CourseService
   /** Starting URL, and the route pattern the element is mounted at. */
   url?: string
   path?: string
 }
 
 /**
- * Renders a case page inside a router with a fake cases API. Any page navigated
+ * Renders a page inside a router with fake course and case APIs. Any page navigated
  * to that isn't `path` renders "Navigated to <url>", so tests can check where a
  * button went.
  */
 export function renderWithProviders(ui: ReactNode, options: Options = {}) {
-  const { user: loggedIn = testInstructor, casesApi = fakeCasesApi(), url = '/', path = '/' } = options
+  const {
+    user: loggedIn = testInstructor,
+    casesApi = fakeCasesApi(),
+    courseService = fakeCourseService(),
+    url = '/',
+    path = '/',
+  } = options
   const auth = {
     user: loggedIn,
     loading: false,
@@ -52,15 +62,17 @@ export function renderWithProviders(ui: ReactNode, options: Options = {}) {
   const user = userEvent.setup()
   render(
     <AuthContext.Provider value={auth}>
-      <CasesApiContext.Provider value={casesApi}>
-        <MemoryRouter initialEntries={[url]}>
-          <Routes>
-            <Route path={path} element={ui} />
-            <Route path="*" element={<NavigatedTo />} />
-          </Routes>
-        </MemoryRouter>
-      </CasesApiContext.Provider>
+      <CourseServiceContext.Provider value={courseService}>
+        <CasesApiContext.Provider value={casesApi}>
+          <MemoryRouter initialEntries={[url]}>
+            <Routes>
+              <Route path={path} element={ui} />
+              <Route path="*" element={<NavigatedTo />} />
+            </Routes>
+          </MemoryRouter>
+        </CasesApiContext.Provider>
+      </CourseServiceContext.Provider>
     </AuthContext.Provider>,
   )
-  return { user, casesApi, auth }
+  return { user, casesApi, courseService, auth }
 }

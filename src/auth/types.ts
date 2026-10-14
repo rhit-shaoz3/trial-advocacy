@@ -13,6 +13,8 @@ export interface SignUpInput {
   email: string
   password: string
   role: Role
+  /** Students only: asks to join the course with this code. */
+  classCode?: string
 }
 
 export interface LogInInput {

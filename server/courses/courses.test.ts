@@ -2,7 +2,7 @@ import request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, fallTrial, resetDatabase, signedInAgent } from '../test/helpers.ts'
+import { createCourseAs, fallTrial, joinCourse, resetDatabase, signedInAgent } from '../test/helpers.ts'
 
 beforeEach(resetDatabase)
 
@@ -26,6 +26,8 @@ describe('POST /api/courses', () => {
       year: 2026,
       entryCode: expect.stringMatching(/^[A-HJ-NP-Z2-9]{6}$/),
       studentCount: 0,
+      requestCount: 0,
+      invitedCount: 0,
     })
   })
 
@@ -63,7 +65,7 @@ describe('POST /api/courses', () => {
 })
 
 describe('GET /api/courses/teaching', () => {
-  it("lists only the instructor's own courses, newest term first, with student counts", async () => {
+  it("lists only the instructor's own courses, newest term first, with roster counts", async () => {
     const { agent } = await signedInAgent('instructor')
     const { agent: other } = await signedInAgent('instructor', 'other@example.com')
     const spring = await createCourseAs(agent, { ...fallTrial, code: 'LAW 520', title: 'Evidence', season: 'Spring' })
@@ -74,7 +76,7 @@ describe('GET /api/courses/teaching', () => {
     const res = await agent.get('/api/courses/teaching')
 
     expect(res.body.courses.map((c: { id: string }) => c.id)).toEqual([fall.id, spring.id])
-    expect(res.body.courses[0]).toMatchObject({ term: 'Fall 2026', studentCount: 2 })
+    expect(res.body.courses[0]).toMatchObject({ term: 'Fall 2026', studentCount: 0, invitedCount: 2 })
     expect(res.body.courses[1]).toMatchObject({ term: 'Spring 2026', studentCount: 0 })
   })
 
@@ -127,7 +129,7 @@ describe('PATCH /api/courses/:courseId', () => {
       season: 'Winter',
       year: 2027,
       entryCode: course.entryCode,
-      studentCount: 1,
+      invitedCount: 1,
     })
     expect((await agent.get(`/api/courses/${course.id}`)).body.course.term).toBe('Winter 2027')
   })
@@ -209,7 +211,7 @@ describe('GET /api/courses/:courseId/home', () => {
     const { agent: prof } = await signedInAgent('instructor', 'prof@example.com', 'Prof. Ruiz')
     const course = await createCourseAs(prof)
     const { agent } = await signedInAgent()
-    await agent.post('/api/courses/join').send({ entryCode: course.entryCode })
+    await joinCourse(agent, prof, course)
 
     const res = await agent.get(`/api/courses/${course.id}/home`)
 
@@ -255,8 +257,8 @@ describe('GET /api/courses', () => {
     const trial = await createCourseAs(prof)
     await createCourseAs(prof, { ...fallTrial, title: 'Not mine' })
     const { agent } = await signedInAgent()
-    await agent.post('/api/courses/join').send({ entryCode: evidence.entryCode })
-    await agent.post('/api/courses/join').send({ entryCode: trial.entryCode })
+    await joinCourse(agent, prof, evidence)
+    await joinCourse(agent, prof, trial)
 
     const res = await agent.get('/api/courses')
 
@@ -278,22 +280,28 @@ describe('GET /api/courses', () => {
 
 describe('POST /api/courses/join', () => {
   let course: { id: string; entryCode: string }
+  let prof: request.Agent
 
   beforeEach(async () => {
-    const { agent } = await signedInAgent('instructor')
-    course = await createCourseAs(agent)
+    prof = (await signedInAgent('instructor')).agent
+    course = await createCourseAs(prof)
   })
 
-  it('enrolls the student, ignoring case and surrounding spaces', async () => {
+  it('asks the instructor to admit the student, ignoring case and surrounding spaces', async () => {
     const { agent } = await signedInAgent()
     const res = await agent
       .post('/api/courses/join')
       .send({ entryCode: `  ${course.entryCode.toLowerCase()} ` })
 
     expect(res.status).toBe(201)
+    expect(res.body.status).toBe('requested')
     expect(res.body.course).toMatchObject({ id: course.id, code: 'LAW 540' })
     expect(res.body.course.entryCode).toBeUndefined()
-    expect((await agent.get('/api/courses')).body.courses).toHaveLength(1)
+    // Not in the course until the instructor admits them.
+    expect((await agent.get('/api/courses')).body.courses).toEqual([])
+    expect((await agent.get('/api/courses/inbox')).body.pendingRequests).toEqual([
+      { courseId: course.id, courseName: 'LAW 540: Trial Advocacy' },
+    ])
   })
 
   it('rejects an unknown code', async () => {
@@ -301,7 +309,7 @@ describe('POST /api/courses/join', () => {
     const res = await agent.post('/api/courses/join').send({ entryCode: 'NOPE00' })
 
     expect(res.status).toBe(404)
-    expect(res.body.error).toBe('No course matches that entry code.')
+    expect(res.body.error).toBe("Sorry, we can't find a course with that code.")
   })
 
   it('rejects a missing code', async () => {
@@ -312,13 +320,20 @@ describe('POST /api/courses/join', () => {
     expect(res.body.error).toBe('Enter an entry code.')
   })
 
-  it('rejects joining twice', async () => {
+  it('rejects asking twice, and joining once in', async () => {
     const { agent } = await signedInAgent()
     await agent.post('/api/courses/join').send({ entryCode: course.entryCode })
-    const res = await agent.post('/api/courses/join').send({ entryCode: course.entryCode })
+    const again = await agent.post('/api/courses/join').send({ entryCode: course.entryCode })
 
-    expect(res.status).toBe(409)
-    expect(res.body.error).toBe('You are already enrolled in that course.')
+    expect(again.status).toBe(409)
+    expect(again.body.error).toBe(
+      'You already asked to join that course. Your instructor will decide soon.',
+    )
+
+    await joinCourse(agent, prof, course)
+    const joined = await agent.post('/api/courses/join').send({ entryCode: course.entryCode })
+    expect(joined.status).toBe(409)
+    expect(joined.body.error).toBe('You are already enrolled in that course.')
   })
 
   it('does not let instructors join as students', async () => {

@@ -1,0 +1,34 @@
+/*
+ * Names used by the sidebar, dashboards and sign-in page (src/layout,
+ * src/dashboard, src/pages/AuthPage), defined in terms of the navy/parchment
+ * palette in src/index.css so everything shares one look.
+ */
+:root {
+  --font-serif: var(--ws-serif);
+  --font-sans: var(--ws-sans);
+  --radius: 0.6rem;
+  --radius-sm: 0.45rem;
+
+  --border-strong: #c9ccc8;
+  --accent-hover: var(--ws-navy-light);
+  --on-accent: #ffffff;
+  --accent-tint: #e1e9f0;
+
+  /* The sidebar and the sign-in panel stay navy in both themes. */
+  --sidebar: #10233f;
+  --sidebar-active: #1d3554;
+  --sidebar-card: #172d4a;
+  --sidebar-fg: #ffffff;
+  --sidebar-muted: #9babbc;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme='dark'] {
+  --border-strong: #3b4c62;
+  --on-accent: #0e1622;
+  --accent-tint: #1d3550;
+
+  --sidebar: #0a1220;
+  --sidebar-active: #1a2a40;
+  --sidebar-card: #111d2e;
+}

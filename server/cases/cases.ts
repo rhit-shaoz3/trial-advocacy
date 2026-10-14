@@ -122,12 +122,29 @@ export async function listCourseCases(courseId: string, onlyPublished: boolean) 
   return rows.map(toSummary)
 }
 
+/**
+ * Every case the user can open, across their courses: all of them for the
+ * instructor, ones with something published for a student.
+ */
+export async function listUserCases(user: { id: string; role: string }) {
+  const { rows } = await pool.query<CaseRow>(
+    user.role === 'instructor'
+      ? `${SELECT_CASE} WHERE co.instructor_id = $1 ORDER BY ca.created_at DESC`
+      : `${SELECT_CASE}
+         JOIN enrollments e ON e.course_id = ca.course_id
+         WHERE e.user_id = $1 AND e.status = 'joined' AND ${ANY_PUBLISHED}
+         ORDER BY ca.created_at DESC`,
+    [user.id],
+  )
+  return rows.map(toSummary)
+}
+
 /** Students who have joined the course (pending roster emails don't count). */
 async function courseStudents(db: Db, courseId: string) {
   const { rows } = await db.query<Person>(
     `SELECT u.id, u.name, u.email
      FROM enrollments e JOIN users u ON u.id = e.user_id
-     WHERE e.course_id = $1
+     WHERE e.course_id = $1 AND e.status = 'joined'
      ORDER BY u.name`,
     [courseId],
   )

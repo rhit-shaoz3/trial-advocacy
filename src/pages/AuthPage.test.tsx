@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { AuthProvider } from '../auth/AuthProvider'
 import type { AuthService, User } from '../auth/types'
+import { CasesApiContext } from '../cases/CasesApiContext'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
+import { fakeCasesApi } from '../test/fakeCasesApi'
 import { fakeCourseService } from '../test/fakeCourseService'
 
 const ada: User = {
@@ -31,9 +33,11 @@ async function renderApp(service = fakeService()) {
   render(
     <MemoryRouter>
       <CourseServiceContext.Provider value={fakeCourseService()}>
-        <AuthProvider service={service}>
-          <App />
-        </AuthProvider>
+        <CasesApiContext.Provider value={fakeCasesApi()}>
+          <AuthProvider service={service}>
+            <App />
+          </AuthProvider>
+        </CasesApiContext.Provider>
       </CourseServiceContext.Provider>
     </MemoryRouter>,
   )
@@ -43,7 +47,7 @@ async function renderApp(service = fakeService()) {
 }
 
 async function openSignUp(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('tab', { name: 'Sign up' }))
+  await user.click(screen.getByRole('button', { name: 'Create an account' }))
 }
 
 async function fillSignUp(
@@ -60,7 +64,7 @@ describe('initial screen', () => {
   it('shows the login form when nobody is logged in', async () => {
     await renderApp()
 
-    expect(screen.getByRole('tab', { name: 'Log in' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: 'Welcome back.' })).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
     expect(screen.queryByLabelText('Full name')).not.toBeInTheDocument()
@@ -69,13 +73,13 @@ describe('initial screen', () => {
   it('goes straight to the home page when a session already exists', async () => {
     await renderApp(fakeService({ getCurrentUser: vi.fn().mockResolvedValue(ada) }))
 
-    expect(screen.getByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome, Ada.' })).toBeInTheDocument()
   })
 
   it('falls back to the login form if the server cannot be reached', async () => {
     await renderApp(fakeService({ getCurrentUser: vi.fn().mockRejectedValue(new Error('down')) }))
 
-    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 })
 
@@ -84,6 +88,7 @@ describe('sign up', () => {
     const { user } = await renderApp()
     await openSignUp(user)
 
+    expect(screen.getByRole('heading', { name: 'Create your account.' })).toBeInTheDocument()
     expect(screen.getByLabelText('Full name')).toBeInTheDocument()
     expect(screen.getByLabelText('Confirm password')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Student/ })).toBeChecked()
@@ -102,8 +107,8 @@ describe('sign up', () => {
       password: 'correct-horse',
       role: 'student',
     })
-    expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
-    expect(screen.getByText('Student', { selector: '.ws-profile small' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome, Ada.' })).toBeInTheDocument()
+    expect(screen.getByText('Student workspace', { selector: 'p' })).toBeInTheDocument()
   })
 
   it('sends the instructor role when Instructor is picked', async () => {
@@ -114,8 +119,39 @@ describe('sign up', () => {
     await user.click(screen.getByRole('button', { name: 'Create account' }))
 
     expect(service.signUp).toHaveBeenCalledWith(expect.objectContaining({ role: 'instructor' }))
-    expect(await screen.findByRole('button', { name: 'Create course' })).toBeInTheDocument()
-    expect(screen.getByText('Instructor', { selector: '.ws-profile small' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome back, Ada.' })).toBeInTheDocument()
+    expect(screen.getByText('Instructor workspace', { selector: 'p' })).toBeInTheDocument()
+  })
+
+  it('offers a course code field to students only', async () => {
+    const { user } = await renderApp()
+    await openSignUp(user)
+
+    expect(screen.getByLabelText('Course code (optional)')).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: /Instructor/ }))
+    expect(screen.queryByLabelText('Course code (optional)')).not.toBeInTheDocument()
+  })
+
+  it('sends the course code when a student enters one', async () => {
+    const { user, service } = await renderApp()
+    await openSignUp(user)
+    await fillSignUp(user)
+    await user.type(screen.getByLabelText('Course code (optional)'), ' k7pq2m ')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+
+    expect(service.signUp).toHaveBeenCalledWith(expect.objectContaining({ classCode: 'k7pq2m' }))
+  })
+
+  it('shows the error for a course code that does not exist', async () => {
+    const message = "Sorry, we can't find a course with that code."
+    const service = fakeService({ signUp: vi.fn().mockRejectedValue(new Error(message)) })
+    const { user } = await renderApp(service)
+    await openSignUp(user)
+    await fillSignUp(user)
+    await user.type(screen.getByLabelText('Course code (optional)'), 'NOPE00')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
   })
 
   it('blocks mismatched passwords without calling the server', async () => {
@@ -169,7 +205,7 @@ describe('sign up', () => {
     expect(service.signUp).toHaveBeenCalledTimes(1)
 
     finish(ada)
-    expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome, Ada.' })).toBeInTheDocument()
   })
 })
 
@@ -178,13 +214,13 @@ describe('log in', () => {
     const { user, service } = await renderApp()
     await user.type(screen.getByLabelText('Email'), 'ada@example.com')
     await user.type(screen.getByLabelText('Password'), 'correct-horse')
-    await user.click(screen.getByRole('button', { name: 'Log in' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(service.logIn).toHaveBeenCalledWith({
       email: 'ada@example.com',
       password: 'correct-horse',
     })
-    expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome, Ada.' })).toBeInTheDocument()
   })
 
   it('submits with the Enter key', async () => {
@@ -197,7 +233,7 @@ describe('log in', () => {
 
   it('does not submit when fields are empty', async () => {
     const { user, service } = await renderApp()
-    await user.click(screen.getByRole('button', { name: 'Log in' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(service.logIn).not.toHaveBeenCalled()
   })
@@ -209,20 +245,20 @@ describe('log in', () => {
     const { user } = await renderApp(service)
     await user.type(screen.getByLabelText('Email'), 'ada@example.com')
     await user.type(screen.getByLabelText('Password'), 'wrong-password')
-    await user.click(screen.getByRole('button', { name: 'Log in' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect email or password.')
-    expect(screen.queryByRole('heading', { name: 'Your courses' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Welcome, Ada.' })).not.toBeInTheDocument()
   })
 
-  it('clears the error and password when switching tabs', async () => {
+  it('clears the error and password when switching to sign up', async () => {
     const service = fakeService({
       logIn: vi.fn().mockRejectedValue(new Error('Incorrect email or password.')),
     })
     const { user } = await renderApp(service)
     await user.type(screen.getByLabelText('Email'), 'ada@example.com')
     await user.type(screen.getByLabelText('Password'), 'wrong-password')
-    await user.click(screen.getByRole('button', { name: 'Log in' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
     await screen.findByRole('alert')
 
     await openSignUp(user)
@@ -239,6 +275,6 @@ describe('log out', () => {
     await user.click(screen.getByRole('button', { name: 'Log out' }))
 
     expect(service.logOut).toHaveBeenCalledTimes(1)
-    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 })

@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS enrollments (
   PRIMARY KEY (course_id, email)
 );
 
+-- Where each roster row stands:
+--   joined    a member of the course
+--   invited   added by the instructor; the student accepts or rejects (user_id
+--             stays NULL until someone signs up with the email)
+--   requested the student entered the entry code; the instructor admits or denies
+--   denied    the instructor said no; shown to the student once, then deleted
+ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'joined'
+  CHECK (status IN ('joined', 'invited', 'requested', 'denied'));
+-- Rows added by email before statuses existed were "pending", i.e. invited.
+UPDATE enrollments SET status = 'invited' WHERE user_id IS NULL AND status = 'joined';
+
 CREATE INDEX IF NOT EXISTS enrollments_user_idx ON enrollments (user_id);
 CREATE INDEX IF NOT EXISTS enrollments_pending_email_idx ON enrollments (email) WHERE user_id IS NULL;
 

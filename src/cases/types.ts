@@ -104,6 +104,8 @@ export interface MatchupInput {
 export interface CasesApi {
   /** The course's cases; students only get ones with something published. */
   listCourseCases(courseId: string): Promise<CaseListItem[]>
+  /** Every case the user can open, across all their courses. */
+  listAllCases(): Promise<CaseListItem[]>
   createCase(courseId: string, name: string): Promise<CaseListItem>
   getInstructorCase(caseId: string): Promise<InstructorCase>
   getStudentCase(caseId: string): Promise<StudentCase>

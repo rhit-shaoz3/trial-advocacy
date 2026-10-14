@@ -83,13 +83,17 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | Method | Path               | Body                                | Result                    |
 | ------ | ------------------ | ----------------------------------- | ------------------------- |
 | GET    | `/api/auth/me`     |                                     | `{ user }` or `{ user: null }` |
-| POST   | `/api/auth/signup` | `{ name, email, password, role }`   | `201 { user }`, `409` if email taken |
+| POST   | `/api/auth/signup` | `{ name, email, password, role, classCode? }` (a course's entry code; students ask to join it) | `201 { user }`, `409` if email taken |
 | POST   | `/api/auth/login`  | `{ email, password }`               | `{ user }`, `401` if wrong |
 | POST   | `/api/auth/logout` |                                     | `204`                     |
-| GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
-| POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
+| GET    | `/api/courses`     |                                     | `{ courses }` the user has joined, newest term first |
+| POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course, status }`: `requested` (the instructor admits or denies) or `joined` (if they'd been invited); `404` unknown code, `409` already joined or already asked, `403` instructors |
+| GET    | `/api/courses/inbox` |                                   | Students: `{ invitations, pendingRequests, denials }`, each `[{ courseId, courseName }]` |
+| POST   | `/api/courses/:id/invitation/accept` |                   | `204`; joins the course |
+| POST   | `/api/courses/:id/invitation/reject` |                   | `204`; takes the email off the roster |
+| POST   | `/api/courses/:id/denial/dismiss` |                      | `204`; clears a "request denied" notice |
 | GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. `cases` are the course's case cards (students only see released ones); activity and deadlines aren't stored yet, so those lists are empty for now |
-| GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode` and `studentCount` |
+| GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode`, `studentCount`, `requestCount` and `invitedCount` |
 | POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
 
 These manage one course and are only for the instructor who teaches it (anyone else gets `404`):
@@ -99,8 +103,9 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | GET    | `/api/courses/:id`                           |                                  | `{ course }` |
 | PATCH  | `/api/courses/:id`                           | `{ code, title, season, year }`  | `{ course }`; entry code and roster unchanged |
 | DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster and fact patterns |
-| GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined }] }` |
-| POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | `{ added, skipped: [{ email, reason }], roster }` |
+| GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, userId, status }] }`, status `joined`, `requested` or `invited` |
+| POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | Invites them: `{ added, skipped: [{ email, reason }], roster }` |
+| POST   | `/api/courses/:id/roster/requests`           | `{ userIds, decision: 'admit' \| 'deny' }` | `{ updated, roster }` for students who asked to join |
 | DELETE | `/api/courses/:id/roster/:email`             |                                  | `204`, `404` if not on the roster |
 | GET    | `/api/courses/:id/fact-patterns`             |                                  | `{ factPatterns: [{ id, filename, sizeBytes, uploadedAt }] }` |
 | POST   | `/api/courses/:id/fact-patterns`             | Raw file body; `X-Filename` (URI-encoded) | `201 { factPattern }`; `413` over 10 MB, `415` not PDF/Word/text |
@@ -113,6 +118,7 @@ A course's instructor builds each case (files, characters, teams, match-ups) and
 
 | Method | Path | Who | Body | Result |
 | ------ | ---- | --- | ---- | ------ |
+| GET    | `/api/cases` | both | | `{ cases }` across all the user's courses; students only get cases with something published |
 | GET    | `/api/courses/:id/cases` | members | | `{ cases }`; students only get cases with something published |
 | POST   | `/api/courses/:id/cases` | instructor | `{ name }` | `201 { case }` |
 | GET    | `/api/cases/:caseId` | members | | `{ case }`: everything for the instructor; for a student, only published sections, filtered to their side |
@@ -130,7 +136,7 @@ A character's `title` is their job title (e.g. "Police Officer") and `role` is `
 
 All `/api/courses` and `/api/cases` routes return `401` when not logged in.
 
-**Rosters are keyed by email.** An instructor can add a student who has no account yet; that roster row is "pending" until someone signs up with the email (or joins with the entry code), and then it links to their account automatically.
+**Rosters are keyed by email, and nobody joins without both sides agreeing.** An instructor invites students by email (even before they have an account); each student accepts or rejects the invitation when they log in, and rejecting takes them off the roster. A student can instead enter the entry code (or a course code at sign-up), which asks to join; the instructor admits or denies, and a denied student sees a notice once. A student who was invited and then enters the code joins straight away.
 
 Errors come back as `{ error: "message" }`. Logins are kept in an httpOnly session cookie stored in the `session` table.
 

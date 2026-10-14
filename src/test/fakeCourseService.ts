@@ -6,6 +6,9 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
   return {
     listMyCourses: vi.fn().mockResolvedValue([]),
     joinCourse: vi.fn(),
+    getInbox: vi.fn().mockResolvedValue({ invitations: [], pendingRequests: [], denials: [] }),
+    answerInvitation: vi.fn().mockResolvedValue(undefined),
+    dismissDenial: vi.fn().mockResolvedValue(undefined),
     getCourseHome: vi.fn(),
     listTaughtCourses: vi.fn().mockResolvedValue([]),
     createCourse: vi.fn(),
@@ -15,6 +18,7 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     listRoster: vi.fn().mockResolvedValue([]),
     addStudents: vi.fn(),
     removeStudent: vi.fn().mockResolvedValue(undefined),
+    decideRequests: vi.fn().mockResolvedValue([]),
     listFactPatterns: vi.fn().mockResolvedValue([]),
     uploadFactPattern: vi.fn(),
     deleteFactPattern: vi.fn().mockResolvedValue(undefined),

@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { SEASONS, type NewCourseInput, type Season } from '../../courses/types'
+import '../Dashboard.css'
 
 /** Best guess at the term an instructor is setting up now (quarter system). */
 function currentTerm(now = new Date()): { season: Season; year: number } {

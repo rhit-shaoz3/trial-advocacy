@@ -16,11 +16,14 @@ const course: TaughtCourse = {
   season: 'Fall',
   year: 2026,
   entryCode: 'K7PQ2M',
-  studentCount: 2,
+  studentCount: 1,
+  requestCount: 0,
+  invitedCount: 1,
 }
 
-const ada: RosterEntry = { email: 'ada@example.com', name: 'Ada Lawyer', joined: true }
-const pending: RosterEntry = { email: 'new@example.com', name: null, joined: false }
+const ada: RosterEntry = { email: 'ada@example.com', name: 'Ada Lawyer', userId: 'u-ada', status: 'joined' }
+const pending: RosterEntry = { email: 'new@example.com', name: null, userId: null, status: 'invited' }
+const bo: RosterEntry = { email: 'bo@example.com', name: 'Bo', userId: 'u-bo', status: 'requested' }
 
 const hale: FactPattern = {
   id: 'f1',
@@ -165,13 +168,27 @@ describe('editing and deleting', () => {
 })
 
 describe('roster', () => {
-  it('lists joined and pending students', async () => {
+  it('lists joined and invited students', async () => {
     renderPage({ listRoster: vi.fn().mockResolvedValue([ada, pending]) })
 
     expect(await screen.findByRole('heading', { name: 'Students (2)' })).toBeInTheDocument()
     const rows = within(rosterSection()).getAllByRole('row').slice(1)
     expect(rows[0]).toHaveTextContent('Ada Lawyerada@example.comJoined')
-    expect(rows[1]).toHaveTextContent('new@example.comPending sign-up')
+    expect(rows[1]).toHaveTextContent('new@example.comInvited · no account yet')
+  })
+
+  it('admits students who asked to join with the entry code', async () => {
+    const decideRequests = vi.fn().mockResolvedValue([ada, { ...bo, status: 'joined' }])
+    const listRoster = vi.fn().mockResolvedValueOnce([ada, bo]).mockResolvedValue([ada, { ...bo, status: 'joined' }])
+    const { user } = renderPage({ listRoster, decideRequests })
+
+    expect(await screen.findByRole('heading', { name: 'Seeking admission (1)' })).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Select Bo' }))
+    await user.click(screen.getByRole('button', { name: 'Admit selected' }))
+
+    expect(decideRequests).toHaveBeenCalledWith('c1', ['u-bo'], 'admit')
+    expect(await screen.findByRole('heading', { name: 'Students (2)' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Seeking admission/ })).not.toBeInTheDocument()
   })
 
   it('adds pasted emails and reports what was skipped', async () => {

@@ -22,7 +22,7 @@ export async function loadCaseForStudent(req: Request) {
     c && (c.documents_published_at || c.characters_published_at || c.teams_published_at)
   if (!c || !anythingPublished) throw new HttpError(404, NOT_FOUND)
   const { rowCount } = await pool.query(
-    'SELECT 1 FROM enrollments WHERE course_id = $1 AND user_id = $2',
+    `SELECT 1 FROM enrollments WHERE course_id = $1 AND user_id = $2 AND status = 'joined'`,
     [c.course_id, user.id],
   )
   if (!rowCount) throw new HttpError(404, NOT_FOUND)

@@ -13,7 +13,21 @@ export const httpCourseService: CourseService = {
       method: 'POST',
       body: JSON.stringify({ entryCode }),
     })
-    return body.course
+    return { course: body.course, status: body.status }
+  },
+
+  async getInbox() {
+    return apiRequest('/courses/inbox')
+  },
+
+  async answerInvitation(courseId, accept) {
+    await apiRequest(`${coursePath(courseId)}/invitation/${accept ? 'accept' : 'reject'}`, {
+      method: 'POST',
+    })
+  },
+
+  async dismissDenial(courseId) {
+    await apiRequest(`${coursePath(courseId)}/denial/dismiss`, { method: 'POST' })
   },
 
   async getCourseHome(courseId) {
@@ -53,6 +67,14 @@ export const httpCourseService: CourseService = {
       method: 'POST',
       body: JSON.stringify({ emails }),
     })
+  },
+
+  async decideRequests(courseId, userIds, decision) {
+    const body = await apiRequest(`${coursePath(courseId)}/roster/requests`, {
+      method: 'POST',
+      body: JSON.stringify({ userIds, decision }),
+    })
+    return body.roster
   },
 
   async removeStudent(courseId, email) {

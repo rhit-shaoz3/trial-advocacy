@@ -5,6 +5,7 @@ import type { CasesApi } from '../cases/types'
 export function fakeCasesApi(overrides: Partial<CasesApi> = {}): CasesApi {
   return {
     listCourseCases: vi.fn().mockResolvedValue([]),
+    listAllCases: vi.fn().mockResolvedValue([]),
     createCase: vi.fn(),
     getInstructorCase: vi.fn(),
     getStudentCase: vi.fn(),

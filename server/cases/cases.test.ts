@@ -2,7 +2,7 @@ import request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, resetDatabase } from '../test/helpers.ts'
+import { createCourseAs, joinCourse, resetDatabase } from '../test/helpers.ts'
 
 type Role = 'student' | 'instructor'
 
@@ -23,7 +23,7 @@ async function setup(studentNames = ['Ana', 'Bo', 'Cy', 'Di']) {
   const students: User[] = []
   for (const name of studentNames) {
     const s = await signUp(name, 'student')
-    await s.agent.post('/api/courses/join').send({ entryCode: course.entryCode })
+    await joinCourse(s.agent, ivy.agent, course)
     students.push(s)
   }
   const created = await ivy.agent
@@ -545,6 +545,21 @@ describe('what students see', () => {
 
     expect((await outsider.agent.get(`/api/cases/${caseId}`)).status).toBe(404)
     expect((await outsider.agent.get(`/api/courses/${courseId}/cases`)).status).toBe(404)
+  })
+
+  it('lists cases across courses: all for the instructor, released ones for students', async () => {
+    const { ivy, ana, caseId, courseId, publish } = await fullCase()
+    const other = await createCourseAs(ivy.agent, { code: 'LAW 520', title: 'Evidence', season: 'Spring', year: 2026 })
+    await ivy.agent.post(`/api/courses/${other.id}/cases`).send({ name: 'State v. Hale' })
+
+    const mine = (await ivy.agent.get('/api/cases')).body.cases
+    expect(mine.map((c: { name: string }) => c.name).sort()).toEqual(['Smith v. Jones', 'State v. Hale'])
+
+    expect((await ana.agent.get('/api/cases')).body.cases).toEqual([])
+    await publish({ documents: true })
+    expect((await ana.agent.get('/api/cases')).body.cases).toEqual([
+      expect.objectContaining({ id: caseId, courseId, courseName: 'LAW 540: Trial Advocacy' }),
+    ])
   })
 
   it('fills the course dashboard with case cards for each role', async () => {

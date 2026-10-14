@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto'
 import { pool } from '../db/pool.ts'
+import type { Db } from '../db/transaction.ts'
 
 // Shapes sent to the client; match `Course` and `TaughtCourse` in src/courses/types.ts.
 export interface PublicCourse {
@@ -16,7 +17,12 @@ export interface TaughtCourse extends PublicCourse {
   season: string
   year: number
   entryCode: string
+  /** Joined students. */
   studentCount: number
+  /** Students who entered the entry code and are waiting to be admitted. */
+  requestCount: number
+  /** Emails the instructor invited that haven't accepted yet. */
+  invitedCount: number
 }
 
 /** The editable fields, already validated. */
@@ -37,18 +43,23 @@ const SELECT_TAUGHT_COURSE = `
          split_part(c.term, ' ', 1) AS season,
          extract(year FROM c.term_start)::int AS year,
          c.entry_code AS "entryCode",
-         (SELECT count(*)::int FROM enrollments e WHERE e.course_id = c.id) AS "studentCount"
+         (SELECT count(*)::int FROM enrollments e
+          WHERE e.course_id = c.id AND e.status = 'joined') AS "studentCount",
+         (SELECT count(*)::int FROM enrollments e
+          WHERE e.course_id = c.id AND e.status = 'requested') AS "requestCount",
+         (SELECT count(*)::int FROM enrollments e
+          WHERE e.course_id = c.id AND e.status = 'invited') AS "invitedCount"
   FROM courses c
   LEFT JOIN users u ON u.id = c.instructor_id`
 
 const NEWEST_FIRST = 'ORDER BY c.term_start DESC, c.code, c.title'
 
-/** Courses the user is enrolled in, newest term first. */
+/** Courses the user has joined, newest term first. */
 export async function listCoursesForUser(userId: string) {
   const { rows } = await pool.query<PublicCourse>(
     `${SELECT_COURSE}
      JOIN enrollments e ON e.course_id = c.id
-     WHERE e.user_id = $1
+     WHERE e.user_id = $1 AND e.status = 'joined'
      ${NEWEST_FIRST}`,
     [userId],
   )
@@ -73,13 +84,14 @@ export async function findTaughtCourse(courseId: string, instructorId: string) {
   return rows[0] ?? null
 }
 
-/** Null unless the user has joined the course or teaches it. Pending roster rows don't count. */
+/** Null unless the user has joined the course or teaches it. Invitations and requests don't count. */
 export async function findCourseForMember(courseId: string, userId: string) {
   const { rows } = await pool.query<PublicCourse>(
     `${SELECT_COURSE}
      WHERE c.id = $1
        AND (c.instructor_id = $2
-            OR EXISTS (SELECT 1 FROM enrollments e WHERE e.course_id = c.id AND e.user_id = $2))`,
+            OR EXISTS (SELECT 1 FROM enrollments e
+                       WHERE e.course_id = c.id AND e.user_id = $2 AND e.status = 'joined'))`,
     [courseId, userId],
   )
   return rows[0] ?? null
@@ -93,18 +105,42 @@ export async function findCourseByEntryCode(entryCode: string) {
   return rows[0] ?? null
 }
 
+export const NO_COURSE_FOR_CODE = "Sorry, we can't find a course with that code."
+
+export type JoinResult = 'joined' | 'requested' | 'already-joined' | 'already-requested'
+
 /**
- * Puts the user on the roster, or claims the pending row an instructor already
- * added for their email. Returns false if they were already enrolled.
+ * A student entering the entry code. If the instructor already invited them
+ * they're in straight away; otherwise it's a request the instructor admits or
+ * denies. Someone who was denied can ask again.
  */
-export async function enroll(user: { id: string; email: string }, courseId: string) {
-  const { rowCount } = await pool.query(
-    `INSERT INTO enrollments (course_id, email, user_id) VALUES ($1, $2, $3)
-     ON CONFLICT (course_id, email) DO UPDATE SET user_id = EXCLUDED.user_id
-       WHERE enrollments.user_id IS NULL`,
-    [courseId, user.email.toLowerCase(), user.id],
+export async function requestToJoin(
+  user: { id: string; email: string },
+  courseId: string,
+  db: Db = pool,
+): Promise<JoinResult> {
+  const email = user.email.toLowerCase()
+  const { rows } = await db.query<{ status: string }>(
+    'SELECT status FROM enrollments WHERE course_id = $1 AND email = $2',
+    [courseId, email],
   )
-  return rowCount === 1
+  const current = rows[0]?.status
+  if (current === 'joined') return 'already-joined'
+  if (current === 'requested') return 'already-requested'
+  if (current === 'invited') {
+    await db.query(
+      `UPDATE enrollments SET status = 'joined', user_id = $3 WHERE course_id = $1 AND email = $2`,
+      [courseId, email, user.id],
+    )
+    return 'joined'
+  }
+  await db.query(
+    `INSERT INTO enrollments (course_id, email, user_id, status) VALUES ($1, $2, $3, 'requested')
+     ON CONFLICT (course_id, email) DO UPDATE SET status = 'requested', user_id = EXCLUDED.user_id,
+       added_at = now()`,
+    [courseId, email, user.id],
+  )
+  return 'requested'
 }
 
 // No 0/O or 1/I, so codes survive being read aloud or copied by hand.

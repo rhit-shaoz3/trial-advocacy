@@ -14,6 +14,10 @@ export const httpCasesApi: CasesApi = {
     return (await apiRequest(`/courses/${courseId}/cases`)).cases
   },
 
+  async listAllCases() {
+    return (await apiRequest('/cases')).cases
+  },
+
   async createCase(courseId, name) {
     return (await send('POST', `/courses/${courseId}/cases`, { name })).case
   },

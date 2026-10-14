@@ -2,6 +2,8 @@ import { apiRequest } from '../api/request'
 import type { CourseService } from './types'
 
 const coursePath = (courseId: string) => `/courses/${encodeURIComponent(courseId)}`
+const casePath = (courseId: string, caseId: string) =>
+  `${coursePath(courseId)}/cases/${encodeURIComponent(caseId)}`
 
 export const httpCourseService: CourseService = {
   async listMyCourses() {
@@ -86,5 +88,33 @@ export const httpCourseService: CourseService = {
 
   factPatternDownloadUrl(courseId, factPatternId) {
     return `/api${coursePath(courseId)}/fact-patterns/${encodeURIComponent(factPatternId)}/file`
+  },
+
+  async listCases(courseId) {
+    return (await apiRequest(`${coursePath(courseId)}/cases`)).cases
+  },
+
+  async createCase(courseId, input) {
+    const body = await apiRequest(`${coursePath(courseId)}/cases`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+    return body.case
+  },
+
+  async getCase(courseId, caseId) {
+    return (await apiRequest(casePath(courseId, caseId))).case
+  },
+
+  async updateCase(courseId, caseId, input) {
+    const body = await apiRequest(casePath(courseId, caseId), {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    })
+    return body.case
+  },
+
+  async deleteCase(courseId, caseId) {
+    await apiRequest(casePath(courseId, caseId), { method: 'DELETE' })
   },
 }

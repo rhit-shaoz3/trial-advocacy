@@ -55,6 +55,24 @@ CREATE TABLE IF NOT EXISTS fact_patterns (
 
 CREATE INDEX IF NOT EXISTS fact_patterns_course_idx ON fact_patterns (course_id);
 
+-- A case the whole class works on, e.g. a rollercoaster incident. Students are
+-- paired into teams per case, and each matchup of two teams becomes one "case
+-- world" with its own variation of the facts. For now a case is just a shell:
+-- its content arrives with the structured fact pattern.
+-- `draft` is invisible to students; `active` means the worlds have launched;
+-- `closed` is a finished case kept for its pairing history.
+CREATE TABLE IF NOT EXISTS cases (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id  uuid        NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+  title      text        NOT NULL,
+  summary    text        NOT NULL DEFAULT '',
+  status     text        NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'closed')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS cases_course_idx ON cases (course_id);
+
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (
   sid    varchar      PRIMARY KEY,

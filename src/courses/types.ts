@@ -49,6 +49,30 @@ export interface FactPattern {
   uploadedAt: string
 }
 
+export const COURSE_CASE_STATUSES = ['draft', 'active', 'closed'] as const
+/** Draft: hidden from students. Active: the case worlds have launched. Closed: finished. */
+export type CourseCaseStatus = (typeof COURSE_CASE_STATUSES)[number]
+
+/**
+ * A case the whole class works on, as its instructor manages it. Teams and
+ * case worlds (matchups) hang off it; for now it is just the shell.
+ */
+export interface CourseCase {
+  id: string
+  title: string
+  summary: string
+  status: CourseCaseStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CaseInput {
+  title: string
+  summary: string
+  /** Defaults to draft when creating. */
+  status?: CourseCaseStatus
+}
+
 /** Everything the UI needs from the courses backend. See `httpCourseService`. */
 export interface CourseService {
   // Students
@@ -64,7 +88,7 @@ export interface CourseService {
   createCourse(input: NewCourseInput): Promise<TaughtCourse>
   getCourse(courseId: string): Promise<TaughtCourse>
   updateCourse(courseId: string, input: NewCourseInput): Promise<TaughtCourse>
-  /** Also deletes the roster and fact patterns. */
+  /** Also deletes the roster, fact patterns, and cases. */
   deleteCourse(courseId: string): Promise<void>
   listRoster(courseId: string): Promise<RosterEntry[]>
   addStudents(courseId: string, emails: string[]): Promise<AddStudentsResult>
@@ -73,4 +97,10 @@ export interface CourseService {
   uploadFactPattern(courseId: string, file: File): Promise<FactPattern>
   deleteFactPattern(courseId: string, factPatternId: string): Promise<void>
   factPatternDownloadUrl(courseId: string, factPatternId: string): string
+  /** Oldest first. */
+  listCases(courseId: string): Promise<CourseCase[]>
+  createCase(courseId: string, input: CaseInput): Promise<CourseCase>
+  getCase(courseId: string, caseId: string): Promise<CourseCase>
+  updateCase(courseId: string, caseId: string, input: Required<CaseInput>): Promise<CourseCase>
+  deleteCase(courseId: string, caseId: string): Promise<void>
 }

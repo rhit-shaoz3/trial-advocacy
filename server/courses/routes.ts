@@ -15,6 +15,7 @@ import {
   type CourseFields,
   type TaughtCourse,
 } from './courses.ts'
+import { casesRouter } from './caseRoutes.ts'
 import { factPatternsRouter } from './factPatternRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
 
@@ -133,12 +134,13 @@ courseRouter.get('/', (req, res) => {
 courseRouter.patch('/', async (req, res) => {
   res.json({ course: await updateCourse(req.course!.id, readCourseFields(req.body)) })
 })
-/** Also deletes the roster and fact patterns. The entry code stops working. */
+/** Also deletes the roster, fact patterns, and cases. The entry code stops working. */
 courseRouter.delete('/', async (req, res) => {
   await deleteCourse(req.course!.id)
   res.status(204).end()
 })
 courseRouter.use('/roster', rosterRouter)
 courseRouter.use('/fact-patterns', factPatternsRouter)
+courseRouter.use('/cases', casesRouter)
 
 coursesRouter.use('/:courseId', courseRouter)

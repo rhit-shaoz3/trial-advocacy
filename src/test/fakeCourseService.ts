@@ -19,6 +19,11 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     uploadFactPattern: vi.fn(),
     deleteFactPattern: vi.fn().mockResolvedValue(undefined),
     factPatternDownloadUrl: (courseId, id) => `/download/${courseId}/${id}`,
+    listCases: vi.fn().mockResolvedValue([]),
+    createCase: vi.fn(),
+    getCase: vi.fn(),
+    updateCase: vi.fn(),
+    deleteCase: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
 }

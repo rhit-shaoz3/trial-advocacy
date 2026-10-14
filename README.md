@@ -98,7 +98,7 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | ------ | -------------------------------------------- | -------------------------------- | ------ |
 | GET    | `/api/courses/:id`                           |                                  | `{ course }` |
 | PATCH  | `/api/courses/:id`                           | `{ code, title, season, year }`  | `{ course }`; entry code and roster unchanged |
-| DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster and fact patterns |
+| DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster, fact patterns, and cases |
 | GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined }] }` |
 | POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | `{ added, skipped: [{ email, reason }], roster }` |
 | DELETE | `/api/courses/:id/roster/:email`             |                                  | `204`, `404` if not on the roster |
@@ -106,8 +106,15 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | POST   | `/api/courses/:id/fact-patterns`             | Raw file body; `X-Filename` (URI-encoded) | `201 { factPattern }`; `413` over 10 MB, `415` not PDF/Word/text |
 | GET    | `/api/courses/:id/fact-patterns/:fileId/file` |                                 | The file, as a download |
 | DELETE | `/api/courses/:id/fact-patterns/:fileId`     |                                  | `204` |
+| GET    | `/api/courses/:id/cases`                     |                                  | `{ cases: [{ id, title, summary, status, createdAt, updatedAt }] }`, oldest first |
+| POST   | `/api/courses/:id/cases`                     | `{ title, summary?, status? }`   | `201 { case }`; status defaults to `draft` |
+| GET    | `/api/courses/:id/cases/:caseId`             |                                  | `{ case }` |
+| PATCH  | `/api/courses/:id/cases/:caseId`             | `{ title, summary, status }`     | `{ case }`; status is required here |
+| DELETE | `/api/courses/:id/cases/:caseId`             |                                  | `204` |
 
 All `/api/courses` routes return `401` when not logged in.
+
+**Cases** are shared by the whole class; students will be paired into teams per case, and each matchup of two teams becomes a case world. A case's `status` is `draft` (hidden from students), `active`, or `closed`. For now a case is only a shell (title and summary).
 
 **Rosters are keyed by email.** An instructor can add a student who has no account yet; that roster row is "pending" until someone signs up with the email (or joins with the entry code), and then it links to their account automatically.
 

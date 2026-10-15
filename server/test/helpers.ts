@@ -29,3 +29,23 @@ export async function createCourseAs(
   if (res.status !== 201) throw new Error(`Create course failed: ${JSON.stringify(res.body)}`)
   return res.body.course as { id: string; entryCode: string }
 }
+
+/**
+ * Uploads a case file the way the browser does: ask for an upload link, PUT
+ * the file to it (the local storage stand-in), then confirm. Returns the
+ * first response that wasn't a success, or the confirmation.
+ */
+export async function uploadCaseFile(
+  agent: request.Agent,
+  caseUrl: string,
+  filename: string,
+  { audience = 'all', description = '' }: { audience?: string; description?: string } = {},
+  data = Buffer.from('%PDF-1.7 test'),
+) {
+  const start = await agent.post(`${caseUrl}/materials/uploads`).send({ filename, size: data.length })
+  if (start.status !== 201) return start
+  const { key, url, headers } = start.body.upload
+  const put = await agent.put(url).set(headers).send(data)
+  if (put.status !== 200) return put
+  return agent.post(`${caseUrl}/materials`).send({ uploadKey: key, filename, audience, description })
+}

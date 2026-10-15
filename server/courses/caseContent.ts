@@ -1,4 +1,5 @@
 import { pool } from '../db/pool.ts'
+import { storage } from '../storage/storage.ts'
 import type { Side } from './matchups.ts'
 
 // What the instructor provides for a case: the case file (the pieces of the
@@ -54,28 +55,32 @@ export async function listMaterials(caseId: string, audiences: readonly Audience
   return rows
 }
 
+/** Records a file already in storage under `storageKey`; `id` is chosen by the caller (it's in the key). */
 export async function createMaterial(input: {
+  id: string
   caseId: string
   audience: Audience
   filename: string
   description: string
   contentType: string
-  data: Buffer
+  sizeBytes: number
+  storageKey: string
   uploadedBy: string
 }) {
   const { rows } = await pool.query<CaseMaterial>(
     `INSERT INTO case_materials
-       (case_id, audience, filename, description, content_type, size_bytes, data, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (id, case_id, audience, filename, description, content_type, size_bytes, storage_key, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING ${MATERIAL_COLUMNS}`,
     [
+      input.id,
       input.caseId,
       input.audience,
       input.filename,
       input.description,
       input.contentType,
-      input.data.length,
-      input.data,
+      input.sizeBytes,
+      input.storageKey,
       input.uploadedBy,
     ],
   )
@@ -97,22 +102,61 @@ export async function updateMaterial(
   return rows[0] ?? null
 }
 
+/** Returns false if there was no such material, else its storage key (null for an old in-database file). */
 export async function deleteMaterial(caseId: string, id: string) {
-  const { rowCount } = await pool.query('DELETE FROM case_materials WHERE case_id = $1 AND id = $2', [
-    caseId,
-    id,
-  ])
-  return rowCount === 1
+  const { rows } = await pool.query<{ storageKey: string | null }>(
+    'DELETE FROM case_materials WHERE case_id = $1 AND id = $2 RETURNING storage_key AS "storageKey"',
+    [caseId, id],
+  )
+  return rows.length === 0 ? false : rows[0].storageKey
 }
 
-/** Includes the file contents; null unless the material exists and is visible to `audiences`. */
+/**
+ * The storage keys of every file in a case, or in all of a course's cases, so
+ * they can be removed from storage when the case or course is deleted.
+ */
+export async function listStorageKeys(scope: { caseId: string } | { courseId: string }) {
+  const { rows } = await pool.query<{ key: string }>(
+    'caseId' in scope
+      ? 'SELECT storage_key AS key FROM case_materials WHERE case_id = $1 AND storage_key IS NOT NULL'
+      : `SELECT m.storage_key AS key FROM case_materials m JOIN cases c ON c.id = m.case_id
+         WHERE c.course_id = $1 AND m.storage_key IS NOT NULL`,
+    ['caseId' in scope ? scope.caseId : scope.courseId],
+  )
+  return rows.map((r) => r.key)
+}
+
+/**
+ * Where a file is stored (or, for a file uploaded before object storage, its
+ * contents); null unless the material exists and is visible to `audiences`.
+ */
 export async function findMaterialFile(caseId: string, id: string, audiences: readonly Audience[] = AUDIENCES) {
-  const { rows } = await pool.query<{ filename: string; contentType: string; data: Buffer }>(
-    `SELECT filename, content_type AS "contentType", data FROM case_materials
+  const { rows } = await pool.query<{
+    filename: string
+    contentType: string
+    storageKey: string | null
+    data: Buffer | null
+  }>(
+    `SELECT filename, content_type AS "contentType", storage_key AS "storageKey",
+            CASE WHEN storage_key IS NULL THEN data END AS data
+     FROM case_materials
      WHERE case_id = $1 AND id = $2 AND audience = ANY($3)`,
     [caseId, id, audiences],
   )
   return rows[0] ?? null
+}
+
+/**
+ * Deletes files from storage after their rows are gone. A failure is logged
+ * rather than undoing the delete; the files are unreachable either way.
+ */
+export async function removeStoredFiles(keys: string[]) {
+  if (keys.length === 0) return
+  try {
+    await storage.delete(keys)
+  } catch (err) {
+    console.error(`Could not delete ${keys.length} stored file(s):`, err)
+  }
 }
 
 // Witnesses

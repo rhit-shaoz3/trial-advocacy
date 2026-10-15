@@ -53,6 +53,8 @@ To preview a student's course home page with made-up cases, activity, and deadli
 | `npm run dev:server` | Start only the API (restarts on file changes)        |
 | `npm run db:migrate` | Apply `server/db/schema.sql` to the database         |
 | `npm run db:seed`    | Add demo accounts and courses (dev only)             |
+| `npm run storage:migrate` | Move case files still stored in Postgres into storage (runs on each Heroku release) |
+| `npm run storage:check` | Check the case file storage (S3 or `.storage/`) end to end |
 | `npm run build`      | Type-check everything and build the web app (`dist/`) |
 | `npm start`          | Run the API in production (also serves `dist/`)      |
 | `npm test`           | Run all tests once                                   |
@@ -91,7 +93,7 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Students get the active and closed cases they're on a team in, each with `world: { number, side }` (or `null` before matching), `progress` (percent of their team's tasks done), and `nextTask`; `upcoming` lists their open tasks' deadlines and `stats` counts completed tasks. The instructor gets every active and closed case with `worldCount`. `activity` is always empty for now |
 | GET    | `/api/courses/:id/my-cases` |                             | Members: `{ cases: [{ id, title, summary, status, team, world }] }`, without drafts; `team` is `{ number, members }` (each member has `you`) or `null` before pairing; `world` is `{ number, side, opponents: { number, members } }` or `null` before matching |
 | GET    | `/api/courses/:id/my-cases/:caseId` |                     | Students: `{ workspace }`, the case dashboard: `{ case, team, world, side, materials, witnesses, tasks, preview }`, showing only shared items and their side's. Each task has the team's `completedAt` / `completedBy`. `404` for drafts |
-| GET    | `/api/courses/:id/my-cases/:caseId/materials/:materialId/file` | | The file, as a download, if the student's side can see it |
+| GET    | `/api/courses/:id/my-cases/:caseId/materials/:materialId/file` | | `302` to a 5-minute download link, if the student's side can see it |
 | PUT    | `/api/courses/:id/my-cases/:caseId/tasks/:taskId` | `{ done: boolean }`   | `{ workspace }`; marks it done (or not) for the student's whole team. `409` if the case is closed or the student has no team |
 | GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode` and `studentCount` |
 | POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
@@ -124,10 +126,11 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | POST   | `/api/courses/:id/cases/:caseId/matchups/:matchupId/swap` |                     | The teams, with that world's sides swapped |
 | DELETE | `/api/courses/:id/cases/:caseId/matchups/:matchupId` |                          | The teams, without that world |
 | GET    | `/api/courses/:id/cases/:caseId/materials` |                                 | `{ materials: [{ id, audience, filename, description, contentType, sizeBytes, uploadedAt }] }`, in upload order |
-| POST   | `/api/courses/:id/cases/:caseId/materials?audience=` | Raw file body; `X-Filename` and optional `X-Description` (URI-encoded) | `201 { material }`; `audience` is `all` (default), `plaintiff`, or `defense`. `413` over 10 MB, `415` unless a document (PDF, Word, text), image (PNG, JPEG, GIF, WebP), audio (MP3, M4A, WAV), or video (MP4, MOV, WebM) |
+| POST   | `/api/courses/:id/cases/:caseId/materials/uploads` | `{ filename, size }` | Step 1 of an upload: `201 { upload: { key, url, headers } }`, a 15-minute link to `PUT` the file to (S3 in production) with exactly those headers. `413` over 100 MB, `415` unless a document (PDF, Word, text), image (PNG, JPEG, GIF, WebP), audio (MP3, M4A, WAV), or video (MP4, MOV, WebM) |
+| POST   | `/api/courses/:id/cases/:caseId/materials` | `{ uploadKey, filename, audience?, description? }` | Step 2, after the `PUT`: `201 { material }`; `audience` is `all` (default), `plaintiff`, or `defense`. `400` if the upload didn't finish or belongs to another case |
 | PATCH  | `/api/courses/:id/cases/:caseId/materials/:materialId` | `{ audience, description }` | `{ material }` |
-| GET    | `/api/courses/:id/cases/:caseId/materials/:materialId/file` |                  | The file, as a download |
-| DELETE | `/api/courses/:id/cases/:caseId/materials/:materialId` |                       | `204` |
+| GET    | `/api/courses/:id/cases/:caseId/materials/:materialId/file` |                  | `302` to a 5-minute download link |
+| DELETE | `/api/courses/:id/cases/:caseId/materials/:materialId` |                       | `204`; also deletes the stored file |
 | GET / POST | `/api/courses/:id/cases/:caseId/witnesses` | `{ name, role?, description?, audience? }` | `{ witnesses }` / `201 { witness }` |
 | PUT / DELETE | `/api/courses/:id/cases/:caseId/witnesses/:witnessId` | Same as POST            | `{ witness }` / `204` |
 | GET / POST | `/api/courses/:id/cases/:caseId/tasks` | `{ title, description?, dueAt?, audience? }` | `{ tasks }` (soonest due first) / `201 { task }`; `dueAt` is an ISO timestamp or `null` |
@@ -155,3 +158,5 @@ The `Procfile` runs migrations on each release and starts the API, which also se
 heroku addons:create heroku-postgresql:essential-0
 heroku config:set SESSION_SECRET=<long random string>
 ```
+
+Case files are stored in Amazon S3, and the app won't start in production without it. Follow [docs/s3-setup.md](docs/s3-setup.md) to create the bucket and access key, then set `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`. Locally, without those settings, files go to a git-ignored `.storage/` folder.

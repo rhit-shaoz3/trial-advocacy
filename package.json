@@ -12,6 +12,8 @@
     "dev:server": "node --env-file-if-exists=.env.local --watch server/index.ts",
     "db:migrate": "node --env-file-if-exists=.env.local server/db/migrate.ts",
     "db:seed": "node --env-file-if-exists=.env.local server/db/seed.ts",
+    "storage:migrate": "node --env-file-if-exists=.env.local server/db/moveFilesToStorage.ts",
+    "storage:check": "node --env-file-if-exists=.env.local server/storage/check.ts",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,6 +22,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
+    "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "bcryptjs": "^3.0.3",
     "connect-pg-simple": "^10.0.0",
     "express": "^5.2.1",

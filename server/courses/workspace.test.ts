@@ -1,7 +1,7 @@
 import type request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, resetDatabase, signedInAgent } from '../test/helpers.ts'
+import { createCourseAs, resetDatabase, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 
 let prof: request.Agent
 let course: { id: string; entryCode: string }
@@ -11,18 +11,8 @@ const email = (n: number) => `s${n}@example.com`
 const caseUrl = () => `/api/courses/${course.id}/cases/${caseId}`
 const myCaseUrl = () => `/api/courses/${course.id}/my-cases/${caseId}`
 
-function upload(
-  filename: string,
-  { audience = 'all', description = '' }: { audience?: string; description?: string } = {},
-  data = Buffer.from('%PDF-1.7 test'),
-) {
-  return prof
-    .post(`${caseUrl()}/materials?audience=${audience}`)
-    .set('Content-Type', 'application/octet-stream')
-    .set('X-Filename', encodeURIComponent(filename))
-    .set('X-Description', encodeURIComponent(description))
-    .send(data)
-}
+const upload = (filename: string, options?: { audience?: string; description?: string }, data?: Buffer) =>
+  uploadCaseFile(prof, caseUrl(), filename, options, data)
 
 /** s1+s2 (plaintiff) v s3+s4 (defense) in World A. Returns the team and matchup ids. */
 async function pairAndMatch() {
@@ -75,9 +65,16 @@ describe('case materials', () => {
       .send({ audience: 'defense', description: 'Ride photo' })
     expect(edited.body.material).toMatchObject({ audience: 'defense', description: 'Ride photo' })
 
+    // Downloads redirect to a short-lived link from storage.
     const file = await prof.get(`${caseUrl()}/materials/${res.body.material.id}/file`)
-    expect(file.headers['content-disposition']).toContain('attachment')
-    expect(file.headers['x-content-type-options']).toBe('nosniff')
+    expect(file.status).toBe(302)
+    const download = await prof.get(file.headers.location)
+    expect(download.headers['content-disposition']).toBe(
+      `attachment; filename="Fact pattern.pdf"; filename*=UTF-8''Fact%20pattern.pdf`,
+    )
+    expect(download.headers['content-type']).toBe('application/pdf')
+    expect(download.body.toString()).toBe('%PDF-1.7 test')
+    expect(download.headers['x-content-type-options']).toBe('nosniff')
 
     expect((await prof.delete(`${caseUrl()}/materials/${photo.id}`)).status).toBe(204)
     expect((await prof.get(`${caseUrl()}/materials/${photo.id}/file`)).status).toBe(404)
@@ -89,7 +86,9 @@ describe('case materials', () => {
     expect((await upload('walkthrough.MP4')).body.material.contentType).toBe('video/mp4')
     expect((await upload('x.pdf', { audience: 'judge' })).status).toBe(400)
     expect((await upload('x.pdf', {}, Buffer.alloc(0))).body.error).toBe('The file is empty.')
-    expect((await upload('big.pdf', {}, Buffer.alloc(10 * 1024 * 1024 + 1))).status).toBe(413)
+    const big = await prof.post(`${caseUrl()}/materials/uploads`).send({ filename: 'big.pdf', size: 100 * 1024 * 1024 + 1 })
+    expect(big.status).toBe(413)
+    expect(big.body.error).toBe('That file is too large. The limit is 100 MB.')
   })
 })
 
@@ -236,8 +235,8 @@ describe("a student's case dashboard", () => {
     const byName = (name: string) => materials.find((m) => m.filename === name)!.id
 
     const own = await plaintiff.get(`${myCaseUrl()}/materials/${byName('Plaintiff memo.pdf')}/file`)
-    expect(own.status).toBe(200)
-    expect(own.headers['content-disposition']).toContain('attachment')
+    expect(own.status).toBe(302)
+    expect((await plaintiff.get(own.headers.location)).headers['content-disposition']).toContain('attachment')
     expect((await plaintiff.get(`${myCaseUrl()}/materials/${byName('Defense memo.pdf')}/file`)).status).toBe(404)
   })
 

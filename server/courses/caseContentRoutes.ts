@@ -1,6 +1,9 @@
-import express, { Router, type Response } from 'express'
+import { Router, type Response } from 'express'
+import { randomUUID } from 'node:crypto'
 import { extname } from 'node:path'
 import { HttpError } from '../httpError.ts'
+import { KEY_PATTERN, MAX_UPLOAD_BYTES } from '../storage/shared.ts'
+import { storage } from '../storage/storage.ts'
 import { isUuid, readString } from '../validation.ts'
 import {
   AUDIENCES,
@@ -14,6 +17,7 @@ import {
   listMaterials,
   listTasks,
   listWitnesses,
+  removeStoredFiles,
   updateMaterial,
   updateTask,
   updateWitness,
@@ -22,7 +26,6 @@ import {
   type WitnessFields,
 } from './caseContent.ts'
 
-export const MAX_MATERIAL_BYTES = 10 * 1024 * 1024 // 10 MB
 const MAX_FILENAME_LENGTH = 200
 const MAX_NAME_LENGTH = 120
 const MAX_TEXT_LENGTH = 4000
@@ -66,23 +69,22 @@ function readText(body: unknown, key: string, label: string, max = MAX_TEXT_LENG
   return text
 }
 
-/** Headers are ASCII-only, so the client URI-encodes text it sends in them. */
-function decodeHeader(header: string | undefined) {
-  try {
-    return decodeURIComponent(header ?? '')
-  } catch {
-    return ''
-  }
-}
-
 function readId(id: string, notFound: string) {
   if (!isUuid(id)) throw new HttpError(404, notFound)
   return id
 }
 
-/** Always a download, never rendered in the page, so an uploaded file can't run script here. */
-export function sendMaterialFile(res: Response, file: { filename: string; contentType: string; data: Buffer } | null) {
+/**
+ * Redirects to a short-lived download link from storage. Files are always
+ * served as attachments, never rendered in the page, so an upload can't run
+ * script here. Files from before object storage are sent from the database.
+ */
+export async function sendMaterialFile(res: Response, file: Awaited<ReturnType<typeof findMaterialFile>>) {
   if (!file) throw new HttpError(404, 'File not found.')
+  if (file.storageKey) {
+    res.redirect(302, await storage.downloadUrl(file.storageKey, file.filename, file.contentType))
+    return
+  }
   res.attachment(file.filename)
   res.set({ 'Content-Type': file.contentType, 'X-Content-Type-Options': 'nosniff' })
   res.send(file.data)
@@ -95,38 +97,70 @@ materialsRouter.get('/', async (req, res) => {
   res.json({ materials: await listMaterials(req.courseCase!.id) })
 })
 
-/**
- * The request body is the raw file. Its name goes in the X-Filename header and
- * an optional description in X-Description (both URI-encoded); `audience`
- * is a query parameter (default: everyone).
- */
-materialsRouter.post(
-  '/',
-  express.raw({ type: () => true, limit: MAX_MATERIAL_BYTES }),
-  async (req, res) => {
-    const audience = readAudience(req.query.audience, 'all')
-    // Keep just the base name, without any folder the browser included.
-    const filename = decodeHeader(req.get('X-Filename')).split(/[\\/]/).pop()!.trim().slice(-MAX_FILENAME_LENGTH)
-    const description = decodeHeader(req.get('X-Description')).trim().slice(0, MAX_TEXT_LENGTH)
-    if (!filename) throw new HttpError(400, 'The file needs a name.')
-    const contentType = CONTENT_TYPES[extname(filename).toLowerCase()]
-    if (!contentType) {
-      throw new HttpError(415, 'Upload a document (PDF, Word, text), image, audio, or video file.')
-    }
-    if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, 'The file is empty.')
+/** Validates a file name from the client: its base name, and a type we accept. */
+function readFilename(body: unknown) {
+  // Keep just the base name, without any folder the browser included.
+  const filename = readString(body, 'filename').split(/[\\/]/).pop()!.trim().slice(-MAX_FILENAME_LENGTH)
+  if (!filename) throw new HttpError(400, 'The file needs a name.')
+  const contentType = CONTENT_TYPES[extname(filename).toLowerCase()]
+  if (!contentType) {
+    throw new HttpError(415, 'Upload a document (PDF, Word, text), image, audio, or video file.')
+  }
+  return { filename, contentType }
+}
 
-    const material = await createMaterial({
-      caseId: req.courseCase!.id,
-      audience,
-      filename,
-      description,
-      contentType,
-      data: req.body,
-      uploadedBy: req.user!.id,
-    })
-    res.status(201).json({ material })
-  },
-)
+const tooLarge = () => new HttpError(413, `That file is too large. The limit is ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.`)
+
+/**
+ * Step 1 of an upload, `{ filename, size }`: returns a signed URL the browser
+ * PUTs the file to (straight to S3 in production), valid for 15 minutes.
+ */
+materialsRouter.post('/uploads', async (req, res) => {
+  const { contentType } = readFilename(req.body)
+  const size = (req.body as Record<string, unknown> | undefined)?.size
+  if (!Number.isInteger(size) || (size as number) <= 0) throw new HttpError(400, 'The file is empty.')
+  if ((size as number) > MAX_UPLOAD_BYTES) throw tooLarge()
+
+  const key = `uploads/${req.courseCase!.id}/${randomUUID()}`
+  const { url, headers } = await storage.uploadTarget(key, contentType, size as number)
+  res.status(201).json({ upload: { key, url, headers } })
+})
+
+/**
+ * Step 2, after the browser's PUT succeeds: `{ uploadKey, filename,
+ * audience?, description? }` adds the uploaded file to the case file.
+ */
+materialsRouter.post('/', async (req, res) => {
+  const caseId = req.courseCase!.id
+  const { filename, contentType } = readFilename(req.body)
+  const uploadKey = readString(req.body, 'uploadKey')
+  // Only uploads started for this case can be added to it.
+  if (!uploadKey.startsWith(`uploads/${caseId}/`) || !KEY_PATTERN.test(uploadKey)) {
+    throw new HttpError(400, 'That upload is not for this case.')
+  }
+  const size = await storage.size(uploadKey)
+  if (size === null) throw new HttpError(400, 'The upload did not finish. Try again.')
+  if (size > MAX_UPLOAD_BYTES) {
+    await storage.delete([uploadKey])
+    throw tooLarge()
+  }
+
+  const id = randomUUID()
+  const storageKey = `cases/${caseId}/${id}`
+  await storage.move(uploadKey, storageKey)
+  const material = await createMaterial({
+    id,
+    caseId,
+    audience: readAudience((req.body as Record<string, unknown>).audience, 'all'),
+    filename,
+    description: readText(req.body, 'description', 'Description'),
+    contentType,
+    sizeBytes: size,
+    storageKey,
+    uploadedBy: req.user!.id,
+  })
+  res.status(201).json({ material })
+})
 
 materialsRouter.patch('/:materialId', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
@@ -140,12 +174,14 @@ materialsRouter.patch('/:materialId', async (req, res) => {
 
 materialsRouter.get('/:materialId/file', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
-  sendMaterialFile(res, await findMaterialFile(req.courseCase!.id, id))
+  await sendMaterialFile(res, await findMaterialFile(req.courseCase!.id, id))
 })
 
 materialsRouter.delete('/:materialId', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
-  if (!(await deleteMaterial(req.courseCase!.id, id))) throw new HttpError(404, 'File not found.')
+  const deleted = await deleteMaterial(req.courseCase!.id, id)
+  if (deleted === false) throw new HttpError(404, 'File not found.')
+  if (deleted) await removeStoredFiles([deleted])
   res.status(204).end()
 })
 

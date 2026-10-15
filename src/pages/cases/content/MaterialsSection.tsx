@@ -3,7 +3,7 @@ import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate } from '../../../courses/caseLabels'
 import { AUDIENCES, type Audience, type CaseMaterial } from '../../../courses/types'
 
-const MAX_BYTES = 10 * 1024 * 1024 // matches the server's limit
+const MAX_BYTES = 100 * 1024 * 1024 // matches the server's limit
 const ACCEPT = [
   '.pdf,.doc,.docx,.txt', // documents
   '.png,.jpg,.jpeg,.gif,.webp', // images
@@ -55,7 +55,7 @@ export function MaterialsSection({
     const failures: string[] = []
     for (const file of chosen) {
       if (file.size > MAX_BYTES) {
-        failures.push(`${file.name}: That file is too large. The limit is 10 MB.`)
+        failures.push(`${file.name}: That file is too large. The limit is 100 MB.`)
         continue
       }
       try {
@@ -101,8 +101,9 @@ export function MaterialsSection({
     <section className="course-section" aria-labelledby="materials-heading">
       <h2 id="materials-heading">Case file</h2>
       <p className="muted section-hint">
-        Upload the fact pattern and its pieces: documents, images, audio, and video, up to 10 MB
-        each. Students see them in their Case file tab, grouped by type. Choose who can see each file.
+        Split the fact pattern into sections and upload each piece (documents, images, audio, and
+        video, up to 100 MB each) so students can find what they need. They see the files in their
+        Case file tab, grouped by type. Choose who can see each file.
       </p>
 
       <div className="panel-form content-form" role="group" aria-label="Upload to the case file">

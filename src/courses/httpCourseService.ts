@@ -164,16 +164,24 @@ export const httpCourseService: CourseService = {
   },
 
   async uploadMaterial(courseId, caseId, file, { audience, description }) {
-    // The raw file is the body; headers are ASCII-only, so text in them is URI-encoded.
-    const query = new URLSearchParams({ audience })
-    const body = await apiRequest(`${casePath(courseId, caseId)}/materials?${query}`, {
+    const materials = `${casePath(courseId, caseId)}/materials`
+    // 1. The API approves the file and returns a signed upload link (S3 in production).
+    const { upload } = await apiRequest(`${materials}/uploads`, {
       method: 'POST',
-      body: file,
-      headers: {
-        'Content-Type': file.type || 'application/octet-stream',
-        'X-Filename': encodeURIComponent(file.name),
-        'X-Description': encodeURIComponent(description),
-      },
+      body: JSON.stringify({ filename: file.name, size: file.size }),
+    })
+    // 2. The file goes straight to storage, not through the API.
+    let res: Response
+    try {
+      res = await fetch(upload.url, { method: 'PUT', headers: upload.headers, body: file })
+    } catch {
+      throw new Error('Could not reach file storage. Check your connection and try again.')
+    }
+    if (!res.ok) throw new Error(`File storage refused the upload (${res.status}). Try again.`)
+    // 3. The API checks the stored file and adds it to the case file.
+    const body = await apiRequest(materials, {
+      method: 'POST',
+      body: JSON.stringify({ uploadKey: upload.key, filename: file.name, audience, description }),
     })
     return body.material
   },

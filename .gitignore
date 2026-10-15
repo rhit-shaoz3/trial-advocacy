@@ -25,3 +25,6 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Case files stored locally when S3 is not configured
+.storage

@@ -117,7 +117,7 @@ describe('MaterialsSection', () => {
     await screen.findByRole('link', { name: 'Fact pattern.pdf' })
 
     const huge = new File(['x'], 'huge.pdf')
-    Object.defineProperty(huge, 'size', { value: 10 * 1024 * 1024 + 1 })
+    Object.defineProperty(huge, 'size', { value: 100 * 1024 * 1024 + 1 })
     fireEvent.change(screen.getByTestId('material-input'), { target: { files: [huge] } })
     expect(await screen.findByRole('alert')).toHaveTextContent('huge.pdf: That file is too large.')
     expect(service.uploadMaterial).not.toHaveBeenCalled()

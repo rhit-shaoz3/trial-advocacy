@@ -15,7 +15,7 @@ import {
   type CourseFields,
   type TaughtCourse,
 } from './courses.ts'
-import { findMaterialFile, setTaskDone, visibleTo } from './caseContent.ts'
+import { findMaterialFile, listStorageKeys, removeStoredFiles, setTaskDone, visibleTo } from './caseContent.ts'
 import { sendMaterialFile } from './caseContentRoutes.ts'
 import { casesRouter } from './caseRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
@@ -159,7 +159,7 @@ coursesRouter.get('/:courseId/my-cases/:caseId/materials/:materialId/file', asyn
   const { courseId, caseId, materialId } = req.params
   const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
   if (!isUuid(materialId)) throw new HttpError(404, 'File not found.')
-  sendMaterialFile(res, await findMaterialFile(caseId, materialId, visibleTo(workspace.side)))
+  await sendMaterialFile(res, await findMaterialFile(caseId, materialId, visibleTo(workspace.side)))
 })
 
 /** Marks one of the case's tasks done (or not) for the student's whole team. */
@@ -189,7 +189,9 @@ courseRouter.patch('/', async (req, res) => {
 })
 /** Also deletes the roster and the cases with everything in them. The entry code stops working. */
 courseRouter.delete('/', async (req, res) => {
+  const files = await listStorageKeys({ courseId: req.course!.id })
   await deleteCourse(req.course!.id)
+  await removeStoredFiles(files)
   res.status(204).end()
 })
 courseRouter.use('/roster', rosterRouter)

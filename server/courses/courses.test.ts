@@ -2,7 +2,8 @@ import request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, fallTrial, resetDatabase, signedInAgent } from '../test/helpers.ts'
+import { storage } from '../storage/storage.ts'
+import { createCourseAs, fallTrial, resetDatabase, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 
 beforeEach(resetDatabase)
 
@@ -172,11 +173,9 @@ describe('DELETE /api/courses/:courseId', () => {
     const { agent: student } = await signedInAgent()
     await student.post('/api/courses/join').send({ entryCode: course.entryCode })
     const caseId = (await agent.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera' })).body.case.id
-    await agent
-      .post(`/api/courses/${course.id}/cases/${caseId}/materials`)
-      .set('Content-Type', 'application/pdf')
-      .set('X-Filename', 'case.pdf')
-      .send(Buffer.from('%PDF'))
+    const uploaded = await uploadCaseFile(agent, `/api/courses/${course.id}/cases/${caseId}`, 'case.pdf')
+    const { storageKey } = (await pool.query('SELECT storage_key AS "storageKey" FROM case_materials')).rows[0]
+    expect(uploaded.status).toBe(201)
 
     const res = await agent.delete(`/api/courses/${course.id}`)
 
@@ -190,6 +189,8 @@ describe('DELETE /api/courses/:courseId', () => {
               (SELECT count(*) FROM case_materials)::int AS files`,
     )
     expect(leftovers.rows[0]).toEqual({ enrollments: 0, cases: 0, files: 0 })
+    // The stored file is removed too.
+    expect(await storage.size(storageKey)).toBeNull()
     const join = await student.post('/api/courses/join').send({ entryCode: course.entryCode })
     expect(join.status).toBe(404)
   })

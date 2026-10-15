@@ -12,7 +12,7 @@ import {
   type CaseStatus,
   type CourseCase,
 } from './cases.ts'
-import { setInstructorNote } from './caseContent.ts'
+import { listStorageKeys, removeStoredFiles, setInstructorNote } from './caseContent.ts'
 import { materialsRouter, tasksRouter, witnessesRouter } from './caseContentRoutes.ts'
 import { matchupsRouter } from './matchupRoutes.ts'
 import { teamsRouter } from './teamRoutes.ts'
@@ -76,11 +76,14 @@ casesRouter.patch('/:caseId', async (req, res) => {
   res.json({ case: updated })
 })
 
+/** Also deletes the case's teams, worlds, and everything in its case file, including the stored files. */
 casesRouter.delete('/:caseId', async (req, res) => {
   const { caseId } = req.params
+  const files = isUuid(caseId) ? await listStorageKeys({ caseId }) : []
   if (!isUuid(caseId) || !(await deleteCase(req.course!.id, caseId))) {
     throw new HttpError(404, 'Case not found.')
   }
+  await removeStoredFiles(files)
   res.status(204).end()
 })
 

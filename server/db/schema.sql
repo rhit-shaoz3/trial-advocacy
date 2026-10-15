@@ -126,9 +126,9 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS instructor_note text NOT NULL DEFAULT
 
 -- The case file: the pieces of the fact pattern the instructor uploads
 -- (documents, images, audio, video). What kind of file it is comes from its
--- content type. `audience` says which side can see it. Stored in the database
--- because Heroku's filesystem is wiped on every restart; move to object
--- storage if files get large.
+-- content type. `audience` says which side can see it. The file itself is in
+-- object storage (S3 in production) under `storage_key`; `data` only holds
+-- files uploaded before that, until `npm run storage:migrate` moves them.
 CREATE TABLE IF NOT EXISTS case_materials (
   id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
@@ -137,10 +137,14 @@ CREATE TABLE IF NOT EXISTS case_materials (
   description  text        NOT NULL DEFAULT '',
   content_type text        NOT NULL,
   size_bytes   integer     NOT NULL,
-  data         bytea       NOT NULL,
+  data         bytea,
+  storage_key  text,
   uploaded_by  uuid        REFERENCES users (id) ON DELETE SET NULL,
   uploaded_at  timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS storage_key text;
+ALTER TABLE case_materials ALTER COLUMN data DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS case_materials_case_idx ON case_materials (case_id);
 

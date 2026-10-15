@@ -95,36 +95,102 @@ export interface CaseSummary {
   world: { number: number; side: Side } | null
   /** How many case worlds the case has (the instructor's view). */
   worldCount: number | null
-  /** Not tracked yet. */
-  progress: null
+  /** Percent of the team's tasks done; null for the instructor or when there are no tasks. */
+  progress: number | null
   nextMilestone: null
+  /** The team's soonest-due open task. */
+  nextTask: { title: string; dueAt: Date | null } | null
   participants: { name: string }[]
 }
 
 const nameOf = (m: RosterEntry) => ({ name: m.name ?? m.email })
 
-/** A student's course-home cases: the non-draft cases they are on a team in. */
-export async function homeCasesForStudent(courseId: string, userId: string): Promise<CaseSummary[]> {
-  const cases = await listMyCases(courseId, userId)
-  return cases
-    .filter((c) => c.team)
-    .map((c) => ({
+interface TeamTask {
+  id: string
+  title: string
+  dueAt: Date | null
+  /** When the student's team completed it, or null. */
+  completedAt: Date | null
+}
+
+/** The tasks a student's side can see in a case, soonest due first, with when their team did each. */
+async function teamTasks(caseId: string, userId: string, side: Side | null) {
+  const { rows } = await pool.query<TeamTask>(
+    `SELECT t.id, t.title, t.due_at AS "dueAt",
+            (SELECT tc.completed_at FROM task_completions tc
+             JOIN team_members m ON m.team_id = tc.team_id
+             JOIN enrollments e ON e.course_id = m.course_id AND e.email = m.email
+             WHERE tc.task_id = t.id AND e.user_id = $2) AS "completedAt"
+     FROM case_tasks t
+     WHERE t.case_id = $1 AND t.audience = ANY($3)
+     ORDER BY t.due_at NULLS LAST, t.created_at`,
+    [caseId, userId, side ? ['all', side] : ['all']],
+  )
+  return rows
+}
+
+// Shape sent to the client; matches `UpcomingItem` in src/workspace/types.ts.
+export interface UpcomingItem {
+  id: string
+  kind: 'deadline'
+  title: string
+  caseTitle: string
+  at: Date
+}
+
+const WEEK = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * A student's course home: the non-draft cases they are on a team in (with
+ * their team's progress), their open tasks' deadlines, and task counts.
+ */
+export async function studentHome(courseId: string, userId: string, now = new Date()) {
+  const cases = (await listMyCases(courseId, userId)).filter((c) => c.team)
+  const tasks = await Promise.all(cases.map((c) => teamTasks(c.id, userId, c.world?.side ?? null)))
+
+  const summaries: CaseSummary[] = cases.map((c, i) => {
+    const done = tasks[i].filter((t) => t.completedAt).length
+    const next = tasks[i].find((t) => !t.completedAt)
+    return {
       id: c.id,
       title: c.title,
       summary: c.summary,
       status: c.status,
       world: c.world && { number: c.world.number, side: c.world.side },
       worldCount: null,
-      progress: null,
+      progress: tasks[i].length === 0 ? null : Math.round((done / tasks[i].length) * 100),
       nextMilestone: null,
+      nextTask: next ? { title: next.title, dueAt: next.dueAt } : null,
       // Everyone in the student's world: their pairing, then the opposition.
       participants: [...c.team!.members, ...(c.world?.opponents.members ?? [])].map(nameOf),
-    }))
+    }
+  })
+
+  // Deadlines of open tasks in active cases, including overdue ones.
+  const upcoming: UpcomingItem[] = cases
+    .flatMap((c, i) =>
+      c.status === 'active'
+        ? tasks[i]
+            .filter((t) => !t.completedAt && t.dueAt)
+            .map((t) => ({ id: t.id, kind: 'deadline' as const, title: t.title, caseTitle: c.title, at: t.dueAt! }))
+        : [],
+    )
+    .sort((x, y) => x.at.getTime() - y.at.getTime())
+
+  const completed = tasks.flat().filter((t) => t.completedAt)
+  return {
+    cases: summaries,
+    upcoming,
+    stats: {
+      tasksCompleted: completed.length,
+      tasksCompletedThisWeek: completed.filter((t) => now.getTime() - t.completedAt!.getTime() < WEEK).length,
+    },
+  }
 }
 
 /** The instructor's course-home cases: every non-draft case, with all its paired students. */
 export async function homeCasesForInstructor(courseId: string): Promise<CaseSummary[]> {
-  const { rows } = await pool.query<Omit<CaseSummary, 'world' | 'progress' | 'nextMilestone'>>(
+  const { rows } = await pool.query<Omit<CaseSummary, 'world' | 'progress' | 'nextMilestone' | 'nextTask'>>(
     `SELECT c.id, c.title, c.summary, c.status,
             (SELECT count(*)::int FROM matchups mu WHERE mu.case_id = c.id) AS "worldCount",
             coalesce((SELECT json_agg(json_build_object('name', coalesce(u.name, m.email))
@@ -139,5 +205,5 @@ export async function homeCasesForInstructor(courseId: string): Promise<CaseSumm
      ORDER BY c.created_at, c.title`,
     [courseId],
   )
-  return rows.map((r) => ({ ...r, world: null, progress: null, nextMilestone: null }))
+  return rows.map((r) => ({ ...r, world: null, progress: null, nextMilestone: null, nextTask: null }))
 }

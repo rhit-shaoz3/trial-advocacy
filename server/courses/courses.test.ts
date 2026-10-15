@@ -166,13 +166,14 @@ describe('PATCH /api/courses/:courseId', () => {
 })
 
 describe('DELETE /api/courses/:courseId', () => {
-  it('deletes the course with its roster and fact patterns, and retires the entry code', async () => {
+  it('deletes the course with its roster and cases, and retires the entry code', async () => {
     const { agent } = await signedInAgent('instructor')
     const course = await createCourseAs(agent)
     const { agent: student } = await signedInAgent()
     await student.post('/api/courses/join').send({ entryCode: course.entryCode })
+    const caseId = (await agent.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera' })).body.case.id
     await agent
-      .post(`/api/courses/${course.id}/fact-patterns`)
+      .post(`/api/courses/${course.id}/cases/${caseId}/materials`)
       .set('Content-Type', 'application/pdf')
       .set('X-Filename', 'case.pdf')
       .send(Buffer.from('%PDF'))
@@ -185,9 +186,10 @@ describe('DELETE /api/courses/:courseId', () => {
     expect((await student.get('/api/courses')).body.courses).toEqual([])
     const leftovers = await pool.query(
       `SELECT (SELECT count(*) FROM enrollments)::int AS enrollments,
-              (SELECT count(*) FROM fact_patterns)::int AS files`,
+              (SELECT count(*) FROM cases)::int AS cases,
+              (SELECT count(*) FROM case_materials)::int AS files`,
     )
-    expect(leftovers.rows[0]).toEqual({ enrollments: 0, files: 0 })
+    expect(leftovers.rows[0]).toEqual({ enrollments: 0, cases: 0, files: 0 })
     const join = await student.post('/api/courses/join').send({ entryCode: course.entryCode })
     expect(join.status).toBe(404)
   })

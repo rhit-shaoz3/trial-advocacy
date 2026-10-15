@@ -28,6 +28,8 @@ export interface CaseSummary {
   progress: number | null
   /** The next thing that matters, e.g. "Discovery due Oct 13" or "Awaiting instructor review". */
   nextMilestone: string | null
+  /** The team's soonest-due open task (real cases; sample data uses nextMilestone). */
+  nextTask?: { title: string; dueAt: string | null } | null
   participants: CaseParticipant[]
 }
 

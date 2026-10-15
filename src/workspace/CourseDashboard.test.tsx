@@ -127,6 +127,7 @@ describe('course workspace for the instructor', () => {
       title: 'Rivera v. Thrill Park',
       summary: '',
       status: 'draft' as const,
+      instructorNote: '',
       createdAt: '2026-10-01T15:00:00.000Z',
       updatedAt: '2026-10-01T15:00:00.000Z',
     }
@@ -180,7 +181,6 @@ describe('course workspace for the instructor', () => {
     expect(screen.getByText('K7PQ2M')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Manage course' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('region', { name: /Students/ })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Fact patterns' })).toBeInTheDocument()
   })
 
   it('updates the sidebar after the course is renamed', async () => {

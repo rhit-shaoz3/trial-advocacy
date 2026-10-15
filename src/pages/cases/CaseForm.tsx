@@ -25,8 +25,8 @@ export function CaseForm({
   label: string
   submitLabel: string
   submittingLabel: string
-  /** Throw to show the error in the form. */
-  onSubmit(input: CaseInput): Promise<void>
+  /** Throw to show the error in the form. `note` is the note to students (edit form only). */
+  onSubmit(input: CaseInput, note: string): Promise<void>
   onCancel(): void
   /** Extra controls after Save/Cancel (the edit form's Delete button). */
   children?: ReactNode
@@ -34,6 +34,7 @@ export function CaseForm({
   const [title, setTitle] = useState(initial?.title ?? '')
   const [summary, setSummary] = useState(initial?.summary ?? '')
   const [status, setStatus] = useState<CourseCaseStatus>(initial?.status ?? 'draft')
+  const [note, setNote] = useState(initial?.instructorNote ?? '')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -42,7 +43,7 @@ export function CaseForm({
     setError(null)
     setSubmitting(true)
     try {
-      await onSubmit(initial ? { title, summary, status } : { title, summary })
+      await onSubmit(initial ? { title, summary, status } : { title, summary }, note)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setSubmitting(false)
@@ -85,6 +86,18 @@ export function CaseForm({
           rows={3}
         />
       </label>
+      {initial && (
+        <label className="case-summary-field">
+          Note to students (optional)
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Focus on what the inspection log reveals about notice."
+            maxLength={2000}
+            rows={2}
+          />
+        </label>
+      )}
       <p className="muted case-form-hint">
         {initial
           ? STATUS_HINT[status]

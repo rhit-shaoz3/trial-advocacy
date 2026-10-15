@@ -88,8 +88,11 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | POST   | `/api/auth/logout` |                                     | `204`                     |
 | GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
 | POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
-| GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Students get the active and closed cases they're on a team in, each with `world: { number, side }` (or `null` before matching); the instructor gets every active and closed case with `worldCount`. Activity, deadlines, and case progress aren't stored yet, so those are empty |
+| GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Students get the active and closed cases they're on a team in, each with `world: { number, side }` (or `null` before matching), `progress` (percent of their team's tasks done), and `nextTask`; `upcoming` lists their open tasks' deadlines and `stats` counts completed tasks. The instructor gets every active and closed case with `worldCount`. `activity` is always empty for now |
 | GET    | `/api/courses/:id/my-cases` |                             | Members: `{ cases: [{ id, title, summary, status, team, world }] }`, without drafts; `team` is `{ number, members }` (each member has `you`) or `null` before pairing; `world` is `{ number, side, opponents: { number, members } }` or `null` before matching |
+| GET    | `/api/courses/:id/my-cases/:caseId` |                     | Students: `{ workspace }`, the case dashboard: `{ case, team, world, side, materials, witnesses, tasks, preview }`, showing only shared items and their side's. Each task has the team's `completedAt` / `completedBy`. `404` for drafts |
+| GET    | `/api/courses/:id/my-cases/:caseId/materials/:materialId/file` | | The file, as a download, if the student's side can see it |
+| PUT    | `/api/courses/:id/my-cases/:caseId/tasks/:taskId` | `{ done: boolean }`   | `{ workspace }`; marks it done (or not) for the student's whole team. `409` if the case is closed or the student has no team |
 | GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode` and `studentCount` |
 | POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
 
@@ -99,14 +102,10 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | ------ | -------------------------------------------- | -------------------------------- | ------ |
 | GET    | `/api/courses/:id`                           |                                  | `{ course }` |
 | PATCH  | `/api/courses/:id`                           | `{ code, title, season, year }`  | `{ course }`; entry code and roster unchanged |
-| DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster, fact patterns, and cases |
+| DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster and the cases with everything in them |
 | GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined }] }` |
 | POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | `{ added, skipped: [{ email, reason }], roster }` |
 | DELETE | `/api/courses/:id/roster/:email`             |                                  | `204`, `404` if not on the roster |
-| GET    | `/api/courses/:id/fact-patterns`             |                                  | `{ factPatterns: [{ id, filename, sizeBytes, uploadedAt }] }` |
-| POST   | `/api/courses/:id/fact-patterns`             | Raw file body; `X-Filename` (URI-encoded) | `201 { factPattern }`; `413` over 10 MB, `415` not PDF/Word/text |
-| GET    | `/api/courses/:id/fact-patterns/:fileId/file` |                                 | The file, as a download |
-| DELETE | `/api/courses/:id/fact-patterns/:fileId`     |                                  | `204` |
 | GET    | `/api/courses/:id/cases`                     |                                  | `{ cases: [{ id, title, summary, status, createdAt, updatedAt }] }`, oldest first |
 | POST   | `/api/courses/:id/cases`                     | `{ title, summary?, status? }`   | `201 { case }`; status defaults to `draft` |
 | GET    | `/api/courses/:id/cases/:caseId`             |                                  | `{ case }` |
@@ -124,10 +123,25 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | DELETE | `/api/courses/:id/cases/:caseId/matchups`    |                                  | The teams, with no matchups left |
 | POST   | `/api/courses/:id/cases/:caseId/matchups/:matchupId/swap` |                     | The teams, with that world's sides swapped |
 | DELETE | `/api/courses/:id/cases/:caseId/matchups/:matchupId` |                          | The teams, without that world |
+| GET    | `/api/courses/:id/cases/:caseId/materials` |                                 | `{ materials: [{ id, audience, filename, description, contentType, sizeBytes, uploadedAt }] }`, in upload order |
+| POST   | `/api/courses/:id/cases/:caseId/materials?audience=` | Raw file body; `X-Filename` and optional `X-Description` (URI-encoded) | `201 { material }`; `audience` is `all` (default), `plaintiff`, or `defense`. `413` over 10 MB, `415` unless a document (PDF, Word, text), image (PNG, JPEG, GIF, WebP), audio (MP3, M4A, WAV), or video (MP4, MOV, WebM) |
+| PATCH  | `/api/courses/:id/cases/:caseId/materials/:materialId` | `{ audience, description }` | `{ material }` |
+| GET    | `/api/courses/:id/cases/:caseId/materials/:materialId/file` |                  | The file, as a download |
+| DELETE | `/api/courses/:id/cases/:caseId/materials/:materialId` |                       | `204` |
+| GET / POST | `/api/courses/:id/cases/:caseId/witnesses` | `{ name, role?, description?, audience? }` | `{ witnesses }` / `201 { witness }` |
+| PUT / DELETE | `/api/courses/:id/cases/:caseId/witnesses/:witnessId` | Same as POST            | `{ witness }` / `204` |
+| GET / POST | `/api/courses/:id/cases/:caseId/tasks` | `{ title, description?, dueAt?, audience? }` | `{ tasks }` (soonest due first) / `201 { task }`; `dueAt` is an ISO timestamp or `null` |
+| PUT / DELETE | `/api/courses/:id/cases/:caseId/tasks/:taskId` | Same as POST                   | `{ task }` / `204`; deleting removes teams' completions |
+| PUT    | `/api/courses/:id/cases/:caseId/note` | `{ note }`                                    | `{ case }`; the instructor note shown on every student's case dashboard |
+| GET    | `/api/courses/:id/cases/:caseId/launch` |                                             | `{ checks: [{ key, ok, message }] }`: everyone paired, every team matched, at least one case file uploaded |
+| POST   | `/api/courses/:id/cases/:caseId/launch` |                                             | `{ case }`, now `active`; `409` if not ready (the message lists what's missing) or already launched |
+| GET    | `/api/courses/:id/cases/:caseId/preview?side=&matchup=` |                             | `{ workspace }`: the case dashboard as a team on `side` sees it (that world's team, with `matchup`), with `preview: true` |
 
 All `/api/courses` routes return `401` when not logged in.
 
 **Cases** are shared by the whole class. A case's `status` is `draft` (hidden from students), `active`, or `closed`. Students are paired into **teams** per case: usually two, with one team of three for an odd class. Team members are roster entries, so pending students can be paired too, and removing a student from the roster takes them off their teams. Auto-pairing avoids repeating partners from the course's other cases where it can. Each **matchup** sets two teams against each other as plaintiff and defense, and is one **case world** (matchup `number` 1 is World A). The side is stored on the matchup, not the team. Auto-matching avoids opponents students faced in the course's other cases and gives each team the side its members have argued less. Deleting a team deletes its matchup. A closed case's teams and matchups can't change (`409`).
+
+Each case also has a **case file** (the pieces of the fact pattern: documents, images, audio, and video, told apart only by file type), **witnesses**, **tasks**, and an instructor note. Every material, witness, and task has an `audience`: everyone in the case, or only the plaintiff or defense teams; students see shared items plus their side's (only shared items before their team is matched). Teams mark tasks done, and their progress is the share of tasks done. **Launching** a draft case (`POST …/launch`) makes it active once everyone is paired, every team is matched, and the case file has at least one file.
 
 **Rosters are keyed by email.** An instructor can add a student who has no account yet; that roster row is "pending" until someone signs up with the email (or joins with the entry code), and then it links to their account automatically.
 

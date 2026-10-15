@@ -5,6 +5,8 @@ const coursePath = (courseId: string) => `/courses/${encodeURIComponent(courseId
 const casePath = (courseId: string, caseId: string) =>
   `${coursePath(courseId)}/cases/${encodeURIComponent(caseId)}`
 const teamsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/teams`
+const myCasePath = (courseId: string, caseId: string) =>
+  `${coursePath(courseId)}/my-cases/${encodeURIComponent(caseId)}`
 const matchupsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/matchups`
 
 export const httpCourseService: CourseService = {
@@ -63,33 +65,6 @@ export const httpCourseService: CourseService = {
     await apiRequest(`${coursePath(courseId)}/roster/${encodeURIComponent(email)}`, {
       method: 'DELETE',
     })
-  },
-
-  async listFactPatterns(courseId) {
-    return (await apiRequest(`${coursePath(courseId)}/fact-patterns`)).factPatterns
-  },
-
-  async uploadFactPattern(courseId, file) {
-    // The raw file is the body; headers are ASCII-only, so the name is URI-encoded.
-    const body = await apiRequest(`${coursePath(courseId)}/fact-patterns`, {
-      method: 'POST',
-      body: file,
-      headers: {
-        'Content-Type': file.type || 'application/octet-stream',
-        'X-Filename': encodeURIComponent(file.name),
-      },
-    })
-    return body.factPattern
-  },
-
-  async deleteFactPattern(courseId, factPatternId) {
-    await apiRequest(`${coursePath(courseId)}/fact-patterns/${encodeURIComponent(factPatternId)}`, {
-      method: 'DELETE',
-    })
-  },
-
-  factPatternDownloadUrl(courseId, factPatternId) {
-    return `/api${coursePath(courseId)}/fact-patterns/${encodeURIComponent(factPatternId)}/file`
   },
 
   async listCases(courseId) {
@@ -184,7 +159,131 @@ export const httpCourseService: CourseService = {
     })
   },
 
+  async listMaterials(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/materials`)).materials
+  },
+
+  async uploadMaterial(courseId, caseId, file, { audience, description }) {
+    // The raw file is the body; headers are ASCII-only, so text in them is URI-encoded.
+    const query = new URLSearchParams({ audience })
+    const body = await apiRequest(`${casePath(courseId, caseId)}/materials?${query}`, {
+      method: 'POST',
+      body: file,
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-Filename': encodeURIComponent(file.name),
+        'X-Description': encodeURIComponent(description),
+      },
+    })
+    return body.material
+  },
+
+  async updateMaterial(courseId, caseId, materialId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    })
+    return body.material
+  },
+
+  async deleteMaterial(courseId, caseId, materialId) {
+    await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  materialDownloadUrl(courseId, caseId, materialId) {
+    return `/api${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/file`
+  },
+
+  async listWitnesses(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/witnesses`)).witnesses
+  },
+
+  async createWitness(courseId, caseId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/witnesses`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+    return body.witness
+  },
+
+  async updateWitness(courseId, caseId, witnessId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/witnesses/${encodeURIComponent(witnessId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.witness
+  },
+
+  async deleteWitness(courseId, caseId, witnessId) {
+    await apiRequest(`${casePath(courseId, caseId)}/witnesses/${encodeURIComponent(witnessId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async listTasks(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/tasks`)).tasks
+  },
+
+  async createTask(courseId, caseId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+    return body.task
+  },
+
+  async updateTask(courseId, caseId, taskId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.task
+  },
+
+  async deleteTask(courseId, caseId, taskId) {
+    await apiRequest(`${casePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+  },
+
+  async saveInstructorNote(courseId, caseId, note) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/note`, {
+      method: 'PUT',
+      body: JSON.stringify({ note }),
+    })
+    return body.case
+  },
+
+  async getLaunchChecks(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/launch`)).checks
+  },
+
+  async launchCase(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/launch`, { method: 'POST' })).case
+  },
+
+  async previewWorkspace(courseId, caseId, side, matchupId) {
+    const query = new URLSearchParams({ side, ...(matchupId ? { matchup: matchupId } : {}) })
+    return (await apiRequest(`${casePath(courseId, caseId)}/preview?${query}`)).workspace
+  },
+
   async listMyCases(courseId) {
     return (await apiRequest(`${coursePath(courseId)}/my-cases`)).cases
+  },
+
+  async getMyCaseWorkspace(courseId, caseId) {
+    return (await apiRequest(myCasePath(courseId, caseId))).workspace
+  },
+
+  async setTaskDone(courseId, caseId, taskId, done) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ done }),
+    })
+    return body.workspace
+  },
+
+  myMaterialDownloadUrl(courseId, caseId, materialId) {
+    return `/api${myCasePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/file`
   },
 }

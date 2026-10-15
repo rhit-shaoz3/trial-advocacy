@@ -40,20 +40,9 @@ CREATE TABLE IF NOT EXISTS enrollments (
 CREATE INDEX IF NOT EXISTS enrollments_user_idx ON enrollments (user_id);
 CREATE INDEX IF NOT EXISTS enrollments_pending_email_idx ON enrollments (email) WHERE user_id IS NULL;
 
--- Course documents. Stored in the database because Heroku's filesystem is
--- wiped on every restart; move to object storage if files get large.
-CREATE TABLE IF NOT EXISTS fact_patterns (
-  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  course_id    uuid        NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
-  filename     text        NOT NULL,
-  content_type text        NOT NULL,
-  size_bytes   integer     NOT NULL,
-  data         bytea       NOT NULL,
-  uploaded_by  uuid        REFERENCES users (id) ON DELETE SET NULL,
-  uploaded_at  timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS fact_patterns_course_idx ON fact_patterns (course_id);
+-- Course-level fact pattern uploads were replaced by per-case materials
+-- (case_materials below). Drop the old table, and its files, if it exists.
+DROP TABLE IF EXISTS fact_patterns;
 
 -- A case the whole class works on, e.g. a rollercoaster incident. Students are
 -- paired into teams per case, and each matchup of two teams becomes one "case
@@ -130,6 +119,69 @@ CREATE TABLE IF NOT EXISTS matchup_teams (
   PRIMARY KEY (matchup_id, side) DEFERRABLE,
   FOREIGN KEY (matchup_id, case_id) REFERENCES matchups (id, case_id) ON DELETE CASCADE,
   FOREIGN KEY (team_id, case_id) REFERENCES teams (id, case_id) ON DELETE CASCADE
+);
+
+-- A note from the instructor shown on every student's case dashboard.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS instructor_note text NOT NULL DEFAULT '';
+
+-- The case file: the pieces of the fact pattern the instructor uploads
+-- (documents, images, audio, video). What kind of file it is comes from its
+-- content type. `audience` says which side can see it. Stored in the database
+-- because Heroku's filesystem is wiped on every restart; move to object
+-- storage if files get large.
+CREATE TABLE IF NOT EXISTS case_materials (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  audience     text        NOT NULL DEFAULT 'all' CHECK (audience IN ('all', 'plaintiff', 'defense')),
+  filename     text        NOT NULL,
+  description  text        NOT NULL DEFAULT '',
+  content_type text        NOT NULL,
+  size_bytes   integer     NOT NULL,
+  data         bytea       NOT NULL,
+  uploaded_by  uuid        REFERENCES users (id) ON DELETE SET NULL,
+  uploaded_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS case_materials_case_idx ON case_materials (case_id);
+
+-- Materials were briefly split into "fact pattern" and "evidence"; the fact
+-- pattern is the whole packet, so that split was dropped.
+ALTER TABLE case_materials DROP COLUMN IF EXISTS kind;
+
+-- People in the case's story. For now just a directory; later each will be
+-- an AI-simulated witness students can interview.
+CREATE TABLE IF NOT EXISTS case_witnesses (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id     uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  name        text        NOT NULL,
+  role        text        NOT NULL DEFAULT '',
+  description text        NOT NULL DEFAULT '',
+  audience    text        NOT NULL DEFAULT 'all' CHECK (audience IN ('all', 'plaintiff', 'defense')),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS case_witnesses_case_idx ON case_witnesses (case_id);
+
+-- Work the instructor assigns for a case, to every team on `audience`'s side.
+CREATE TABLE IF NOT EXISTS case_tasks (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id     uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  title       text        NOT NULL,
+  description text        NOT NULL DEFAULT '',
+  due_at      timestamptz,
+  audience    text        NOT NULL DEFAULT 'all' CHECK (audience IN ('all', 'plaintiff', 'defense')),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS case_tasks_case_idx ON case_tasks (case_id);
+
+-- A team marking one of its case's tasks done. Either teammate can.
+CREATE TABLE IF NOT EXISTS task_completions (
+  task_id      uuid        NOT NULL REFERENCES case_tasks (id) ON DELETE CASCADE,
+  team_id      uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  completed_by uuid        REFERENCES users (id) ON DELETE SET NULL,
+  completed_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (task_id, team_id)
 );
 
 -- Login sessions, in the format connect-pg-simple expects.

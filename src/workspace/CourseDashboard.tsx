@@ -13,6 +13,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
+import { shortDate } from '../courses/caseLabels'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import {
   calendarDaysUntil,
@@ -237,6 +238,11 @@ function caseSubtitle(c: CaseSummary) {
 function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: string }) {
   const progressLabel = `${c.title} progress`
   const subtitle = caseSubtitle(c)
+  const milestone =
+    c.nextMilestone ??
+    (c.nextTask
+      ? `${c.nextTask.title}${c.nextTask.dueAt ? ` · due ${shortDate(c.nextTask.dueAt)}` : ''}`
+      : null)
   const shown = c.participants.slice(0, MAX_AVATARS)
   const hidden = c.participants.length - shown.length
   return (
@@ -280,10 +286,10 @@ function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: st
       )}
 
       <div className="ws-case-meta">
-        {c.nextMilestone && (
+        {milestone && (
           <span>
             <Clock aria-hidden="true" />
-            {c.nextMilestone}
+            {milestone}
           </span>
         )}
         <span>

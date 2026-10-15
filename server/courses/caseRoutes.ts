@@ -12,8 +12,11 @@ import {
   type CaseStatus,
   type CourseCase,
 } from './cases.ts'
+import { setInstructorNote } from './caseContent.ts'
+import { materialsRouter, tasksRouter, witnessesRouter } from './caseContentRoutes.ts'
 import { matchupsRouter } from './matchupRoutes.ts'
 import { teamsRouter } from './teamRoutes.ts'
+import { getPreviewWorkspace, launchChecks } from './workspace.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -24,6 +27,7 @@ declare module 'express-serve-static-core' {
 
 const MAX_TITLE_LENGTH = 120
 const MAX_SUMMARY_LENGTH = 2000
+const MAX_NOTE_LENGTH = 2000
 
 /**
  * Validates the body of a create or edit request. Edits must send the status,
@@ -93,4 +97,51 @@ const caseRouter = Router({ mergeParams: true })
 caseRouter.use(loadCase)
 caseRouter.use('/teams', teamsRouter)
 caseRouter.use('/matchups', matchupsRouter)
+caseRouter.use('/materials', materialsRouter)
+caseRouter.use('/witnesses', witnessesRouter)
+caseRouter.use('/tasks', tasksRouter)
+
+caseRouter.put('/note', async (req, res) => {
+  const note = readString(req.body, 'note').trim()
+  if (note.length > MAX_NOTE_LENGTH) {
+    throw new HttpError(400, `The note must be at most ${MAX_NOTE_LENGTH} characters.`)
+  }
+  await setInstructorNote(req.courseCase!.id, note)
+  res.json({ case: await findCase(req.course!.id, req.courseCase!.id) })
+})
+
+/** What still has to happen before the case worlds can launch. */
+caseRouter.get('/launch', async (req, res) => {
+  res.json({ checks: await launchChecks(req.course!.id, req.courseCase!.id) })
+})
+
+/** Launches every case world at once: makes a ready draft case active. */
+caseRouter.post('/launch', async (req, res) => {
+  const current = req.courseCase!
+  if (current.status !== 'draft') throw new HttpError(409, 'This case has already been launched.')
+  const unmet = (await launchChecks(req.course!.id, current.id)).filter((c) => !c.ok)
+  if (unmet.length > 0) {
+    throw new HttpError(409, `Not ready to launch: ${unmet.map((c) => c.message).join(' ')}`)
+  }
+  const launched = await updateCase(req.course!.id, current.id, {
+    title: current.title,
+    summary: current.summary,
+    status: 'active',
+  })
+  res.json({ case: launched })
+})
+
+/**
+ * The case dashboard as a student would see it: `?side=plaintiff|defense`,
+ * and optionally `&matchup=<id>` to see one case world's team on that side.
+ */
+caseRouter.get('/preview', async (req, res) => {
+  const side = req.query.side
+  if (side !== 'plaintiff' && side !== 'defense') throw new HttpError(400, 'Choose a side to preview.')
+  const matchup = typeof req.query.matchup === 'string' && req.query.matchup ? req.query.matchup : null
+  if (matchup !== null && !isUuid(matchup)) throw new HttpError(404, 'Case world not found.')
+  const workspace = await getPreviewWorkspace(req.course!.id, req.courseCase!.id, side, matchup)
+  if (!workspace) throw new HttpError(404, 'Case world not found.')
+  res.json({ workspace })
+})
 casesRouter.use('/:caseId', caseRouter)

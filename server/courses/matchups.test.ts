@@ -239,6 +239,7 @@ describe('the course home cases', () => {
         worldCount: null,
         progress: null,
         nextMilestone: null,
+        nextTask: null,
         participants: [{ name: 'Ada Lawyer' }, { name: email(2) }, { name: email(3) }, { name: email(4) }],
       },
     ])

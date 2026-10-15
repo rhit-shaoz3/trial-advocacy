@@ -13,6 +13,7 @@ const coaster: CourseCase = {
   title: 'Rivera v. Thrill Park',
   summary: 'A rollercoaster stalls mid-loop.',
   status: 'draft',
+  instructorNote: '',
   createdAt: '2026-10-01T15:00:00.000Z',
   updatedAt: '2026-10-01T15:00:00.000Z',
 }
@@ -93,6 +94,43 @@ describe('CasesPage', () => {
 })
 
 describe('CaseDetailPage', () => {
+  it('switches between the setup tabs, keeping the tab in the URL', async () => {
+    const { user, service } = renderAt('/courses/c1/cases/k1?tab=materials', {
+      getCase: vi.fn().mockResolvedValue(coaster),
+    })
+
+    expect(await screen.findByRole('tab', { name: 'Case file' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('region', { name: 'Case file' })).toBeInTheDocument()
+    expect(service.listMaterials).toHaveBeenCalledWith('c1', 'k1')
+
+    await user.click(screen.getByRole('tab', { name: 'Witnesses' }))
+    expect(await screen.findByRole('region', { name: 'Witnesses' })).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Teams & worlds' }))
+    expect(await screen.findByRole('region', { name: 'Teams' })).toBeInTheDocument()
+  })
+
+  it('shows the launch checklist only while the case is a draft', async () => {
+    const { service } = renderAt('/courses/c1/cases/k1', { getCase: vi.fn().mockResolvedValue(coaster) })
+    expect(await screen.findByRole('region', { name: 'Launch case worlds' })).toBeInTheDocument()
+    expect(service.getLaunchChecks).toHaveBeenCalledWith('c1', 'k1')
+  })
+
+  it('saves the note to students along with the case details', async () => {
+    const saved = { ...coaster, instructorNote: 'Mind the timeline.' }
+    const { user, service } = renderAt('/courses/c1/cases/k1', {
+      getCase: vi.fn().mockResolvedValue(coaster),
+      updateCase: vi.fn().mockResolvedValue(coaster),
+      saveInstructorNote: vi.fn().mockResolvedValue(saved),
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Edit case' }))
+    await user.type(screen.getByLabelText(/Note to students/), 'Mind the timeline.')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(service.saveInstructorNote).toHaveBeenCalledWith('c1', 'k1', 'Mind the timeline.')
+    expect(await screen.findByText('Mind the timeline.')).toBeInTheDocument()
+  })
+
   it('shows the case with a place for teams', async () => {
     const { service } = renderAt('/courses/c1/cases/k1', { getCase: vi.fn().mockResolvedValue(coaster) })
 

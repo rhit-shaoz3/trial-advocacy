@@ -35,6 +35,7 @@ describe('creating', () => {
       title: 'Rivera v. Thrill Park',
       summary: coaster.summary,
       status: 'draft',
+      instructorNote: '',
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     })

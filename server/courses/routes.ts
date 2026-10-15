@@ -15,10 +15,12 @@ import {
   type CourseFields,
   type TaughtCourse,
 } from './courses.ts'
+import { findMaterialFile, setTaskDone, visibleTo } from './caseContent.ts'
+import { sendMaterialFile } from './caseContentRoutes.ts'
 import { casesRouter } from './caseRoutes.ts'
-import { factPatternsRouter } from './factPatternRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
-import { homeCasesForInstructor, homeCasesForStudent, listMyCases } from './myCases.ts'
+import { homeCasesForInstructor, listMyCases, studentHome } from './myCases.ts'
+import { findStudentTeamId, getStudentWorkspace } from './workspace.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -108,11 +110,19 @@ coursesRouter.post('/join', async (req, res) => {
   res.status(201).json({ course })
 })
 
+/** 404s unless the case is launched in a course the user belongs to. */
+async function loadStudentWorkspace(courseId: string, caseId: string, userId: string) {
+  const workspace =
+    isUuid(courseId) && isUuid(caseId) ? await getStudentWorkspace(courseId, caseId, userId) : null
+  if (!workspace) throw new HttpError(404, 'Case not found.')
+  return workspace
+}
+
 /**
  * Everything a member's course home page shows. Students get the launched
  * cases they're on a team in; the instructor (the only instructor who can be
- * a member) gets every launched case. Activity and deadlines aren't stored
- * yet, so those lists are empty for now.
+ * a member) gets every launched case. Students' deadlines and task counts come
+ * from their team's open and completed tasks. Activity isn't stored yet.
  */
 coursesRouter.get('/:courseId/home', async (req, res) => {
   const { courseId } = req.params
@@ -120,13 +130,14 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
   if (!course) throw new HttpError(404, 'Course not found.')
   res.json({
     course,
-    cases:
-      req.user!.role === 'instructor'
-        ? await homeCasesForInstructor(course.id)
-        : await homeCasesForStudent(course.id, req.user!.id),
     activity: [],
-    upcoming: [],
-    stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+    ...(req.user!.role === 'instructor'
+      ? {
+          cases: await homeCasesForInstructor(course.id),
+          upcoming: [],
+          stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+        }
+      : await studentHome(course.id, req.user!.id)),
   })
 })
 
@@ -138,6 +149,35 @@ coursesRouter.get('/:courseId/my-cases', async (req, res) => {
   res.json({ cases: await listMyCases(course.id, req.user!.id) })
 })
 
+/** A student's dashboard for one launched case: their team, world, and what they can see. */
+coursesRouter.get('/:courseId/my-cases/:caseId', async (req, res) => {
+  res.json({ workspace: await loadStudentWorkspace(req.params.courseId, req.params.caseId, req.user!.id) })
+})
+
+/** Downloads a case file, if the student's side can see it. */
+coursesRouter.get('/:courseId/my-cases/:caseId/materials/:materialId/file', async (req, res) => {
+  const { courseId, caseId, materialId } = req.params
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  if (!isUuid(materialId)) throw new HttpError(404, 'File not found.')
+  sendMaterialFile(res, await findMaterialFile(caseId, materialId, visibleTo(workspace.side)))
+})
+
+/** Marks one of the case's tasks done (or not) for the student's whole team. */
+coursesRouter.put('/:courseId/my-cases/:caseId/tasks/:taskId', async (req, res) => {
+  const { courseId, caseId, taskId } = req.params
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const done = (req.body as Record<string, unknown> | undefined)?.done
+  if (typeof done !== 'boolean') throw new HttpError(400, 'Say whether the task is done.')
+  if (!workspace.tasks.some((t) => t.id === taskId)) throw new HttpError(404, 'Task not found.')
+  if (workspace.case.status !== 'active') {
+    throw new HttpError(409, 'This case is closed, so its tasks can no longer change.')
+  }
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  if (!teamId) throw new HttpError(409, 'You need to be on a team to complete tasks.')
+  await setTaskDone(taskId, teamId, req.user!.id, done)
+  res.json({ workspace: await loadStudentWorkspace(courseId, caseId, req.user!.id) })
+})
+
 // Everything below manages one course and is only for the instructor who teaches it.
 const courseRouter = Router({ mergeParams: true })
 courseRouter.use(loadTaughtCourse)
@@ -147,13 +187,12 @@ courseRouter.get('/', (req, res) => {
 courseRouter.patch('/', async (req, res) => {
   res.json({ course: await updateCourse(req.course!.id, readCourseFields(req.body)) })
 })
-/** Also deletes the roster, fact patterns, and cases. The entry code stops working. */
+/** Also deletes the roster and the cases with everything in them. The entry code stops working. */
 courseRouter.delete('/', async (req, res) => {
   await deleteCourse(req.course!.id)
   res.status(204).end()
 })
 courseRouter.use('/roster', rosterRouter)
-courseRouter.use('/fact-patterns', factPatternsRouter)
 courseRouter.use('/cases', casesRouter)
 
 coursesRouter.use('/:courseId', courseRouter)

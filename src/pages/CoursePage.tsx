@@ -4,12 +4,11 @@ import { useCourseService } from '../courses/CourseServiceContext'
 import type { TaughtCourse } from '../courses/types'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import { CourseForm } from './course/CourseForm'
-import { FactPatternsSection } from './course/FactPatternsSection'
 import { RosterSection } from './course/RosterSection'
 import { NotFoundPage } from './NotFoundPage'
 import './CoursePage.css'
 
-/** The instructor's "Manage course" tab: course details, roster, and fact patterns. */
+/** The instructor's "Manage course" tab: course details and the roster. */
 export function CoursePage() {
   const { courseId = '' } = useParams()
   const service = useCourseService()
@@ -25,8 +24,8 @@ export function CoursePage() {
   async function handleDelete() {
     if (!course) return
     const confirmed = window.confirm(
-      `Delete ${course.code}: ${course.title}? This also removes its student roster and all fact ` +
-        'patterns, and the entry code stops working. This cannot be undone.',
+      `Delete ${course.code}: ${course.title}? This also removes its student roster and all of ` +
+        'its cases, and the entry code stops working. This cannot be undone.',
     )
     if (!confirmed) return
     setDeleteError(null)
@@ -117,7 +116,6 @@ export function CoursePage() {
           )}
 
           <RosterSection courseId={course.id} />
-          <FactPatternsSection courseId={course.id} />
         </>
       )}
     </main>

@@ -1,0 +1,620 @@
+/* One case's dashboard (CaseWorkspaceView), after the Figma case workspace mock. */
+
+.cw h1,
+.cw h2,
+.cw h3,
+.cw p {
+  margin: 0;
+}
+
+/* Lays itself out by its own width, so it also fits the instructor's preview frame. */
+.cw {
+  container-type: inline-size;
+}
+
+/* Header */
+
+.cw-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.cw-emblem {
+  width: 3.4rem;
+  height: 3.4rem;
+  font-size: 1.15rem;
+}
+
+.cw-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cw-chip {
+  color: #7c8793;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.cw .cw-title {
+  margin-top: 0.3rem;
+  color: var(--ws-navy);
+  font: 400 2.2rem/1.15 var(--ws-serif);
+}
+
+.cw .cw-subtitle {
+  margin-top: 0.25rem;
+  color: var(--ws-muted);
+  font-size: 0.85rem;
+}
+
+/* Tabs */
+
+.cw-tabs {
+  display: flex;
+  gap: 1.6rem;
+  margin: 1.6rem 0 1.4rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ws-line);
+  scrollbar-width: none;
+}
+
+.cw-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ws-muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cw-tab:hover {
+  color: var(--ws-navy);
+}
+
+.cw-tab[aria-selected='true'] {
+  border-bottom-color: var(--ws-red);
+  color: var(--ws-navy);
+}
+
+.cw-tab:focus-visible {
+  outline: 2px solid #608cb3;
+  outline-offset: 2px;
+}
+
+.cw-tab-count {
+  min-width: 1.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 1rem;
+  background: #e9ebeb;
+  color: var(--ws-muted);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+/* Overview layout */
+
+.cw-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.cw-main,
+.cw-side {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+/* Progress banner */
+
+.cw-banner {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem 1.6rem;
+  border-radius: 0.7rem;
+  background: var(--ws-navy);
+  color: #fff;
+}
+
+.cw-banner-eyebrow {
+  color: #b8c4d2;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cw .cw-banner h2 {
+  margin-top: 0.45rem;
+  color: #fff;
+  font: 400 1.75rem/1.2 var(--ws-serif);
+}
+
+.cw .cw-banner p {
+  margin-top: 0.35rem;
+  color: #c9d2dd;
+  font-size: 0.85rem;
+}
+
+.cw-banner-progress {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+  font-size: 0.75rem;
+}
+
+.cw-banner-bar {
+  height: 0.38rem;
+  margin: 0.45rem 0 0.5rem;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cw-banner-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+}
+
+.cw-banner small {
+  color: #a9b6c5;
+  font-size: 0.72rem;
+}
+
+/* Cards */
+
+.cw-card {
+  padding: 1.35rem 1.4rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.7rem;
+  background: #fff;
+}
+
+.cw .cw-card h2 {
+  margin-top: 0.3rem;
+  color: var(--ws-navy);
+  font: 400 1.6rem/1.2 var(--ws-serif);
+}
+
+.cw .cw-card h2.cw-card-title {
+  margin-top: 0;
+  font-size: 1.35rem;
+}
+
+.cw .cw-summary {
+  margin-top: 0.85rem;
+  color: #3c4857;
+  font: 1rem/1.7 Georgia, 'Times New Roman', serif;
+  white-space: pre-line;
+}
+
+.cw .cw-empty {
+  margin-top: 0.8rem;
+  color: var(--ws-muted);
+  font-size: 0.88rem;
+}
+
+.cw-section-title {
+  color: var(--ws-navy);
+  font: 400 1.5rem/1.2 var(--ws-serif);
+}
+
+.cw .cw-section-sub {
+  margin-top: 0.2rem;
+  color: var(--ws-muted);
+  font-size: 0.78rem;
+}
+
+/* Rows: files, workbench, evidence, witnesses, tasks */
+
+.cw-files,
+.cw-workbench,
+.cw-list,
+.cw-people {
+  display: grid;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cw-files {
+  gap: 0.5rem;
+}
+
+.cw-workbench {
+  gap: 0.6rem;
+}
+
+.cw-list > li + li {
+  border-top: 1px solid var(--ws-row-line);
+}
+
+.cw-row,
+.cw-file {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.85rem 0.2rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+.cw-file,
+.cw-workbench .cw-row {
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.55rem;
+  background: #fff;
+}
+
+.cw-row-link,
+.cw-file {
+  cursor: pointer;
+}
+
+.cw-row-link:hover,
+.cw-file:hover {
+  border-color: #c7ccd0;
+}
+
+.cw-list .cw-row-link:hover {
+  background: #fafaf8;
+}
+
+.cw-row-link:focus-visible,
+.cw-file:focus-visible {
+  outline: 2px solid #608cb3;
+  outline-offset: 2px;
+}
+
+.cw-row-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.cw-row-body strong {
+  color: var(--ws-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cw-row-body small {
+  color: var(--ws-muted);
+  font-size: 0.72rem;
+}
+
+.cw .cw-row-body p,
+.cw .cw-row-desc {
+  margin-top: 0.2rem;
+  color: #4d5866;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.cw-row-end {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  color: #8a939b;
+}
+
+.cw-badge {
+  flex: none;
+  padding: 0.2rem 0.6rem;
+  border-radius: 1rem;
+  background: #eef0f1;
+  color: #5c6670;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cw-badge-done {
+  background: #e1eee7;
+  color: #426d59;
+}
+
+.cw-badge-overdue {
+  background: #f6e3e0;
+  color: var(--ws-red);
+}
+
+.cw .cw-overdue {
+  color: var(--ws-red);
+}
+
+/* Task checkboxes */
+
+.cw-check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  border: 1.5px solid #b8bfc6;
+  border-radius: 0.35rem;
+  background: #fff;
+  color: #fff;
+  cursor: pointer;
+}
+
+.cw-check svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.cw-check[aria-checked='true'],
+.cw-check-on {
+  border-color: #4e8067;
+  background: #4e8067;
+}
+
+.cw-check-static {
+  cursor: default;
+}
+
+.cw-check:focus-visible {
+  outline: 2px solid #608cb3;
+  outline-offset: 2px;
+}
+
+.cw-task-done .cw-row-body strong {
+  color: var(--ws-muted);
+  text-decoration: line-through;
+}
+
+/* Next task */
+
+.cw-next {
+  border-top: 3px solid var(--ws-red);
+}
+
+.cw .cw-next h3 {
+  margin-top: 0.6rem;
+  color: var(--ws-navy);
+  font: 400 1.3rem/1.25 var(--ws-serif);
+}
+
+.cw .cw-next-desc {
+  margin-top: 0.4rem;
+  color: #4d5866;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.cw .cw-next-due {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  color: var(--ws-muted);
+  font-size: 0.75rem;
+}
+
+.cw-next-due svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.cw-next-btn {
+  justify-content: center;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+/* Team */
+
+.cw-people {
+  gap: 0.7rem;
+}
+
+.cw-people li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.cw-people span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cw-people strong {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cw-people small {
+  color: var(--ws-muted);
+  font-size: 0.72rem;
+}
+
+/* Instructor note */
+
+.cw-note {
+  padding: 1.2rem 1.3rem;
+  border: 1px solid #e4d9c4;
+  border-left: 3px solid var(--ws-gold);
+  border-radius: 0.6rem;
+  background: #f8f2e6;
+}
+
+.cw-note-label {
+  color: #8b692f;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cw-note blockquote {
+  margin: 0.6rem 0 0;
+  color: #3c4857;
+  font: italic 0.95rem/1.6 Georgia, 'Times New Roman', serif;
+  white-space: pre-line;
+}
+
+.cw-note-by {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+  color: var(--ws-muted);
+  font-size: 0.75rem;
+}
+
+/* Narrow: one column. */
+
+@container (max-width: 760px) {
+  .cw-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 520px) {
+  .cw-title {
+    font-size: 1.75rem;
+  }
+
+  .cw-header {
+    align-items: flex-start;
+  }
+
+  /* Badges drop to their own line, right-aligned, so titles keep their width. */
+  .cw-row {
+    flex-wrap: wrap;
+  }
+
+  .cw-row-body {
+    flex-basis: calc(100% - 6rem);
+  }
+
+  .cw-row-end {
+    order: 2;
+  }
+
+  .cw-row .cw-badge {
+    order: 3;
+  }
+
+  .cw-row-body + .cw-badge,
+  .cw-row-end + .cw-badge {
+    margin-left: auto;
+  }
+}
+
+/* Breadcrumb above the header (student page and instructor preview). */
+
+.cw-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1.1rem;
+  color: var(--ws-muted);
+  font-size: 0.78rem;
+}
+
+.cw-breadcrumb a {
+  color: var(--ws-muted);
+  text-decoration: none;
+}
+
+.cw-breadcrumb a:hover {
+  color: var(--ws-navy);
+  text-decoration: underline;
+}
+
+.cw-breadcrumb svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.cw-breadcrumb [aria-current] {
+  overflow: hidden;
+  color: var(--ws-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Case file tab: one group per kind of file. */
+
+.cw-group {
+  margin-top: 1.25rem;
+}
+
+.cw .cw-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--ws-row-line);
+  color: var(--ws-navy);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cw-group h3 span {
+  color: var(--ws-muted);
+  font-weight: 600;
+}
+
+.cw-group .cw-list {
+  margin-top: 0.2rem;
+}
+
+/* "View all 8 files" under the overview's first few. */
+.cw-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ws-blue);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cw-more:hover {
+  text-decoration: underline;
+}
+
+.cw-more svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}

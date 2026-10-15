@@ -9,6 +9,8 @@ export interface CourseCase {
   title: string
   summary: string
   status: CaseStatus
+  /** Shown on every student's case dashboard. */
+  instructorNote: string
   createdAt: Date
   updatedAt: Date
 }
@@ -20,7 +22,8 @@ export interface CaseFields {
   status: CaseStatus
 }
 
-const CASE_COLUMNS = `id, title, summary, status, created_at AS "createdAt", updated_at AS "updatedAt"`
+const CASE_COLUMNS = `id, title, summary, status, instructor_note AS "instructorNote",
+  created_at AS "createdAt", updated_at AS "updatedAt"`
 
 /** Oldest first, so the term's first case stays on top. */
 export async function listCases(courseId: string) {

@@ -7,7 +7,7 @@ import { pool } from './pool.ts'
  * courses, and enrollments are left as they are (demo account passwords are
  * reset to the demo password). Log in as the demo instructor to manage the
  * courses, or as any demo student. LAW 540 also gets a draft placeholder case
- * with placeholder witnesses and tasks (its case file starts empty).
+ * if it has no cases yet.
  */
 if (isProduction) throw new Error('Refusing to seed demo data in production.')
 
@@ -46,33 +46,14 @@ function demoEmail(name: string) {
   return `${local}@example.com`
 }
 
-/** A placeholder case shell; its facts arrive with the structured fact pattern. */
+/**
+ * A placeholder case shell for a fresh database. The real case and its files
+ * are confidential, so they are entered through the app, not seeded.
+ */
 const DEMO_CASE = {
-  title: 'Rivera v. Thrill Park',
-  summary:
-    'A rollercoaster stalls at the top of its lift hill, and a rider is injured during the ' +
-    'evacuation. The rider sues the park for negligence. Placeholder case: the full fact ' +
-    'pattern is still to come.',
+  title: 'Practice case (placeholder)',
+  summary: 'A placeholder case to practice pairing students into teams and case worlds.',
 }
-
-// Placeholder witnesses, tasks, and note for the demo case. The case file starts
-// empty: the instructor uploads the real fact pattern sections.
-const DEMO_WITNESSES = [
-  { name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls when the train stalled.', audience: 'all' },
-  { name: 'Marcus Bell', role: 'Rider, eyewitness', description: 'Sat two rows behind the plaintiff.', audience: 'all' },
-  { name: 'Dr. Rachel Lin', role: 'Treating physician', description: "Treated the plaintiff's wrist.", audience: 'plaintiff' },
-  { name: 'Sam Okoro', role: 'Maintenance supervisor', description: 'Signed off on the June repairs.', audience: 'defense' },
-]
-
-const DAY = 24 * 60 * 60 * 1000
-const DEMO_TASKS = [
-  { title: 'Read the fact pattern', description: 'Note every fact about notice and timing.', dueInDays: 3, audience: 'all' },
-  { title: 'Review the maintenance log', description: 'What did the park know before the stall?', dueInDays: 7, audience: 'all' },
-  { title: "Outline the treating physician's testimony", description: '', dueInDays: 10, audience: 'plaintiff' },
-  { title: "Outline the maintenance supervisor's testimony", description: '', dueInDays: 10, audience: 'defense' },
-]
-
-const DEMO_NOTE = "Focus on what the maintenance log shows about notice. Don't overlook the timeline."
 
 const CLASS = CLASS_NAMES.map((name) => ({ name, email: demoEmail(name), role: 'student' }))
 
@@ -122,43 +103,14 @@ try {
     )
   }
 
-  // A draft case to pair the class into. Matched by title so re-seeding doesn't duplicate it.
+  // A draft case to pair the class into, only while the course has no cases, so
+  // re-seeding never adds one next to the instructor's real cases.
   await pool.query(
     `INSERT INTO cases (course_id, title, summary)
      SELECT $1, $2, $3
-     WHERE NOT EXISTS (SELECT 1 FROM cases WHERE course_id = $1 AND title = $2)`,
+     WHERE NOT EXISTS (SELECT 1 FROM cases WHERE course_id = $1)`,
     [classCourse.id, DEMO_CASE.title, DEMO_CASE.summary],
   )
-
-  // Workspace content for the demo case, only if it has none yet, so re-seeding
-  // never duplicates it or mixes with what an instructor added.
-  const { rows: demoCase } = await pool.query<{ id: string; empty: boolean }>(
-    `SELECT c.id,
-            NOT EXISTS (SELECT 1 FROM case_witnesses WHERE case_id = c.id)
-              AND NOT EXISTS (SELECT 1 FROM case_tasks WHERE case_id = c.id) AS empty
-     FROM cases c WHERE c.course_id = $1 AND c.title = $2`,
-    [classCourse.id, DEMO_CASE.title],
-  )
-  if (demoCase[0]?.empty) {
-    const caseId = demoCase[0].id
-    for (const w of DEMO_WITNESSES) {
-      await pool.query(
-        'INSERT INTO case_witnesses (case_id, name, role, description, audience) VALUES ($1, $2, $3, $4, $5)',
-        [caseId, w.name, w.role, w.description, w.audience],
-      )
-    }
-    for (const t of DEMO_TASKS) {
-      await pool.query(
-        'INSERT INTO case_tasks (case_id, title, description, due_at, audience) VALUES ($1, $2, $3, $4, $5)',
-        [caseId, t.title, t.description, new Date(Date.now() + t.dueInDays * DAY), t.audience],
-      )
-    }
-    await pool.query(`UPDATE cases SET instructor_note = $2 WHERE id = $1 AND instructor_note = ''`, [
-      caseId,
-      DEMO_NOTE,
-    ])
-    console.log(`Added placeholder witnesses and tasks to ${DEMO_CASE.title}.`)
-  }
 
   const { rows: counts } = await pool.query<{ total: number }>(
     'SELECT count(*)::int AS total FROM enrollments WHERE course_id = $1 AND user_id IS NOT NULL',

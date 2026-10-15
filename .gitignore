@@ -28,3 +28,6 @@ Thumbs.db
 
 # Case files stored locally when S3 is not configured
 .storage
+
+# Client fact pattern packet (confidential source files; uploaded to S3 through the app)
+.material/

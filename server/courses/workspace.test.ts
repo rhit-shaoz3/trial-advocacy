@@ -1,7 +1,7 @@
 import type request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, resetDatabase, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
+import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 
 let prof: request.Agent
 let course: { id: string; entryCode: string }
@@ -34,7 +34,7 @@ beforeEach(async () => {
   prof = (await signedInAgent('instructor', 'prof@example.com', 'Prof. Ruiz')).agent
   course = await createCourseAs(prof)
   await prof.post(`/api/courses/${course.id}/roster`).send({ emails: [1, 2, 3, 4].map(email) })
-  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera v. Thrill Park' })).body.case.id
+  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park' })).body.case.id
 })
 
 afterAll(async () => {
@@ -310,7 +310,7 @@ describe("a student's case dashboard", () => {
     expect((await defense.put(`${myCaseUrl()}/tasks/${plaintiffOnly.id}`).send({ done: true })).status).toBe(404)
     expect((await plaintiff.put(`${myCaseUrl()}/tasks/${plaintiffOnly.id}`).send({ done: 'yes' })).status).toBe(400)
 
-    await prof.patch(caseUrl()).send({ title: 'Rivera v. Thrill Park', summary: '', status: 'closed' })
+    await prof.patch(caseUrl()).send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park', summary: '', status: 'closed' })
     const closed = await plaintiff.put(`${myCaseUrl()}/tasks/${plaintiffOnly.id}`).send({ done: true })
     expect(closed.status).toBe(409)
   })

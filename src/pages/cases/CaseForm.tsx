@@ -6,10 +6,13 @@ import {
   type CourseCaseStatus,
 } from '../../courses/types'
 import { STATUS_HINT, STATUS_LABEL } from './caseStatus'
+import { ImportantFactsField } from './ImportantFactsField'
+import { cleanFacts, missingSide, SIDE_FACT_LABEL, toRows } from './factRows'
 
 /**
- * The case title/summary form. Creating starts a draft; editing (when
- * `initial` is given) also lets the instructor change the status.
+ * The case title/summary form, with the most important facts for each side.
+ * Creating starts a draft; editing (when `initial` is given) also lets the
+ * instructor change the status.
  */
 export function CaseForm({
   initial,
@@ -35,15 +38,26 @@ export function CaseForm({
   const [summary, setSummary] = useState(initial?.summary ?? '')
   const [status, setStatus] = useState<CourseCaseStatus>(initial?.status ?? 'draft')
   const [note, setNote] = useState(initial?.instructorNote ?? '')
+  const [plaintiffFacts, setPlaintiffFacts] = useState(() => toRows(initial?.importantFacts.plaintiff ?? []))
+  const [defenseFacts, setDefenseFacts] = useState(() => toRows(initial?.importantFacts.defense ?? []))
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    const importantFacts = { plaintiff: cleanFacts(plaintiffFacts), defense: cleanFacts(defenseFacts) }
+    const missing = missingSide(importantFacts)
+    if (missing) {
+      setError(`List at least one important fact for the ${SIDE_FACT_LABEL[missing]}.`)
+      return
+    }
     setSubmitting(true)
     try {
-      await onSubmit(initial ? { title, summary, status } : { title, summary }, note)
+      await onSubmit(
+        initial ? { title, summary, status, importantFacts } : { title, summary, importantFacts },
+        note,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setSubmitting(false)
@@ -86,6 +100,14 @@ export function CaseForm({
           rows={3}
         />
       </label>
+      <div className="case-facts">
+        <p className="muted case-form-hint">
+          List the most important facts for each side, at least one each. The AI witnesses never
+          contradict them, and students don&rsquo;t see them.
+        </p>
+        <ImportantFactsField side="plaintiff" rows={plaintiffFacts} onChange={setPlaintiffFacts} />
+        <ImportantFactsField side="defense" rows={defenseFacts} onChange={setDefenseFacts} />
+      </div>
       {initial && (
         <label className="case-summary-field">
           Note to students (optional)

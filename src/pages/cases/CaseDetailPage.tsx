@@ -13,6 +13,7 @@ import { MaterialsSection } from './content/MaterialsSection'
 import { StudentViewSection } from './content/StudentViewSection'
 import { TasksSection } from './content/TasksSection'
 import { WitnessesSection } from './content/WitnessesSection'
+import { PhasePanel } from './PhasePanel'
 import { TeamsSection } from './TeamsSection'
 import '../CoursePage.css'
 import './Cases.css'
@@ -176,6 +177,8 @@ export function CaseDetailPage() {
               </div>
             </header>
           )}
+
+          <PhasePanel courseId={courseId} courseCase={courseCase} onChanged={setCourseCase} />
 
           {courseCase.status === 'draft' && (
             <LaunchPanel

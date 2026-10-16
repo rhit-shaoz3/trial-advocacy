@@ -209,6 +209,13 @@ ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS text_error text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS in_world_date date;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS disputed_issues text NOT NULL DEFAULT '';
 
+-- Every case world in a case moves through the same phases, when the
+-- instructor says so: subpoena (each side sees only its own witnesses),
+-- investigate (the background investigator opens), deposition (every witness
+-- is revealed to both sides).
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS phase text NOT NULL DEFAULT 'subpoena'
+  CHECK (phase IN ('subpoena', 'investigate', 'deposition'));
+
 -- A witness becomes an AI witness once it has a side and a deposition. The
 -- deposition is its own sworn account; `known_material_ids` are the other case
 -- files the witness has seen. `defending_counsel` is the witness's lawyer, who

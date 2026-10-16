@@ -9,6 +9,7 @@ import {
   type CaseTask,
   type Witness,
 } from './caseContent.ts'
+import type { CasePhase } from './cases.ts'
 import type { Side } from './matchups.ts'
 import { listMyCases, type MyCase } from './myCases.ts'
 import { listTeams } from './teams.ts'
@@ -16,8 +17,26 @@ import { isAiWitness } from '../witness/profile.ts'
 
 /** What students see of a witness: never its AI setup (deposition file, persona, files it has seen). */
 export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'audience'> & {
+  /** The side the witness testifies for, or null for neither. */
+  side: Side | null
   /** Whether the witness is an AI witness the team can interview. */
   canInterview: boolean
+}
+
+/**
+ * The witnesses a team on `side` can see (and interview) in `phase`. Until the
+ * deposition phase, a witness for one side is hidden from the other, and the
+ * rest follow their audience; in deposition, every witness is revealed to
+ * both sides. With no side yet, only shared witnesses with no side show.
+ */
+export function visibleWitnesses<W extends Pick<Witness, 'audience' | 'alignedSide'>>(
+  witnesses: W[],
+  side: Side | null,
+  phase: CasePhase,
+) {
+  if (phase === 'deposition') return witnesses
+  const audiences: string[] = visibleTo(side)
+  return witnesses.filter((w) => audiences.includes(w.audience) && (w.alignedSide === null || w.alignedSide === side))
 }
 
 // Shape sent to the client; matches `CaseWorkspace` in src/courses/types.ts.
@@ -27,6 +46,7 @@ export interface CaseWorkspace {
     title: string
     summary: string
     status: 'draft' | 'active' | 'closed'
+    phase: CasePhase
     instructorNote: string
   }
   team: MyCase['team']
@@ -35,6 +55,8 @@ export interface CaseWorkspace {
   side: Side | null
   materials: CaseMaterial[]
   witnesses: WorkspaceWitness[]
+  /** Whether the background investigator is open yet (from the investigate phase on). */
+  investigatorAvailable: boolean
   tasks: (CaseTask & { completedAt: Date | null; completedBy: string | null })[]
   /** True when the instructor is looking at it as a team would; nothing can be changed. */
   preview: boolean
@@ -42,7 +64,7 @@ export interface CaseWorkspace {
 
 async function findCaseRow(courseId: string, caseId: string) {
   const { rows } = await pool.query<CaseWorkspace['case']>(
-    `SELECT id, title, summary, status, instructor_note AS "instructorNote"
+    `SELECT id, title, summary, status, phase, instructor_note AS "instructorNote"
      FROM cases WHERE course_id = $1 AND id = $2`,
     [courseId, caseId],
   )
@@ -60,7 +82,7 @@ async function assemble(
   const audiences = visibleTo(side)
   const [materials, witnesses, tasks, completions] = await Promise.all([
     listMaterials(caseRow.id, audiences),
-    listWitnesses(caseRow.id, audiences),
+    listWitnesses(caseRow.id),
     listTasks(caseRow.id, audiences),
     teamId ? listCompletions(caseRow.id, teamId) : Promise.resolve([]),
   ])
@@ -71,14 +93,16 @@ async function assemble(
     world,
     side,
     materials,
-    witnesses: witnesses.map((w) => ({
+    witnesses: visibleWitnesses(witnesses, side, caseRow.phase).map((w) => ({
       id: w.id,
       name: w.name,
       role: w.role,
       description: w.description,
       audience: w.audience,
+      side: w.alignedSide,
       canInterview: isAiWitness(w),
     })),
+    investigatorAvailable: caseRow.phase !== 'subpoena',
     tasks: tasks.map((t) => ({
       ...t,
       completedAt: doneBy.get(t.id)?.completedAt ?? null,

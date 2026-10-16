@@ -8,7 +8,7 @@ import { fakeCourseService } from '../test/fakeCourseService'
 import { StudentCasePage } from './StudentCasePage'
 
 const workspace: CaseWorkspace = {
-  case: { id: 'k1', title: 'Rivera v. Thrill Park', summary: '', status: 'active', instructorNote: '' },
+  case: { id: 'k1', title: 'Rivera v. Thrill Park', summary: '', status: 'active', phase: 'subpoena', instructorNote: '' },
   team: { number: 1, members: [{ email: 'ada@example.com', name: 'Ada Lawyer', joined: true, you: true }] },
   world: null,
   side: null,
@@ -26,6 +26,7 @@ const workspace: CaseWorkspace = {
     },
   ],
   witnesses: [],
+  investigatorAvailable: false,
   tasks: [
     { id: 't1', title: 'Read it', description: '', dueAt: null, audience: 'all', completedAt: null, completedBy: null },
   ],

@@ -94,22 +94,59 @@ describe('MaterialsSection', () => {
     expect(onChange).toHaveBeenCalled()
   })
 
-  it('uploads chosen files with the selected audience and description', async () => {
-    const evidence = { ...factPattern, id: 'm2', filename: 'photo.jpg', contentType: 'image/jpeg' }
-    const uploadMaterial = vi.fn().mockResolvedValue(evidence)
-    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, { uploadMaterial })
+  it('lists chosen files to label, then uploads each with its own label and audience', async () => {
+    const photo = new File(['img'], 'photo.jpg', { type: 'image/jpeg' })
+    const log = new File(['log'], 'Ride log (March).pdf', { type: 'application/pdf' })
+    const uploadMaterial = vi.fn((_c: string, _k: string, file: File, input: { description: string }) =>
+      Promise.resolve({ ...factPattern, id: file.name, filename: file.name, description: input.description }),
+    )
+    const onChange = vi.fn()
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" onChange={onChange} />, { uploadMaterial })
 
     await screen.findByText(/No files uploaded yet/)
-    await user.selectOptions(screen.getByLabelText('Visible to'), 'Defense only')
-    await user.type(screen.getByLabelText(/Description/), 'Ride photo')
-    const file = new File(['img'], 'photo.jpg', { type: 'image/jpeg' })
-    fireEvent.change(screen.getByTestId('material-input'), { target: { files: [file] } })
+    await user.selectOptions(screen.getByLabelText('Visible to (new files)'), 'Defense only')
+    fireEvent.change(screen.getByTestId('material-input'), { target: { files: [photo, log] } })
 
+    // Nothing uploads until the files are labeled and confirmed.
+    expect(screen.getByRole('heading', { name: 'Ready to upload (2)' })).toBeInTheDocument()
+    expect(uploadMaterial).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Label for photo.jpg')).toHaveValue('photo')
+    expect(screen.getByLabelText('Label for Ride log (March).pdf')).toHaveValue('Ride log (March)')
+    expect(screen.getByLabelText('Who will see photo.jpg')).toHaveValue('defense')
+
+    await user.clear(screen.getByLabelText('Label for photo.jpg'))
+    expect(screen.getByRole('button', { name: 'Upload 2 files' })).toBeDisabled()
+    await user.type(screen.getByLabelText('Label for photo.jpg'), 'Ride photo')
+    await user.selectOptions(screen.getByLabelText('Who will see Ride log (March).pdf'), 'Everyone')
+    await user.click(screen.getByRole('button', { name: 'Upload 2 files' }))
+
+    expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', photo, { audience: 'defense', description: 'Ride photo' })
+    expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', log, { audience: 'all', description: 'Ride log (March)' })
     expect(await screen.findByRole('link', { name: 'photo.jpg' })).toBeInTheDocument()
-    expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', file, {
-      audience: 'defense',
-      description: 'Ride photo',
-    })
+    expect(screen.queryByRole('heading', { name: /Ready to upload/ })).not.toBeInTheDocument()
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('takes dropped files into the list, and keeps any that fail to upload', async () => {
+    const good = new File(['a'], 'a.pdf', { type: 'application/pdf' })
+    const bad = new File(['b'], 'b.pdf', { type: 'application/pdf' })
+    const uploadMaterial = vi.fn((_c: string, _k: string, file: File) =>
+      file === bad ? Promise.reject(new Error('Upload failed.')) : Promise.resolve({ ...factPattern, id: 'a', filename: 'a.pdf' }),
+    )
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, { uploadMaterial })
+    await screen.findByText(/No files uploaded yet/)
+
+    fireEvent.drop(screen.getByTestId('material-drop'), { dataTransfer: { files: [good, bad] } })
+    expect(screen.getByRole('heading', { name: 'Ready to upload (2)' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Remove a.pdf' }))
+    fireEvent.drop(screen.getByTestId('material-drop'), { dataTransfer: { files: [good] } })
+    await user.click(screen.getByRole('button', { name: 'Upload 2 files' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('b.pdf: Upload failed.')
+    expect(screen.getByRole('heading', { name: 'Ready to upload (1)' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Label for b.pdf')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'a.pdf' })).toBeInTheDocument()
   })
 
   it('refuses files over 10 MB without uploading, and deletes after confirming', async () => {
@@ -123,6 +160,7 @@ describe('MaterialsSection', () => {
     Object.defineProperty(huge, 'size', { value: 100 * 1024 * 1024 + 1 })
     fireEvent.change(screen.getByTestId('material-input'), { target: { files: [huge] } })
     expect(await screen.findByRole('alert')).toHaveTextContent('huge.pdf: That file is too large.')
+    expect(screen.queryByRole('heading', { name: /Ready to upload/ })).not.toBeInTheDocument()
     expect(service.uploadMaterial).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: 'Delete Fact pattern.pdf' }))

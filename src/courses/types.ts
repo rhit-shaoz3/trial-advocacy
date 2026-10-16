@@ -308,7 +308,7 @@ export interface CourseService {
   materialDownloadUrl(courseId: string, caseId: string, materialId: string): string
   /** The file's transcription (what the AI witnesses read), as plain text. */
   materialTextUrl(courseId: string, caseId: string, materialId: string): string
-  /** Transcribes the file again; resolves when done. */
+  /** Starts transcribing the file again; resolves at once with it pending. */
   retryTranscription(courseId: string, caseId: string, materialId: string): Promise<CaseMaterial>
   listWitnesses(courseId: string, caseId: string): Promise<Witness[]>
   createWitness(courseId: string, caseId: string, input: WitnessInput): Promise<Witness>

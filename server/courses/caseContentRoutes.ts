@@ -22,6 +22,7 @@ import {
   listTasks,
   listWitnesses,
   removeStoredFiles,
+  setMaterialText,
   updateMaterial,
   updateTask,
   updateWitness,
@@ -30,7 +31,7 @@ import {
   type TaskFields,
   type WitnessFields,
 } from './caseContent.ts'
-import { queueTranscription, transcribeMaterial } from './materialText.ts'
+import { queueTranscription } from './materialText.ts'
 import { askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
 
 const MAX_FILENAME_LENGTH = 200
@@ -200,12 +201,17 @@ materialsRouter.get('/:materialId/text', async (req, res) => {
   res.send(file.text)
 })
 
-/** Transcribes the file again (after a failure, say) and returns it with its new status. */
+/**
+ * Transcribes the file again (after a failure, say) in the background and
+ * returns it as pending; the page checks back until it is done. Long PDFs
+ * take longer than Heroku's 30-second request limit, so this never waits.
+ */
 materialsRouter.post('/:materialId/text', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
   const caseId = req.courseCase!.id
   if (!(await getMaterialText(caseId, id))) throw new HttpError(404, 'File not found.')
-  await transcribeMaterial(id)
+  await setMaterialText(id, { status: 'pending' })
+  queueTranscription(id)
   const material = (await listMaterials(caseId)).find((m) => m.id === id)
   if (!material) throw new HttpError(404, 'File not found.')
   res.json({ material })

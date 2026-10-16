@@ -107,7 +107,11 @@ describe('case file transcription', () => {
 
     ai.transcribe = async () => '[Photo: the booth]'
     const retried = await prof.post(`${caseUrl()}/materials/${failed.id}/text`)
-    expect(retried.body.material).toMatchObject({ textStatus: 'ready', textError: null })
+    // Retry answers at once and reads the file in the background.
+    expect(retried.body.material).toMatchObject({ textStatus: 'pending', textError: null })
+    await transcriptionsSettled()
+    const done = (await prof.get(`${caseUrl()}/materials`)).body.materials.find((m: { id: string }) => m.id === failed.id)
+    expect(done).toMatchObject({ textStatus: 'ready', textError: null })
   })
 
   it('marks files with nothing to read', async () => {

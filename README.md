@@ -187,6 +187,9 @@ The `Procfile` runs migrations on each release and starts the API, which also se
 ```bash
 heroku addons:create heroku-postgresql:essential-0
 heroku config:set SESSION_SECRET=<long random string>
+heroku config:set ANTHROPIC_API_KEY=<your Claude API key>
 ```
 
-Case files are stored in Amazon S3, and the app won't start in production without it. Follow [docs/s3-setup.md](docs/s3-setup.md) to create the bucket and access key, then set `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`. Locally, without those settings, files go to a git-ignored `.storage/` folder.
+Without `ANTHROPIC_API_KEY`, uploads still work but files aren't transcribed and the AI witnesses say they aren't set up. Set a monthly spend limit in the Claude Console; each student question costs a couple of cents.
+
+Case files are stored in Amazon S3, and the app won't start in production without it. Follow [docs/s3-setup.md](docs/s3-setup.md) to create the bucket and access key, then set `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`. After the first deploy, add the app's `https://<app>.herokuapp.com` address to the bucket's CORS `AllowedOrigins` (step 3 there), or uploads fail. Locally, without those settings, files go to a git-ignored `.storage/` folder.

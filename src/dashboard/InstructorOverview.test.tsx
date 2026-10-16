@@ -1,10 +1,21 @@
 import { screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { trialAd } from '../test/courseFixtures'
-import { fakeCasesApi } from '../test/fakeCasesApi'
 import { fakeCourseService } from '../test/fakeCourseService'
 import { renderWithProviders } from '../test/renderWithProviders'
 import { InstructorOverview } from './InstructorOverview'
+
+const smith = {
+    id: 'k1',
+    title: 'Smith v. Jones',
+    summary: '',
+    status: 'active' as const,
+    instructorNote: '',
+    inWorldDate: null,
+    disputedIssues: '',
+    createdAt: '2026-10-01T15:00:00.000Z',
+    updatedAt: '2026-10-01T15:00:00.000Z',
+  }
 
 describe('instructor overview', () => {
   it('greets the instructor and sums up courses, students, cases and requests', async () => {
@@ -14,17 +25,7 @@ describe('instructor overview', () => {
           trialAd,
           { ...trialAd, id: 'c2', code: 'LAW 520', title: 'Evidence', studentCount: 3, requestCount: 0 },
         ]),
-      }),
-      casesApi: fakeCasesApi({
-        listAllCases: vi.fn().mockResolvedValue([
-          {
-            id: 'k1',
-            name: 'Smith v. Jones',
-            courseId: 'c1',
-            courseName: 'LAW 540: Trial Advocacy',
-            published: { documents: true, characters: false, teams: false },
-          },
-        ]),
+        listCases: vi.fn((courseId: string) => Promise.resolve(courseId === 'c1' ? [smith] : [])),
       }),
     })
 
@@ -33,7 +34,7 @@ describe('instructor overview', () => {
       screen.getByText(label, { selector: '.stat-head span' }).closest('.stat-card')!
     expect(stat('Courses')).toHaveTextContent('2')
     expect(stat('Students')).toHaveTextContent('4')
-    expect(stat('Cases')).toHaveTextContent('1 published to students')
+    expect(stat('Cases')).toHaveTextContent('1 launched to students')
     expect(stat('Seeking admission')).toHaveTextContent('2')
 
     const tile = screen.getByRole('article', { name: 'LAW 540: Trial Advocacy' })

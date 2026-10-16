@@ -32,5 +32,7 @@ describe('workspace formatting', () => {
     expect(caseInitials('Anderson v. Caldwell')).toBe('AC')
     expect(caseInitials('State v Hale')).toBe('SH')
     expect(caseInitials('In re Marriage of Lopez')).toBe('IL')
+    expect(caseInitials('Workspace check (temporary)')).toBe('WT')
+    expect(initials('Liam O’Connor')).toBe('LO')
   })
 })

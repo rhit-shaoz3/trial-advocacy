@@ -3,9 +3,10 @@ import { useCallback } from 'react'
 import { Link } from 'react-router'
 import { useLoad } from '../api/useLoad'
 import { useAuth } from '../auth/useAuth'
-import { useCasesApi } from '../cases/CasesApiContext'
+import { useCourseService } from '../courses/CourseServiceContext'
 import { firstName } from '../layout/initials'
 import { PageFrame } from '../layout/PageFrame'
+import { courseName, loadStudentCases } from '../pages/cases/caseLibrary'
 import { StudentCourseList } from './StudentCourseList'
 import { StudentNotices } from './StudentNotices'
 import { todayLabel } from './todayLabel'
@@ -15,8 +16,12 @@ import './Dashboard.css'
 export function StudentOverview() {
   const { user } = useAuth()
   const home = useStudentHome()
-  const casesApi = useCasesApi()
-  const cases = useLoad(useCallback(() => casesApi.listAllCases(), [casesApi]))
+  const service = useCourseService()
+  const library = useLoad(useCallback(() => loadStudentCases(service), [service]))
+  const cases = {
+    data: library.data?.flatMap(({ course, cases }) => cases.map((k) => ({ ...k, course }))) ?? null,
+    error: library.error,
+  }
 
   return (
     <PageFrame crumbs={[{ label: 'Student workspace' }, { label: 'Overview' }]}>
@@ -47,17 +52,17 @@ export function StudentOverview() {
             {cases.data?.length === 0 && (
               <div className="ws-empty">
                 <p className="case-empty-title">Nothing assigned yet.</p>
-                <p className="ws-subtle">Your cases appear here once your instructor releases them.</p>
+                <p className="ws-subtle">Your cases appear here once your instructor launches them.</p>
               </div>
             )}
             <div className="case-card-grid">
               {cases.data?.map((c) => (
-                <Link key={c.id} to={`/courses/${c.courseId}/cases/${c.id}`} className="ws-panel case-tile">
+                <Link key={c.id} to={`/courses/${c.course.id}/cases/${c.id}`} className="ws-panel case-tile">
                   <span className="ws-icon-tile ws-tone-blue" aria-hidden>
                     <Briefcase size={18} />
                   </span>
-                  <span className="ws-eyebrow">{c.courseName}</span>
-                  <h3 className="case-tile-name">{c.name}</h3>
+                  <span className="ws-eyebrow">{courseName(c.course)}</span>
+                  <h3 className="case-tile-name">{c.title}</h3>
                   <span className="ws-link">
                     Open case <ArrowRight size={16} aria-hidden />
                   </span>

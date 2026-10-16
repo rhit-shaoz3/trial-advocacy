@@ -53,6 +53,8 @@ To preview a student's course home page with made-up cases, activity, and deadli
 | `npm run dev:server` | Start only the API (restarts on file changes)        |
 | `npm run db:migrate` | Apply `server/db/schema.sql` to the database         |
 | `npm run db:seed`    | Add demo accounts and courses (dev only)             |
+| `npm run storage:migrate` | Move case files still stored in Postgres into storage (runs on each Heroku release) |
+| `npm run storage:check` | Check the case file storage (S3 or `.storage/`) end to end |
 | `npm run build`      | Type-check everything and build the web app (`dist/`) |
 | `npm start`          | Run the API in production (also serves `dist/`)      |
 | `npm test`           | Run all tests once                                   |
@@ -92,7 +94,12 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | POST   | `/api/courses/:id/invitation/accept` |                   | `204`; joins the course |
 | POST   | `/api/courses/:id/invitation/reject` |                   | `204`; takes the email off the roster |
 | POST   | `/api/courses/:id/denial/dismiss` |                      | `204`; clears a "request denied" notice |
-| GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. `cases` are the course's case cards (students only see released ones); activity and deadlines aren't stored yet, so those lists are empty for now |
+| GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Students get the active and closed cases they're on a team in, each with `world: { number, side }` (or `null` before matching), `progress` (percent of their team's tasks done), and `nextTask`; `upcoming` lists their open tasks' deadlines and `stats` counts completed tasks. The instructor gets every active and closed case with `worldCount`. `activity` is always empty for now |
+| GET    | `/api/courses/:id/my-cases` |                             | Members: `{ cases: [{ id, title, summary, status, team, world }] }`, without drafts; `team` is `{ number, members }` (each member has `you`) or `null` before pairing; `world` is `{ number, side, opponents: { number, members } }` or `null` before matching |
+| GET    | `/api/courses/:id/my-cases/:caseId` |                     | Students: `{ workspace }`, the case dashboard: `{ case, team, world, side, materials, witnesses, tasks, preview }`, showing only shared items and their side's. Witnesses carry only `{ id, name, role, description, audience, canInterview }`, never their AI setup. Each task has the team's `completedAt` / `completedBy`. `404` for drafts |
+| GET    | `/api/courses/:id/my-cases/:caseId/materials/:materialId/file` | | `302` to a 5-minute download link, if the student's side can see it |
+| GET / POST | `/api/courses/:id/my-cases/:caseId/witnesses/:witnessId/interview` (`/questions`, `/restart`) | `{ question }` | The team's interview of a witness its side can see, shared by both partners and always asked as the team's own side (any `side` in the request is ignored); same shapes as the instructor's. `409` before the team is matched, or once the case is closed (read-only) |
+| PUT    | `/api/courses/:id/my-cases/:caseId/tasks/:taskId` | `{ done: boolean }`   | `{ workspace }`; marks it done (or not) for the student's whole team. `409` if the case is closed or the student has no team |
 | GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode`, `studentCount`, `requestCount` and `invitedCount` |
 | POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
 
@@ -102,43 +109,83 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | ------ | -------------------------------------------- | -------------------------------- | ------ |
 | GET    | `/api/courses/:id`                           |                                  | `{ course }` |
 | PATCH  | `/api/courses/:id`                           | `{ code, title, season, year }`  | `{ course }`; entry code and roster unchanged |
-| DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster and fact patterns |
+| DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster and the cases with everything in them |
 | GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, userId, status }] }`, status `joined`, `requested` or `invited` |
 | POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | Invites them: `{ added, skipped: [{ email, reason }], roster }` |
 | POST   | `/api/courses/:id/roster/requests`           | `{ userIds, decision: 'admit' \| 'deny' }` | `{ updated, roster }` for students who asked to join |
 | DELETE | `/api/courses/:id/roster/:email`             |                                  | `204`, `404` if not on the roster |
-| GET    | `/api/courses/:id/fact-patterns`             |                                  | `{ factPatterns: [{ id, filename, sizeBytes, uploadedAt }] }` |
-| POST   | `/api/courses/:id/fact-patterns`             | Raw file body; `X-Filename` (URI-encoded) | `201 { factPattern }`; `413` over 10 MB, `415` not PDF/Word/text |
-| GET    | `/api/courses/:id/fact-patterns/:fileId/file` |                                 | The file, as a download |
-| DELETE | `/api/courses/:id/fact-patterns/:fileId`     |                                  | `204` |
+| GET    | `/api/courses/:id/cases`                     |                                  | `{ cases: [{ id, title, summary, status, createdAt, updatedAt }] }`, oldest first |
+| POST   | `/api/courses/:id/cases`                     | `{ title, summary?, status? }`   | `201 { case }`; status defaults to `draft` |
+| GET    | `/api/courses/:id/cases/:caseId`             |                                  | `{ case }` |
+| PATCH  | `/api/courses/:id/cases/:caseId`             | `{ title, summary, status }`     | `{ case }`; status is required here |
+| DELETE | `/api/courses/:id/cases/:caseId`             |                                  | `204` |
+| GET    | `/api/courses/:id/cases/:caseId/teams`       |                                  | `{ teams: [{ id, number, members }], unpaired, matchups: [{ id, number, plaintiffTeamId, defenseTeamId }] }` (members and unpaired are roster entries). Every team and matchup change responds with this shape |
+| POST   | `/api/courses/:id/cases/:caseId/teams`       | `{ emails: string[] }` (1–3)     | `201`, the teams; `400` not on the roster, `409` already on a team |
+| POST   | `/api/courses/:id/cases/:caseId/teams/auto`  | `{ teamSize? }` (1–5, default 2)  | The teams, after grouping every unpaired student at random into teams of `teamSize`; leftovers join a team one each, or make a smaller team when there are more of them than teams. `409` if nobody is left |
+| DELETE | `/api/courses/:id/cases/:caseId/teams`       |                                  | The teams (now none): unpairs everyone |
+| DELETE | `/api/courses/:id/cases/:caseId/teams/:teamId` |                                | The teams, without that one |
+| POST   | `/api/courses/:id/cases/:caseId/teams/:teamId/members` | `{ email }`              | The teams; `409` if the team already has 3 |
+| DELETE | `/api/courses/:id/cases/:caseId/teams/:teamId/members/:email` |                   | The teams; a team left empty is deleted |
+| POST   | `/api/courses/:id/cases/:caseId/matchups`    | `{ plaintiffTeamId, defenseTeamId }` | `201`, the teams (with the new matchup); `409` if a team is already in a world |
+| POST   | `/api/courses/:id/cases/:caseId/matchups/auto` |                                | The teams, after matching every waiting team; `409` if fewer than two are waiting |
+| DELETE | `/api/courses/:id/cases/:caseId/matchups`    |                                  | The teams, with no matchups left |
+| POST   | `/api/courses/:id/cases/:caseId/matchups/:matchupId/swap` |                     | The teams, with that world's sides swapped |
+| DELETE | `/api/courses/:id/cases/:caseId/matchups/:matchupId` |                          | The teams, without that world |
+| GET    | `/api/courses/:id/cases/:caseId/materials` |                                 | `{ materials: [{ id, audience, filename, description, contentType, sizeBytes, uploadedAt, textStatus, textError, published }] }`, in upload order. `textStatus` is the AI transcription: `pending`, `ready`, `failed` (with `textError`), or `none` |
+| POST   | `/api/courses/:id/cases/:caseId/materials/uploads` | `{ filename, size }` | Step 1 of an upload: `201 { upload: { key, url, headers } }`, a 15-minute link to `PUT` the file to (S3 in production) with exactly those headers. `413` over 100 MB, `415` unless a document (PDF, Word, text), image (PNG, JPEG, GIF, WebP), audio (MP3, M4A, WAV), or video (MP4, MOV, WebM) |
+| POST   | `/api/courses/:id/cases/:caseId/materials` | `{ uploadKey, filename, audience?, description? }` | Step 2, after the `PUT`: `201 { material }`; `audience` is `all` (default), `plaintiff`, `defense`, or `instructor` (never shown to students). Starts the file's transcription. `400` if the upload didn't finish or belongs to another case |
+| PATCH  | `/api/courses/:id/cases/:caseId/materials/:materialId` | `{ audience, description }` | `{ material }` |
+| PUT    | `/api/courses/:id/cases/:caseId/materials/:materialId/published` | `{ published }` | `{ material }`. New files start unpublished |
+| GET    | `/api/courses/:id/cases/:caseId/materials/:materialId/file` |                  | `302` to a 5-minute download link |
+| GET / POST | `/api/courses/:id/cases/:caseId/materials/:materialId/text` | | The transcription as `text/plain` (`404` until ready) / transcribe again: `{ material }` when done |
+| DELETE | `/api/courses/:id/cases/:caseId/materials/:materialId` |                       | `204`; also deletes the stored file |
+| GET / POST | `/api/courses/:id/cases/:caseId/witnesses` | `{ name, role?, description?, audience?, alignedSide?, depositionMaterialId?, knownMaterialIds?, personaNotes?, defendingCounsel? }` | `{ witnesses }` / `201 { witness }`. With `alignedSide` (`plaintiff` / `defense`) and a deposition file from this case, an AI witness |
+| PUT / DELETE | `/api/courses/:id/cases/:caseId/witnesses/:witnessId` | Same as POST            | `{ witness }` / `204` |
+| PUT    | `/api/courses/:id/cases/:caseId/witnesses/:witnessId/published` | `{ published }` | `{ witness }`. New witnesses start unpublished |
+| GET | `/api/courses/:id/cases/:caseId/witnesses/:witnessId/interview?side=` | | The instructor's test interview as `plaintiff` or `defense`, kept apart from every team's: `{ interview: { id, side, witness, turns, maxTurns, canAsk, notice } }` |
+| POST | `…/witnesses/:witnessId/interview/questions?side=` | `{ question }` | Asks the witness; `{ interview }` with the answer. `409` if the witness isn't set up, `503` without an API key |
+| POST | `…/witnesses/:witnessId/interview/restart?side=` | | Ends it and starts an empty one: `{ interview }` |
+| PUT | `/api/courses/:id/cases/:caseId/witness-settings` | `{ inWorldDate: 'YYYY-MM-DD' \| null, disputedIssues }` | `{ case }`. Shared by the case's AI witnesses |
+| GET / POST | `/api/courses/:id/cases/:caseId/tasks` | `{ title, description?, dueAt?, audience? }` | `{ tasks }` (soonest due first) / `201 { task }`; `dueAt` is an ISO timestamp or `null` |
+| PUT / DELETE | `/api/courses/:id/cases/:caseId/tasks/:taskId` | Same as POST                   | `{ task }` / `204`; deleting removes teams' completions |
+| PUT    | `/api/courses/:id/cases/:caseId/note` | `{ note }`                                    | `{ case }`; the instructor note shown on every student's case dashboard |
+| GET    | `/api/courses/:id/cases/:caseId/launch` |                                             | `{ checks: [{ key, ok, message }] }`: everyone paired, every team matched, at least one case file uploaded |
+| POST   | `/api/courses/:id/cases/:caseId/launch` |                                             | `{ case }`, now `active`; `409` if not ready (the message lists what's missing) or already launched |
+| GET    | `/api/courses/:id/cases/:caseId/preview?side=&matchup=` |                             | `{ workspace }`: the case dashboard as a team on `side` sees it (that world's team, with `matchup`), with `preview: true` |
 
 ### Cases
 
-A course's instructor builds each case (files, characters, teams, match-ups) and releases each section to students separately. Students only see cases with something released.
+**Cases** are shared by the whole class. A case's `status` is `draft` (hidden from students), `active`, or `closed`. Students are paired into **teams** per case: two by default (or the size the instructor picks for auto-pair, up to five), with leftovers joining a team one each; a team holds at most six. Instructors can also drag students between teams. Team members are roster entries, so invited students who haven't accepted yet can be paired too (and count for launch), but students who asked to join and aren't admitted, or were denied, can't. Students open a case only once they've joined, and removing a student from the roster takes them off their teams. Auto-pairing avoids repeating partners from the course's other cases where it can. Each **matchup** sets two teams against each other as plaintiff and defense, and is one **case world** (matchup `number` 1 is World A). The side is stored on the matchup, not the team. Auto-matching avoids opponents students faced in the course's other cases and gives each team the side its members have argued less. Deleting a team deletes its matchup. A closed case's teams and matchups can't change (`409`).
 
-| Method | Path | Who | Body | Result |
-| ------ | ---- | --- | ---- | ------ |
-| GET    | `/api/cases` | both | | `{ cases }` across all the user's courses; students only get cases with something published |
-| GET    | `/api/courses/:id/cases` | members | | `{ cases }`; students only get cases with something published |
-| POST   | `/api/courses/:id/cases` | instructor | `{ name }` | `201 { case }` |
-| GET    | `/api/cases/:caseId` | members | | `{ case }`: everything for the instructor; for a student, only published sections, filtered to their side |
-| PATCH  | `/api/cases/:caseId/publish` | instructor | `{ documents?, characters?, teams? }` (booleans) | `{ case }` |
-| POST   | `/api/cases/:caseId/documents?side=` | instructor | Raw file body; `X-Filename` (URI-encoded), same rules as fact patterns | `201 { document }` |
-| PATCH / DELETE | `/api/cases/:caseId/documents/:docId` | instructor | `{ side }` | `{ document }` / `204` |
-| GET    | `/api/cases/:caseId/documents/:docId/file` | members | | The file, as a download (students only get their side's and shared files) |
-| POST   | `/api/cases/:caseId/characters` | instructor | `{ name, title, role, side }` | `201 { character }` |
-| PATCH / DELETE | `/api/cases/:caseId/characters/:charId` | instructor | `{ name, title, role, side }` | `{ character }` / `204` |
-| PUT / DELETE | `/api/cases/:caseId/characters/:charId/documents/:docId` | instructor | | `204`; links or unlinks what the character knows |
-| PUT    | `/api/cases/:caseId/teams` | instructor | `{ teams: [{ id?, name, side, studentIds }] }` | `{ case }`; replaces all teams; every joined student must be on one |
-| PUT    | `/api/cases/:caseId/matchups` | instructor | `{ matchups: [{ plaintiffTeamId, defendantTeamId }] }` | `{ case }`; replaces all match-ups |
-
-A character's `title` is their job title (e.g. "Police Officer") and `role` is `witness` or `investigator`. `side` is `plaintiff`, `defendant` or `both` for documents and characters, and `plaintiff` or `defendant` for teams. Students see items marked `both` once that section is published, and items for their own side once teams are published too.
-
-All `/api/courses` and `/api/cases` routes return `401` when not logged in.
+Each case also has a **case file** (the pieces of the fact pattern: documents, images, audio, and video, told apart only by file type), **witnesses**, **tasks**, and an instructor note. Every material, witness, and task has an `audience`: everyone in the case, or only the plaintiff or defense teams; students see shared items plus their side's (only shared items before their team is matched). Case files and witnesses are also **published** one by one: students only see published ones, so the instructor can prepare items before showing them. Teams mark tasks done, and their progress is the share of tasks done. **Launching** a draft case (`POST …/launch`) makes it active once everyone is paired, every team is matched, and the case file has at least one file.
 
 **Rosters are keyed by email, and nobody joins without both sides agreeing.** An instructor invites students by email (even before they have an account); each student accepts or rejects the invitation when they log in, and rejecting takes them off the roster. A student can instead enter the entry code (or a course code at sign-up), which asks to join; the instructor admits or denies, and a denied student sees a notice once. A student who was invited and then enters the code joins straight away.
 
 Errors come back as `{ error: "message" }`. Logins are kept in an httpOnly session cookie stored in the `session` table.
+
+## AI witnesses
+
+Teams interview AI witnesses, played by Claude (`claude-opus-5-5`). A witness isn't fine-tuned: each answer is generated from a system prompt rendered from two Mustache templates in `server/witness/templates/`, the **witness initialization** (who the witness is, the case, the case documents labelled by how binding they are and whether the witness knows them, and the rules for filling gaps truthfully) followed by the **deposition session** (which side is asking, how to answer, and the defending lawyer's objections). The code is in `server/witness/` and `server/ai/`.
+
+The instructor sets a witness up in the app:
+
+1. **Upload the deposition** to the case file as *Instructors only*. Students never see or download instructor-only files.
+2. **Every case file is transcribed** by Claude once, in the background, after it's uploaded (`server/ai/transcribe.ts`): tables as `|`-separated rows, photos and screenshots described in brackets. The Case file tab shows each file's status, with *View text* to check what the witnesses read and *Retry* if it failed. Audio and video have nothing to read yet.
+3. **Create the witness** in the Witnesses tab: the side they testify for, their deposition file, the other files they have seen, their background and demeanor, and their lawyer (who may object when the other side asks). A witness with a side and a deposition is an AI witness.
+4. **Set the case-wide settings** in the same tab: today's date inside the case and the issues every witness must leave disputed.
+
+The witness reads its deposition as its own account, the files it has seen as records it knows, the other student files as records it doesn't know, and other instructor-only files (other witnesses' depositions) as someone else's account. Before the deposition, teams **interview** each witness: the *Interview* button in the student Witnesses tab. Each team shares one interview per witness, always as its own side (the witness treats them as that side's lawyers; they can't switch), saved turn by turn; *Start over* begins a new one. Every team starts with an empty interview. The instructor tests a witness with *Test as plaintiff* / *Test as defense* in the Witnesses tab; those runs are kept apart from the teams, and the Student view preview shows the Interview button without opening anything. Depositions themselves, with instructor deadlines, come later.
+
+Each question costs a couple of cents (the case documents are cached for the interview; the first question writes the cache, about 20 cents). Transcribing a long PDF costs well under a dollar, once.
+
+Set `ANTHROPIC_API_KEY` in `.env.local` (and as a Heroku config var). For the terminal tools, eval cases, saved transcripts, and eval results live in the git-ignored `.material/witnesses/<name>/`, since they quote the confidential fact pattern:
+
+| Command | What it does |
+| --- | --- |
+| `npm run witness:chat -- --witness "Name" --side plaintiff` | Question an app witness in the terminal, without saving to the app (`--side defense`, `--attorney "Mr. X"`) |
+| `npm run witness:eval -- --witness "Name"` | Run the witness's behavioral eval against the real model (about a dollar; `--case <id>`, `--repeat N`, `--effort low`) |
+
+`npm test` covers transcription bookkeeping, witness setup, interviews, prompt rendering, request building, reply parsing, and eval checks with Claude faked; it never calls the API.
 
 ## Deploying to Heroku
 
@@ -147,4 +194,9 @@ The `Procfile` runs migrations on each release and starts the API, which also se
 ```bash
 heroku addons:create heroku-postgresql:essential-0
 heroku config:set SESSION_SECRET=<long random string>
+heroku config:set ANTHROPIC_API_KEY=<your Claude API key>
 ```
+
+Without `ANTHROPIC_API_KEY`, uploads still work but files aren't transcribed and the AI witnesses say they aren't set up. Set a monthly spend limit in the Claude Console; each student question costs a couple of cents.
+
+Case files are stored in Amazon S3, and the app won't start in production without it. Follow [docs/s3-setup.md](docs/s3-setup.md) to create the bucket and access key, then set `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`. After the first deploy, add the app's `https://<app>.herokuapp.com` address to the bucket's CORS `AllowedOrigins` (step 3 there), or uploads fail. Locally, without those settings, files go to a git-ignored `.storage/` folder.

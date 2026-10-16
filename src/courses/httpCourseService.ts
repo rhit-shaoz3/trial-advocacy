@@ -1,7 +1,19 @@
 import { apiRequest } from '../api/request'
-import type { CourseService } from './types'
+import type { CourseService, InterviewAs } from './types'
 
 const coursePath = (courseId: string) => `/courses/${encodeURIComponent(courseId)}`
+const casePath = (courseId: string, caseId: string) =>
+  `${coursePath(courseId)}/cases/${encodeURIComponent(caseId)}`
+const teamsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/teams`
+const myCasePath = (courseId: string, caseId: string) =>
+  `${coursePath(courseId)}/my-cases/${encodeURIComponent(caseId)}`
+const matchupsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/matchups`
+/** A team's interview lives under my-cases; the instructor's test one under the case, by side. */
+function interviewPath(courseId: string, caseId: string, witnessId: string, as: InterviewAs, action = '') {
+  const base = as === 'team' ? myCasePath(courseId, caseId) : casePath(courseId, caseId)
+  const path = `${base}/witnesses/${encodeURIComponent(witnessId)}/interview${action}`
+  return as === 'team' ? path : `${path}?side=${as}`
+}
 
 export const httpCourseService: CourseService = {
   async listMyCourses() {
@@ -83,30 +95,285 @@ export const httpCourseService: CourseService = {
     })
   },
 
-  async listFactPatterns(courseId) {
-    return (await apiRequest(`${coursePath(courseId)}/fact-patterns`)).factPatterns
+  async listCases(courseId) {
+    return (await apiRequest(`${coursePath(courseId)}/cases`)).cases
   },
 
-  async uploadFactPattern(courseId, file) {
-    // The raw file is the body; headers are ASCII-only, so the name is URI-encoded.
-    const body = await apiRequest(`${coursePath(courseId)}/fact-patterns`, {
+  async createCase(courseId, input) {
+    const body = await apiRequest(`${coursePath(courseId)}/cases`, {
       method: 'POST',
-      body: file,
-      headers: {
-        'Content-Type': file.type || 'application/octet-stream',
-        'X-Filename': encodeURIComponent(file.name),
-      },
+      body: JSON.stringify(input),
     })
-    return body.factPattern
+    return body.case
   },
 
-  async deleteFactPattern(courseId, factPatternId) {
-    await apiRequest(`${coursePath(courseId)}/fact-patterns/${encodeURIComponent(factPatternId)}`, {
+  async getCase(courseId, caseId) {
+    return (await apiRequest(casePath(courseId, caseId))).case
+  },
+
+  async updateCase(courseId, caseId, input) {
+    const body = await apiRequest(casePath(courseId, caseId), {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    })
+    return body.case
+  },
+
+  async deleteCase(courseId, caseId) {
+    await apiRequest(casePath(courseId, caseId), { method: 'DELETE' })
+  },
+
+  async listTeams(courseId, caseId) {
+    return apiRequest(teamsPath(courseId, caseId))
+  },
+
+  async createTeam(courseId, caseId, emails) {
+    return apiRequest(teamsPath(courseId, caseId), {
+      method: 'POST',
+      body: JSON.stringify({ emails }),
+    })
+  },
+
+  async autoPair(courseId, caseId, teamSize = 2) {
+    return apiRequest(`${teamsPath(courseId, caseId)}/auto`, {
+      method: 'POST',
+      body: JSON.stringify({ teamSize }),
+    })
+  },
+
+  async clearTeams(courseId, caseId) {
+    return apiRequest(teamsPath(courseId, caseId), { method: 'DELETE' })
+  },
+
+  async deleteTeam(courseId, caseId, teamId) {
+    return apiRequest(`${teamsPath(courseId, caseId)}/${encodeURIComponent(teamId)}`, {
       method: 'DELETE',
     })
   },
 
-  factPatternDownloadUrl(courseId, factPatternId) {
-    return `/api${coursePath(courseId)}/fact-patterns/${encodeURIComponent(factPatternId)}/file`
+  async addTeamMember(courseId, caseId, teamId, email) {
+    return apiRequest(`${teamsPath(courseId, caseId)}/${encodeURIComponent(teamId)}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  },
+
+  async removeTeamMember(courseId, caseId, teamId, email) {
+    const path = `${teamsPath(courseId, caseId)}/${encodeURIComponent(teamId)}/members/${encodeURIComponent(email)}`
+    return apiRequest(path, { method: 'DELETE' })
+  },
+
+  async createMatchup(courseId, caseId, plaintiffTeamId, defenseTeamId) {
+    return apiRequest(matchupsPath(courseId, caseId), {
+      method: 'POST',
+      body: JSON.stringify({ plaintiffTeamId, defenseTeamId }),
+    })
+  },
+
+  async autoMatch(courseId, caseId) {
+    return apiRequest(`${matchupsPath(courseId, caseId)}/auto`, { method: 'POST' })
+  },
+
+  async clearMatchups(courseId, caseId) {
+    return apiRequest(matchupsPath(courseId, caseId), { method: 'DELETE' })
+  },
+
+  async swapSides(courseId, caseId, matchupId) {
+    return apiRequest(`${matchupsPath(courseId, caseId)}/${encodeURIComponent(matchupId)}/swap`, {
+      method: 'POST',
+    })
+  },
+
+  async deleteMatchup(courseId, caseId, matchupId) {
+    return apiRequest(`${matchupsPath(courseId, caseId)}/${encodeURIComponent(matchupId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async listMaterials(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/materials`)).materials
+  },
+
+  async uploadMaterial(courseId, caseId, file, { audience, description }) {
+    const materials = `${casePath(courseId, caseId)}/materials`
+    // 1. The API approves the file and returns a signed upload link (S3 in production).
+    const { upload } = await apiRequest(`${materials}/uploads`, {
+      method: 'POST',
+      body: JSON.stringify({ filename: file.name, size: file.size }),
+    })
+    // 2. The file goes straight to storage, not through the API.
+    let res: Response
+    try {
+      res = await fetch(upload.url, { method: 'PUT', headers: upload.headers, body: file })
+    } catch {
+      throw new Error('Could not reach file storage. Check your connection and try again.')
+    }
+    if (!res.ok) throw new Error(`File storage refused the upload (${res.status}). Try again.`)
+    // 3. The API checks the stored file and adds it to the case file.
+    const body = await apiRequest(materials, {
+      method: 'POST',
+      body: JSON.stringify({ uploadKey: upload.key, filename: file.name, audience, description }),
+    })
+    return body.material
+  },
+
+  async updateMaterial(courseId, caseId, materialId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    })
+    return body.material
+  },
+
+  async deleteMaterial(courseId, caseId, materialId) {
+    await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async setMaterialPublished(courseId, caseId, materialId, published) {
+    const body = await apiRequest(
+      `${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/published`,
+      { method: 'PUT', body: JSON.stringify({ published }) },
+    )
+    return body.material
+  },
+
+  materialDownloadUrl(courseId, caseId, materialId) {
+    return `/api${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/file`
+  },
+
+  materialTextUrl(courseId, caseId, materialId) {
+    return `/api${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/text`
+  },
+
+  async retryTranscription(courseId, caseId, materialId) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/text`, {
+      method: 'POST',
+    })
+    return body.material
+  },
+
+  async listWitnesses(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/witnesses`)).witnesses
+  },
+
+  async createWitness(courseId, caseId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/witnesses`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+    return body.witness
+  },
+
+  async updateWitness(courseId, caseId, witnessId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/witnesses/${encodeURIComponent(witnessId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.witness
+  },
+
+  async setWitnessPublished(courseId, caseId, witnessId, published) {
+    const body = await apiRequest(
+      `${casePath(courseId, caseId)}/witnesses/${encodeURIComponent(witnessId)}/published`,
+      { method: 'PUT', body: JSON.stringify({ published }) },
+    )
+    return body.witness
+  },
+
+  async deleteWitness(courseId, caseId, witnessId) {
+    await apiRequest(`${casePath(courseId, caseId)}/witnesses/${encodeURIComponent(witnessId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async listTasks(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/tasks`)).tasks
+  },
+
+  async createTask(courseId, caseId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+    return body.task
+  },
+
+  async updateTask(courseId, caseId, taskId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.task
+  },
+
+  async deleteTask(courseId, caseId, taskId) {
+    await apiRequest(`${casePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+  },
+
+  async saveInstructorNote(courseId, caseId, note) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/note`, {
+      method: 'PUT',
+      body: JSON.stringify({ note }),
+    })
+    return body.case
+  },
+
+  async saveWitnessSettings(courseId, caseId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/witness-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.case
+  },
+
+  async getLaunchChecks(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/launch`)).checks
+  },
+
+  async launchCase(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/launch`, { method: 'POST' })).case
+  },
+
+  async previewWorkspace(courseId, caseId, side, matchupId) {
+    const query = new URLSearchParams({ side, ...(matchupId ? { matchup: matchupId } : {}) })
+    return (await apiRequest(`${casePath(courseId, caseId)}/preview?${query}`)).workspace
+  },
+
+  async listMyCases(courseId) {
+    return (await apiRequest(`${coursePath(courseId)}/my-cases`)).cases
+  },
+
+  async getMyCaseWorkspace(courseId, caseId) {
+    return (await apiRequest(myCasePath(courseId, caseId))).workspace
+  },
+
+  async setTaskDone(courseId, caseId, taskId, done) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ done }),
+    })
+    return body.workspace
+  },
+
+  myMaterialDownloadUrl(courseId, caseId, materialId) {
+    return `/api${myCasePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/file`
+  },
+
+  async getInterview(courseId, caseId, witnessId, as) {
+    return (await apiRequest(interviewPath(courseId, caseId, witnessId, as))).interview
+  },
+
+  async askWitness(courseId, caseId, witnessId, as, question) {
+    const body = await apiRequest(interviewPath(courseId, caseId, witnessId, as, '/questions'), {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    })
+    return body.interview
+  },
+
+  async restartInterview(courseId, caseId, witnessId, as) {
+    return (await apiRequest(interviewPath(courseId, caseId, witnessId, as, '/restart'), { method: 'POST' })).interview
   },
 }

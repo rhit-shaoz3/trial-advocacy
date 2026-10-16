@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
@@ -30,7 +32,16 @@ export default defineConfig({
           include: ['server/**/*.test.ts'],
           environment: 'node',
           globalSetup: ['server/test/globalSetup.ts'],
-          env: { DATABASE_URL: testDatabaseUrl ?? '', NODE_ENV: 'test' },
+          setupFiles: ['server/test/fakeAi.ts'],
+          // Case files go to a temporary folder, never to S3.
+          env: {
+            DATABASE_URL: testDatabaseUrl ?? '',
+            NODE_ENV: 'test',
+            // Tests never call Claude; they swap in fakes for `ai`.
+            ANTHROPIC_API_KEY: '',
+            S3_BUCKET: '',
+            STORAGE_DIR: join(tmpdir(), 'trial-advocacy-test-storage'),
+          },
           // All server test files share one database.
           fileParallelism: false,
         },

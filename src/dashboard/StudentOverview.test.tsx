@@ -1,6 +1,5 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { fakeCasesApi } from '../test/fakeCasesApi'
 import { fakeCourseService } from '../test/fakeCourseService'
 import { renderWithProviders, testStudent } from '../test/renderWithProviders'
 import { StudentOverview } from './StudentOverview'
@@ -9,18 +8,13 @@ describe('student overview', () => {
   it('greets the student, links to released cases and shows invitations', async () => {
     renderWithProviders(<StudentOverview />, {
       user: testStudent,
-      casesApi: fakeCasesApi({
-        listAllCases: vi.fn().mockResolvedValue([
-          {
-            id: 'k1',
-            name: 'Smith v. Jones',
-            courseId: 'c1',
-            courseName: 'LAW 540: Trial Advocacy',
-            published: { documents: true, characters: false, teams: false },
-          },
-        ]),
-      }),
       courseService: fakeCourseService({
+        listMyCourses: vi.fn().mockResolvedValue([
+          { id: 'c1', code: 'LAW 540', title: 'Trial Advocacy', term: 'Fall 2026', instructorName: 'Ivy Brooks' },
+        ]),
+        listMyCases: vi
+          .fn()
+          .mockResolvedValue([{ id: 'k1', title: 'Smith v. Jones', summary: '', status: 'active', team: null, world: null }]),
         getInbox: vi.fn().mockResolvedValue({
           invitations: [{ courseId: 'c2', courseName: 'LAW 520: Evidence' }],
           pendingRequests: [],

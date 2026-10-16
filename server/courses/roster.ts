@@ -58,13 +58,40 @@ export async function addToRoster(courseId: string, email: string): Promise<AddR
   return 'added'
 }
 
-/** Returns false if the email was not on the roster. */
+/**
+ * Also takes the student off their teams (via the foreign key), deletes any
+ * team that leaves empty, and any matchup that leaves one-sided. Returns false
+ * if the email was not on the roster.
+ */
 export async function removeFromRoster(courseId: string, email: string) {
   const { rowCount } = await pool.query(
     'DELETE FROM enrollments WHERE course_id = $1 AND email = $2',
     [courseId, email],
   )
-  return rowCount === 1
+  if (rowCount !== 1) return false
+  await removeEmptyTeams(courseId)
+  return true
+}
+
+/**
+ * After someone leaves the roster (their team spots go with them), deletes
+ * teams left with nobody and case worlds left with only one team.
+ */
+async function removeEmptyTeams(courseId: string) {
+  await pool.query(
+    `DELETE FROM teams t
+     USING cases c
+     WHERE c.id = t.case_id AND c.course_id = $1
+       AND NOT EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = t.id)`,
+    [courseId],
+  )
+  await pool.query(
+    `DELETE FROM matchups mu
+     USING cases c
+     WHERE c.id = mu.case_id AND c.course_id = $1
+       AND (SELECT count(*) FROM matchup_teams mt WHERE mt.matchup_id = mu.id) < 2`,
+    [courseId],
+  )
 }
 
 /** Called at sign-up: links invitations sent to this email, so the student sees them. */
@@ -110,7 +137,7 @@ export async function getInbox(userId: string) {
   }
 }
 
-/** Accepts or rejects an invitation. Rejecting takes the email off the roster. */
+/** Accepts or rejects an invitation. Rejecting takes the email off the roster and its teams. */
 export async function answerInvitation(courseId: string, userId: string, accept: boolean) {
   const { rowCount } = await pool.query(
     accept
@@ -119,6 +146,8 @@ export async function answerInvitation(courseId: string, userId: string, accept:
       : `DELETE FROM enrollments WHERE course_id = $1 AND user_id = $2 AND status = 'invited'`,
     [courseId, userId],
   )
+  // Rejecting also takes them off any team the instructor already put them on.
+  if (rowCount === 1 && !accept) await removeEmptyTeams(courseId)
   return rowCount === 1
 }
 

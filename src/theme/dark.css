@@ -38,6 +38,8 @@
 :root[data-theme='dark'] :is(
     .btn-secondary,
     .ws-btn-secondary,
+    .panel-form input,
+    .panel-form select,
     .panel-form textarea,
     .ws-stat,
     .ws-case,
@@ -141,4 +143,166 @@
 
 :root[data-theme='dark'] :is(.auth-card, .auth-tabs button.active) {
   box-shadow: none;
+}
+
+/*
+ * The case pages: the instructor's case setup (src/pages/cases/Cases.css), the
+ * student case workspace (caseWorkspace.css) and interviews (interview.css).
+ */
+
+/* White fields and cards */
+:root[data-theme='dark'] :is(
+    .team-add,
+    .world-form select,
+    .inline-select,
+    .preview-picker select,
+    .cw-card,
+    .cw-workbench .cw-row,
+    .iv-transcript,
+    .iv-composer textarea
+  ) {
+  background: var(--surface);
+}
+
+:root[data-theme='dark'] .cw-file {
+  background: var(--subtle);
+}
+
+:root[data-theme='dark'] .cw-list .cw-row-link:hover {
+  background: var(--subtle);
+}
+
+:root[data-theme='dark'] :is(a.case-row:hover, .cw-file:hover) {
+  border-color: var(--dark-hover-border);
+}
+
+/* Dark grey body text */
+:root[data-theme='dark'] :is(
+    .world-form label,
+    .launch-checks li,
+    .content-fieldset legend,
+    .content-checklist,
+    .preview-picker,
+    .cw .cw-summary,
+    .cw-note blockquote
+  ) {
+  color: var(--ws-text);
+}
+
+:root[data-theme='dark'] :is(
+    .content-item p,
+    .cw .cw-row-desc,
+    .cw .cw-next-desc,
+    .cw-chip,
+    .cw-row-end,
+    .launch-checks svg
+  ) {
+  color: var(--ws-muted);
+}
+
+/* Navy panels and buttons stay dark, with white text */
+:root[data-theme='dark'] :is(.cw-banner, .ws-case-emblem) {
+  background: var(--dark-navy);
+}
+
+:root[data-theme='dark'] .cw-banner {
+  border: 1px solid var(--ws-line);
+}
+
+:root[data-theme='dark'] :is(.cw-interview, .cw-interview-off:hover) {
+  background: var(--dark-button);
+}
+
+:root[data-theme='dark'] .cw-interview:hover {
+  background: var(--dark-button-hover);
+}
+
+/* Status badges and tinted chips: same hues, dark background, light text */
+:root[data-theme='dark'] .badge-case-draft {
+  background: #3a2f1c;
+  color: #e3c48c;
+}
+
+:root[data-theme='dark'] .cw-note-label {
+  color: #e3c48c;
+}
+
+:root[data-theme='dark'] :is(.badge-case-active, .cw-badge-done, .content-ai-witness) {
+  background: #1d3529;
+  color: #9fd0b5;
+}
+
+:root[data-theme='dark'] :is(.badge-case-closed, .content-audience-all, .cw-badge, .cw-tab-count) {
+  background: #253141;
+  color: #b4bfcb;
+}
+
+:root[data-theme='dark'] :is(.world-side-plaintiff, .content-audience-plaintiff) {
+  background: #1d3550;
+  color: #a9c8e6;
+}
+
+:root[data-theme='dark'] .world-side-plaintiff dt {
+  color: #a9c8e6;
+}
+
+:root[data-theme='dark'] :is(.world-side-defense, .content-audience-defense) {
+  background: #3a2a20;
+  color: #e6b99c;
+}
+
+:root[data-theme='dark'] .world-side-defense dt {
+  color: #e6b99c;
+}
+
+:root[data-theme='dark'] .content-audience-instructor {
+  background: #2e2540;
+  color: #c9b3e8;
+}
+
+:root[data-theme='dark'] .cw-badge-overdue {
+  background: #3c2221;
+  color: #eaaba3;
+}
+
+:root[data-theme='dark'] .launch-checks .launch-ok svg {
+  color: #9fd0b5;
+}
+
+:root[data-theme='dark'] .icon-button:hover:not(:disabled) {
+  color: var(--ws-red);
+}
+
+/* Dashed and tinted boxes */
+:root[data-theme='dark'] .unpaired-panel {
+  border-color: #5a4c32;
+  background: #1f1b14;
+}
+
+:root[data-theme='dark'] .preview-frame {
+  border-color: var(--ws-line);
+}
+
+:root[data-theme='dark'] .cw-note {
+  border-color: #4a3e28;
+  background: #1f1b14;
+}
+
+:root[data-theme='dark'] .iv-notice {
+  background: var(--subtle);
+  color: var(--ws-muted);
+}
+
+:root[data-theme='dark'] .cw-check {
+  border-color: #4b5a6d;
+  background: var(--surface);
+}
+
+:root[data-theme='dark'] .cw-check-on {
+  border-color: #4e8067;
+  background: #4e8067;
+}
+
+:root[data-theme='dark'] .team-drag.dragging {
+  box-shadow: 0 4px 14px rgb(0 0 0 / 45%);
 }

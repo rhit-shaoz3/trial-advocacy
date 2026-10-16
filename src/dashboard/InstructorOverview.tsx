@@ -3,10 +3,11 @@ import { useCallback, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useLoad } from '../api/useLoad'
 import { useAuth } from '../auth/useAuth'
-import { useCasesApi } from '../cases/CasesApiContext'
 import { useCourseService } from '../courses/CourseServiceContext'
 import { firstName } from '../layout/initials'
 import { PageFrame } from '../layout/PageFrame'
+import { CaseStatusBadge } from '../pages/cases/CaseStatusBadge'
+import { courseName, loadTaughtCases } from '../pages/cases/caseLibrary'
 import { todayLabel } from './todayLabel'
 import './Dashboard.css'
 
@@ -28,16 +29,14 @@ function StatCard({ label, value, note, icon }: { label: string; value: number; 
 export function InstructorOverview() {
   const { user } = useAuth()
   const courseService = useCourseService()
-  const casesApi = useCasesApi()
-  const courses = useLoad(useCallback(() => courseService.listTaughtCourses(), [courseService]))
-  const cases = useLoad(useCallback(() => casesApi.listAllCases(), [casesApi]))
+  const library = useLoad(useCallback(() => loadTaughtCases(courseService), [courseService]))
 
-  const courseList = courses.data ?? []
-  const caseList = cases.data ?? []
+  const courseList = library.data?.map((c) => c.course) ?? []
+  const caseList = library.data?.flatMap(({ course, cases }) => cases.map((k) => ({ ...k, course }))) ?? []
   const students = courseList.reduce((n, c) => n + c.studentCount, 0)
   const waiting = courseList.reduce((n, c) => n + c.requestCount, 0)
-  const published = caseList.filter((c) => Object.values(c.published).some(Boolean)).length
-  const loaded = courses.data !== null && cases.data !== null
+  const launched = caseList.filter((c) => c.status !== 'draft').length
+  const loaded = library.data !== null
 
   return (
     <PageFrame crumbs={[{ label: 'Instructor workspace' }, { label: 'Overview' }]}>
@@ -52,9 +51,9 @@ export function InstructorOverview() {
         </Link>
       </div>
 
-      {(courses.error || cases.error) && (
+      {library.error && (
         <p className="form-error" role="alert">
-          {courses.error ?? cases.error}
+          {library.error}
         </p>
       )}
 
@@ -71,7 +70,7 @@ export function InstructorOverview() {
             <StatCard
               label="Cases"
               value={caseList.length}
-              note={`${published} published to students`}
+              note={`${launched} launched to students`}
               icon={<Briefcase size={18} />}
             />
             <StatCard
@@ -100,7 +99,7 @@ export function InstructorOverview() {
             ) : (
               <div className="case-card-grid">
                 {courseList.map((c) => {
-                  const courseCases = caseList.filter((k) => k.courseId === c.id)
+                  const courseCases = caseList.filter((k) => k.course.id === c.id)
                   return (
                     <article key={c.id} className="ws-panel course-tile" aria-labelledby={`tile-${c.id}`}>
                       <span className="case-badge">Entry code {c.entryCode}</span>
@@ -108,7 +107,7 @@ export function InstructorOverview() {
                         {c.code}: {c.title}
                       </h3>
                       <p className="case-hint">
-                        {c.term} · {courseCases.length ? courseCases.map((k) => k.name).join(' · ') : 'No cases yet'}
+                        {c.term} · {courseCases.length ? courseCases.map((k) => k.title).join(' · ') : 'No cases yet'}
                       </p>
                       <p className="course-tile-counts">
                         <span>{c.studentCount} students</span>
@@ -143,10 +142,11 @@ export function InstructorOverview() {
                     <span className="ws-icon-tile ws-tone-blue" aria-hidden>
                       <Briefcase size={18} />
                     </span>
-                    <Link to={`/courses/${k.courseId}/cases/${k.id}`} className="case-row-main case-row-link">
-                      <span>{k.name}</span>
-                      <span>{k.courseName}</span>
+                    <Link to={`/courses/${k.course.id}/cases/${k.id}`} className="case-row-main case-row-link">
+                      <span>{k.title}</span>
+                      <span>{courseName(k.course)}</span>
                     </Link>
+                    <CaseStatusBadge status={k.status} />
                     <ChevronRight size={18} className="muted" aria-hidden />
                   </li>
                 ))}

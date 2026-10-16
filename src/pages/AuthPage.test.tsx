@@ -5,9 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { AuthProvider } from '../auth/AuthProvider'
 import type { AuthService, User } from '../auth/types'
-import { CasesApiContext } from '../cases/CasesApiContext'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
-import { fakeCasesApi } from '../test/fakeCasesApi'
 import { fakeCourseService } from '../test/fakeCourseService'
 
 const ada: User = {
@@ -33,11 +31,9 @@ async function renderApp(service = fakeService()) {
   render(
     <MemoryRouter>
       <CourseServiceContext.Provider value={fakeCourseService()}>
-        <CasesApiContext.Provider value={fakeCasesApi()}>
-          <AuthProvider service={service}>
-            <App />
-          </AuthProvider>
-        </CasesApiContext.Provider>
+        <AuthProvider service={service}>
+          <App />
+        </AuthProvider>
       </CourseServiceContext.Provider>
     </MemoryRouter>,
   )

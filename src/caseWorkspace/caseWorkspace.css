@@ -479,10 +479,27 @@
   gap: 0.7rem;
 }
 
-.cw-people span {
+.cw-people .cw-person-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+.cw-you {
+  color: var(--ws-muted);
+  font-weight: 400;
+}
+
+.cw-opponents {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ws-line);
+}
+
+.cw .cw-team-heading {
+  margin: 0;
+  color: var(--ws-navy);
+  font: 400 1.1rem var(--ws-serif);
 }
 
 .cw-people strong {

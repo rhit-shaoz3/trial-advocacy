@@ -559,32 +559,58 @@ function NextTask({
   )
 }
 
+/** The student's own team and side, and (once matched) the opposing team in their case world. */
 function CaseTeam({ workspace: { team, world } }: { workspace: CaseWorkspace }) {
-  const people = [
-    ...(team?.members ?? []).map((m) => ({ m, role: world ? COUNSEL[world.side] : `Team ${team!.number}` })),
-    ...(world?.opponents.members ?? []).map((m) => ({ m, role: COUNSEL[other(world!.side)] })),
-  ]
   return (
     <section className="cw-card" aria-labelledby="cw-team">
       <h2 id="cw-team" className="cw-card-title">
-        Case team
+        Your team
       </h2>
       <p className="cw-section-sub">
-        {people.length === 0 ? 'Not on a team yet.' : count(people.length, 'participant')}
+        {!team
+          ? 'Not on a team yet.'
+          : world
+            ? `${ROLE_LABEL[world.side]} · Team ${team.number}`
+            : `Team ${team.number} · Waiting for a case world`}
       </p>
-      {people.length > 0 && (
-        <ul className="cw-people">
-          {people.map(({ m, role }) => (
-            <li key={m.email}>
-              <Avatar name={displayName(m)} size="sm" />
-              <span>
-                <strong>{displayName(m)}</strong>
-                <small>{role}</small>
-              </span>
-            </li>
-          ))}
-        </ul>
+      {team && <People members={team.members} role={world ? COUNSEL[world.side] : 'Teammate'} />}
+
+      {team && (
+        <div className="cw-opponents">
+          <h3 id="cw-opponents" className="cw-team-heading">
+            Opposing team
+          </h3>
+          {world ? (
+            <>
+              <p className="cw-section-sub">
+                {ROLE_LABEL[other(world.side)]} · Team {world.opponents.number}
+              </p>
+              <People members={world.opponents.members} role={COUNSEL[other(world.side)]} />
+            </>
+          ) : (
+            <p className="cw-section-sub">Your opponents appear once your team is matched.</p>
+          )}
+        </div>
       )}
     </section>
+  )
+}
+
+function People({ members, role }: { members: MyTeamMember[]; role: string }) {
+  return (
+    <ul className="cw-people">
+      {members.map((m) => (
+        <li key={m.email}>
+          <Avatar name={displayName(m)} size="sm" />
+          <span className="cw-person-text">
+            <strong>
+              {displayName(m)}
+              {m.you && <span className="cw-you"> (you)</span>}
+            </strong>
+            <small>{role}</small>
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }

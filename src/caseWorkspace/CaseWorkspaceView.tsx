@@ -11,7 +11,9 @@ import {
   Image,
   FileAudio,
   FileVideo,
+  Lock,
   MessageSquare,
+  Search,
   Users,
 } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
@@ -20,6 +22,7 @@ import {
   CATEGORY_HEADING,
   CATEGORY_LABEL,
   FILE_CATEGORIES,
+  PHASE_LABEL,
   dueLabel,
   fileCategory,
   fileTypeLabel,
@@ -32,7 +35,7 @@ import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
 import './caseWorkspace.css'
 
-type Tab = 'overview' | 'case-file' | 'witnesses' | 'tasks'
+type Tab = 'overview' | 'case-file' | 'witnesses' | 'investigator' | 'tasks'
 type WorkspaceTask = CaseWorkspace['tasks'][number]
 
 /** How many case files the overview lists before "View all". */
@@ -86,6 +89,7 @@ export function CaseWorkspaceView({
     { id: 'overview', label: 'Overview' },
     { id: 'case-file', label: 'Case file', count: materials.length },
     { id: 'witnesses', label: 'Witnesses', count: witnesses.length },
+    { id: 'investigator', label: 'Investigator' },
     { id: 'tasks', label: 'Tasks', count: openTasks.length },
   ]
 
@@ -98,6 +102,7 @@ export function CaseWorkspaceView({
         <div>
           <div className="cw-tags">
             <StatusPill status={c.status} />
+            <span className="cw-chip">{PHASE_LABEL[c.phase]} phase</span>
             {world && <span className="cw-chip">Case world {worldLabel(world.number)}</span>}
           </div>
           <h1 className="cw-title">{c.title}</h1>
@@ -243,10 +248,18 @@ export function CaseWorkspaceView({
         {tab === 'witnesses' && (
           <ListPanel
             title="Witnesses"
-            sub={`People in ${c.title}. Interview the AI witnesses with your partner to prepare for their depositions.`}
+            sub={
+              c.phase === 'deposition'
+                ? `People in ${c.title}. Interview your side's AI witnesses with your partner, and depose the other side's.`
+                : `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's witnesses are revealed in the deposition phase.`
+            }
             empty="No witnesses have been added yet."
           >
-            {witnesses.map((w) => (
+            {witnesses.map((w) => {
+              // A witness for the other side: shown only once the deposition phase reveals them.
+              const theirs = Boolean(workspace.side && w.side && w.side !== workspace.side)
+              const action = theirs ? 'Depose' : 'Interview'
+              return (
               <li key={w.id} className="cw-row">
                 <span className="ws-icon-tile ws-icon-tile-sm ws-tone-amber" aria-hidden="true">
                   <Users />
@@ -256,24 +269,28 @@ export function CaseWorkspaceView({
                   {w.role && <small>{w.role}</small>}
                   {w.description && <p>{w.description}</p>}
                 </div>
+                {theirs && <span className="cw-badge cw-badge-theirs">{WITNESS_FOR[w.side!]}</span>}
                 {w.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[w.audience]}</span>}
                 {w.canInterview &&
                   (interviewHref ? (
-                    <Link to={interviewHref(w.id)} className="cw-interview" aria-label={`Interview ${w.name}`}>
+                    <Link to={interviewHref(w.id)} className="cw-interview" aria-label={`${action} ${w.name}`}>
                       <MessageSquare aria-hidden="true" />
-                      Interview
+                      {action}
                     </Link>
                   ) : (
                     // The instructor's preview: shown as the team sees it, but nothing opens.
                     <span className="cw-interview cw-interview-off" aria-disabled="true">
                       <MessageSquare aria-hidden="true" />
-                      Interview
+                      {action}
                     </span>
                   ))}
               </li>
-            ))}
+              )
+            })}
           </ListPanel>
         )}
+
+        {tab === 'investigator' && <InvestigatorPanel available={workspace.investigatorAvailable} />}
 
         {tab === 'tasks' && (
           <ListPanel title="Tasks" sub={`Everything assigned in ${c.title}.`} empty="No tasks have been assigned yet.">
@@ -412,6 +429,28 @@ function WorkbenchRow({
         <ChevronRight className="cw-row-end" aria-hidden="true" />
       </button>
     </li>
+  )
+}
+
+const WITNESS_FOR: Record<Side, string> = { plaintiff: "Plaintiff's witness", defense: "Defense's witness" }
+
+/** The background investigator: locked until the investigate phase, and still being built after that. */
+function InvestigatorPanel({ available }: { available: boolean }) {
+  return (
+    <section className="cw-card cw-investigator" aria-labelledby="cw-investigator-title">
+      <span className="ws-eyebrow">Case workspace</span>
+      <h2 id="cw-investigator-title">Background investigator</h2>
+      <div className="cw-investigator-body">
+        <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
+          {available ? <Search /> : <Lock />}
+        </span>
+        <p>
+          {available
+            ? 'Your background investigator is on the way. Check back soon.'
+            : 'Your background investigator becomes available in the investigate phase.'}
+        </p>
+      </div>
+    </section>
   )
 }
 

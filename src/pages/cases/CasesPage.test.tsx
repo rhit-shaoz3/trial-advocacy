@@ -13,6 +13,7 @@ const coaster: CourseCase = {
   title: 'Rivera v. Thrill Park',
   summary: 'A rollercoaster stalls mid-loop.',
   status: 'draft',
+  phase: 'subpoena',
   instructorNote: '',
   inWorldDate: null,
   disputedIssues: '',

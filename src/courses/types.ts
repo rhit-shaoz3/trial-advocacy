@@ -42,6 +42,15 @@ export interface AddStudentsResult {
   roster: RosterEntry[]
 }
 
+/**
+ * Every case world in a case moves through these together, in order, when the
+ * instructor says so. Subpoena: each side sees only its own witnesses.
+ * Investigate: the background investigator opens. Deposition: every witness is
+ * revealed to both sides.
+ */
+export const CASE_PHASES = ['subpoena', 'investigate', 'deposition'] as const
+export type CasePhase = (typeof CASE_PHASES)[number]
+
 export const COURSE_CASE_STATUSES = ['draft', 'active', 'closed'] as const
 /** Draft: hidden from students. Active: the case worlds have launched. Closed: finished. */
 export type CourseCaseStatus = (typeof COURSE_CASE_STATUSES)[number]
@@ -55,6 +64,7 @@ export interface CourseCase {
   title: string
   summary: string
   status: CourseCaseStatus
+  phase: CasePhase
   /** Shown on every student's case dashboard. */
   instructorNote: string
   /** "Today" inside the case for its AI witnesses (YYYY-MM-DD); null means the real date. */
@@ -181,6 +191,8 @@ export interface WorkspaceWitness {
   role: string
   description: string
   audience: Audience
+  /** The side the witness testifies for, or null for neither. */
+  side: Side | null
   /** An AI witness the team can interview. */
   canInterview: boolean
 }
@@ -237,6 +249,7 @@ export interface CaseWorkspace {
     title: string
     summary: string
     status: CourseCaseStatus
+    phase: CasePhase
     instructorNote: string
   }
   team: MyCase['team']
@@ -245,6 +258,8 @@ export interface CaseWorkspace {
   side: Side | null
   materials: CaseMaterial[]
   witnesses: WorkspaceWitness[]
+  /** Whether the background investigator is open yet (from the investigate phase on). */
+  investigatorAvailable: boolean
   /** Soonest due first; completion is the team's. */
   tasks: (CaseTask & { completedAt: string | null; completedBy: string | null })[]
   /** The instructor viewing it as a team would; nothing can be changed. */
@@ -320,6 +335,8 @@ export interface CourseService {
   updateTask(courseId: string, caseId: string, taskId: string, input: TaskInput): Promise<CaseTask>
   deleteTask(courseId: string, caseId: string, taskId: string): Promise<void>
   saveInstructorNote(courseId: string, caseId: string, note: string): Promise<CourseCase>
+  /** Moves every world in the case to `phase` (forward or back). */
+  setCasePhase(courseId: string, caseId: string, phase: CasePhase): Promise<CourseCase>
   saveWitnessSettings(courseId: string, caseId: string, input: WitnessSettingsInput): Promise<CourseCase>
   getLaunchChecks(courseId: string, caseId: string): Promise<LaunchCheck[]>
   /** Makes a ready draft case active, launching every case world. */

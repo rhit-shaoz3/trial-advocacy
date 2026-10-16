@@ -35,6 +35,7 @@ describe('creating', () => {
       title: 'Rivera v. Thrill Park',
       summary: coaster.summary,
       status: 'draft',
+      phase: 'subpoena',
       instructorNote: '',
       inWorldDate: null,
       disputedIssues: '',

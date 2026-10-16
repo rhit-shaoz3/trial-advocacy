@@ -1,4 +1,4 @@
-import type { MaterialAudience } from './types'
+import type { CasePhase, MaterialAudience } from './types'
 
 /** How the instructor sees who an item is for. */
 export const AUDIENCE_LABEL: Record<MaterialAudience, string> = {
@@ -84,4 +84,10 @@ export function toLocalInput(iso: string | null) {
 /** Back from a `datetime-local` value (local time) to ISO, or null when empty. */
 export function fromLocalInput(value: string) {
   return value ? new Date(value).toISOString() : null
+}
+
+export const PHASE_LABEL: Record<CasePhase, string> = {
+  subpoena: 'Subpoena',
+  investigate: 'Investigate',
+  deposition: 'Deposition',
 }

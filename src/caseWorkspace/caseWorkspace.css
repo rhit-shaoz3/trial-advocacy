@@ -655,3 +655,22 @@
   width: 0.95rem;
   height: 0.95rem;
 }
+
+/* A witness for the other side, revealed in the deposition phase */
+.cw-badge-theirs {
+  background: #f6ece6;
+  color: #8a4f2f;
+}
+
+/* Background investigator (locked until the investigate phase) */
+.cw-investigator-body {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+}
+
+.cw .cw-investigator-body p {
+  margin: 0;
+  color: var(--ws-muted);
+}

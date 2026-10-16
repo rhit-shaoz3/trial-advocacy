@@ -474,6 +474,100 @@ a.case-row:hover {
   height: 1rem;
 }
 
+/* Phase panel: the case's phase, shared by every world */
+
+.phase-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 1.2rem 1.4rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ws-blue);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.phase-panel-body {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.phase-panel h2 {
+  margin: 0;
+  color: var(--ws-navy);
+  font: 400 1.35rem var(--ws-serif);
+}
+
+.phase-panel p {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.phase-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.phase-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.phase-step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1.5px solid #b8bfc6;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.phase-steps .phase-done .phase-step-number {
+  border-color: #4e8067;
+  background: #e1eee7;
+  color: #426d59;
+}
+
+.phase-steps .phase-current {
+  color: var(--ws-navy);
+  font-weight: 700;
+}
+
+.phase-steps .phase-current .phase-step-number {
+  border-color: var(--ws-navy);
+  background: var(--ws-navy);
+  color: #fff;
+}
+
+.phase-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.phase-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.phase-actions svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 /* Materials, witnesses, and tasks */
 
 .content-form label {

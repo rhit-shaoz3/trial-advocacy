@@ -172,10 +172,11 @@ describe('setting up an AI witness', () => {
     await createWitness()
     await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Bystander' })
     await launch()
-    const { witnesses } = (await ada.get(myCaseUrl())).body.workspace
+    // Elena testifies for the defense, so (before the deposition phase) only the defense team sees her.
+    const { witnesses } = (await cy.get(myCaseUrl())).body.workspace
     expect(witnesses).toEqual([
-      { id: expect.any(String), name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls.', audience: 'all', canInterview: true },
-      { id: expect.any(String), name: 'Bystander', role: '', description: '', audience: 'all', canInterview: false },
+      { id: expect.any(String), name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls.', audience: 'all', side: 'defense', canInterview: true },
+      { id: expect.any(String), name: 'Bystander', role: '', description: '', audience: 'all', side: null, canInterview: false },
     ])
   })
 })
@@ -188,6 +189,8 @@ describe('interviewing an AI witness', () => {
     witnessId = (await createWitness()).id
     await prof.put(`${caseUrl()}/witness-settings`).send({ inWorldDate: '2024-10-01', disputedIssues: 'Where she stood.' })
     await launch()
+    // Elena testifies for the defense; the plaintiff team (Ada's) can depose her only in this phase.
+    await prof.put(`${caseUrl()}/phase`).send({ phase: 'deposition' })
   })
 
   it('builds the witness from the case file', async () => {
@@ -272,6 +275,8 @@ describe('interviewing an AI witness', () => {
     expect(view.body.interview).toMatchObject({ canAsk: false, notice: "Bystander isn't available for interviews yet." })
     expect((await ada.post(`${myCaseUrl()}/witnesses/${bystander}/interview/questions`).send({ question: 'Hi?' })).status).toBe(409)
 
+    // Before the deposition phase, a witness only the defense can see is out of reach.
+    await prof.put(`${caseUrl()}/phase`).send({ phase: 'investigate' })
     const defenseOnly = (await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Secret', audience: 'defense' })).body.witness.id
     expect((await ada.get(`${myCaseUrl()}/witnesses/${defenseOnly}/interview`)).status).toBe(404)
     expect(asked).toHaveLength(0)
@@ -300,6 +305,44 @@ describe('interviewing an AI witness', () => {
   it('keeps students out of the instructor routes', async () => {
     expect((await ada.get(`${caseUrl()}/witnesses/${witnessId}/interview?side=plaintiff`)).status).toBe(404)
     expect((await ada.get(`${caseUrl()}/materials/${files['Torres deposition.pdf']}/text`)).status).toBe(404)
+  })
+})
+
+describe('witnesses by phase', () => {
+  let witnessId: string
+  const interview = () => `${myCaseUrl()}/witnesses/${witnessId}/interview`
+  const setPhase = (phase: string) => prof.put(`${caseUrl()}/phase`).send({ phase })
+  const names = async (agent: request.Agent) =>
+    (await agent.get(myCaseUrl())).body.workspace.witnesses.map((w: { name: string }) => w.name)
+
+  beforeEach(async () => {
+    witnessId = (await createWitness()).id
+    await launch()
+  })
+
+  it("keeps a side's witness from the other side until the deposition phase", async () => {
+    for (const phase of ['subpoena', 'investigate']) {
+      await setPhase(phase)
+      expect(await names(ada)).toEqual([])
+      expect(await names(cy)).toEqual(['Elena Torres'])
+      expect((await ada.get(interview())).status).toBe(404)
+      expect((await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })).status).toBe(404)
+    }
+    // Her own side can interview her all along.
+    expect((await cy.post(`${interview()}/questions`).send({ question: 'Where were you?' })).status).toBe(200)
+    expect(asked[0].settings.examiningPartyRole).toBe('defendant')
+
+    await setPhase('deposition')
+    expect(await names(ada)).toEqual(['Elena Torres'])
+    const deposed = await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    expect(deposed.status).toBe(200)
+    expect(asked[1].settings).toMatchObject({ examiningPartyRole: 'plaintiff', defendingCounselName: 'Ms. Park' })
+
+    // Stepping back hides her again; the interview is kept for later.
+    await setPhase('investigate')
+    expect((await ada.get(interview())).status).toBe(404)
+    await setPhase('deposition')
+    expect((await ada.get(interview())).body.interview.turns).toHaveLength(1)
   })
 })
 

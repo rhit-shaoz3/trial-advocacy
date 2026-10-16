@@ -218,6 +218,7 @@ describe("a student's case dashboard", () => {
       title: 'Rivera v. Thrill Park',
       summary: '',
       status: 'active',
+      phase: 'subpoena',
       instructorNote: 'Mind the timeline.',
     })
     expect(workspace.side).toBe('plaintiff')
@@ -344,6 +345,113 @@ describe("the instructor's student-view preview", () => {
 
     expect((await prof.get(`${caseUrl()}/preview`)).body.error).toBe('Choose a side to preview.')
     expect((await prof.get(`${caseUrl()}/preview?side=defense&matchup=${caseId}`)).status).toBe(404)
+  })
+})
+
+describe('case phases', () => {
+  const setPhase = (phase: unknown, agent = prof) => agent.put(`${caseUrl()}/phase`).send({ phase })
+
+  it('starts in subpoena, and the instructor moves it forward or back', async () => {
+    expect((await prof.get(caseUrl())).body.case.phase).toBe('subpoena')
+
+    const moved = await setPhase('deposition')
+    expect(moved.status).toBe(200)
+    expect(moved.body.case.phase).toBe('deposition')
+    expect((await setPhase('investigate')).body.case.phase).toBe('investigate')
+
+    // Editing the case keeps its phase.
+    await prof.patch(caseUrl()).send({ title: 'Rivera v. Thrill Park', summary: '', status: 'draft' })
+    expect((await prof.get(caseUrl())).body.case.phase).toBe('investigate')
+  })
+
+  it('validates the phase, and freezes it once the case is closed', async () => {
+    expect((await setPhase('trial')).body.error).toBe('Choose a valid phase.')
+    expect((await setPhase(undefined)).status).toBe(400)
+
+    await prof.patch(caseUrl()).send({ title: 'Rivera v. Thrill Park', summary: '', status: 'closed' })
+    const closed = await setPhase('investigate')
+    expect(closed.status).toBe(409)
+    expect(closed.body.error).toBe('This case is closed, so its phase can no longer change.')
+  })
+
+  it('is only for the instructor', async () => {
+    const other = (await signedInAgent('instructor', 'other@example.com')).agent
+    const student = (await signedInAgent('student', email(1))).agent
+    expect((await setPhase('deposition', other)).status).toBe(404)
+    expect((await setPhase('deposition', student)).status).toBe(404)
+    expect((await prof.get(caseUrl())).body.case.phase).toBe('subpoena')
+  })
+
+  describe('what each side sees', () => {
+    let plaintiff: request.Agent
+    let defense: request.Agent
+    let unpaired: request.Agent
+    const view = async (agent: request.Agent) => {
+      const { workspace } = (await agent.get(myCaseUrl())).body
+      return {
+        phase: workspace.case.phase,
+        investigator: workspace.investigatorAvailable,
+        witnesses: workspace.witnesses.map((w: { name: string }) => w.name),
+      }
+    }
+
+    beforeEach(async () => {
+      plaintiff = (await signedInAgent('student', email(1))).agent
+      defense = (await signedInAgent('student', email(3))).agent
+      await pairAndMatch()
+      await upload('Fact pattern.pdf')
+      await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Rider', alignedSide: 'plaintiff' })
+      await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Operator', alignedSide: 'defense' })
+      await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Bystander' })
+      await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Engineer', audience: 'defense' })
+      await launch()
+      // Joins after launch, so isn't on a team yet.
+      await prof.post(`/api/courses/${course.id}/roster`).send({ emails: [email(5)] })
+      unpaired = (await signedInAgent('student', email(5))).agent
+    })
+
+    it("hides each side's witnesses from the other, and the investigator, in subpoena", async () => {
+      expect(await view(plaintiff)).toEqual({ phase: 'subpoena', investigator: false, witnesses: ['Rider', 'Bystander'] })
+      expect(await view(defense)).toEqual({
+        phase: 'subpoena',
+        investigator: false,
+        witnesses: ['Operator', 'Bystander', 'Engineer'],
+      })
+      expect((await view(unpaired)).witnesses).toEqual(['Bystander'])
+    })
+
+    it('opens the investigator in investigate, still hiding the other side', async () => {
+      await setPhase('investigate')
+      expect(await view(plaintiff)).toEqual({ phase: 'investigate', investigator: true, witnesses: ['Rider', 'Bystander'] })
+      expect((await view(defense)).witnesses).toEqual(['Operator', 'Bystander', 'Engineer'])
+    })
+
+    it('reveals every witness to both sides in deposition', async () => {
+      await setPhase('deposition')
+      const all = ['Rider', 'Operator', 'Bystander', 'Engineer']
+      expect(await view(plaintiff)).toEqual({ phase: 'deposition', investigator: true, witnesses: all })
+      expect((await view(defense)).witnesses).toEqual(all)
+      const operator = (await plaintiff.get(myCaseUrl())).body.workspace.witnesses[1]
+      expect(operator).toMatchObject({ name: 'Operator', side: 'defense' })
+      expect(operator).not.toHaveProperty('personaNotes')
+    })
+
+    it("follows the phase in the instructor's preview", async () => {
+      const preview = async () =>
+        (await prof.get(`${caseUrl()}/preview?side=plaintiff`)).body.workspace.witnesses.map((w: { name: string }) => w.name)
+      expect(await preview()).toEqual(['Rider', 'Bystander'])
+      await setPhase('deposition')
+      expect(await preview()).toEqual(['Rider', 'Operator', 'Bystander', 'Engineer'])
+    })
+  })
+
+  it('keeps the phase when the case launches', async () => {
+    await signedInAgent('student', email(1))
+    await pairAndMatch()
+    await upload('Fact pattern.pdf')
+    await setPhase('investigate')
+    await launch()
+    expect((await prof.get(caseUrl())).body.case).toMatchObject({ status: 'active', phase: 'investigate' })
   })
 })
 

@@ -127,6 +127,7 @@ describe('course workspace for the instructor', () => {
       title: 'Rivera v. Thrill Park',
       summary: '',
       status: 'draft' as const,
+      phase: 'subpoena',
       instructorNote: '',
       createdAt: '2026-10-01T15:00:00.000Z',
       updatedAt: '2026-10-01T15:00:00.000Z',

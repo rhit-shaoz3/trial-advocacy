@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate } from '../../../courses/caseLabels'
-import { AUDIENCES, type Audience, type CaseMaterial } from '../../../courses/types'
+import { MATERIAL_AUDIENCES, type CaseMaterial, type MaterialAudience } from '../../../courses/types'
 
 const MAX_BYTES = 100 * 1024 * 1024 // matches the server's limit
 const ACCEPT = [
@@ -11,9 +11,13 @@ const ACCEPT = [
   '.mp4,.mov,.webm', // video
 ].join(',')
 
+/** How often the list refreshes while files are still being transcribed. */
+const POLL_MS = 5000
+
 /**
  * The case file: the pieces of the fact pattern (documents, images, audio,
- * video), each shown to everyone in the case or only to one side.
+ * video), each shown to everyone in the case, only to one side, or only to
+ * instructors. Every file is also transcribed for the AI witnesses to read.
  */
 export function MaterialsSection({
   courseId,
@@ -31,7 +35,8 @@ export function MaterialsSection({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
-  const [audience, setAudience] = useState<Audience>('all')
+  const [audience, setAudience] = useState<MaterialAudience>('all')
+  const [retrying, setRetrying] = useState<string | null>(null)
   const [description, setDescription] = useState('')
 
   useEffect(() => {
@@ -44,6 +49,32 @@ export function MaterialsSection({
       cancelled = true
     }
   }, [service, courseId, caseId])
+
+  // Transcription runs in the background after an upload; check back until it's done.
+  const pending = materials?.some((m) => m.textStatus === 'pending') ?? false
+  useEffect(() => {
+    if (!pending) return
+    const timer = setInterval(() => {
+      service
+        .listMaterials(courseId, caseId)
+        .then(setMaterials)
+        .catch(() => {}) // keep the current list; the next tick tries again
+    }, POLL_MS)
+    return () => clearInterval(timer)
+  }, [service, courseId, caseId, pending])
+
+  async function handleRetry(material: CaseMaterial) {
+    setErrors([])
+    setRetrying(material.id)
+    try {
+      const updated = await service.retryTranscription(courseId, caseId, material.id)
+      setMaterials((prev) => prev?.map((m) => (m.id === updated.id ? updated : m)) ?? null)
+    } catch (err) {
+      setErrors([err instanceof Error ? err.message : 'Something went wrong.'])
+    } finally {
+      setRetrying(null)
+    }
+  }
 
   async function handleChosen(e: ChangeEvent<HTMLInputElement>) {
     const chosen = [...(e.target.files ?? [])]
@@ -71,7 +102,7 @@ export function MaterialsSection({
     onChange?.()
   }
 
-  async function handleAudience(material: CaseMaterial, next: Audience) {
+  async function handleAudience(material: CaseMaterial, next: MaterialAudience) {
     setErrors([])
     try {
       const updated = await service.updateMaterial(courseId, caseId, material.id, {
@@ -103,14 +134,16 @@ export function MaterialsSection({
       <p className="muted section-hint">
         Split the fact pattern into sections and upload each piece (documents, images, audio, and
         video, up to 100 MB each) so students can find what they need. They see the files in their
-        Case file tab, grouped by type. Choose who can see each file.
+        Case file tab, grouped by type. Choose who can see each file: keep a witness&rsquo;s deposition
+        to instructors only, so the AI witness can read it but students can&rsquo;t. Each file is
+        transcribed for the AI witnesses once it&rsquo;s uploaded.
       </p>
 
       <div className="panel-form content-form" role="group" aria-label="Upload to the case file">
         <label>
           Visible to
-          <select value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
-            {AUDIENCES.map((a) => (
+          <select value={audience} onChange={(e) => setAudience(e.target.value as MaterialAudience)}>
+            {MATERIAL_AUDIENCES.map((a) => (
               <option key={a} value={a}>
                 {AUDIENCE_LABEL[a]}
               </option>
@@ -170,6 +203,7 @@ export function MaterialsSection({
                 <th scope="col">File</th>
                 <th scope="col">Type</th>
                 <th scope="col">Visible to</th>
+                <th scope="col">AI text</th>
                 <th scope="col">Added</th>
                 <th scope="col">
                   <span className="visually-hidden">Actions</span>
@@ -193,15 +227,23 @@ export function MaterialsSection({
                     <select
                       className="inline-select"
                       value={m.audience}
-                      onChange={(e) => handleAudience(m, e.target.value as Audience)}
+                      onChange={(e) => handleAudience(m, e.target.value as MaterialAudience)}
                       aria-label={`Who can see ${m.filename}`}
                     >
-                      {AUDIENCES.map((a) => (
+                      {MATERIAL_AUDIENCES.map((a) => (
                         <option key={a} value={a}>
                           {AUDIENCE_LABEL[a]}
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td>
+                    <TextStatusCell
+                      material={m}
+                      textUrl={service.materialTextUrl(courseId, caseId, m.id)}
+                      retrying={retrying === m.id}
+                      onRetry={() => handleRetry(m)}
+                    />
                   </td>
                   <td>{shortDate(m.uploadedAt)}</td>
                   <td className="cell-actions">
@@ -221,5 +263,36 @@ export function MaterialsSection({
         </div>
       )}
     </section>
+  )
+}
+
+/** Whether the AI witnesses can read the file yet, with its transcription to check. */
+function TextStatusCell({
+  material: m,
+  textUrl,
+  retrying,
+  onRetry,
+}: {
+  material: CaseMaterial
+  textUrl: string
+  retrying: boolean
+  onRetry(): void
+}) {
+  if (retrying || m.textStatus === 'pending') return <span className="muted">Reading…</span>
+  if (m.textStatus === 'none') return <span className="muted">Nothing to read</span>
+  if (m.textStatus === 'ready') {
+    return (
+      <a href={textUrl} target="_blank" rel="noreferrer" aria-label={`View the text of ${m.filename}`}>
+        View text
+      </a>
+    )
+  }
+  return (
+    <span className="content-text-failed">
+      <span className="form-error">{m.textError ?? 'Could not read this file.'}</span>{' '}
+      <button type="button" className="link-button" onClick={onRetry} aria-label={`Read ${m.filename} again`}>
+        Retry
+      </button>
+    </span>
   )
 }

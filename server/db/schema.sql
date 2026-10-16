@@ -188,6 +188,73 @@ CREATE TABLE IF NOT EXISTS task_completions (
   PRIMARY KEY (task_id, team_id)
 );
 
+-- AI witnesses --------------------------------------------------------------
+
+-- Case files can also be for instructors only (e.g. a witness's deposition,
+-- which trains an AI witness but must never reach students).
+ALTER TABLE case_materials DROP CONSTRAINT IF EXISTS case_materials_audience_check;
+ALTER TABLE case_materials ADD CONSTRAINT case_materials_audience_check
+  CHECK (audience IN ('all', 'plaintiff', 'defense', 'instructor'));
+
+-- A transcription of each file (by Claude, once, after upload) that the AI
+-- witnesses read. `text_status`: pending while it runs, ready, failed (with
+-- `text_error`), or none for files with nothing to read (audio, video).
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS text_status text NOT NULL DEFAULT 'pending'
+  CHECK (text_status IN ('pending', 'ready', 'failed', 'none'));
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS text_content text;
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS text_error text;
+
+-- Case-wide settings for the AI witnesses: "today" inside the case, and the
+-- issues no witness may settle.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS in_world_date date;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS disputed_issues text NOT NULL DEFAULT '';
+
+-- A witness becomes an AI witness once it has a side and a deposition. The
+-- deposition is its own sworn account; `known_material_ids` are the other case
+-- files the witness has seen. `defending_counsel` is the witness's lawyer, who
+-- may object when the other side is asking.
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS aligned_side text CHECK (aligned_side IN ('plaintiff', 'defense'));
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS persona_notes text NOT NULL DEFAULT '';
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS deposition_material_id uuid REFERENCES case_materials (id) ON DELETE SET NULL;
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS known_material_ids uuid[] NOT NULL DEFAULT '{}';
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS defending_counsel text NOT NULL DEFAULT '';
+
+-- One interview of an AI witness, before any deposition: by a team (both
+-- partners share it, always as their team's side) or, with no team, an
+-- instructor's test run. `side` is who is asking. Starting over ends the
+-- current one and opens a new, empty one.
+CREATE TABLE IF NOT EXISTS interviews (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  witness_id uuid        NOT NULL REFERENCES case_witnesses (id) ON DELETE CASCADE,
+  team_id    uuid        REFERENCES teams (id) ON DELETE CASCADE,
+  side       text        NOT NULL CHECK (side IN ('plaintiff', 'defense')),
+  started_by uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  ended_at   timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS interviews_witness_idx ON interviews (witness_id);
+
+-- At most one open interview per witness, team (or instructor test), and side.
+CREATE UNIQUE INDEX IF NOT EXISTS interviews_open_idx
+  ON interviews (witness_id, COALESCE(team_id, '00000000-0000-0000-0000-000000000000'::uuid), side)
+  WHERE ended_at IS NULL;
+
+-- Each question and the witness's reply. `position` orders them; it is unique
+-- so two partners asking at once can't both be answered at the same point.
+CREATE TABLE IF NOT EXISTS interview_turns (
+  interview_id  uuid        NOT NULL REFERENCES interviews (id) ON DELETE CASCADE,
+  position      integer     NOT NULL,
+  question      text        NOT NULL,
+  reply         text        NOT NULL,
+  objection     text,
+  answer        text        NOT NULL,
+  asked_by      uuid        REFERENCES users (id) ON DELETE SET NULL,
+  model         text        NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (interview_id, position)
+);
+
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (
   sid    varchar      PRIMARY KEY,

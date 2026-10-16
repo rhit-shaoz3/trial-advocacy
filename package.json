@@ -14,6 +14,8 @@
     "db:seed": "node --env-file-if-exists=.env.local server/db/seed.ts",
     "storage:migrate": "node --env-file-if-exists=.env.local server/db/moveFilesToStorage.ts",
     "storage:check": "node --env-file-if-exists=.env.local server/storage/check.ts",
+    "witness:chat": "node --env-file-if-exists=.env.local server/witness/chat.ts",
+    "witness:eval": "node --env-file-if-exists=.env.local server/witness/evals/runEval.ts",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -22,6 +24,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@aws-sdk/client-s3": "^3.1152.0",
     "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "bcryptjs": "^3.0.3",
@@ -29,10 +32,12 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "lucide-react": "^0.577.0",
+    "mustache": "^4.2.0",
     "pg": "^8.23.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router": "^7.18.4"
+    "react-router": "^7.18.4",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
@@ -42,6 +47,7 @@
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "^5.0.6",
     "@types/express-session": "^1.19.0",
+    "@types/mustache": "^4.2.6",
     "@types/node": "^26.6.4",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.1.8",

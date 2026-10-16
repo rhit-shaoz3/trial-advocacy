@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
+import { caseOverview } from '../../courses/caseLabels'
 import type { CourseCase } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { CaseForm } from './CaseForm'
@@ -85,7 +86,7 @@ export function CasesPage() {
                   <h2>{c.title}</h2>
                   <CaseStatusBadge status={c.status} />
                 </div>
-                {c.summary && <p className="case-row-summary">{c.summary}</p>}
+                {c.summary && <p className="case-row-summary">{caseOverview(c.summary)}</p>}
                 <small className="muted">Created {formatDate(c.createdAt)}</small>
               </Link>
             </li>

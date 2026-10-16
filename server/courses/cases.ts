@@ -11,6 +11,10 @@ export interface CourseCase {
   status: CaseStatus
   /** Shown on every student's case dashboard. */
   instructorNote: string
+  /** "Today" inside the case for its AI witnesses, YYYY-MM-DD; null means the real date. */
+  inWorldDate: string | null
+  /** Issues the AI witnesses must leave disputed (one per line). */
+  disputedIssues: string
   createdAt: Date
   updatedAt: Date
 }
@@ -23,6 +27,7 @@ export interface CaseFields {
 }
 
 const CASE_COLUMNS = `id, title, summary, status, instructor_note AS "instructorNote",
+  to_char(in_world_date, 'YYYY-MM-DD') AS "inWorldDate", disputed_issues AS "disputedIssues",
   created_at AS "createdAt", updated_at AS "updatedAt"`
 
 /** Oldest first, so the term's first case stays on top. */

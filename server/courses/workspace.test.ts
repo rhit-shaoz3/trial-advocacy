@@ -53,6 +53,8 @@ describe('case materials', () => {
       contentType: 'application/pdf',
       sizeBytes: 13,
       uploadedAt: expect.any(String),
+      textStatus: 'pending',
+      textError: null,
     })
     const photo = (await upload('scene.JPG', { audience: 'plaintiff' })).body.material
     expect(photo).toMatchObject({ audience: 'plaintiff', contentType: 'image/jpeg' })
@@ -104,6 +106,11 @@ describe('witnesses, tasks, and the note', () => {
       role: 'Ride operator',
       description: 'Was at the controls.',
       audience: 'all',
+      alignedSide: null,
+      personaNotes: '',
+      depositionMaterialId: null,
+      knownMaterialIds: [],
+      defendingCounsel: '',
     })
     const { id } = res.body.witness
     const edited = await prof.put(`${caseUrl()}/witnesses/${id}`).send({ name: 'Elena Torres', audience: 'defense' })

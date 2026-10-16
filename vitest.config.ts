@@ -32,10 +32,13 @@ export default defineConfig({
           include: ['server/**/*.test.ts'],
           environment: 'node',
           globalSetup: ['server/test/globalSetup.ts'],
+          setupFiles: ['server/test/fakeAi.ts'],
           // Case files go to a temporary folder, never to S3.
           env: {
             DATABASE_URL: testDatabaseUrl ?? '',
             NODE_ENV: 'test',
+            // Tests never call Claude; they swap in fakes for `ai`.
+            ANTHROPIC_API_KEY: '',
             S3_BUCKET: '',
             STORAGE_DIR: join(tmpdir(), 'trial-advocacy-test-storage'),
           },

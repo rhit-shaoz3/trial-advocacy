@@ -92,8 +92,9 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
 | GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Students get the active and closed cases they're on a team in, each with `world: { number, side }` (or `null` before matching), `progress` (percent of their team's tasks done), and `nextTask`; `upcoming` lists their open tasks' deadlines and `stats` counts completed tasks. The instructor gets every active and closed case with `worldCount`. `activity` is always empty for now |
 | GET    | `/api/courses/:id/my-cases` |                             | Members: `{ cases: [{ id, title, summary, status, team, world }] }`, without drafts; `team` is `{ number, members }` (each member has `you`) or `null` before pairing; `world` is `{ number, side, opponents: { number, members } }` or `null` before matching |
-| GET    | `/api/courses/:id/my-cases/:caseId` |                     | Students: `{ workspace }`, the case dashboard: `{ case, team, world, side, materials, witnesses, tasks, preview }`, showing only shared items and their side's. Each task has the team's `completedAt` / `completedBy`. `404` for drafts |
+| GET    | `/api/courses/:id/my-cases/:caseId` |                     | Students: `{ workspace }`, the case dashboard: `{ case, team, world, side, materials, witnesses, tasks, preview }`, showing only shared items and their side's. Witnesses carry only `{ id, name, role, description, audience, canInterview }`, never their AI setup. Each task has the team's `completedAt` / `completedBy`. `404` for drafts |
 | GET    | `/api/courses/:id/my-cases/:caseId/materials/:materialId/file` | | `302` to a 5-minute download link, if the student's side can see it |
+| GET / POST | `/api/courses/:id/my-cases/:caseId/witnesses/:witnessId/interview` (`/questions`, `/restart`) | `{ question }` | The team's interview of a witness its side can see, shared by both partners and always asked as the team's own side (any `side` in the request is ignored); same shapes as the instructor's. `409` before the team is matched, or once the case is closed (read-only) |
 | PUT    | `/api/courses/:id/my-cases/:caseId/tasks/:taskId` | `{ done: boolean }`   | `{ workspace }`; marks it done (or not) for the student's whole team. `409` if the case is closed or the student has no team |
 | GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode` and `studentCount` |
 | POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
@@ -125,14 +126,19 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | DELETE | `/api/courses/:id/cases/:caseId/matchups`    |                                  | The teams, with no matchups left |
 | POST   | `/api/courses/:id/cases/:caseId/matchups/:matchupId/swap` |                     | The teams, with that world's sides swapped |
 | DELETE | `/api/courses/:id/cases/:caseId/matchups/:matchupId` |                          | The teams, without that world |
-| GET    | `/api/courses/:id/cases/:caseId/materials` |                                 | `{ materials: [{ id, audience, filename, description, contentType, sizeBytes, uploadedAt }] }`, in upload order |
+| GET    | `/api/courses/:id/cases/:caseId/materials` |                                 | `{ materials: [{ id, audience, filename, description, contentType, sizeBytes, uploadedAt, textStatus, textError }] }`, in upload order. `textStatus` is the AI transcription: `pending`, `ready`, `failed` (with `textError`), or `none` |
 | POST   | `/api/courses/:id/cases/:caseId/materials/uploads` | `{ filename, size }` | Step 1 of an upload: `201 { upload: { key, url, headers } }`, a 15-minute link to `PUT` the file to (S3 in production) with exactly those headers. `413` over 100 MB, `415` unless a document (PDF, Word, text), image (PNG, JPEG, GIF, WebP), audio (MP3, M4A, WAV), or video (MP4, MOV, WebM) |
-| POST   | `/api/courses/:id/cases/:caseId/materials` | `{ uploadKey, filename, audience?, description? }` | Step 2, after the `PUT`: `201 { material }`; `audience` is `all` (default), `plaintiff`, or `defense`. `400` if the upload didn't finish or belongs to another case |
+| POST   | `/api/courses/:id/cases/:caseId/materials` | `{ uploadKey, filename, audience?, description? }` | Step 2, after the `PUT`: `201 { material }`; `audience` is `all` (default), `plaintiff`, `defense`, or `instructor` (never shown to students). Starts the file's transcription. `400` if the upload didn't finish or belongs to another case |
 | PATCH  | `/api/courses/:id/cases/:caseId/materials/:materialId` | `{ audience, description }` | `{ material }` |
 | GET    | `/api/courses/:id/cases/:caseId/materials/:materialId/file` |                  | `302` to a 5-minute download link |
+| GET / POST | `/api/courses/:id/cases/:caseId/materials/:materialId/text` | | The transcription as `text/plain` (`404` until ready) / transcribe again: `{ material }` when done |
 | DELETE | `/api/courses/:id/cases/:caseId/materials/:materialId` |                       | `204`; also deletes the stored file |
-| GET / POST | `/api/courses/:id/cases/:caseId/witnesses` | `{ name, role?, description?, audience? }` | `{ witnesses }` / `201 { witness }` |
+| GET / POST | `/api/courses/:id/cases/:caseId/witnesses` | `{ name, role?, description?, audience?, alignedSide?, depositionMaterialId?, knownMaterialIds?, personaNotes?, defendingCounsel? }` | `{ witnesses }` / `201 { witness }`. With `alignedSide` (`plaintiff` / `defense`) and a deposition file from this case, an AI witness |
 | PUT / DELETE | `/api/courses/:id/cases/:caseId/witnesses/:witnessId` | Same as POST            | `{ witness }` / `204` |
+| GET | `/api/courses/:id/cases/:caseId/witnesses/:witnessId/interview?side=` | | The instructor's test interview as `plaintiff` or `defense`, kept apart from every team's: `{ interview: { id, side, witness, turns, maxTurns, canAsk, notice } }` |
+| POST | `…/witnesses/:witnessId/interview/questions?side=` | `{ question }` | Asks the witness; `{ interview }` with the answer. `409` if the witness isn't set up, `503` without an API key |
+| POST | `…/witnesses/:witnessId/interview/restart?side=` | | Ends it and starts an empty one: `{ interview }` |
+| PUT | `/api/courses/:id/cases/:caseId/witness-settings` | `{ inWorldDate: 'YYYY-MM-DD' \| null, disputedIssues }` | `{ case }`. Shared by the case's AI witnesses |
 | GET / POST | `/api/courses/:id/cases/:caseId/tasks` | `{ title, description?, dueAt?, audience? }` | `{ tasks }` (soonest due first) / `201 { task }`; `dueAt` is an ISO timestamp or `null` |
 | PUT / DELETE | `/api/courses/:id/cases/:caseId/tasks/:taskId` | Same as POST                   | `{ task }` / `204`; deleting removes teams' completions |
 | PUT    | `/api/courses/:id/cases/:caseId/note` | `{ note }`                                    | `{ case }`; the instructor note shown on every student's case dashboard |
@@ -149,6 +155,30 @@ Each case also has a **case file** (the pieces of the fact pattern: documents, i
 **Rosters are keyed by email.** An instructor can add a student who has no account yet; that roster row is "pending" until someone signs up with the email (or joins with the entry code), and then it links to their account automatically.
 
 Errors come back as `{ error: "message" }`. Logins are kept in an httpOnly session cookie stored in the `session` table.
+
+## AI witnesses
+
+Teams interview AI witnesses, played by Claude (`claude-opus-5-5`). A witness isn't fine-tuned: each answer is generated from a system prompt rendered from two Mustache templates in `server/witness/templates/`, the **witness initialization** (who the witness is, the case, the case documents labelled by how binding they are and whether the witness knows them, and the rules for filling gaps truthfully) followed by the **deposition session** (which side is asking, how to answer, and the defending lawyer's objections). The code is in `server/witness/` and `server/ai/`.
+
+The instructor sets a witness up in the app:
+
+1. **Upload the deposition** to the case file as *Instructors only*. Students never see or download instructor-only files.
+2. **Every case file is transcribed** by Claude once, in the background, after it's uploaded (`server/ai/transcribe.ts`): tables as `|`-separated rows, photos and screenshots described in brackets. The Case file tab shows each file's status, with *View text* to check what the witnesses read and *Retry* if it failed. Audio and video have nothing to read yet.
+3. **Create the witness** in the Witnesses tab: the side they testify for, their deposition file, the other files they have seen, their background and demeanor, and their lawyer (who may object when the other side asks). A witness with a side and a deposition is an AI witness.
+4. **Set the case-wide settings** in the same tab: today's date inside the case and the issues every witness must leave disputed.
+
+The witness reads its deposition as its own account, the files it has seen as records it knows, the other student files as records it doesn't know, and other instructor-only files (other witnesses' depositions) as someone else's account. Before the deposition, teams **interview** each witness: the *Interview* button in the student Witnesses tab. Each team shares one interview per witness, always as its own side (the witness treats them as that side's lawyers; they can't switch), saved turn by turn; *Start over* begins a new one. Every team starts with an empty interview. The instructor tests a witness with *Test as plaintiff* / *Test as defense* in the Witnesses tab; those runs are kept apart from the teams, and the Student view preview shows the Interview button without opening anything. Depositions themselves, with instructor deadlines, come later.
+
+Each question costs a couple of cents (the case documents are cached for the interview; the first question writes the cache, about 20 cents). Transcribing a long PDF costs well under a dollar, once.
+
+Set `ANTHROPIC_API_KEY` in `.env.local` (and as a Heroku config var). For the terminal tools, eval cases, saved transcripts, and eval results live in the git-ignored `.material/witnesses/<name>/`, since they quote the confidential fact pattern:
+
+| Command | What it does |
+| --- | --- |
+| `npm run witness:chat -- --witness "Name" --side plaintiff` | Question an app witness in the terminal, without saving to the app (`--side defense`, `--attorney "Mr. X"`) |
+| `npm run witness:eval -- --witness "Name"` | Run the witness's behavioral eval against the real model (about a dollar; `--case <id>`, `--repeat N`, `--effort low`) |
+
+`npm test` covers transcription bookkeeping, witness setup, interviews, prompt rendering, request building, reply parsing, and eval checks with Claude faked; it never calls the API.
 
 ## Deploying to Heroku
 

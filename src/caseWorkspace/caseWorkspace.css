@@ -336,6 +336,43 @@
   white-space: nowrap;
 }
 
+.cw-interview {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.45rem;
+  background: var(--ws-navy);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.cw-interview:hover {
+  background: var(--ws-blue);
+}
+
+.cw-interview:focus-visible {
+  outline: 2px solid #608cb3;
+  outline-offset: 2px;
+}
+
+.cw-interview-off {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cw-interview-off:hover {
+  background: var(--ws-navy);
+}
+
+.cw-interview svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
 .cw-badge-done {
   background: #e1eee7;
   color: #426d59;

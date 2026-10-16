@@ -1,5 +1,5 @@
 import { apiRequest } from '../api/request'
-import type { CourseService } from './types'
+import type { CourseService, InterviewAs } from './types'
 
 const coursePath = (courseId: string) => `/courses/${encodeURIComponent(courseId)}`
 const casePath = (courseId: string, caseId: string) =>
@@ -8,6 +8,12 @@ const teamsPath = (courseId: string, caseId: string) => `${casePath(courseId, ca
 const myCasePath = (courseId: string, caseId: string) =>
   `${coursePath(courseId)}/my-cases/${encodeURIComponent(caseId)}`
 const matchupsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/matchups`
+/** A team's interview lives under my-cases; the instructor's test one under the case, by side. */
+function interviewPath(courseId: string, caseId: string, witnessId: string, as: InterviewAs, action = '') {
+  const base = as === 'team' ? myCasePath(courseId, caseId) : casePath(courseId, caseId)
+  const path = `${base}/witnesses/${encodeURIComponent(witnessId)}/interview${action}`
+  return as === 'team' ? path : `${path}?side=${as}`
+}
 
 export const httpCourseService: CourseService = {
   async listMyCourses() {
@@ -204,6 +210,17 @@ export const httpCourseService: CourseService = {
     return `/api${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/file`
   },
 
+  materialTextUrl(courseId, caseId, materialId) {
+    return `/api${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/text`
+  },
+
+  async retryTranscription(courseId, caseId, materialId) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/text`, {
+      method: 'POST',
+    })
+    return body.material
+  },
+
   async listWitnesses(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/witnesses`)).witnesses
   },
@@ -262,6 +279,14 @@ export const httpCourseService: CourseService = {
     return body.case
   },
 
+  async saveWitnessSettings(courseId, caseId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/witness-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.case
+  },
+
   async getLaunchChecks(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/launch`)).checks
   },
@@ -293,5 +318,21 @@ export const httpCourseService: CourseService = {
 
   myMaterialDownloadUrl(courseId, caseId, materialId) {
     return `/api${myCasePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/file`
+  },
+
+  async getInterview(courseId, caseId, witnessId, as) {
+    return (await apiRequest(interviewPath(courseId, caseId, witnessId, as))).interview
+  },
+
+  async askWitness(courseId, caseId, witnessId, as, question) {
+    const body = await apiRequest(interviewPath(courseId, caseId, witnessId, as, '/questions'), {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    })
+    return body.interview
+  },
+
+  async restartInterview(courseId, caseId, witnessId, as) {
+    return (await apiRequest(interviewPath(courseId, caseId, witnessId, as, '/restart'), { method: 'POST' })).interview
   },
 }

@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import type { CaseWorkspace } from '../courses/types'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
@@ -37,6 +38,8 @@ const sampleWorkspace: CaseWorkspace = {
       contentType: 'application/pdf',
       sizeBytes: 250_000,
       uploadedAt: '2026-10-01T15:00:00.000Z',
+      textStatus: 'ready',
+      textError: null,
     },
     {
       id: 'm2',
@@ -46,6 +49,8 @@ const sampleWorkspace: CaseWorkspace = {
       contentType: 'application/pdf',
       sizeBytes: 1200,
       uploadedAt: '2026-10-02T15:00:00.000Z',
+      textStatus: 'ready',
+      textError: null,
     },
     {
       id: 'm3',
@@ -55,6 +60,8 @@ const sampleWorkspace: CaseWorkspace = {
       contentType: 'image/jpeg',
       sizeBytes: 3_000_000,
       uploadedAt: '2026-10-03T15:00:00.000Z',
+      textStatus: 'ready',
+      textError: null,
     },
     {
       id: 'm4',
@@ -64,9 +71,11 @@ const sampleWorkspace: CaseWorkspace = {
       contentType: 'audio/mpeg',
       sizeBytes: 900_000,
       uploadedAt: '2026-10-04T15:00:00.000Z',
+      textStatus: 'ready',
+      textError: null,
     },
   ],
-  witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', audience: 'all' }],
+  witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', audience: 'all', canInterview: false }],
   tasks: [
     {
       id: 't1',
@@ -102,13 +111,15 @@ const sampleWorkspace: CaseWorkspace = {
 function renderView(props: Partial<Parameters<typeof CaseWorkspaceView>[0]> = {}) {
   const user = userEvent.setup()
   render(
-    <CaseWorkspaceView
-      workspace={sampleWorkspace}
-      downloadUrl={(id) => `/files/${id}`}
-      instructorName="Prof. Ruiz"
-      now={NOW}
-      {...props}
-    />,
+    <MemoryRouter>
+      <CaseWorkspaceView
+        workspace={sampleWorkspace}
+        downloadUrl={(id) => `/files/${id}`}
+        instructorName="Prof. Ruiz"
+        now={NOW}
+        {...props}
+      />
+    </MemoryRouter>,
   )
   return { user }
 }
@@ -207,5 +218,30 @@ describe('CaseWorkspaceView', () => {
     expect(screen.getAllByText('The case file hasn’t been posted yet.')).toHaveLength(1)
     expect(screen.getByRole('region', { name: 'Next task' })).toHaveTextContent('No tasks have been assigned yet.')
     expect(screen.getByRole('region', { name: 'Case team' })).toHaveTextContent('Not on a team yet.')
+  })
+
+  it("links each AI witness to the team's interview", async () => {
+    const { user } = renderView({
+      workspace: {
+        ...sampleWorkspace,
+        witnesses: [
+          { ...sampleWorkspace.witnesses[0], canInterview: true },
+          { id: 'w2', name: 'Bystander', role: '', description: '', audience: 'all', canInterview: false },
+        ],
+      },
+      interviewHref: (id) => `/interview/${id}`,
+    })
+    await user.click(screen.getByRole('tab', { name: 'Witnesses, 2' }))
+    expect(screen.getByRole('link', { name: 'Interview Elena Torres' })).toHaveAttribute('href', '/interview/w1')
+    expect(screen.queryByRole('link', { name: 'Interview Bystander' })).not.toBeInTheDocument()
+  })
+
+  it("shows the Interview button in the instructor's preview without opening anything", async () => {
+    const { user } = renderView({
+      workspace: { ...sampleWorkspace, preview: true, witnesses: [{ ...sampleWorkspace.witnesses[0], canInterview: true }] },
+    })
+    await user.click(screen.getByRole('tab', { name: 'Witnesses, 1' }))
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Interview')
+    expect(screen.queryByRole('link', { name: /Interview/ })).not.toBeInTheDocument()
   })
 })

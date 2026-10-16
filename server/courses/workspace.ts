@@ -12,6 +12,13 @@ import {
 import type { Side } from './matchups.ts'
 import { listMyCases, type MyCase } from './myCases.ts'
 import { listTeams } from './teams.ts'
+import { isAiWitness } from '../witness/profile.ts'
+
+/** What students see of a witness: never its AI setup (deposition file, persona, files it has seen). */
+export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'audience'> & {
+  /** Whether the witness is an AI witness the team can interview. */
+  canInterview: boolean
+}
 
 // Shape sent to the client; matches `CaseWorkspace` in src/courses/types.ts.
 export interface CaseWorkspace {
@@ -27,7 +34,7 @@ export interface CaseWorkspace {
   /** Which side's material is shown: the world's side, or null before matching. */
   side: Side | null
   materials: CaseMaterial[]
-  witnesses: Witness[]
+  witnesses: WorkspaceWitness[]
   tasks: (CaseTask & { completedAt: Date | null; completedBy: string | null })[]
   /** True when the instructor is looking at it as a team would; nothing can be changed. */
   preview: boolean
@@ -64,7 +71,14 @@ async function assemble(
     world,
     side,
     materials,
-    witnesses,
+    witnesses: witnesses.map((w) => ({
+      id: w.id,
+      name: w.name,
+      role: w.role,
+      description: w.description,
+      audience: w.audience,
+      canInterview: isAiWitness(w),
+    })),
     tasks: tasks.map((t) => ({
       ...t,
       completedAt: doneBy.get(t.id)?.completedAt ?? null,

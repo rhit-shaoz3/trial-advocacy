@@ -57,8 +57,17 @@ export interface CourseCase {
   status: CourseCaseStatus
   /** Shown on every student's case dashboard. */
   instructorNote: string
+  /** "Today" inside the case for its AI witnesses (YYYY-MM-DD); null means the real date. */
+  inWorldDate: string | null
+  /** Issues the AI witnesses must leave disputed. */
+  disputedIssues: string
   createdAt: string
   updatedAt: string
+}
+
+export interface WitnessSettingsInput {
+  inWorldDate: string | null
+  disputedIssues: string
 }
 
 export interface CaseInput {
@@ -113,32 +122,91 @@ export interface MyCase {
 export type Audience = 'all' | Side
 export const AUDIENCES: Audience[] = ['all', 'plaintiff', 'defense']
 
+/** Case files can also be kept from students entirely, like an AI witness's deposition. */
+export type MaterialAudience = Audience | 'instructor'
+export const MATERIAL_AUDIENCES: MaterialAudience[] = [...AUDIENCES, 'instructor']
+
+/**
+ * Each file is transcribed once, after upload, for the AI witnesses to read:
+ * pending while that runs, then ready, failed, or none (nothing to read, like audio).
+ */
+export type TextStatus = 'pending' | 'ready' | 'failed' | 'none'
+
 /** A file in a case's case file: one piece of the fact pattern. */
 export interface CaseMaterial {
   id: string
-  audience: Audience
+  audience: MaterialAudience
   filename: string
   description: string
   contentType: string
   sizeBytes: number
   uploadedAt: string
+  textStatus: TextStatus
+  textError: string | null
 }
 
 export interface MaterialInput {
-  audience: Audience
+  audience: MaterialAudience
   description: string
 }
 
-/** Someone in the case's story. Later, an AI witness students can interview. */
+/**
+ * Someone in the case's story. With a side and a deposition file, an AI
+ * witness that teams can interview.
+ */
 export interface Witness {
   id: string
   name: string
   role: string
   description: string
   audience: Audience
+  /** The side the witness testifies for; null until it is an AI witness. */
+  alignedSide: Side | null
+  /** Demeanor and background for the AI to play. */
+  personaNotes: string
+  /** The witness's own deposition, the account the AI keeps to. */
+  depositionMaterialId: string | null
+  /** Other case files the witness has seen. */
+  knownMaterialIds: string[]
+  /** The witness's lawyer, who may object when the other side asks. */
+  defendingCounsel: string
 }
 
 export type WitnessInput = Omit<Witness, 'id'>
+
+/** What students see of a witness (never its AI setup). */
+export interface WorkspaceWitness {
+  id: string
+  name: string
+  role: string
+  description: string
+  audience: Audience
+  /** An AI witness the team can interview. */
+  canInterview: boolean
+}
+
+/** A team's (or the instructor's test) interview of an AI witness, before any deposition. */
+export interface Interview {
+  id: string
+  side: Side
+  witness: { id: string; name: string; role: string }
+  turns: {
+    position: number
+    question: string
+    /** The defending lawyer's objection, as "Name: text". */
+    objection: string | null
+    answer: string
+    askedBy: string | null
+    createdAt: string
+  }[]
+  maxTurns: number
+  canAsk: boolean
+  /** Why questions can't be asked, when they can't. */
+  notice: string | null
+}
+
+/** Whose interview: the student's team (as its own side), or the instructor testing as one side. */
+export type InterviewAs = 'team' | Side
 
 /** Work every team on `audience`'s side does for the case. */
 export interface CaseTask {
@@ -176,7 +244,7 @@ export interface CaseWorkspace {
   /** Which side's material is shown; null before the student's team is matched. */
   side: Side | null
   materials: CaseMaterial[]
-  witnesses: Witness[]
+  witnesses: WorkspaceWitness[]
   /** Soonest due first; completion is the team's. */
   tasks: (CaseTask & { completedAt: string | null; completedBy: string | null })[]
   /** The instructor viewing it as a team would; nothing can be changed. */
@@ -238,6 +306,10 @@ export interface CourseService {
   updateMaterial(courseId: string, caseId: string, materialId: string, input: MaterialInput): Promise<CaseMaterial>
   deleteMaterial(courseId: string, caseId: string, materialId: string): Promise<void>
   materialDownloadUrl(courseId: string, caseId: string, materialId: string): string
+  /** The file's transcription (what the AI witnesses read), as plain text. */
+  materialTextUrl(courseId: string, caseId: string, materialId: string): string
+  /** Transcribes the file again; resolves when done. */
+  retryTranscription(courseId: string, caseId: string, materialId: string): Promise<CaseMaterial>
   listWitnesses(courseId: string, caseId: string): Promise<Witness[]>
   createWitness(courseId: string, caseId: string, input: WitnessInput): Promise<Witness>
   updateWitness(courseId: string, caseId: string, witnessId: string, input: WitnessInput): Promise<Witness>
@@ -248,6 +320,7 @@ export interface CourseService {
   updateTask(courseId: string, caseId: string, taskId: string, input: TaskInput): Promise<CaseTask>
   deleteTask(courseId: string, caseId: string, taskId: string): Promise<void>
   saveInstructorNote(courseId: string, caseId: string, note: string): Promise<CourseCase>
+  saveWitnessSettings(courseId: string, caseId: string, input: WitnessSettingsInput): Promise<CourseCase>
   getLaunchChecks(courseId: string, caseId: string): Promise<LaunchCheck[]>
   /** Makes a ready draft case active, launching every case world. */
   launchCase(courseId: string, caseId: string): Promise<CourseCase>
@@ -262,4 +335,10 @@ export interface CourseService {
   /** Marks a task done (or not) for the student's whole team. */
   setTaskDone(courseId: string, caseId: string, taskId: string, done: boolean): Promise<CaseWorkspace>
   myMaterialDownloadUrl(courseId: string, caseId: string, materialId: string): string
+
+  // Interviews with AI witnesses: the student's team's, or the instructor's test as one side.
+  getInterview(courseId: string, caseId: string, witnessId: string, as: InterviewAs): Promise<Interview>
+  askWitness(courseId: string, caseId: string, witnessId: string, as: InterviewAs, question: string): Promise<Interview>
+  /** Ends the interview and starts an empty one. */
+  restartInterview(courseId: string, caseId: string, witnessId: string, as: InterviewAs): Promise<Interview>
 }

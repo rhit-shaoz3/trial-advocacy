@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../../../courses/CourseServiceContext'
-import type { CaseMaterial, CaseWorkspace, CourseService } from '../../../courses/types'
+import { MemoryRouter } from 'react-router'
+import type { CaseMaterial, CaseWorkspace, CourseCase, CourseService } from '../../../courses/types'
 import { fakeCourseService } from '../../../test/fakeCourseService'
 import { LaunchPanel } from './LaunchPanel'
 import { MaterialsSection } from './MaterialsSection'
@@ -26,6 +27,8 @@ const factPattern: CaseMaterial = {
   contentType: 'application/pdf',
   sizeBytes: 250_000,
   uploadedAt: '2026-10-01T15:00:00.000Z',
+  textStatus: 'ready',
+  textError: null,
 }
 
 afterEach(() => {
@@ -129,15 +132,33 @@ describe('MaterialsSection', () => {
 })
 
 describe('WitnessesSection', () => {
+  const coaster: CourseCase = {
+    id: 'k1',
+    title: 'Rivera v. Thrill Park',
+    summary: '',
+    status: 'draft',
+    instructorNote: '',
+    inWorldDate: null,
+    disputedIssues: '',
+    createdAt: '2026-10-01T15:00:00.000Z',
+    updatedAt: '2026-10-01T15:00:00.000Z',
+  }
+  const deposition: CaseMaterial = { ...factPattern, id: 'm2', audience: 'instructor', filename: 'Torres deposition.pdf', description: '' }
+  const blankAi = { alignedSide: null, personaNotes: '', depositionMaterialId: null, knownMaterialIds: [], defendingCounsel: '' }
+  const renderSection = (overrides: Partial<CourseService> = {}, onCaseChange = vi.fn()) =>
+    renderWith(
+      <MemoryRouter>
+        <WitnessesSection courseId="c1" courseCase={coaster} onCaseChange={onCaseChange} />
+      </MemoryRouter>,
+      { listMaterials: vi.fn().mockResolvedValue([factPattern, deposition]), ...overrides },
+    )
+
   it('adds, edits, and removes witnesses', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const elena = { id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: '', audience: 'all' as const }
+    const elena = { id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: '', audience: 'all' as const, ...blankAi }
     const createWitness = vi.fn().mockResolvedValue(elena)
     const updateWitness = vi.fn().mockResolvedValue({ ...elena, audience: 'defense' })
-    const { user, service } = renderWith(<WitnessesSection courseId="c1" caseId="k1" />, {
-      createWitness,
-      updateWitness,
-    })
+    const { user, service } = renderSection({ createWitness, updateWitness })
 
     await user.click(await screen.findByRole('button', { name: 'Add witness' }))
     const form = screen.getByRole('form', { name: 'New witness' })
@@ -149,9 +170,11 @@ describe('WitnessesSection', () => {
       role: 'Ride operator',
       description: '',
       audience: 'all',
+      ...blankAi,
     })
     const item = await screen.findByRole('listitem', { name: 'Elena Torres' })
     expect(item).toHaveTextContent('Everyone')
+    expect(within(item).queryByRole('link', { name: 'Test as plaintiff' })).not.toBeInTheDocument()
 
     await user.click(within(item).getByRole('button', { name: 'Edit' }))
     await user.selectOptions(screen.getByLabelText('Visible to'), 'Defense only')
@@ -162,6 +185,60 @@ describe('WitnessesSection', () => {
     await user.click(within(screen.getByRole('listitem', { name: 'Elena Torres' })).getByRole('button', { name: 'Remove' }))
     expect(service.deleteWitness).toHaveBeenCalledWith('c1', 'k1', 'w1')
     expect(screen.getByText('No witnesses yet.')).toBeInTheDocument()
+  })
+
+  it('sets up an AI witness from its deposition and the files it has seen', async () => {
+    const created = {
+      id: 'w1',
+      name: 'Elena Torres',
+      role: '',
+      description: '',
+      audience: 'all' as const,
+      alignedSide: 'defense' as const,
+      personaNotes: 'Plain-spoken.',
+      depositionMaterialId: 'm2',
+      knownMaterialIds: ['m1'],
+      defendingCounsel: 'Ms. Park',
+    }
+    const createWitness = vi.fn().mockResolvedValue(created)
+    const { user } = renderSection({ createWitness })
+
+    await user.click(await screen.findByRole('button', { name: 'Add witness' }))
+    const form = screen.getByRole('form', { name: 'New witness' })
+    await user.type(within(form).getByLabelText('Name'), 'Elena Torres')
+    await user.selectOptions(within(form).getByLabelText('Testifies for'), 'Defense')
+    await user.selectOptions(within(form).getByLabelText('Interview file'), 'Torres deposition.pdf')
+    await user.click(within(form).getByRole('checkbox', { name: 'Read first. (Fact pattern.pdf)' }))
+    await user.type(within(form).getByLabelText(/Witness.s lawyer/), 'Ms. Park')
+    await user.type(within(form).getByLabelText('Background and demeanor (optional)'), 'Plain-spoken.')
+    await user.click(within(form).getByRole('button', { name: 'Save witness' }))
+
+    expect(createWitness).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({
+      alignedSide: 'defense',
+      depositionMaterialId: 'm2',
+      knownMaterialIds: ['m1'],
+      defendingCounsel: 'Ms. Park',
+      personaNotes: 'Plain-spoken.',
+    }))
+    const item = await screen.findByRole('listitem', { name: 'Elena Torres' })
+    expect(item).toHaveTextContent('AI witness')
+    expect(item).toHaveTextContent('For the defendant · Deposition: Torres deposition.pdf · 1 other file seen · Lawyer: Ms. Park')
+    expect(within(item).getByRole('link', { name: 'Test as plaintiff' })).toHaveAttribute('href', '/courses/c1/cases/k1/witnesses/w1?side=plaintiff')
+    expect(within(item).getByRole('link', { name: 'Test as defense' })).toHaveAttribute('href', '/courses/c1/cases/k1/witnesses/w1?side=defense')
+  })
+
+  it('saves the case date and disputed issues', async () => {
+    const saved = { ...coaster, inWorldDate: '2024-10-01', disputedIssues: 'Where she stood.' }
+    const saveWitnessSettings = vi.fn().mockResolvedValue(saved)
+    const onCaseChange = vi.fn()
+    const { user } = renderSection({ saveWitnessSettings }, onCaseChange)
+
+    const form = await screen.findByRole('form', { name: 'AI witness settings' })
+    fireEvent.change(within(form).getByLabelText(/Today.s date in the case/), { target: { value: '2024-10-01' } })
+    await user.type(within(form).getByLabelText(/Issues the witnesses/), 'Where she stood.')
+    await user.click(within(form).getByRole('button', { name: 'Save settings' }))
+    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', { inWorldDate: '2024-10-01', disputedIssues: 'Where she stood.' })
+    expect(onCaseChange).toHaveBeenCalledWith(saved)
   })
 })
 

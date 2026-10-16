@@ -1,10 +1,19 @@
-import type { Audience } from './types'
+import type { MaterialAudience } from './types'
 
 /** How the instructor sees who an item is for. */
-export const AUDIENCE_LABEL: Record<Audience, string> = {
+export const AUDIENCE_LABEL: Record<MaterialAudience, string> = {
   all: 'Everyone',
   plaintiff: 'Plaintiff only',
   defense: 'Defense only',
+  instructor: 'Instructors only',
+}
+
+/**
+ * The case overview: the summary's first paragraph, for lists and cards.
+ * Later paragraphs (procedural history, rulings) show only on the case page.
+ */
+export function caseOverview(summary: string) {
+  return summary.trim().split(/\n\s*\n/)[0].trim()
 }
 
 /** The broad kinds of file in a case file, in the order they're listed. */

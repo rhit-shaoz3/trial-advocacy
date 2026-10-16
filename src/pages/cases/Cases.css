@@ -569,6 +569,85 @@ a.case-row:hover {
   color: #8a4f2f;
 }
 
+.content-audience-instructor {
+  background: #f1ecf6;
+  color: #5d3f86;
+}
+
+.content-ai-witness {
+  background: #e7f3ec;
+  color: #2f6b47;
+}
+
+/* The AI witness part of the witness form */
+
+.content-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.content-fieldset legend {
+  padding: 0 0.35rem;
+  color: #384454;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.content-fieldset .section-hint {
+  margin: 0;
+}
+
+.content-fieldset > .content-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.9rem;
+}
+
+.content-fieldset select {
+  width: 100%;
+}
+
+.content-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #384454;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.panel-form .content-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.panel-form .content-check input {
+  min-height: 0;
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+}
+
+.panel-form-actions small,
+.panel-form-actions [role="status"] {
+  align-self: center;
+}
+
+.content-text-failed .form-error {
+  display: inline;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
 /* Student view preview */
 
 .preview-picker {

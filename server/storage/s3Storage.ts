@@ -65,6 +65,11 @@ export function s3Storage(bucket: string, region: string): FileStorage {
       )
     },
 
+    async read(key) {
+      const object = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
+      return Buffer.from(await object.Body!.transformToByteArray())
+    },
+
     async put(key, data, contentType) {
       await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: data, ContentType: contentType }))
     },

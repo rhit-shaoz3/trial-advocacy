@@ -36,6 +36,8 @@ describe('creating', () => {
       summary: coaster.summary,
       status: 'draft',
       instructorNote: '',
+      inWorldDate: null,
+      disputedIssues: '',
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     })

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { Link } from 'react-router'
 import {
   ArrowRight,
   CalendarClock,
@@ -10,6 +11,7 @@ import {
   Image,
   FileAudio,
   FileVideo,
+  MessageSquare,
   Users,
 } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
@@ -57,11 +59,14 @@ export function CaseWorkspaceView({
   workspace,
   downloadUrl,
   onToggleTask,
+  interviewHref,
   instructorName,
   now = new Date(),
 }: {
   workspace: CaseWorkspace
   downloadUrl(materialId: string): string
+  /** Where a team interviews an AI witness; leave out (the preview) and the Interview buttons do nothing. */
+  interviewHref?(witnessId: string): string
   /** Marks a task done or not done for the team; leave out to make tasks read-only. */
   onToggleTask?(taskId: string, done: boolean): Promise<void>
   instructorName?: string | null
@@ -238,7 +243,7 @@ export function CaseWorkspaceView({
         {tab === 'witnesses' && (
           <ListPanel
             title="Witnesses"
-            sub={`People in ${c.title}. Interviews with each witness are coming soon.`}
+            sub={`People in ${c.title}. Interview the AI witnesses with your partner to prepare for their depositions.`}
             empty="No witnesses have been added yet."
           >
             {witnesses.map((w) => (
@@ -252,6 +257,19 @@ export function CaseWorkspaceView({
                   {w.description && <p>{w.description}</p>}
                 </div>
                 {w.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[w.audience]}</span>}
+                {w.canInterview &&
+                  (interviewHref ? (
+                    <Link to={interviewHref(w.id)} className="cw-interview" aria-label={`Interview ${w.name}`}>
+                      <MessageSquare aria-hidden="true" />
+                      Interview
+                    </Link>
+                  ) : (
+                    // The instructor's preview: shown as the team sees it, but nothing opens.
+                    <span className="cw-interview cw-interview-off" aria-disabled="true">
+                      <MessageSquare aria-hidden="true" />
+                      Interview
+                    </span>
+                  ))}
               </li>
             ))}
           </ListPanel>

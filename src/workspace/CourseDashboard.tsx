@@ -13,7 +13,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
-import { shortDate } from '../courses/caseLabels'
+import { caseOverview, shortDate } from '../courses/caseLabels'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import {
   calendarDaysUntil,
@@ -264,7 +264,7 @@ function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: st
           {subtitle && <p>{subtitle}</p>}
         </div>
       </div>
-      <p className="ws-case-summary">{c.summary}</p>
+      <p className="ws-case-summary">{caseOverview(c.summary)}</p>
 
       {c.progress !== null && (
         <>

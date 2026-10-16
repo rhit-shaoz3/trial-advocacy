@@ -18,7 +18,6 @@ import {
 export interface LocalStorage extends FileStorage {
   /** Checks a signed URL's query; returns its parameters, or null if forged or expired. */
   verify(query: Record<string, unknown>): Record<string, string> | null
-  read(key: string): Promise<Buffer>
   write(key: string, data: Buffer): Promise<void>
 }
 

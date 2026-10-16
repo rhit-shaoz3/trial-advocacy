@@ -15,6 +15,8 @@ export interface FileStorage {
   move(from: string, to: string): Promise<void>
   /** A link (valid for 5 minutes) that downloads the file as an attachment named `filename`. */
   downloadUrl(key: string, filename: string, contentType: string): Promise<string>
+  /** The file's contents, read by the server (e.g. to transcribe it for the AI witnesses). */
+  read(key: string): Promise<Buffer>
   /** Stores a file directly from the server (seeding, moving old files out of Postgres). */
   put(key: string, data: Buffer, contentType: string): Promise<void>
   /** Missing keys are ignored. */

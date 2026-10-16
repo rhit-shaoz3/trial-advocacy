@@ -15,8 +15,10 @@ import {
   type CourseFields,
   type TaughtCourse,
 } from './courses.ts'
-import { findMaterialFile, listStorageKeys, removeStoredFiles, setTaskDone, visibleTo } from './caseContent.ts'
+import { askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
+import { findMaterialFile, findWitness, listStorageKeys, removeStoredFiles, setTaskDone, visibleTo } from './caseContent.ts'
 import { sendMaterialFile } from './caseContentRoutes.ts'
+import { findCase } from './cases.ts'
 import { casesRouter } from './caseRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
 import { homeCasesForInstructor, listMyCases, studentHome } from './myCases.ts'
@@ -176,6 +178,45 @@ coursesRouter.put('/:courseId/my-cases/:caseId/tasks/:taskId', async (req, res) 
   if (!teamId) throw new HttpError(409, 'You need to be on a team to complete tasks.')
   await setTaskDone(taskId, teamId, req.user!.id, done)
   res.json({ workspace: await loadStudentWorkspace(courseId, caseId, req.user!.id) })
+})
+
+/**
+ * A team's interview of an AI witness their side can see. Both partners
+ * share it. The side always comes from the team's case world, never from the
+ * request, so the witness treats them as their own side's lawyers. It can be
+ * read but not continued once the case is closed.
+ */
+async function teamInterview(req: Request): Promise<InterviewContext> {
+  const { courseId, caseId, witnessId } = req.params as Record<string, string>
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  if (!isUuid(witnessId) || !workspace.witnesses.some((w) => w.id === witnessId)) {
+    throw new HttpError(404, 'Witness not found.')
+  }
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  if (!teamId || !workspace.side) throw new HttpError(409, 'Your team needs a case world before it can interview witnesses.')
+  const [courseCase, witness] = await Promise.all([findCase(courseId, caseId), findWitness(caseId, witnessId)])
+  if (!courseCase || !witness) throw new HttpError(404, 'Witness not found.')
+  return {
+    courseCase,
+    witness,
+    owner: { teamId, side: workspace.side },
+    userId: req.user!.id,
+    closed: workspace.case.status !== 'active',
+  }
+}
+
+coursesRouter.get('/:courseId/my-cases/:caseId/witnesses/:witnessId/interview', async (req, res) => {
+  res.json({ interview: await getInterview(await teamInterview(req)) })
+})
+
+coursesRouter.post('/:courseId/my-cases/:caseId/witnesses/:witnessId/interview/questions', async (req, res) => {
+  res.json({ interview: await askQuestion(await teamInterview(req), req.body) })
+})
+
+coursesRouter.post('/:courseId/my-cases/:caseId/witnesses/:witnessId/interview/restart', async (req, res) => {
+  const ctx = await teamInterview(req)
+  if (ctx.closed) throw new HttpError(409, 'This case is closed, so the interview can no longer change.')
+  res.json({ interview: await restartInterview(ctx) })
 })
 
 // Everything below manages one course and is only for the instructor who teaches it.

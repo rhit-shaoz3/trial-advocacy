@@ -218,7 +218,9 @@ export function CaseDetailPage() {
             {tab === 'materials' && (
               <MaterialsSection courseId={courseId} caseId={courseCase.id} onChange={contentChanged} />
             )}
-            {tab === 'witnesses' && <WitnessesSection courseId={courseId} caseId={courseCase.id} />}
+            {tab === 'witnesses' && (
+              <WitnessesSection courseId={courseId} courseCase={courseCase} onCaseChange={setCourseCase} />
+            )}
             {tab === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
             {tab === 'student-view' && (
               <StudentViewSection

@@ -12,7 +12,7 @@ import {
   type CaseStatus,
   type CourseCase,
 } from './cases.ts'
-import { listStorageKeys, removeStoredFiles, setInstructorNote } from './caseContent.ts'
+import { listStorageKeys, removeStoredFiles, setInstructorNote, setWitnessSettings } from './caseContent.ts'
 import { materialsRouter, tasksRouter, witnessesRouter } from './caseContentRoutes.ts'
 import { matchupsRouter } from './matchupRoutes.ts'
 import { teamsRouter } from './teamRoutes.ts'
@@ -110,6 +110,23 @@ caseRouter.put('/note', async (req, res) => {
     throw new HttpError(400, `The note must be at most ${MAX_NOTE_LENGTH} characters.`)
   }
   await setInstructorNote(req.courseCase!.id, note)
+  res.json({ case: await findCase(req.course!.id, req.courseCase!.id) })
+})
+
+/**
+ * Settings shared by the case's AI witnesses: `{ inWorldDate: 'YYYY-MM-DD' | null,
+ * disputedIssues }`, the date "today" in the case and the issues they must leave open.
+ */
+caseRouter.put('/witness-settings', async (req, res) => {
+  const date = readString(req.body, 'inWorldDate').trim()
+  if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)))) {
+    throw new HttpError(400, 'Enter a valid date.')
+  }
+  const disputedIssues = readString(req.body, 'disputedIssues').trim()
+  if (disputedIssues.length > MAX_NOTE_LENGTH) {
+    throw new HttpError(400, `The disputed issues must be at most ${MAX_NOTE_LENGTH} characters.`)
+  }
+  await setWitnessSettings(req.courseCase!.id, { inWorldDate: date || null, disputedIssues })
   res.json({ case: await findCase(req.course!.id, req.courseCase!.id) })
 })
 

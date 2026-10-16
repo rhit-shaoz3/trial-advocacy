@@ -14,6 +14,8 @@ const coaster: CourseCase = {
   summary: 'A rollercoaster stalls mid-loop.',
   status: 'draft',
   instructorNote: '',
+  inWorldDate: null,
+  disputedIssues: '',
   createdAt: '2026-10-01T15:00:00.000Z',
   updatedAt: '2026-10-01T15:00:00.000Z',
 }

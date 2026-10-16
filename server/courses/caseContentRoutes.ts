@@ -1,4 +1,4 @@
-import { Router, type Response } from 'express'
+import { Router, type Request, type Response } from 'express'
 import { randomUUID } from 'node:crypto'
 import { extname } from 'node:path'
 import { HttpError } from '../httpError.ts'
@@ -7,13 +7,17 @@ import { storage } from '../storage/storage.ts'
 import { isUuid, readString } from '../validation.ts'
 import {
   AUDIENCES,
+  MATERIAL_AUDIENCES,
   createMaterial,
   createTask,
   createWitness,
   deleteMaterial,
   deleteTask,
   deleteWitness,
+  existingMaterialIds,
   findMaterialFile,
+  findWitness,
+  getMaterialText,
   listMaterials,
   listTasks,
   listWitnesses,
@@ -22,9 +26,12 @@ import {
   updateTask,
   updateWitness,
   type Audience,
+  type MaterialAudience,
   type TaskFields,
   type WitnessFields,
 } from './caseContent.ts'
+import { queueTranscription, transcribeMaterial } from './materialText.ts'
+import { askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
 
 const MAX_FILENAME_LENGTH = 200
 const MAX_NAME_LENGTH = 120
@@ -62,6 +69,10 @@ function readChoice<T extends string>(value: unknown, choices: readonly T[], fal
 
 const readAudience = (value: unknown, fallback?: Audience) =>
   readChoice(value, AUDIENCES, fallback, 'Choose who can see it: everyone, plaintiff, or defense.')
+
+// Case files can also be kept from students entirely (an AI witness's deposition, say).
+const readMaterialAudience = (value: unknown, fallback?: MaterialAudience) =>
+  readChoice(value, MATERIAL_AUDIENCES, fallback, 'Choose who can see it: everyone, plaintiff, defense, or instructors only.')
 
 function readText(body: unknown, key: string, label: string, max = MAX_TEXT_LENGTH) {
   const text = readString(body, key).trim()
@@ -151,7 +162,7 @@ materialsRouter.post('/', async (req, res) => {
   const material = await createMaterial({
     id,
     caseId,
-    audience: readAudience((req.body as Record<string, unknown>).audience, 'all'),
+    audience: readMaterialAudience((req.body as Record<string, unknown>).audience, 'all'),
     filename,
     description: readText(req.body, 'description', 'Description'),
     contentType,
@@ -159,13 +170,15 @@ materialsRouter.post('/', async (req, res) => {
     storageKey,
     uploadedBy: req.user!.id,
   })
+  // Transcribed in the background so the AI witnesses can read it.
+  queueTranscription(material.id)
   res.status(201).json({ material })
 })
 
 materialsRouter.patch('/:materialId', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
   const material = await updateMaterial(req.courseCase!.id, id, {
-    audience: readAudience(req.body?.audience),
+    audience: readMaterialAudience(req.body?.audience),
     description: readText(req.body, 'description', 'Description'),
   })
   if (!material) throw new HttpError(404, 'File not found.')
@@ -177,6 +190,27 @@ materialsRouter.get('/:materialId/file', async (req, res) => {
   await sendMaterialFile(res, await findMaterialFile(req.courseCase!.id, id))
 })
 
+/** The file's transcription as plain text, for the instructor to check what the AI witnesses read. */
+materialsRouter.get('/:materialId/text', async (req, res) => {
+  const id = readId(req.params.materialId, 'File not found.')
+  const file = await getMaterialText(req.courseCase!.id, id)
+  if (!file) throw new HttpError(404, 'File not found.')
+  if (file.textStatus !== 'ready') throw new HttpError(404, 'This file has no transcription yet.')
+  res.set({ 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' })
+  res.send(file.text)
+})
+
+/** Transcribes the file again (after a failure, say) and returns it with its new status. */
+materialsRouter.post('/:materialId/text', async (req, res) => {
+  const id = readId(req.params.materialId, 'File not found.')
+  const caseId = req.courseCase!.id
+  if (!(await getMaterialText(caseId, id))) throw new HttpError(404, 'File not found.')
+  await transcribeMaterial(id)
+  const material = (await listMaterials(caseId)).find((m) => m.id === id)
+  if (!material) throw new HttpError(404, 'File not found.')
+  res.json({ material })
+})
+
 materialsRouter.delete('/:materialId', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
   const deleted = await deleteMaterial(req.courseCase!.id, id)
@@ -185,14 +219,42 @@ materialsRouter.delete('/:materialId', async (req, res) => {
   res.status(204).end()
 })
 
-function readWitness(body: unknown): WitnessFields {
+const MAX_KNOWN_FILES = 200
+
+/** Validates a witness, including its AI settings: which files are its deposition and which it has seen. */
+async function readWitness(caseId: string, body: unknown): Promise<WitnessFields> {
+  const fields = (body ?? {}) as Record<string, unknown>
   const name = readText(body, 'name', 'Name', MAX_NAME_LENGTH)
   if (!name) throw new HttpError(400, 'Witness name is required.')
+
+  const side = fields.alignedSide
+  if (side !== undefined && side !== null && side !== '' && side !== 'plaintiff' && side !== 'defense') {
+    throw new HttpError(400, 'Choose which side the witness is aligned with: plaintiff, defense, or neither.')
+  }
+  const deposition = fields.depositionMaterialId
+  if (deposition !== undefined && deposition !== null && deposition !== '' && (typeof deposition !== 'string' || !isUuid(deposition))) {
+    throw new HttpError(400, 'Choose a case file for the deposition.')
+  }
+  const depositionMaterialId = typeof deposition === 'string' && deposition ? deposition : null
+  const known = fields.knownMaterialIds ?? []
+  if (!Array.isArray(known) || known.length > MAX_KNOWN_FILES || !known.every((id) => typeof id === 'string' && isUuid(id))) {
+    throw new HttpError(400, 'Choose the case files the witness has seen.')
+  }
+  const knownMaterialIds = [...new Set(known as string[])].filter((id) => id !== depositionMaterialId)
+  const existing = await existingMaterialIds(caseId, depositionMaterialId ? [depositionMaterialId, ...knownMaterialIds] : knownMaterialIds)
+  if (depositionMaterialId && !existing.has(depositionMaterialId)) throw new HttpError(400, 'That deposition file is not in this case.')
+  if (knownMaterialIds.some((id) => !existing.has(id))) throw new HttpError(400, 'Some of those case files are not in this case.')
+
   return {
     name,
     role: readText(body, 'role', 'Role', MAX_NAME_LENGTH),
     description: readText(body, 'description', 'Description'),
-    audience: readAudience((body as Record<string, unknown> | undefined)?.audience, 'all'),
+    audience: readAudience(fields.audience, 'all'),
+    alignedSide: side === 'plaintiff' || side === 'defense' ? side : null,
+    personaNotes: readText(body, 'personaNotes', 'Persona notes'),
+    depositionMaterialId,
+    knownMaterialIds,
+    defendingCounsel: readText(body, 'defendingCounsel', 'Defending lawyer', MAX_NAME_LENGTH),
   }
 }
 
@@ -204,12 +266,12 @@ witnessesRouter.get('/', async (req, res) => {
 })
 
 witnessesRouter.post('/', async (req, res) => {
-  res.status(201).json({ witness: await createWitness(req.courseCase!.id, readWitness(req.body)) })
+  res.status(201).json({ witness: await createWitness(req.courseCase!.id, await readWitness(req.courseCase!.id, req.body)) })
 })
 
 witnessesRouter.put('/:witnessId', async (req, res) => {
   const id = readId(req.params.witnessId, 'Witness not found.')
-  const witness = await updateWitness(req.courseCase!.id, id, readWitness(req.body))
+  const witness = await updateWitness(req.courseCase!.id, id, await readWitness(req.courseCase!.id, req.body))
   if (!witness) throw new HttpError(404, 'Witness not found.')
   res.json({ witness })
 })
@@ -236,6 +298,31 @@ function readTask(body: unknown): TaskFields {
     audience: readAudience((body as Record<string, unknown> | undefined)?.audience, 'all'),
   }
 }
+
+/**
+ * The instructor's test interview of an AI witness, as the side in
+ * `?side=plaintiff|defense`. Kept apart from every team's.
+ */
+async function testInterview(req: Request): Promise<InterviewContext> {
+  const side = req.query.side
+  if (side !== 'plaintiff' && side !== 'defense') throw new HttpError(400, 'Choose which side is asking.')
+  const id = readId(req.params.witnessId as string, 'Witness not found.')
+  const witness = await findWitness(req.courseCase!.id, id)
+  if (!witness) throw new HttpError(404, 'Witness not found.')
+  return { courseCase: req.courseCase!, witness, owner: { teamId: null, side }, userId: req.user!.id, closed: false }
+}
+
+witnessesRouter.get('/:witnessId/interview', async (req, res) => {
+  res.json({ interview: await getInterview(await testInterview(req)) })
+})
+
+witnessesRouter.post('/:witnessId/interview/questions', async (req, res) => {
+  res.json({ interview: await askQuestion(await testInterview(req), req.body) })
+})
+
+witnessesRouter.post('/:witnessId/interview/restart', async (req, res) => {
+  res.json({ interview: await restartInterview(await testInterview(req)) })
+})
 
 /** Mounted under /api/courses/:courseId/cases/:caseId/tasks. */
 export const tasksRouter = Router()

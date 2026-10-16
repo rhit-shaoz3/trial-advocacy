@@ -37,6 +37,8 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     updateMaterial: vi.fn(),
     deleteMaterial: vi.fn().mockResolvedValue(undefined),
     materialDownloadUrl: (courseId, caseId, id) => `/download/${courseId}/${caseId}/${id}`,
+    materialTextUrl: (courseId, caseId, id) => `/text/${courseId}/${caseId}/${id}`,
+    retryTranscription: vi.fn(),
     listWitnesses: vi.fn().mockResolvedValue([]),
     createWitness: vi.fn(),
     updateWitness: vi.fn(),
@@ -46,6 +48,7 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     updateTask: vi.fn(),
     deleteTask: vi.fn().mockResolvedValue(undefined),
     saveInstructorNote: vi.fn(),
+    saveWitnessSettings: vi.fn(),
     getLaunchChecks: vi.fn().mockResolvedValue([]),
     launchCase: vi.fn(),
     previewWorkspace: vi.fn(),
@@ -53,6 +56,9 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     getMyCaseWorkspace: vi.fn(),
     setTaskDone: vi.fn(),
     myMaterialDownloadUrl: (courseId, caseId, id) => `/my-download/${courseId}/${caseId}/${id}`,
+    getInterview: vi.fn(),
+    askWitness: vi.fn(),
+    restartInterview: vi.fn(),
     ...overrides,
   }
 }

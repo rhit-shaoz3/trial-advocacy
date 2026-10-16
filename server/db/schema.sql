@@ -209,6 +209,11 @@ ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS text_error text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS in_world_date date;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS disputed_issues text NOT NULL DEFAULT '';
 
+-- The most important facts for each side, set by the instructor. The AI
+-- witnesses never contradict them; students never see them.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS plaintiff_key_facts text[] NOT NULL DEFAULT '{}';
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS defense_key_facts text[] NOT NULL DEFAULT '{}';
+
 -- A witness becomes an AI witness once it has a side and a deposition. The
 -- deposition is its own sworn account; `known_material_ids` are the other case
 -- files the witness has seen. `defending_counsel` is the witness's lawyer, who

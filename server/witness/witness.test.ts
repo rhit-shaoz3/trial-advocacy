@@ -25,6 +25,10 @@ const profile: WitnessProfile = {
   caseSummary: 'Ana Ortiz slipped in aisle 5 and broke her wrist.',
   inWorldDate: 'March 15, 2026',
   keyDisputedIssues: 'whether the floor was wet before the fall',
+  importantFacts: {
+    plaintiff: ['Nobody mopped aisle 5 after 8 p.m.', 'The "Wet floor" sign was in the back room.'],
+    defense: ['Ms. Ortiz was looking at her phone when she fell.'],
+  },
   documents: [
     {
       title: 'Dana Lee\'s incident statement',
@@ -63,8 +67,26 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toMatch(/&quot;|&amp;|&#39;/)
   })
 
+  it("lists both sides' most important facts, and how to handle questions near them", () => {
+    const prompt = buildSystemPrompt(profile, adverse)
+
+    const section = prompt.slice(prompt.indexOf('# The most important facts'), prompt.indexOf('# What you know'))
+    expect(section).toContain(
+      'For the plaintiff:\n- Nobody mopped aisle 5 after 8 p.m.\n- The "Wet floor" sign was in the back room.\n',
+    )
+    expect(section).toContain('For the defense:\n- Ms. Ortiz was looking at her phone when she fell.\n')
+    expect(section).toContain('Never make up a fact that contradicts any of these important facts.')
+    expect(section).toContain('you may say you don\'t know, as long as that doesn\'t damage your credibility')
+    expect(section).toContain('say "Let me check" instead, to avoid the question for now')
+    expect(prompt).toContain('contradicts a record, your own account, or one of the most important facts')
+  })
+
   it('leaves out optional sections that do not apply', () => {
-    const bare = buildSystemPrompt({ ...profile, personaNotes: undefined, keyDisputedIssues: undefined }, adverse)
+    const bare = buildSystemPrompt(
+      { ...profile, personaNotes: undefined, keyDisputedIssues: undefined, importantFacts: undefined },
+      adverse,
+    )
+    expect(bare).not.toContain('# The most important facts')
     expect(bare).not.toContain('Background and demeanor')
     expect(bare).not.toContain('must stay genuinely disputed')
     expect(bare).not.toContain('You are testifying as an expert')

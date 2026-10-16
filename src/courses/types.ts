@@ -50,6 +50,12 @@ export type CourseCaseStatus = (typeof COURSE_CASE_STATUSES)[number]
  * A case the whole class works on, as its instructor manages it. Teams, case
  * worlds (matchups), materials, witnesses, and tasks hang off it.
  */
+/** The most important facts for each side. Instructors and AI witnesses only; students never see them. */
+export interface ImportantFacts {
+  plaintiff: string[]
+  defense: string[]
+}
+
 export interface CourseCase {
   id: string
   title: string
@@ -61,6 +67,8 @@ export interface CourseCase {
   inWorldDate: string | null
   /** Issues the AI witnesses must leave disputed. */
   disputedIssues: string
+  /** The AI witnesses never contradict these. */
+  importantFacts: ImportantFacts
   createdAt: string
   updatedAt: string
 }
@@ -75,6 +83,8 @@ export interface CaseInput {
   summary: string
   /** Defaults to draft when creating. */
   status?: CourseCaseStatus
+  /** At least one per side. */
+  importantFacts: ImportantFacts
 }
 
 /** Students paired for one case: usually two, three for the odd one out. */

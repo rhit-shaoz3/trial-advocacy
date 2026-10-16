@@ -15,8 +15,14 @@ import {
   type CourseFields,
   type TaughtCourse,
 } from './courses.ts'
-import { factPatternsRouter } from './factPatternRoutes.ts'
+import { askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
+import { findMaterialFile, findWitness, listStorageKeys, removeStoredFiles, setTaskDone, visibleTo } from './caseContent.ts'
+import { sendMaterialFile } from './caseContentRoutes.ts'
+import { findCase } from './cases.ts'
+import { casesRouter } from './caseRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
+import { homeCasesForInstructor, listMyCases, studentHome } from './myCases.ts'
+import { findStudentTeamId, getStudentWorkspace } from './workspace.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -106,10 +112,19 @@ coursesRouter.post('/join', async (req, res) => {
   res.status(201).json({ course })
 })
 
+/** 404s unless the case is launched in a course the user belongs to. */
+async function loadStudentWorkspace(courseId: string, caseId: string, userId: string) {
+  const workspace =
+    isUuid(courseId) && isUuid(caseId) ? await getStudentWorkspace(courseId, caseId, userId) : null
+  if (!workspace) throw new HttpError(404, 'Case not found.')
+  return workspace
+}
+
 /**
- * Everything a member's course home page shows. Cases, activity, and deadlines
- * don't exist yet (they arrive with cases and teams), so those lists are empty
- * for now; the shape is what the client already renders.
+ * Everything a member's course home page shows. Students get the launched
+ * cases they're on a team in; the instructor (the only instructor who can be
+ * a member) gets every launched case. Students' deadlines and task counts come
+ * from their team's open and completed tasks. Activity isn't stored yet.
  */
 coursesRouter.get('/:courseId/home', async (req, res) => {
   const { courseId } = req.params
@@ -117,11 +132,91 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
   if (!course) throw new HttpError(404, 'Course not found.')
   res.json({
     course,
-    cases: [],
     activity: [],
-    upcoming: [],
-    stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+    ...(req.user!.role === 'instructor'
+      ? {
+          cases: await homeCasesForInstructor(course.id),
+          upcoming: [],
+          stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+        }
+      : await studentHome(course.id, req.user!.id)),
   })
+})
+
+/** A member's cases (drafts are hidden) with their team and case world in each, or null before pairing. */
+coursesRouter.get('/:courseId/my-cases', async (req, res) => {
+  const { courseId } = req.params
+  const course = isUuid(courseId) ? await findCourseForMember(courseId, req.user!.id) : null
+  if (!course) throw new HttpError(404, 'Course not found.')
+  res.json({ cases: await listMyCases(course.id, req.user!.id) })
+})
+
+/** A student's dashboard for one launched case: their team, world, and what they can see. */
+coursesRouter.get('/:courseId/my-cases/:caseId', async (req, res) => {
+  res.json({ workspace: await loadStudentWorkspace(req.params.courseId, req.params.caseId, req.user!.id) })
+})
+
+/** Downloads a case file, if the student's side can see it. */
+coursesRouter.get('/:courseId/my-cases/:caseId/materials/:materialId/file', async (req, res) => {
+  const { courseId, caseId, materialId } = req.params
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  if (!isUuid(materialId)) throw new HttpError(404, 'File not found.')
+  await sendMaterialFile(res, await findMaterialFile(caseId, materialId, visibleTo(workspace.side)))
+})
+
+/** Marks one of the case's tasks done (or not) for the student's whole team. */
+coursesRouter.put('/:courseId/my-cases/:caseId/tasks/:taskId', async (req, res) => {
+  const { courseId, caseId, taskId } = req.params
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const done = (req.body as Record<string, unknown> | undefined)?.done
+  if (typeof done !== 'boolean') throw new HttpError(400, 'Say whether the task is done.')
+  if (!workspace.tasks.some((t) => t.id === taskId)) throw new HttpError(404, 'Task not found.')
+  if (workspace.case.status !== 'active') {
+    throw new HttpError(409, 'This case is closed, so its tasks can no longer change.')
+  }
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  if (!teamId) throw new HttpError(409, 'You need to be on a team to complete tasks.')
+  await setTaskDone(taskId, teamId, req.user!.id, done)
+  res.json({ workspace: await loadStudentWorkspace(courseId, caseId, req.user!.id) })
+})
+
+/**
+ * A team's interview of an AI witness their side can see. Both partners
+ * share it. The side always comes from the team's case world, never from the
+ * request, so the witness treats them as their own side's lawyers. It can be
+ * read but not continued once the case is closed.
+ */
+async function teamInterview(req: Request): Promise<InterviewContext> {
+  const { courseId, caseId, witnessId } = req.params as Record<string, string>
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  if (!isUuid(witnessId) || !workspace.witnesses.some((w) => w.id === witnessId)) {
+    throw new HttpError(404, 'Witness not found.')
+  }
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  if (!teamId || !workspace.side) throw new HttpError(409, 'Your team needs a case world before it can interview witnesses.')
+  const [courseCase, witness] = await Promise.all([findCase(courseId, caseId), findWitness(caseId, witnessId)])
+  if (!courseCase || !witness) throw new HttpError(404, 'Witness not found.')
+  return {
+    courseCase,
+    witness,
+    owner: { teamId, side: workspace.side },
+    userId: req.user!.id,
+    closed: workspace.case.status !== 'active',
+  }
+}
+
+coursesRouter.get('/:courseId/my-cases/:caseId/witnesses/:witnessId/interview', async (req, res) => {
+  res.json({ interview: await getInterview(await teamInterview(req)) })
+})
+
+coursesRouter.post('/:courseId/my-cases/:caseId/witnesses/:witnessId/interview/questions', async (req, res) => {
+  res.json({ interview: await askQuestion(await teamInterview(req), req.body) })
+})
+
+coursesRouter.post('/:courseId/my-cases/:caseId/witnesses/:witnessId/interview/restart', async (req, res) => {
+  const ctx = await teamInterview(req)
+  if (ctx.closed) throw new HttpError(409, 'This case is closed, so the interview can no longer change.')
+  res.json({ interview: await restartInterview(ctx) })
 })
 
 // Everything below manages one course and is only for the instructor who teaches it.
@@ -133,12 +228,14 @@ courseRouter.get('/', (req, res) => {
 courseRouter.patch('/', async (req, res) => {
   res.json({ course: await updateCourse(req.course!.id, readCourseFields(req.body)) })
 })
-/** Also deletes the roster and fact patterns. The entry code stops working. */
+/** Also deletes the roster and the cases with everything in them. The entry code stops working. */
 courseRouter.delete('/', async (req, res) => {
+  const files = await listStorageKeys({ courseId: req.course!.id })
   await deleteCourse(req.course!.id)
+  await removeStoredFiles(files)
   res.status(204).end()
 })
 courseRouter.use('/roster', rosterRouter)
-courseRouter.use('/fact-patterns', factPatternsRouter)
+courseRouter.use('/cases', casesRouter)
 
 coursesRouter.use('/:courseId', courseRouter)

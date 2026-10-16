@@ -2,7 +2,8 @@ import request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, fallTrial, resetDatabase, signedInAgent } from '../test/helpers.ts'
+import { storage } from '../storage/storage.ts'
+import { createCourseAs, fallTrial, resetDatabase, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 
 beforeEach(resetDatabase)
 
@@ -166,16 +167,15 @@ describe('PATCH /api/courses/:courseId', () => {
 })
 
 describe('DELETE /api/courses/:courseId', () => {
-  it('deletes the course with its roster and fact patterns, and retires the entry code', async () => {
+  it('deletes the course with its roster and cases, and retires the entry code', async () => {
     const { agent } = await signedInAgent('instructor')
     const course = await createCourseAs(agent)
     const { agent: student } = await signedInAgent()
     await student.post('/api/courses/join').send({ entryCode: course.entryCode })
-    await agent
-      .post(`/api/courses/${course.id}/fact-patterns`)
-      .set('Content-Type', 'application/pdf')
-      .set('X-Filename', 'case.pdf')
-      .send(Buffer.from('%PDF'))
+    const caseId = (await agent.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera' })).body.case.id
+    const uploaded = await uploadCaseFile(agent, `/api/courses/${course.id}/cases/${caseId}`, 'case.pdf')
+    const { storageKey } = (await pool.query('SELECT storage_key AS "storageKey" FROM case_materials')).rows[0]
+    expect(uploaded.status).toBe(201)
 
     const res = await agent.delete(`/api/courses/${course.id}`)
 
@@ -185,9 +185,12 @@ describe('DELETE /api/courses/:courseId', () => {
     expect((await student.get('/api/courses')).body.courses).toEqual([])
     const leftovers = await pool.query(
       `SELECT (SELECT count(*) FROM enrollments)::int AS enrollments,
-              (SELECT count(*) FROM fact_patterns)::int AS files`,
+              (SELECT count(*) FROM cases)::int AS cases,
+              (SELECT count(*) FROM case_materials)::int AS files`,
     )
-    expect(leftovers.rows[0]).toEqual({ enrollments: 0, files: 0 })
+    expect(leftovers.rows[0]).toEqual({ enrollments: 0, cases: 0, files: 0 })
+    // The stored file is removed too.
+    expect(await storage.size(storageKey)).toBeNull()
     const join = await student.post('/api/courses/join').send({ entryCode: course.entryCode })
     expect(join.status).toBe(404)
   })

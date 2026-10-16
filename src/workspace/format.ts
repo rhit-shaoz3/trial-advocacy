@@ -52,9 +52,13 @@ export function shortMonth(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short' }).toUpperCase()
 }
 
-/** "Alex Morgan" → "AM"; "Cher" → "C" */
+/** "Alex Morgan" → "AM"; "Cher" → "C". Skips punctuation: "Case (draft)" → "CD". */
 export function initials(name: string) {
-  const words = name.trim().split(/\s+/).filter(Boolean)
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(Boolean)
   const letters = words.length > 1 ? [words[0], words.at(-1)!] : words
   return letters.map((w) => w[0]!.toUpperCase()).join('')
 }

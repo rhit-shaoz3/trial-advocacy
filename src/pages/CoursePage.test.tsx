@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
-import type { CourseService, FactPattern, RosterEntry, TaughtCourse } from '../courses/types'
+import type { CourseService, RosterEntry, TaughtCourse } from '../courses/types'
 import { fakeCourseService } from '../test/fakeCourseService'
 import { CoursePage } from './CoursePage'
 
@@ -22,13 +22,6 @@ const course: TaughtCourse = {
 const ada: RosterEntry = { email: 'ada@example.com', name: 'Ada Lawyer', joined: true }
 const pending: RosterEntry = { email: 'new@example.com', name: null, joined: false }
 
-const hale: FactPattern = {
-  id: 'f1',
-  filename: 'State v. Hale.pdf',
-  sizeBytes: 250_000,
-  uploadedAt: '2026-10-01T15:00:00.000Z',
-}
-
 function renderPage(overrides: Partial<CourseService> = {}) {
   const service = fakeCourseService({ getCourse: vi.fn().mockResolvedValue(course), ...overrides })
   const user = userEvent.setup()
@@ -46,7 +39,6 @@ function renderPage(overrides: Partial<CourseService> = {}) {
 }
 
 const rosterSection = () => screen.getByRole('region', { name: /Students/ })
-const factPatternSection = () => screen.getByRole('region', { name: 'Fact patterns' })
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -216,57 +208,5 @@ describe('roster', () => {
 
     expect(service.removeStudent).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: 'Students (1)' })).toBeInTheDocument()
-  })
-})
-
-describe('fact patterns', () => {
-  it('lists files with download links', async () => {
-    renderPage({ listFactPatterns: vi.fn().mockResolvedValue([hale]) })
-
-    const link = await screen.findByRole('link', { name: 'State v. Hale.pdf' })
-    expect(link).toHaveAttribute('href', '/download/c1/f1')
-    expect(within(factPatternSection()).getByText('244 KB')).toBeInTheDocument()
-  })
-
-  it('uploads the chosen files and adds them to the list', async () => {
-    const uploadFactPattern = vi.fn().mockResolvedValue(hale)
-    const { user } = renderPage({ uploadFactPattern })
-    await screen.findByText('No fact patterns uploaded yet.')
-
-    const file = new File(['%PDF'], 'State v. Hale.pdf', { type: 'application/pdf' })
-    await user.upload(screen.getByTestId('fact-pattern-input'), file)
-
-    expect(uploadFactPattern).toHaveBeenCalledWith('c1', file)
-    expect(await screen.findByRole('link', { name: 'State v. Hale.pdf' })).toBeInTheDocument()
-  })
-
-  it('reports files that are too big or rejected without stopping the others', async () => {
-    const uploadFactPattern = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('Upload a PDF, Word document, or text file.'))
-      .mockResolvedValueOnce(hale)
-    const { user } = renderPage({ uploadFactPattern })
-    await screen.findByText('No fact patterns uploaded yet.')
-
-    const huge = new File(['x'], 'huge.pdf')
-    Object.defineProperty(huge, 'size', { value: 11 * 1024 * 1024 })
-    const files = [huge, new File(['x'], 'weird.pdf'), new File(['%PDF'], 'State v. Hale.pdf')]
-    await user.upload(screen.getByTestId('fact-pattern-input'), files)
-
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('huge.pdf: That file is too large. The limit is 10 MB.')
-    expect(alert).toHaveTextContent('weird.pdf: Upload a PDF, Word document, or text file.')
-    expect(uploadFactPattern).toHaveBeenCalledTimes(2)
-    expect(screen.getByRole('link', { name: 'State v. Hale.pdf' })).toBeInTheDocument()
-  })
-
-  it('deletes a file after confirming', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const { user, service } = renderPage({ listFactPatterns: vi.fn().mockResolvedValue([hale]) })
-
-    await user.click(await screen.findByRole('button', { name: 'Delete State v. Hale.pdf' }))
-
-    expect(service.deleteFactPattern).toHaveBeenCalledWith('c1', 'f1')
-    expect(await screen.findByText('No fact patterns uploaded yet.')).toBeInTheDocument()
   })
 })

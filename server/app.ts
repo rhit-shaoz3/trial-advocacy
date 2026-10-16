@@ -2,15 +2,21 @@ import express, { type ErrorRequestHandler } from 'express'
 import { fileURLToPath } from 'node:url'
 import { authRouter } from './auth/routes.ts'
 import { isProduction } from './config.ts'
-import { MAX_FACT_PATTERN_BYTES } from './courses/factPatternRoutes.ts'
 import { coursesRouter } from './courses/routes.ts'
 import { HttpError } from './httpError.ts'
 import { sessionMiddleware } from './session.ts'
+import { localStorageRouter } from './storage/localStorageRoutes.ts'
+import { MAX_UPLOAD_BYTES } from './storage/shared.ts'
+import { localStore } from './storage/storage.ts'
 
 export const app = express()
 
 // Heroku terminates HTTPS at its router; trust it so secure cookies work.
 if (isProduction) app.set('trust proxy', 1)
+
+// Without S3, the API stands in for its signed upload and download URLs. Signed
+// URLs need no login, so this goes before the session middleware.
+if (localStore) app.use('/api/storage/local', localStorageRouter)
 
 app.use('/api', express.json(), sessionMiddleware)
 app.use('/api/auth', authRouter)
@@ -33,7 +39,7 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     return
   }
   if (err?.type === 'entity.too.large') {
-    const limitMb = MAX_FACT_PATTERN_BYTES / (1024 * 1024)
+    const limitMb = MAX_UPLOAD_BYTES / (1024 * 1024)
     res.status(413).json({ error: `That file is too large. The limit is ${limitMb} MB.` })
     return
   }

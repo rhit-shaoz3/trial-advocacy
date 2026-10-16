@@ -37,13 +37,32 @@ export async function addToRoster(courseId: string, email: string): Promise<AddR
   return rowCount === 1 ? 'added' : 'already-enrolled'
 }
 
-/** Returns false if the email was not on the roster. */
+/**
+ * Also takes the student off their teams (via the foreign key), deletes any
+ * team that leaves empty, and any matchup that leaves one-sided. Returns false
+ * if the email was not on the roster.
+ */
 export async function removeFromRoster(courseId: string, email: string) {
   const { rowCount } = await pool.query(
     'DELETE FROM enrollments WHERE course_id = $1 AND email = $2',
     [courseId, email],
   )
-  return rowCount === 1
+  if (rowCount !== 1) return false
+  await pool.query(
+    `DELETE FROM teams t
+     USING cases c
+     WHERE c.id = t.case_id AND c.course_id = $1
+       AND NOT EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = t.id)`,
+    [courseId],
+  )
+  await pool.query(
+    `DELETE FROM matchups mu
+     USING cases c
+     WHERE c.id = mu.case_id AND c.course_id = $1
+       AND (SELECT count(*) FROM matchup_teams mt WHERE mt.matchup_id = mu.id) < 2`,
+    [courseId],
+  )
+  return true
 }
 
 /** Called at sign-up: claims every roster spot an instructor added for this email. */

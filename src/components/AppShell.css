@@ -415,6 +415,21 @@
   margin-right: -0.45rem;
 }
 
+/* "+12" after the first few avatars. */
+.ws-avatar-more {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.35rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #e6e9ee;
+  color: #4f5b6b;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
 /* Narrower screens */
 
 @media (max-width: 1000px) {

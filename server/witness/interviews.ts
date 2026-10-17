@@ -5,6 +5,7 @@ import type { CourseCase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
+import { createReview, settledFacts } from '../reviews/reviews.ts'
 import { readString } from '../validation.ts'
 import { WitnessRefusalError } from './deposition.ts'
 import { depositionSettings, isAiWitness, loadProfile, WitnessNotReadyError } from './profile.ts'
@@ -13,7 +14,8 @@ import { depositionSettings, isAiWitness, loadProfile, WitnessNotReadyError } fr
 // deposition. Partners share one interview per witness, always as their own
 // team's side: the witness treats them as that side's lawyers. An
 // instructor's test runs (no team) are kept apart, one per side. "Start over"
-// ends an interview and the next visit opens a new, empty one.
+// ends an interview and the next visit opens a new, empty one; "End
+// interview" does the same but first sends it to the instructor for review.
 
 export const MAX_QUESTION_LENGTH = 2000
 /** Keeps a runaway interview from growing the prompt (and the bill) without end. */
@@ -109,6 +111,8 @@ export interface InterviewContext {
   courseCase: Pick<CourseCase, 'id' | 'title' | 'summary' | 'inWorldDate' | 'disputedIssues'>
   witness: Witness
   owner: InterviewOwner
+  /** The team's case world, whose rulings bind the witness; null for the instructor's tests. */
+  matchupId: string | null
   userId: string
   /** The case is closed: the interview can be read but not continued. */
   closed: boolean
@@ -125,6 +129,20 @@ export async function restartInterview(ctx: InterviewContext) {
   return getInterview(ctx)
 }
 
+/**
+ * Ends a team's interview and sends it to the instructor, who rules on the
+ * new facts the witness added. Empty interviews aren't sent. Opens a fresh one.
+ */
+export async function endInterview(ctx: InterviewContext) {
+  const current = await findOpen(ctx.witness.id, ctx.owner)
+  let reviewId: string | null = null
+  if (current) {
+    await pool.query('UPDATE interviews SET ended_at = now() WHERE id = $1', [current])
+    if (ctx.owner.teamId) reviewId = await createReview(current, ctx.owner.teamId)
+  }
+  return { interview: await getInterview(ctx), sentForReview: reviewId !== null }
+}
+
 /** Asks the next question (`{ question }`) and stores the witness's reply. */
 export async function askQuestion(ctx: InterviewContext, body: unknown) {
   const question = readString(body, 'question').trim()
@@ -139,7 +157,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
   const transcript = await listTurns(interviewId)
   let reply
   try {
-    const profile = await loadProfile(ctx.courseCase, ctx.witness)
+    const profile = await loadProfile(ctx.courseCase, ctx.witness, await settledFacts(ctx.courseCase.id, ctx.matchupId))
     const settings = depositionSettings(profile, ctx.witness, ctx.owner.side)
     reply = await ai.askWitness({
       profile,

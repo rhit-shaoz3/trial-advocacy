@@ -39,6 +39,17 @@ export interface WitnessProfile {
   inWorldDate: string
   keyDisputedIssues?: string
   documents: WitnessDocument[]
+  /**
+   * The instructor's rulings on facts witnesses added in earlier interviews,
+   * for this witness's case world and the whole case: true facts to keep to,
+   * and facts ruled untrue that must never be said.
+   */
+  settledFacts?: SettledFacts
+}
+
+export interface SettledFacts {
+  accepted: string[]
+  denied: string[]
 }
 
 /** Who is taking this deposition. */
@@ -85,6 +96,10 @@ export function buildSystemPrompt(profile: WitnessProfile, settings: DepositionS
     case_summary: profile.caseSummary,
     in_world_date: profile.inWorldDate,
     key_disputed_issues: profile.keyDisputedIssues,
+    settled_facts: profile.settledFacts?.accepted ?? [],
+    has_settled_facts: Boolean(profile.settledFacts?.accepted.length),
+    denied_facts: profile.settledFacts?.denied ?? [],
+    has_denied_facts: Boolean(profile.settledFacts?.denied.length),
     documents: profile.documents.map((d) => ({
       title: d.title,
       type: d.type,

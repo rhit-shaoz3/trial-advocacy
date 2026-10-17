@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
@@ -76,5 +76,46 @@ describe('StudentCasePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Case not found' })).toBeInTheDocument()
     expect(screen.getByText(/not been opened to students yet/)).toBeInTheDocument()
+  })
+})
+
+describe('StudentCasePage: review results', () => {
+  const result = {
+    id: 'r1',
+    witness: { id: 'w1', name: 'Elena Torres' },
+    completedAt: '2026-10-16T15:00:00.000Z',
+    accepted: ['Torres was on break at 3:00.'],
+    denied: ['Torres smelled smoke.'],
+    seen: false,
+  }
+
+  it('flags new results, and marks them read when the team opens them', async () => {
+    const { user, service } = renderPage({
+      getMyCaseWorkspace: vi.fn().mockResolvedValue(workspace),
+      listMyReviews: vi.fn().mockResolvedValue([result]),
+    })
+
+    expect(await screen.findByText('New review results.')).toBeInTheDocument()
+    expect(service.listMyReviews).toHaveBeenCalledWith('c1', 'k1')
+    expect(screen.getByRole('tab', { name: 'Reviews, 1' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'See results' }))
+    expect(service.markReviewsSeen).toHaveBeenCalledWith('c1', 'k1')
+    const review = screen.getByRole('listitem', { name: 'Review of Elena Torres' })
+    expect(within(review).getByRole('list', { name: 'Accepted' })).toHaveTextContent('Torres was on break at 3:00.')
+    expect(within(review).getByRole('list', { name: 'Denied' })).toHaveTextContent('Torres smelled smoke.')
+    expect(screen.queryByText('New review results.')).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Reviews' })).toBeInTheDocument()
+  })
+
+  it("doesn't mark anything when every result was already read", async () => {
+    const { user, service } = renderPage({
+      getMyCaseWorkspace: vi.fn().mockResolvedValue(workspace),
+      listMyReviews: vi.fn().mockResolvedValue([{ ...result, seen: true, accepted: [], denied: [] }]),
+    })
+    await user.click(await screen.findByRole('tab', { name: 'Reviews' }))
+    expect(screen.queryByText('New review results.')).not.toBeInTheDocument()
+    expect(screen.getByText('No new facts: the witness kept to the record.')).toBeInTheDocument()
+    expect(service.markReviewsSeen).not.toHaveBeenCalled()
   })
 })

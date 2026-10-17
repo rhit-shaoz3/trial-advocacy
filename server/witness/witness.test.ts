@@ -63,8 +63,25 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toMatch(/&quot;|&amp;|&#39;/)
   })
 
+  it("includes the instructor's rulings on facts from earlier interviews", () => {
+    const prompt = buildSystemPrompt(
+      { ...profile, settledFacts: { accepted: ['Dana mopped at 8:45.'], denied: ['A sign was posted.', 'Sam was there.'] } },
+      adverse,
+    )
+    expect(prompt).toContain('# Facts settled in earlier interviews')
+    expect(prompt).toContain('<settled_facts>\n- Dana mopped at 8:45.\n</settled_facts>')
+    expect(prompt).toContain('# Things that are not true')
+    expect(prompt).toContain('<untrue_facts>\n- A sign was posted.\n- Sam was there.\n</untrue_facts>')
+    expect(prompt).toContain('a settled fact, and never say anything listed as not true')
+  })
+
   it('leaves out optional sections that do not apply', () => {
-    const bare = buildSystemPrompt({ ...profile, personaNotes: undefined, keyDisputedIssues: undefined }, adverse)
+    const bare = buildSystemPrompt(
+      { ...profile, personaNotes: undefined, keyDisputedIssues: undefined, settledFacts: { accepted: [], denied: [] } },
+      adverse,
+    )
+    expect(bare).not.toContain('# Facts settled in earlier interviews')
+    expect(bare).not.toContain('# Things that are not true')
     expect(bare).not.toContain('Background and demeanor')
     expect(bare).not.toContain('must stay genuinely disputed')
     expect(bare).not.toContain('You are testifying as an expert')

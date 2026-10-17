@@ -88,7 +88,7 @@ describe('course workspace for the instructor', () => {
       'Dashboard',
       'All cases',
       'Calendar',
-      'Resource library',
+      'Review',
       'Manage course',
     ])
     expect(screen.getByRole('heading', { name: 'All cases' })).toBeInTheDocument()
@@ -390,5 +390,41 @@ describe('course workspace', () => {
 
     expect(auth.logOut).toHaveBeenCalledTimes(1)
     expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument()
+  })
+})
+
+describe('reviews on the dashboard', () => {
+  const ruiz: User = { ...ada, id: 'user-2', name: 'Elena Ruiz', role: 'instructor' }
+
+  it("tells the instructor how many conversations wait for review, with a badge on Review", async () => {
+    const { user } = renderCourse(
+      fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, reviewCount: 3 }) }),
+      '/courses/c1',
+      ruiz,
+    )
+
+    expect(await screen.findByText('3 conversations are waiting for your review.')).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: 'Course' })
+    expect(within(nav).getByRole('link', { name: 'Review, 3 waiting' })).toHaveAttribute('href', '/courses/c1/review')
+
+    await user.click(screen.getByRole('link', { name: 'Review now' }))
+    expect(await screen.findByRole('heading', { name: 'Review' })).toBeInTheDocument()
+  })
+
+  it('shows nothing when no reviews wait', async () => {
+    renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, reviewCount: 0 }) }), '/courses/c1', ruiz)
+    await screen.findByRole('heading', { name: 'Good morning, Elena.' })
+    expect(screen.queryByText(/waiting for your review/)).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Course' })).getByRole('link', { name: 'Review' })).toBeInTheDocument()
+  })
+
+  it('tells a student when their interviews have been reviewed, and keeps their resource library', async () => {
+    renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, newReviewResults: 1 }) }))
+
+    expect(await screen.findByText('Your instructor reviewed your interviews.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open my cases' })).toHaveAttribute('href', '/courses/c1/cases')
+    const nav = screen.getByRole('navigation', { name: 'Course' })
+    expect(within(nav).getByRole('link', { name: 'Resource library' })).toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: /Review/ })).not.toBeInTheDocument()
   })
 })

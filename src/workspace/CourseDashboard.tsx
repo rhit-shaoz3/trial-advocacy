@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   Clock,
   FileText,
+  Gavel,
   Users,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -85,6 +86,35 @@ export function CourseDashboard({ now = new Date() }: { now?: Date }) {
           View schedule
         </Link>
       </div>
+
+      {isInstructor && home.reviewCount ? (
+        <div className="ws-notice" role="status">
+          <Gavel aria-hidden="true" />
+          <p>
+            <strong>
+              {home.reviewCount === 1
+                ? '1 conversation is waiting for your review.'
+                : `${home.reviewCount} conversations are waiting for your review.`}
+            </strong>{' '}
+            Rule on the new facts the AI witnesses added.
+          </p>
+          <Link to={`${base}/review${search}`} className="ws-btn ws-btn-primary">
+            Review now
+          </Link>
+        </div>
+      ) : null}
+      {!isInstructor && home.newReviewResults ? (
+        <div className="ws-notice" role="status">
+          <Gavel aria-hidden="true" />
+          <p>
+            <strong>Your instructor reviewed your interviews.</strong> See which new facts were accepted and
+            which were denied in your case&rsquo;s Reviews tab.
+          </p>
+          <Link to={`${base}/cases${search}`} className="ws-btn ws-btn-primary">
+            Open my cases
+          </Link>
+        </div>
+      ) : null}
 
       <section className="ws-stats" aria-label="Summary">
         <StatCard

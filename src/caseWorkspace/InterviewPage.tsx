@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ChevronRight, RotateCcw, Send } from 'lucide-react'
+import { ChevronRight, Gavel, RotateCcw, Send } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { useCourseService } from '../courses/CourseServiceContext'
@@ -32,6 +32,8 @@ export function InterviewPage() {
   /** The question waiting for the witness's answer. */
   const [asking, setAsking] = useState<string | null>(null)
   const [restarting, setRestarting] = useState(false)
+  /** Shown after the team ends an interview and it goes to the instructor. */
+  const [sentNote, setSentNote] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   const casePath = `/courses/${courseId}/cases/${caseId}`
@@ -60,6 +62,7 @@ export function InterviewPage() {
     const text = question.trim()
     if (!text || asking) return
     setError(null)
+    setSentNote(null)
     setAsking(text)
     setQuestion('')
     try {
@@ -88,6 +91,26 @@ export function InterviewPage() {
     setRestarting(true)
     try {
       setInterview(await service.restartInterview(courseId, caseId, witnessId, as))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setRestarting(false)
+    }
+  }
+
+  /** Ends the team's interview and sends the new facts the witness added to the instructor. */
+  async function endForReview() {
+    if (!window.confirm('End this interview and send it to your instructor for review?')) return
+    setError(null)
+    setRestarting(true)
+    try {
+      const { interview: fresh, sentForReview } = await service.endInterview(courseId, caseId, witnessId)
+      setInterview(fresh)
+      setSentNote(
+        sentForReview
+          ? "Sent for review. You'll see your instructor's rulings in the case's Reviews tab."
+          : 'The interview ended. It had no questions, so nothing was sent for review.',
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -124,6 +147,17 @@ export function InterviewPage() {
               {witness!.role && <p className="iv-role">{witness!.role}</p>}
             </div>
             <div className="iv-header-actions">
+              {!isInstructor && (
+                <button
+                  type="button"
+                  className="btn-primary iv-restart"
+                  onClick={endForReview}
+                  disabled={restarting || Boolean(asking) || interview.turns.length === 0}
+                >
+                  <Gavel aria-hidden="true" />
+                  End interview
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-secondary iv-restart"
@@ -135,6 +169,12 @@ export function InterviewPage() {
               </button>
             </div>
           </header>
+
+          {sentNote && (
+            <p className="iv-notice" role="status">
+              {sentNote}
+            </p>
+          )}
 
           <ol className="iv-transcript" aria-label="Transcript">
             {interview.turns.length === 0 && !asking && (

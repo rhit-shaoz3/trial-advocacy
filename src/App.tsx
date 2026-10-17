@@ -11,6 +11,7 @@ import { MyCasesPage } from './pages/cases/MyCasesPage'
 import { CoursePage } from './pages/CoursePage'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { ReviewPage } from './pages/review/ReviewPage'
 import { ComingSoon } from './workspace/ComingSoon'
 import { CourseDashboard } from './workspace/CourseDashboard'
 import { WorkspaceLayout } from './workspace/WorkspaceLayout'
@@ -50,6 +51,7 @@ function App() {
         <Route path="cases/:caseId/witnesses/:witnessId" element={<InterviewPage />} />
         <Route path="calendar" element={<ComingSoon title="Calendar" />} />
         <Route path="resources" element={<ComingSoon title="Resource library" />} />
+        {isInstructor && <Route path="review" element={<ReviewPage />} />}
         {isInstructor && <Route path="manage" element={<CoursePage />} />}
         <Route
           path="*"

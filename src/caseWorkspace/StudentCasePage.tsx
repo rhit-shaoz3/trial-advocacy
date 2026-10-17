@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Link, useOutletContext, useParams } from 'react-router'
 import { useCourseService } from '../courses/CourseServiceContext'
-import type { CaseWorkspace } from '../courses/types'
+import type { CaseWorkspace, ReviewResult } from '../courses/types'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
 
@@ -13,6 +13,7 @@ export function StudentCasePage() {
   const workspace = useOutletContext<WorkspaceContext | undefined>()
   const [data, setData] = useState<CaseWorkspace | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reviews, setReviews] = useState<ReviewResult[] | undefined>(undefined)
   const myCasesPath = `/courses/${courseId}/cases${workspace?.search ?? ''}`
 
   useEffect(() => {
@@ -23,6 +24,10 @@ export function StudentCasePage() {
       .getMyCaseWorkspace(courseId, caseId)
       .then((w) => !cancelled && setData(w))
       .catch((err: Error) => !cancelled && setError(err.message))
+    service
+      .listMyReviews(courseId, caseId)
+      .then((r) => !cancelled && setReviews(r))
+      .catch(() => {}) // the case still works without its review results
     return () => {
       cancelled = true
     }
@@ -36,6 +41,16 @@ export function StudentCasePage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     }
+  }
+
+  /** Opening the Reviews tab marks the results read, here and in the course notice. */
+  function openReviews() {
+    if (!reviews?.some((r) => !r.seen)) return
+    setReviews((prev) => prev?.map((r) => ({ ...r, seen: true })))
+    service
+      .markReviewsSeen(courseId, caseId)
+      .then(() => workspace?.reloadHome())
+      .catch(() => {})
   }
 
   return (
@@ -69,6 +84,8 @@ export function StudentCasePage() {
             onToggleTask={toggleTask}
             interviewHref={(id) => `/courses/${courseId}/cases/${caseId}/witnesses/${id}${workspace?.search ?? ''}`}
             instructorName={workspace?.home.course.instructorName}
+            reviews={reviews ?? []}
+            onOpenReviews={openReviews}
           />
         </>
       )}

@@ -17,6 +17,72 @@
   font-size: 0.85rem;
 }
 
+/* The most important facts for each side, side by side on wide screens. */
+.case-form .case-facts {
+  display: grid;
+  flex-basis: 100%;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 0.75rem 1.5rem;
+}
+
+@media (max-width: 720px) {
+  .case-form .case-facts {
+    grid-template-columns: 1fr;
+  }
+}
+
+.case-facts .case-form-hint {
+  grid-column: 1 / -1;
+}
+
+.case-facts-side {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.case-facts-side legend {
+  margin-bottom: 0.45rem;
+  padding: 0;
+  font-weight: 600;
+}
+
+.case-facts-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.case-facts-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.case-form .case-facts-list input {
+  flex: 1;
+  min-width: 0;
+}
+
+.case-facts-add {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.case-facts-add svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 .case-list {
   display: grid;
   gap: 0.75rem;

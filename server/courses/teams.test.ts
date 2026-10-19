@@ -1,7 +1,7 @@
 import type request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, resetDatabase, signedInAgent } from '../test/helpers.ts'
+import { createCourseAs, resetDatabase, sampleFacts, signedInAgent } from '../test/helpers.ts'
 import { pairStudents, partnerKey } from './teams.ts'
 
 let prof: request.Agent
@@ -12,7 +12,7 @@ const STUDENTS = ['ada', 'ben', 'cy', 'dee', 'eve', 'fay', 'gus'].map((n) => `${
 const [ada, ben, cy, dee, eve] = STUDENTS
 
 async function newCase(title = 'Rivera v. Thrill Park') {
-  const res = await prof.post(`/api/courses/${course.id}/cases`).send({ title })
+  const res = await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title })
   return res.body.case.id as string
 }
 
@@ -187,7 +187,7 @@ describe('roster changes and case status', () => {
     await prof.post(teamsUrl()).send({ emails: [ada, ben] })
     await prof
       .patch(`/api/courses/${course.id}/cases/${caseId}`)
-      .send({ title: 'Rivera v. Thrill Park', summary: '', status: 'closed' })
+      .send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park', summary: '', status: 'closed' })
 
     const res = await prof.post(`${teamsUrl()}/auto`)
     expect(res.status).toBe(409)
@@ -249,7 +249,7 @@ describe("a student's cases", () => {
     await signedInAgent('student', ben, 'Ben Counsel')
     const myCases = async () => (await student.get(`/api/courses/${course.id}/my-cases`)).body.cases
     const setStatus = (id: string, title: string, status: string) =>
-      prof.patch(`/api/courses/${course.id}/cases/${id}`).send({ title, summary: '', status })
+      prof.patch(`/api/courses/${course.id}/cases/${id}`).send({ importantFacts: sampleFacts, title, summary: '', status })
 
     // Drafts are hidden, even once paired.
     await prof.post(teamsUrl()).send({ emails: [ben, ada, cy] })

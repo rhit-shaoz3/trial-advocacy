@@ -38,6 +38,8 @@ export interface WitnessProfile {
   /** "Today" inside the case, e.g. "October 1, 2024". */
   inWorldDate: string
   keyDisputedIssues?: string
+  /** The instructor's most important facts for each side; the witness never contradicts them. */
+  importantFacts?: { plaintiff: string[]; defense: string[] }
   documents: WitnessDocument[]
 }
 
@@ -85,6 +87,9 @@ export function buildSystemPrompt(profile: WitnessProfile, settings: DepositionS
     case_summary: profile.caseSummary,
     in_world_date: profile.inWorldDate,
     key_disputed_issues: profile.keyDisputedIssues,
+    has_important_facts: Boolean(profile.importantFacts?.plaintiff.length || profile.importantFacts?.defense.length),
+    plaintiff_important_facts: profile.importantFacts?.plaintiff ?? [],
+    defense_important_facts: profile.importantFacts?.defense ?? [],
     documents: profile.documents.map((d) => ({
       title: d.title,
       type: d.type,

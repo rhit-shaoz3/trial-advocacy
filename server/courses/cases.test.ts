@@ -1,7 +1,7 @@
 import type request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, resetDatabase, signedInAgent } from '../test/helpers.ts'
+import { createCourseAs, resetDatabase, sampleFacts, signedInAgent } from '../test/helpers.ts'
 
 let prof: request.Agent
 let course: { id: string; entryCode: string }
@@ -17,17 +17,21 @@ afterAll(async () => {
 })
 
 const baseUrl = () => `/api/courses/${course.id}/cases`
-const coaster = { title: 'Rivera v. Thrill Park', summary: 'A rollercoaster stops mid-loop.' }
+const coaster = { title: 'Rivera v. Thrill Park', summary: 'A rollercoaster stops mid-loop.', importantFacts: sampleFacts }
 
 async function createCase(input: Record<string, unknown> = coaster) {
-  const res = await prof.post(baseUrl()).send(input)
+  const res = await prof.post(baseUrl()).send({ importantFacts: sampleFacts, ...input })
   if (res.status !== 201) throw new Error(`Create case failed: ${JSON.stringify(res.body)}`)
   return res.body.case as { id: string; status: string }
 }
 
 describe('creating', () => {
   it('starts the case as a draft and lists it', async () => {
-    const res = await prof.post(baseUrl()).send({ title: '  Rivera v. Thrill Park ', summary: coaster.summary })
+    const res = await prof.post(baseUrl()).send({
+      title: '  Rivera v. Thrill Park ',
+      summary: coaster.summary,
+      importantFacts: { plaintiff: ['  The lap bar light was red. ', '', '  '], defense: ['It passed inspection.'] },
+    })
 
     expect(res.status).toBe(201)
     expect(res.body.case).toEqual({
@@ -38,6 +42,7 @@ describe('creating', () => {
       instructorNote: '',
       inWorldDate: null,
       disputedIssues: '',
+      importantFacts: { plaintiff: ['The lap bar light was red.'], defense: ['It passed inspection.'] },
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     })
@@ -59,7 +64,8 @@ describe('creating', () => {
   })
 
   it('validates the fields', async () => {
-    const error = async (body: Record<string, unknown>) => (await prof.post(baseUrl()).send(body)).body.error
+    const error = async (body: Record<string, unknown>) =>
+      (await prof.post(baseUrl()).send({ importantFacts: sampleFacts, ...body })).body.error
 
     expect(await error({ title: '   ' })).toBe('Case title is required.')
     expect(await error({ title: 'x'.repeat(121) })).toBe('Case title must be at most 120 characters.')
@@ -67,6 +73,75 @@ describe('creating', () => {
       'Summary must be at most 2000 characters.',
     )
     expect(await error({ title: 'Ok', status: 'archived' })).toBe('Choose a valid status.')
+  })
+
+  it('needs at least one important fact for each side', async () => {
+    const error = async (importantFacts: unknown) =>
+      (await prof.post(baseUrl()).send({ title: 'Ok', importantFacts })).body.error
+
+    expect(await error(undefined)).toBe('List at least one important fact for the plaintiff.')
+    expect(await error({ plaintiff: ['  '], defense: ['A fact.'] })).toBe(
+      'List at least one important fact for the plaintiff.',
+    )
+    expect(await error({ plaintiff: ['A fact.'], defense: [] })).toBe('List at least one important fact for the defense.')
+    expect(await error({ plaintiff: 'A fact.', defense: ['A fact.'] })).toBe("List the plaintiff's important facts as text.")
+    expect(await error({ plaintiff: ['A fact.'], defense: [3] })).toBe("List the defense's important facts as text.")
+    expect(await error({ plaintiff: Array(21).fill('A fact.'), defense: ['A fact.'] })).toBe(
+      'List at most 20 important facts for the plaintiff.',
+    )
+    expect(await error({ plaintiff: ['x'.repeat(501)], defense: ['A fact.'] })).toBe(
+      'Each important fact must be at most 500 characters.',
+    )
+    expect((await prof.get(baseUrl())).body.cases).toEqual([])
+  })
+})
+
+describe('important facts', () => {
+  it('can be changed when editing, and also have to be kept', async () => {
+    const { id } = await createCase()
+    const edit = (importantFacts: unknown) =>
+      prof.patch(`${baseUrl()}/${id}`).send({ ...coaster, status: 'draft', importantFacts })
+
+    const res = await edit({ plaintiff: ['The light was red.', 'Nobody checked the bar.'], defense: ['It passed inspection.'] })
+    expect(res.body.case.importantFacts).toEqual({
+      plaintiff: ['The light was red.', 'Nobody checked the bar.'],
+      defense: ['It passed inspection.'],
+    })
+    expect((await edit({ plaintiff: ['The light was red.'] })).body.error).toBe(
+      'List at least one important fact for the defense.',
+    )
+    expect((await prof.get(`${baseUrl()}/${id}`)).body.case.importantFacts.plaintiff).toHaveLength(2)
+  })
+
+  it('survive launch and are never shown to students', async () => {
+    const { id } = await createCase()
+    await prof.post(`/api/courses/${course.id}/roster`).send({ emails: ['ada@example.com', 'ben@example.com'] })
+    // On the roster, so signing up enrolls them.
+    const student = (await signedInAgent('student', 'ada@example.com')).agent
+    const caseUrl = `${baseUrl()}/${id}`
+    const t1 = (await prof.post(`${caseUrl}/teams`).send({ emails: ['ada@example.com'] })).body.teams[0].id
+    const t2 = (await prof.post(`${caseUrl}/teams`).send({ emails: ['ben@example.com'] })).body.teams[1].id
+    await prof.post(`${caseUrl}/matchups`).send({ plaintiffTeamId: t1, defenseTeamId: t2 })
+    await pool.query(
+      `INSERT INTO case_materials (case_id, filename, content_type, size_bytes, storage_key)
+       VALUES ($1, 'Fact pattern.pdf', 'application/pdf', 1, 'k')`,
+      [id],
+    )
+
+    const launched = await prof.post(`${caseUrl}/launch`)
+    expect(launched.body.case).toMatchObject({ status: 'active', importantFacts: sampleFacts })
+
+    const seen = [
+      await student.get(`/api/courses/${course.id}/my-cases`),
+      await student.get(`/api/courses/${course.id}/my-cases/${id}`),
+      await student.get(`/api/courses/${course.id}/home`),
+    ]
+    for (const res of seen) {
+      expect(res.status).toBe(200)
+      const text = JSON.stringify(res.body)
+      expect(text).not.toContain('importantFacts')
+      expect(text).not.toContain(sampleFacts.plaintiff[0])
+    }
   })
 })
 
@@ -76,7 +151,7 @@ describe('editing and deleting', () => {
 
     const res = await prof
       .patch(`${baseUrl()}/${id}`)
-      .send({ title: 'Rivera v. Thrill Park LLC', summary: 'Updated.', status: 'active' })
+      .send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park LLC', summary: 'Updated.', status: 'active' })
 
     expect(res.status).toBe(200)
     expect(res.body.case).toMatchObject({ title: 'Rivera v. Thrill Park LLC', summary: 'Updated.', status: 'active' })

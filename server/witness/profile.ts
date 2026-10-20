@@ -126,12 +126,18 @@ export async function loadProfile(
   return buildProfile(courseCase, witness, materials, new Date(), settledFacts, otherDepositionIds)
 }
 
-/** Who is asking: the side's party, and the witness's own lawyer when the other side asks. */
+/** Who speaks for the witness's lawyer when the instructor didn't name one. */
+export const DEFAULT_COUNSEL = 'Defending counsel'
+
+/**
+ * Who is asking: the side's party. When the other side asks, the witness's own
+ * lawyer is always there to object (named by the instructor, or DEFAULT_COUNSEL).
+ */
 export function depositionSettings(profile: WitnessProfile, witness: Witness, side: Side): DepositionSettings {
   const role = partyRole(side)
   return {
     examiningPartyRole: role,
     examiningPartyName: role === 'plaintiff' ? profile.plaintiffName : profile.defendantName,
-    defendingCounselName: witness.defendingCounsel || undefined,
+    defendingCounselName: witness.defendingCounsel || DEFAULT_COUNSEL,
   }
 }

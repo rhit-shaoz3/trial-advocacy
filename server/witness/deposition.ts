@@ -1,15 +1,24 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { buildSystemPrompt, type DepositionSettings, type WitnessProfile } from './prompt.ts'
 
-export const WITNESS_MODEL = 'claude-opus-5-5'
+/**
+ * The witness runs on Claude Haiku 5.5: a deposition is many short answers
+ * over one large, cached case file, and Haiku costs a small fraction of Opus.
+ * WITNESS_MODEL in the environment overrides it (e.g. claude-sonnet-5-5) to
+ * compare against the eval (npm run witness:eval).
+ */
+export const WITNESS_MODEL = process.env.WITNESS_MODEL || 'claude-haiku-5-5'
 
 /**
  * Thinking depth per answer. Answers are short, but the witness has a lot of
- * rules to weigh (what it knows, what it may add, which side it's on), so
- * this stays at the model's default rather than dropping to "low". Tune it
- * against the eval (npm run witness:eval).
+ * rules to weigh (what it knows, what it may add, which side it's on, when its
+ * lawyer objects), and "high" is where Haiku follows instructions most
+ * strictly. Tune it against the eval.
  */
-export const WITNESS_EFFORT = 'medium'
+export const WITNESS_EFFORT = 'high'
+
+/** Haiku has no server-side fallback: the parameter would do nothing, or fail with a model list. */
+const hasServerFallback = (model: string) => !model.startsWith('claude-haiku')
 
 /** One question and the witness's reply, exactly as the model gave it (objection included). */
 export interface TranscriptTurn {
@@ -69,16 +78,16 @@ export function buildRequest(options: {
   model?: string
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 }): Anthropic.Beta.Messages.MessageCreateParamsNonStreaming {
+  const model = options.model ?? WITNESS_MODEL
   return {
-    model: options.model ?? WITNESS_MODEL,
+    model,
     max_tokens: 16000,
-    // Thinking is always on for this model; effort sets how much.
+    // Adaptive thinking; effort sets how much.
     thinking: { type: 'adaptive' },
     output_config: { effort: options.effort ?? WITNESS_EFFORT },
-    // If a safety classifier declines (unlikely for a deposition), retry on
-    // Anthropic's recommended fallback model instead of failing the turn.
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    // On models that have one, a safety decline (unlikely for a deposition)
+    // retries on Anthropic's recommended fallback model instead of failing the turn.
+    ...(hasServerFallback(model) && { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
     // The system prompt (case documents included) is large and identical for
     // the whole deposition, so cache it; the top-level breakpoint also caches
     // the growing transcript turn by turn.

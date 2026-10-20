@@ -366,6 +366,19 @@ describe('witnesses by phase', () => {
     await setPhase('deposition')
     expect((await ada.get(interview())).body.interview.turns).toHaveLength(1)
   })
+
+  it('always seats her lawyer for the other side, named "Defending counsel" when none is set', async () => {
+    await prof.put(`${caseUrl()}/witnesses/${witnessId}`).send({
+      name: 'Elena Torres',
+      alignedSide: 'defense',
+      depositionMaterialId: files['Torres deposition.pdf'],
+      defendingCounsel: '',
+    })
+    await setPhase('deposition')
+    await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    expect(asked[0].settings).toMatchObject({ examiningPartyRole: 'plaintiff', defendingCounselName: 'Defending counsel' })
+    expect(buildSystemPrompt(asked[0].profile, asked[0].settings)).toContain('# Your lawyer is present')
+  })
 })
 
 describe('profile helpers', () => {

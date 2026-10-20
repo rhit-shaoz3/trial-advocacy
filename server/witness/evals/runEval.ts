@@ -6,7 +6,8 @@ import { parseArgs } from 'node:util'
 import { z } from 'zod'
 import { pool } from '../../db/pool.ts'
 import { loadAppWitness, witnessFolder } from '../cliWitness.ts'
-import { askWitness, WITNESS_MODEL, type WitnessReply } from '../deposition.ts'
+import { askWitness, WITNESS_EFFORT, WITNESS_MODEL, type WitnessReply } from '../deposition.ts'
+import { depositionSettings } from '../profile.ts'
 import type { DepositionSettings, WitnessProfile } from '../prompt.ts'
 import { checkReply, type CheckFailure, type EvalCase } from './checks.ts'
 
@@ -34,8 +35,15 @@ const { values } = parseArgs({
 })
 
 const GRADER_MODEL = 'claude-opus-5-5'
-// Claude Opus 5.5 rates per million tokens: input, cache writes (5-minute, 1.25x), cache reads, output.
-const PRICE = { input: 4, cacheWrite: 5, cacheRead: 0.2, output: 20 }
+
+/** Rates per million tokens: input, cache writes (5-minute, 1.25x), cache reads (0.1x), output. */
+const rates = (input: number, output: number) => ({ input, cacheWrite: input * 1.25, cacheRead: input * 0.1, output })
+/** Haiku has two rate cards, chosen by how long the prompt is. */
+function priceFor(model: string, promptTokens: number) {
+  if (model.startsWith('claude-haiku-5-5')) return promptTokens > 100_000 ? rates(0.5, 2.5) : rates(0.1, 0.5)
+  if (model.startsWith('claude-sonnet-5-5')) return rates(2, 10)
+  return rates(4, 20) // Claude Opus 5.5, and the default guess for anything else
+}
 
 const Verdict = z.object({
   pass: z.boolean(),
@@ -44,12 +52,15 @@ const Verdict = z.object({
 
 const client = new Anthropic()
 let cost = 0
-function addCost(usage: Anthropic.Beta.Messages.BetaUsage | Anthropic.Messages.Usage) {
+function addCost(model: string, usage: Anthropic.Beta.Messages.BetaUsage | Anthropic.Messages.Usage) {
+  const cacheWrite = usage.cache_creation_input_tokens ?? 0
+  const cacheRead = usage.cache_read_input_tokens ?? 0
+  const price = priceFor(model, usage.input_tokens + cacheWrite + cacheRead)
   cost +=
-    (usage.input_tokens * PRICE.input +
-      (usage.cache_creation_input_tokens ?? 0) * PRICE.cacheWrite +
-      (usage.cache_read_input_tokens ?? 0) * PRICE.cacheRead +
-      usage.output_tokens * PRICE.output) /
+    (usage.input_tokens * price.input +
+      cacheWrite * price.cacheWrite +
+      cacheRead * price.cacheRead +
+      usage.output_tokens * price.output) /
     1_000_000
 }
 
@@ -75,7 +86,7 @@ async function grade(profile: WitnessProfile, c: EvalCase, reply: WitnessReply) 
     ],
     output_config: { format: zodOutputFormat(Verdict) },
   })
-  addCost(response.usage)
+  addCost(GRADER_MODEL, response.usage)
   if (!response.parsed_output) throw new Error(`The grader returned no verdict for ${c.id}`)
   return response.parsed_output
 }
@@ -92,11 +103,12 @@ interface Result {
 }
 
 async function runCase(profile: WitnessProfile, c: EvalCase, run: number): Promise<Result> {
+  // As in the app: the witness's own lawyer is there (the case's, or the witness's, or the default).
+  const app = depositionSettings(profile, witness, c.side === 'plaintiff' ? 'plaintiff' : 'defense')
   const settings: DepositionSettings = {
-    examiningPartyRole: c.side,
-    examiningPartyName: c.side === 'plaintiff' ? profile.plaintiffName : profile.defendantName,
+    ...app,
     examiningAttorneyName: c.attorney,
-    defendingCounselName: c.counsel,
+    defendingCounselName: c.counsel ?? app.defendingCounselName,
   }
   const reply = await askWitness(client, {
     profile,
@@ -105,7 +117,7 @@ async function runCase(profile: WitnessProfile, c: EvalCase, run: number): Promi
     question: c.question,
     effort: values.effort as Parameters<typeof askWitness>[1]['effort'],
   })
-  addCost(reply.usage)
+  addCost(reply.model, reply.usage)
   const ruleFailures = checkReply(reply, c.checks)
   const grader = await grade(profile, c, reply)
   return {
@@ -120,7 +132,7 @@ async function runCase(profile: WitnessProfile, c: EvalCase, run: number): Promi
   }
 }
 
-const { profile } = await loadAppWitness(values.witness)
+const { profile, witness } = await loadAppWitness(values.witness)
 await pool.end()
 const folder = witnessFolder(profile.name)
 const allCases = JSON.parse(await readFile(new URL('eval-cases.json', folder), 'utf8')) as EvalCase[]
@@ -128,7 +140,7 @@ const cases = allCases.filter((c) => !values.case || c.id.includes(values.case))
 const repeat = Math.max(1, Number(values.repeat))
 if (cases.length === 0) throw new Error(`No case id contains "${values.case}"`)
 
-console.log(`${profile.name}: ${cases.length} case(s) x ${repeat} on ${WITNESS_MODEL}${values.effort ? ` (effort ${values.effort})` : ''}\n`)
+console.log(`${profile.name}: ${cases.length} case(s) x ${repeat} on ${WITNESS_MODEL} (effort ${values.effort ?? WITNESS_EFFORT})\n`)
 const jobs = Array.from({ length: repeat }, (_, run) => cases.map((c) => ({ c, run }))).flat()
 
 // The first call writes the cached system prompt; the rest read it, a few at a time.
@@ -159,6 +171,6 @@ console.log(`\n${passed}/${results.length} passed. Cost: about $${cost.toFixed(2
 const dir = new URL('eval-results/', folder)
 await mkdir(dir, { recursive: true })
 const file = new URL(`${new Date().toISOString().replace(/[:.]/g, '-')}.json`, dir)
-await writeFile(file, JSON.stringify({ model: WITNESS_MODEL, effort: values.effort ?? 'default', cost, results }, null, 2))
+await writeFile(file, JSON.stringify({ model: WITNESS_MODEL, effort: values.effort ?? WITNESS_EFFORT, cost, results }, null, 2))
 console.log(`Saved the results to ${fileURLToPath(file)}`)
 if (passed < results.length) process.exitCode = 1

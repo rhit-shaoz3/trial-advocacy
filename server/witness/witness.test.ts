@@ -25,6 +25,10 @@ const profile: WitnessProfile = {
   caseSummary: 'Ana Ortiz slipped in aisle 5 and broke her wrist.',
   inWorldDate: 'March 15, 2026',
   keyDisputedIssues: 'whether the floor was wet before the fall',
+  importantFacts: {
+    plaintiff: ['Nobody mopped aisle 5 after 8 p.m.', 'The "Wet floor" sign was in the back room.'],
+    defense: ['Ms. Ortiz was looking at her phone when she fell.'],
+  },
   documents: [
     {
       title: 'Dana Lee\'s incident statement',
@@ -72,14 +76,35 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('<settled_facts>\n- Dana mopped at 8:45.\n</settled_facts>')
     expect(prompt).toContain('# Things that are not true')
     expect(prompt).toContain('<untrue_facts>\n- A sign was posted.\n- Sam was there.\n</untrue_facts>')
-    expect(prompt).toContain('a settled fact, and never say anything listed as not true')
+    expect(prompt).toContain('one of the most important facts, or a settled fact, and never say anything listed as not true')
+  })
+
+  it("lists both sides' most important facts, and how to handle questions near them", () => {
+    const prompt = buildSystemPrompt(profile, adverse)
+
+    const section = prompt.slice(prompt.indexOf('# The most important facts'), prompt.indexOf('# What you know'))
+    expect(section).toContain(
+      'For the plaintiff:\n- Nobody mopped aisle 5 after 8 p.m.\n- The "Wet floor" sign was in the back room.\n',
+    )
+    expect(section).toContain('For the defense:\n- Ms. Ortiz was looking at her phone when she fell.\n')
+    expect(section).toContain('Never make up a fact that contradicts any of these important facts.')
+    expect(section).toContain('you may say you don\'t know, as long as that doesn\'t damage your credibility')
+    expect(section).toContain('say "Let me check" instead, to avoid the question for now')
+    expect(prompt).toContain('one of the most important facts, or a settled fact')
   })
 
   it('leaves out optional sections that do not apply', () => {
     const bare = buildSystemPrompt(
-      { ...profile, personaNotes: undefined, keyDisputedIssues: undefined, settledFacts: { accepted: [], denied: [] } },
+      {
+        ...profile,
+        personaNotes: undefined,
+        keyDisputedIssues: undefined,
+        importantFacts: undefined,
+        settledFacts: { accepted: [], denied: [] },
+      },
       adverse,
     )
+    expect(bare).not.toContain('# The most important facts')
     expect(bare).not.toContain('# Facts settled in earlier interviews')
     expect(bare).not.toContain('# Things that are not true')
     expect(bare).not.toContain('Background and demeanor')

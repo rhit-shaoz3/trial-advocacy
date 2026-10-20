@@ -112,10 +112,10 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined }] }` |
 | POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | `{ added, skipped: [{ email, reason }], roster }` |
 | DELETE | `/api/courses/:id/roster/:email`             |                                  | `204`, `404` if not on the roster |
-| GET    | `/api/courses/:id/cases`                     |                                  | `{ cases: [{ id, title, summary, status, createdAt, updatedAt }] }`, oldest first |
-| POST   | `/api/courses/:id/cases`                     | `{ title, summary?, status? }`   | `201 { case }`; status defaults to `draft` |
+| GET    | `/api/courses/:id/cases`                     |                                  | `{ cases: [{ id, title, summary, status, importantFacts, createdAt, updatedAt }] }`, oldest first. `importantFacts` is `{ plaintiff: string[], defense: string[] }`: the most important facts for each side, which the AI witnesses never contradict and students never see |
+| POST   | `/api/courses/:id/cases`                     | `{ title, summary?, status?, importantFacts }` | `201 { case }`; status defaults to `draft`. `importantFacts` needs at least one fact per side (at most 20, each up to 500 characters) |
 | GET    | `/api/courses/:id/cases/:caseId`             |                                  | `{ case }` |
-| PATCH  | `/api/courses/:id/cases/:caseId`             | `{ title, summary, status }`     | `{ case }`; status is required here |
+| PATCH  | `/api/courses/:id/cases/:caseId`             | `{ title, summary, status, importantFacts }` | `{ case }`; status and `importantFacts` are required here |
 | DELETE | `/api/courses/:id/cases/:caseId`             |                                  | `204` |
 | GET    | `/api/courses/:id/cases/:caseId/teams`       |                                  | `{ teams: [{ id, number, members }], unpaired, matchups: [{ id, number, plaintiffTeamId, defenseTeamId }] }` (members and unpaired are roster entries). Every team and matchup change responds with this shape |
 | POST   | `/api/courses/:id/cases/:caseId/teams`       | `{ emails: string[] }` (1–3)     | `201`, the teams; `400` not on the roster, `409` already on a team |

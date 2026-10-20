@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { ai } from '../ai/ai.ts'
 import { transcriptionsSettled } from '../courses/materialText.ts'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, resetDatabase, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
+import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 import { buildSystemPrompt, type DepositionSettings, type WitnessProfile } from './prompt.ts'
 import { formatCaseDate, partyNames } from './profile.ts'
 
@@ -42,7 +42,7 @@ beforeEach(async () => {
   ada = (await signedInAgent('student', email(1), 'Ada Lawyer')).agent
   bo = (await signedInAgent('student', email(2), 'Bo Partner')).agent
   cy = (await signedInAgent('student', email(3), 'Cy Counsel')).agent
-  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera v. Thrill Park', summary: 'A rider fell.' })).body.case.id
+  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park', summary: 'A rider fell.' })).body.case.id
 
   const { teams } = (await prof.post(`${caseUrl()}/teams`).send({ emails: [email(1), email(2)] })).body
   const defense = (await prof.post(`${caseUrl()}/teams`).send({ emails: [email(3), email(4)] })).body.teams[1]
@@ -150,7 +150,7 @@ describe('setting up an AI witness', () => {
   })
 
   it('rejects files from another case and bad sides', async () => {
-    const otherCase = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Other' })).body.case.id
+    const otherCase = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title: 'Other' })).body.case.id
     const res = await prof
       .post(`/api/courses/${course.id}/cases/${otherCase}/witnesses`)
       .send({ name: 'X', depositionMaterialId: files['Torres deposition.pdf'] })
@@ -204,6 +204,7 @@ describe('interviewing an AI witness', () => {
       inWorldDate: 'October 1, 2024',
       keyDisputedIssues: 'Where she stood.',
       personaNotes: 'Proud of her work.',
+      importantFacts: sampleFacts,
     })
     expect(profile.documents.map((d) => [d.title, d.type, d.witnessKnows])).toEqual([
       ['Torres deposition', 'own_statement', true],

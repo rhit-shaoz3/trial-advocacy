@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { Upload, X } from 'lucide-react'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate } from '../../../courses/caseLabels'
 import { MATERIAL_AUDIENCES, type CaseMaterial, type MaterialAudience } from '../../../courses/types'
@@ -13,6 +14,18 @@ const ACCEPT = [
 
 /** How often the list refreshes while files are still being transcribed. */
 const POLL_MS = 5000
+
+/** A file waiting to be uploaded, with the label and audience the instructor picks for it. */
+interface QueuedFile {
+  key: number
+  file: File
+  label: string
+  audience: MaterialAudience
+}
+
+let nextKey = 0
+/** "Ride log (March).pdf" → "Ride log (March)" */
+const defaultLabel = (filename: string) => filename.replace(/\.[^.]+$/, '') || filename
 
 /**
  * The case file: the pieces of the fact pattern (documents, images, audio,
@@ -37,7 +50,8 @@ export function MaterialsSection({
   const [uploading, setUploading] = useState(false)
   const [audience, setAudience] = useState<MaterialAudience>('all')
   const [retrying, setRetrying] = useState<string | null>(null)
-  const [description, setDescription] = useState('')
+  const [queued, setQueued] = useState<QueuedFile[]>([])
+  const [dragging, setDragging] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -76,31 +90,56 @@ export function MaterialsSection({
     }
   }
 
-  async function handleChosen(e: ChangeEvent<HTMLInputElement>) {
+  /** Adds chosen or dropped files to the list to label; nothing uploads until "Upload". */
+  function addFiles(files: File[]) {
+    if (files.length === 0) return
+    const tooLarge = files.filter((f) => f.size > MAX_BYTES)
+    setErrors(tooLarge.map((f) => `${f.name}: That file is too large. The limit is 100 MB.`))
+    const accepted = files.filter((f) => f.size <= MAX_BYTES)
+    setQueued((prev) => [
+      ...prev,
+      ...accepted.map((file) => ({ key: nextKey++, file, label: defaultLabel(file.name), audience })),
+    ])
+  }
+
+  function handleChosen(e: ChangeEvent<HTMLInputElement>) {
     const chosen = [...(e.target.files ?? [])]
     e.target.value = '' // so choosing the same file again still fires a change
-    if (chosen.length === 0) return
+    addFiles(chosen)
+  }
 
+  function handleDrop(e: DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    if (!uploading) addFiles([...e.dataTransfer.files])
+  }
+
+  const updateQueued = (key: number, fields: Partial<QueuedFile>) =>
+    setQueued((prev) => prev.map((p) => (p.key === key ? { ...p, ...fields } : p)))
+
+  /** Uploads every listed file with its own label and audience. Files that fail stay listed. */
+  async function handleUpload() {
     setErrors([])
     setUploading(true)
     const failures: string[] = []
-    for (const file of chosen) {
-      if (file.size > MAX_BYTES) {
-        failures.push(`${file.name}: That file is too large. The limit is 100 MB.`)
-        continue
-      }
+    for (const item of queued) {
       try {
-        const uploaded = await service.uploadMaterial(courseId, caseId, file, { audience, description })
+        const uploaded = await service.uploadMaterial(courseId, caseId, item.file, {
+          audience: item.audience,
+          description: item.label.trim(),
+        })
         setMaterials((prev) => [...(prev ?? []), uploaded])
+        setQueued((prev) => prev.filter((p) => p.key !== item.key))
       } catch (err) {
-        failures.push(`${file.name}: ${err instanceof Error ? err.message : 'Upload failed.'}`)
+        failures.push(`${item.file.name}: ${err instanceof Error ? err.message : 'Upload failed.'}`)
       }
     }
-    if (failures.length < chosen.length) setDescription('')
     setErrors(failures)
     setUploading(false)
     onChange?.()
   }
+
+  const unlabeled = queued.some((p) => !p.label.trim())
 
   async function handleAudience(material: CaseMaterial, next: MaterialAudience) {
     setErrors([])
@@ -133,15 +172,33 @@ export function MaterialsSection({
       <h2 id="materials-heading">Case file</h2>
       <p className="muted section-hint">
         Split the fact pattern into sections and upload each piece (documents, images, audio, and
-        video, up to 100 MB each) so students can find what they need. They see the files in their
+        video, up to 100 MB each) so students can find what they need. Drag files in or choose them,
+        then give each one a label: students see it as the file&rsquo;s title. They see the files in their
         Case file tab, grouped by type. Choose who can see each file: keep a witness&rsquo;s deposition
         to instructors only, so the AI witness can read it but students can&rsquo;t. Each file is
         transcribed for the AI witnesses once it&rsquo;s uploaded.
       </p>
 
-      <div className="panel-form content-form" role="group" aria-label="Upload to the case file">
+      <div
+        className={`panel-form content-form upload-drop${dragging ? ' upload-drop-over' : ''}`}
+        role="group"
+        aria-label="Upload to the case file"
+        data-testid="material-drop"
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+        }}
+        onDrop={handleDrop}
+      >
+        <p className="upload-drop-prompt">
+          <Upload aria-hidden="true" />
+          Drag files here, or choose them.
+        </p>
         <label>
-          Visible to
+          Visible to (new files)
           <select value={audience} onChange={(e) => setAudience(e.target.value as MaterialAudience)}>
             {MATERIAL_AUDIENCES.map((a) => (
               <option key={a} value={a}>
@@ -149,16 +206,6 @@ export function MaterialsSection({
               </option>
             ))}
           </select>
-        </label>
-        <label className="content-form-grow">
-          Description (optional)
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Ride maintenance log, March–October"
-            maxLength={400}
-          />
         </label>
         <input
           ref={fileInput}
@@ -171,13 +218,76 @@ export function MaterialsSection({
         />
         <button
           type="button"
-          className="btn-primary"
+          className="btn-secondary"
           onClick={() => fileInput.current?.click()}
           disabled={uploading}
         >
-          {uploading ? 'Uploading…' : 'Choose files to upload'}
+          Choose files
         </button>
       </div>
+
+      {queued.length > 0 && (
+        <section className="upload-queue" aria-labelledby="upload-queue-heading">
+          <h3 id="upload-queue-heading">Ready to upload ({queued.length})</h3>
+          <ul>
+            {queued.map((p) => (
+              <li key={p.key}>
+                <span className="upload-queue-file">
+                  {p.file.name}
+                  <small className="muted">{formatSize(p.file.size)}</small>
+                </span>
+                <input
+                  type="text"
+                  value={p.label}
+                  onChange={(e) => updateQueued(p.key, { label: e.target.value })}
+                  aria-label={`Label for ${p.file.name}`}
+                  aria-invalid={!p.label.trim()}
+                  placeholder="Label (required)"
+                  maxLength={400}
+                  required
+                  disabled={uploading}
+                />
+                <select
+                  className="inline-select"
+                  value={p.audience}
+                  onChange={(e) => updateQueued(p.key, { audience: e.target.value as MaterialAudience })}
+                  aria-label={`Who will see ${p.file.name}`}
+                  disabled={uploading}
+                >
+                  {MATERIAL_AUDIENCES.map((a) => (
+                    <option key={a} value={a}>
+                      {AUDIENCE_LABEL[a]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setQueued((prev) => prev.filter((x) => x.key !== p.key))}
+                  aria-label={`Remove ${p.file.name}`}
+                  title="Remove"
+                  disabled={uploading}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="upload-queue-actions">
+            <button type="button" className="btn-primary" onClick={handleUpload} disabled={uploading || unlabeled}>
+              {uploading
+                ? 'Uploading…'
+                : queued.length === 1
+                  ? 'Upload 1 file'
+                  : `Upload ${queued.length} files`}
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => setQueued([])} disabled={uploading}>
+              Clear
+            </button>
+            {unlabeled && <span className="muted">Give every file a label to upload.</span>}
+          </div>
+        </section>
+      )}
 
       {errors.length > 0 && (
         <div className="form-error" role="alert">

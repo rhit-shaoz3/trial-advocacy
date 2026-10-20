@@ -6,7 +6,7 @@ import type { DepositionSettings, PartyRole, SettledFacts, WitnessDocument, Witn
 
 // Builds an AI witness's profile from what the instructor set up in the app:
 // the witness (side, deposition, files they've seen, persona), the case
-// (title, summary, in-world date, disputed issues), and every case file's
+// (title, summary, in-world date, disputed issues, most important facts), and every case file's
 // transcription.
 
 /** Why a witness can't be deposed right now; the message is shown to whoever asked. */
@@ -70,7 +70,7 @@ export function witnessDocuments(witness: Witness, materials: MaterialText[]): W
 }
 
 export function buildProfile(
-  courseCase: Pick<CourseCase, 'title' | 'summary' | 'inWorldDate' | 'disputedIssues'>,
+  courseCase: Pick<CourseCase, 'title' | 'summary' | 'inWorldDate' | 'disputedIssues' | 'importantFacts'>,
   witness: Witness,
   materials: MaterialText[],
   today = new Date(),
@@ -92,6 +92,7 @@ export function buildProfile(
     caseSummary: courseCase.summary,
     inWorldDate: formatCaseDate(courseCase.inWorldDate ?? today.toISOString().slice(0, 10)),
     keyDisputedIssues: courseCase.disputedIssues || undefined,
+    importantFacts: courseCase.importantFacts,
     documents: witnessDocuments(witness, materials),
     settledFacts,
   }

@@ -18,6 +18,12 @@ export async function signedInAgent(
   return { agent, userId: res.body.user.id as string }
 }
 
+/** Every case needs at least one important fact per side. */
+export const sampleFacts = {
+  plaintiff: ['The lap bar light was red when the ride left the station.'],
+  defense: ['The ride passed its safety inspection that morning.'],
+}
+
 export const fallTrial = { code: 'LAW 540', title: 'Trial Advocacy', season: 'Fall', year: 2026 }
 
 /** Creates a course through the API as `instructor` and returns it. */

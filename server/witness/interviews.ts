@@ -108,7 +108,7 @@ async function view(witness: Witness, owner: InterviewOwner, interviewId: string
 }
 
 export interface InterviewContext {
-  courseCase: Pick<CourseCase, 'id' | 'title' | 'summary' | 'inWorldDate' | 'disputedIssues'>
+  courseCase: Pick<CourseCase, 'id' | 'title' | 'summary' | 'inWorldDate' | 'disputedIssues' | 'importantFacts'>
   witness: Witness
   owner: InterviewOwner
   /** The team's case world, whose rulings bind the witness; null for the instructor's tests. */

@@ -128,6 +128,7 @@ describe('course workspace for the instructor', () => {
       summary: '',
       status: 'draft' as const,
       instructorNote: '',
+      importantFacts: { plaintiff: ['The light was red.'], defense: ['It passed inspection.'] },
       createdAt: '2026-10-01T15:00:00.000Z',
       updatedAt: '2026-10-01T15:00:00.000Z',
     }

@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { ai } from '../ai/ai.ts'
 import { transcriptionsSettled } from '../courses/materialText.ts'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, resetDatabase, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
+import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 import type { NewFactsInput } from '../witness/newFacts.ts'
 import type { WitnessProfile } from '../witness/prompt.ts'
 import { reviewsSettled } from './reviews.ts'
@@ -39,7 +39,7 @@ beforeEach(async () => {
   ada = (await signedInAgent('student', email(1), 'Ada Lawyer')).agent
   bo = (await signedInAgent('student', email(2), 'Bo Partner')).agent
   eve = (await signedInAgent('student', email(5), 'Eve Advocate')).agent
-  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera v. Thrill Park' })).body.case.id
+  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera v. Thrill Park', importantFacts: sampleFacts })).body.case.id
 
   // World A: s1+s2 v s3+s4. World B: s5+s6 v s7+s8.
   const team = async (a: number, b: number) =>

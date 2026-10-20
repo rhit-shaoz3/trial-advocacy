@@ -53,6 +53,8 @@ function demoEmail(name: string) {
 const DEMO_CASE = {
   title: 'Practice case (placeholder)',
   summary: 'A placeholder case to practice pairing students into teams and case worlds.',
+  plaintiffFacts: ['The ride stopped at the top of the lift hill for twenty minutes.'],
+  defenseFacts: ['The ride passed its safety inspection that morning.'],
 }
 
 const CLASS = CLASS_NAMES.map((name) => ({ name, email: demoEmail(name), role: 'student' }))
@@ -106,10 +108,10 @@ try {
   // A draft case to pair the class into, only while the course has no cases, so
   // re-seeding never adds one next to the instructor's real cases.
   await pool.query(
-    `INSERT INTO cases (course_id, title, summary)
-     SELECT $1, $2, $3
+    `INSERT INTO cases (course_id, title, summary, plaintiff_key_facts, defense_key_facts)
+     SELECT $1, $2, $3, $4, $5
      WHERE NOT EXISTS (SELECT 1 FROM cases WHERE course_id = $1)`,
-    [classCourse.id, DEMO_CASE.title, DEMO_CASE.summary],
+    [classCourse.id, DEMO_CASE.title, DEMO_CASE.summary, DEMO_CASE.plaintiffFacts, DEMO_CASE.defenseFacts],
   )
 
   const { rows: counts } = await pool.query<{ total: number }>(

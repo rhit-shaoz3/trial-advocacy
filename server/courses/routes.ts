@@ -29,6 +29,7 @@ import { sendMaterialFile } from './caseContentRoutes.ts'
 import { findCase } from './cases.ts'
 import { casesRouter } from './caseRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
+import { instructorHome } from './instructorHome.ts'
 import { homeCasesForInstructor, listMyCases, studentHome } from './myCases.ts'
 import { findStudentTeamId, getStudentWorkspace } from './workspace.ts'
 
@@ -131,8 +132,10 @@ async function loadStudentWorkspace(courseId: string, caseId: string, userId: st
 /**
  * Everything a member's course home page shows. Students get the launched
  * cases they're on a team in; the instructor (the only instructor who can be
- * a member) gets every launched case. Students' deadlines and task counts come
- * from their team's open and completed tasks. Activity isn't stored yet.
+ * a member) gets every launched case, plus `instructor`: their own dashboard
+ * (course health, every case's readiness, what's waiting on them, deadlines
+ * with team completion, recent activity). Students' deadlines and task counts
+ * come from their team's open and completed tasks.
  */
 coursesRouter.get('/:courseId/home', async (req, res) => {
   const { courseId } = req.params
@@ -147,6 +150,7 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
           upcoming: [],
           stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
           reviewCount: await openReviewCount(course.id),
+          instructor: await instructorHome(course.id),
         }
       : {
           ...(await studentHome(course.id, req.user!.id)),

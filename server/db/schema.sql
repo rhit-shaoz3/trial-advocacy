@@ -209,6 +209,11 @@ ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS text_error text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS in_world_date date;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS disputed_issues text NOT NULL DEFAULT '';
 
+-- The most important facts for each side, set by the instructor. The AI
+-- witnesses never contradict them; students never see them.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS plaintiff_key_facts text[] NOT NULL DEFAULT '{}';
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS defense_key_facts text[] NOT NULL DEFAULT '{}';
+
 -- Every case world in a case moves through the same phases, when the
 -- instructor says so: subpoena (each side sees only its own witnesses),
 -- investigate (the background investigator opens), deposition (every witness
@@ -260,6 +265,51 @@ CREATE TABLE IF NOT EXISTS interview_turns (
   model         text        NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (interview_id, position)
+);
+
+-- A team's ended interview, sent to the instructor as the new facts the AI
+-- witness added (not in the case files or earlier rulings). The instructor
+-- rules on each fact; once the review is completed the rulings bind every
+-- later interview: for the team's case world, or for the whole case.
+CREATE TABLE IF NOT EXISTS interview_reviews (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  interview_id uuid        NOT NULL UNIQUE REFERENCES interviews (id) ON DELETE CASCADE,
+  case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  witness_id   uuid        NOT NULL REFERENCES case_witnesses (id) ON DELETE CASCADE,
+  team_id      uuid        REFERENCES teams (id) ON DELETE SET NULL,
+  matchup_id   uuid        REFERENCES matchups (id) ON DELETE SET NULL,
+  -- Kept for display even if the teams or worlds are rearranged later.
+  team_number  integer     NOT NULL,
+  world_number integer     NOT NULL,
+  side         text        NOT NULL CHECK (side IN ('plaintiff', 'defense')),
+  status       text        NOT NULL DEFAULT 'summarizing'
+               CHECK (status IN ('summarizing', 'failed', 'open', 'completed')),
+  error        text,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz,
+  completed_by uuid        REFERENCES users (id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS interview_reviews_case_idx ON interview_reviews (case_id);
+
+-- Each new fact from a review, and the instructor's ruling: accept or deny,
+-- for the team's world only or for every world in the case.
+CREATE TABLE IF NOT EXISTS review_facts (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  review_id  uuid        NOT NULL REFERENCES interview_reviews (id) ON DELETE CASCADE,
+  position   integer     NOT NULL,
+  text       text        NOT NULL,
+  decision   text        CHECK (decision IN ('accept_world', 'deny_world', 'accept_case', 'deny_case')),
+  decided_at timestamptz,
+  UNIQUE (review_id, position)
+);
+
+-- Which students have opened a completed review's results.
+CREATE TABLE IF NOT EXISTS review_seen (
+  review_id uuid        NOT NULL REFERENCES interview_reviews (id) ON DELETE CASCADE,
+  user_id   uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  seen_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (review_id, user_id)
 );
 
 -- Login sessions, in the format connect-pg-simple expects.

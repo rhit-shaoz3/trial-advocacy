@@ -128,6 +128,7 @@ export function CaseDetailPage() {
                   title: input.title,
                   summary: input.summary,
                   status: input.status ?? courseCase.status,
+                  importantFacts: input.importantFacts,
                 })
                 if (note.trim() !== courseCase.instructorNote) {
                   saved = await service.saveInstructorNote(courseId, courseCase.id, note)

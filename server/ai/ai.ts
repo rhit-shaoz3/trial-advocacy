@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { askWitness, type WitnessReply } from '../witness/deposition.ts'
+import { findNewFacts, type NewFactsInput } from '../witness/newFacts.ts'
 import { transcribeFile, type FileToTranscribe } from './transcribe.ts'
 
 /**
@@ -25,4 +26,6 @@ export const ai = {
   transcribe: (file: FileToTranscribe): Promise<string | null> => transcribeFile(anthropic(), file),
   /** The AI witness's reply to the next deposition question. */
   askWitness: (options: Parameters<typeof askWitness>[1]): Promise<WitnessReply> => askWitness(anthropic(), options),
+  /** The new facts a witness added in an ended interview, for the instructor to rule on. */
+  findNewFacts: (input: NewFactsInput): Promise<string[]> => findNewFacts(anthropic(), input),
 }

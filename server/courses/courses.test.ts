@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
 import { storage } from '../storage/storage.ts'
-import { createCourseAs, fallTrial, resetDatabase, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
+import { createCourseAs, fallTrial, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 
 beforeEach(resetDatabase)
 
@@ -172,7 +172,7 @@ describe('DELETE /api/courses/:courseId', () => {
     const course = await createCourseAs(agent)
     const { agent: student } = await signedInAgent()
     await student.post('/api/courses/join').send({ entryCode: course.entryCode })
-    const caseId = (await agent.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera' })).body.case.id
+    const caseId = (await agent.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title: 'Rivera' })).body.case.id
     const uploaded = await uploadCaseFile(agent, `/api/courses/${course.id}/cases/${caseId}`, 'case.pdf')
     const { storageKey } = (await pool.query('SELECT storage_key AS "storageKey" FROM case_materials')).rows[0]
     expect(uploaded.status).toBe(201)
@@ -223,6 +223,7 @@ describe('GET /api/courses/:courseId/home', () => {
       activity: [],
       upcoming: [],
       stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+      newReviewResults: 0,
     })
   })
 
@@ -230,7 +231,9 @@ describe('GET /api/courses/:courseId/home', () => {
     const { agent: prof } = await signedInAgent('instructor')
     const course = await createCourseAs(prof)
 
-    expect((await prof.get(`/api/courses/${course.id}/home`)).status).toBe(200)
+    const res = await prof.get(`/api/courses/${course.id}/home`)
+    expect(res.status).toBe(200)
+    expect(res.body.reviewCount).toBe(0)
   })
 
   it('404s for students who are not enrolled or give a bad id, and 401s when logged out', async () => {

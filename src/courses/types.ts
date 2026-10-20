@@ -59,6 +59,12 @@ export type CourseCaseStatus = (typeof COURSE_CASE_STATUSES)[number]
  * A case the whole class works on, as its instructor manages it. Teams, case
  * worlds (matchups), materials, witnesses, and tasks hang off it.
  */
+/** The most important facts for each side. Instructors and AI witnesses only; students never see them. */
+export interface ImportantFacts {
+  plaintiff: string[]
+  defense: string[]
+}
+
 export interface CourseCase {
   id: string
   title: string
@@ -71,6 +77,8 @@ export interface CourseCase {
   inWorldDate: string | null
   /** Issues the AI witnesses must leave disputed. */
   disputedIssues: string
+  /** The AI witnesses never contradict these. */
+  importantFacts: ImportantFacts
   createdAt: string
   updatedAt: string
 }
@@ -85,6 +93,8 @@ export interface CaseInput {
   summary: string
   /** Defaults to draft when creating. */
   status?: CourseCaseStatus
+  /** At least one per side. */
+  importantFacts: ImportantFacts
 }
 
 /** Students paired for one case: usually two, three for the odd one out. */
@@ -215,6 +225,50 @@ export interface Interview {
   canAsk: boolean
   /** Why questions can't be asked, when they can't. */
   notice: string | null
+}
+
+/**
+ * The instructor's ruling on a fact a witness added: accept or deny, for the
+ * team's case world only or for every world in the case.
+ */
+export type FactDecision = 'accept_world' | 'deny_world' | 'accept_case' | 'deny_case'
+export const FACT_DECISIONS: FactDecision[] = ['accept_world', 'deny_world', 'accept_case', 'deny_case']
+
+/** A team's ended interview, sent to the instructor as the new facts the witness added. */
+export interface InterviewReview {
+  id: string
+  caseId: string
+  caseTitle: string
+  witness: { id: string; name: string; role: string }
+  worldNumber: number
+  teamNumber: number
+  side: Side
+  /** The team's members, by name. */
+  team: string[]
+  /** Summarizing: the AI is still listing the new facts. Failed: try again. */
+  status: 'summarizing' | 'failed' | 'open' | 'completed'
+  error: string | null
+  createdAt: string
+  completedAt: string | null
+  facts: { id: string; text: string; decision: FactDecision | null }[]
+}
+
+export interface ReviewTurn {
+  question: string
+  objection: string | null
+  answer: string
+  askedBy: string | null
+}
+
+/** A completed review as the team sees it: only whether each fact stands. */
+export interface ReviewResult {
+  id: string
+  witness: { id: string; name: string }
+  completedAt: string
+  accepted: string[]
+  denied: string[]
+  /** Whether this student has opened the results. */
+  seen: boolean
 }
 
 /** Whose interview: the student's team (as its own side), or the instructor testing as one side. */
@@ -358,4 +412,19 @@ export interface CourseService {
   askWitness(courseId: string, caseId: string, witnessId: string, as: InterviewAs, question: string): Promise<Interview>
   /** Ends the interview and starts an empty one. */
   restartInterview(courseId: string, caseId: string, witnessId: string, as: InterviewAs): Promise<Interview>
+  /** Ends the team's interview and sends it to the instructor for review; opens a fresh one. */
+  endInterview(
+    courseId: string,
+    caseId: string,
+    witnessId: string,
+  ): Promise<{ interview: Interview; sentForReview: boolean }>
+  /** The team's completed reviews in a case. */
+  listMyReviews(courseId: string, caseId: string): Promise<ReviewResult[]>
+  markReviewsSeen(courseId: string, caseId: string): Promise<void>
+  // The instructor's review panel.
+  listReviews(courseId: string, status: 'open' | 'completed'): Promise<InterviewReview[]>
+  decideFact(courseId: string, reviewId: string, factId: string, decision: FactDecision): Promise<InterviewReview>
+  completeReview(courseId: string, reviewId: string): Promise<InterviewReview>
+  retryReview(courseId: string, reviewId: string): Promise<InterviewReview>
+  getReviewTranscript(courseId: string, reviewId: string): Promise<ReviewTurn[]>
 }

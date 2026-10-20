@@ -121,3 +121,38 @@ describe('InterviewPage', () => {
     expect(screen.queryByRole('button', { name: 'Defendant' })).not.toBeInTheDocument()
   })
 })
+
+describe('InterviewPage: ending for review', () => {
+  it('ends the team interview after confirming and says it went for review', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const asked = { ...empty, turns: [turn(0, 'Where were you?', 'On break.')] }
+    const endInterview = vi.fn().mockResolvedValue({ interview: empty, sentForReview: true })
+    const { user } = renderPage({ getInterview: vi.fn().mockResolvedValue(asked), endInterview })
+
+    await user.click(await screen.findByRole('button', { name: 'End interview' }))
+
+    expect(window.confirm).toHaveBeenCalledWith('End this interview and send it to your instructor for review?')
+    expect(endInterview).toHaveBeenCalledWith('c1', 'k1', 'w1')
+    expect(await screen.findByRole('status')).toHaveTextContent('Sent for review.')
+    expect(screen.queryByText('On break.')).not.toBeInTheDocument()
+  })
+
+  it('does nothing if the team cancels', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const asked = { ...empty, turns: [turn(0, 'Where were you?', 'On break.')] }
+    const { user, service } = renderPage({ getInterview: vi.fn().mockResolvedValue(asked) })
+    await user.click(await screen.findByRole('button', { name: 'End interview' }))
+    expect(service.endInterview).not.toHaveBeenCalled()
+  })
+
+  it('is off before any question', async () => {
+    renderPage({ getInterview: vi.fn().mockResolvedValue(empty) })
+    expect(await screen.findByRole('button', { name: 'End interview' })).toBeDisabled()
+  })
+
+  it("isn't shown on the instructor's test interview", async () => {
+    renderPage({ getInterview: vi.fn().mockResolvedValue(empty) }, instructor, '/courses/c1/cases/k1/witnesses/w1?side=defense')
+    await screen.findByRole('heading', { level: 1, name: 'Elena Torres' })
+    expect(screen.queryByRole('button', { name: 'End interview' })).not.toBeInTheDocument()
+  })
+})

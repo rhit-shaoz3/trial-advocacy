@@ -1,6 +1,7 @@
 import { afterEach, beforeEach } from 'vitest'
 import { ai } from '../ai/ai.ts'
 import { transcriptionsSettled } from '../courses/materialText.ts'
+import { reviewsSettled } from '../reviews/reviews.ts'
 
 // Server tests never call Claude. By default a file's "transcription" is its
 // own bytes as text, and the witness has no answer; tests that need the
@@ -12,10 +13,12 @@ beforeEach(() => {
   ai.askWitness = async () => {
     throw new Error('This test did not set up a fake witness.')
   }
+  ai.findNewFacts = async () => []
 })
 
 afterEach(async () => {
   // Uploads start transcriptions in the background; let them finish before the next test resets the database.
   await transcriptionsSettled()
+  await reviewsSettled()
   Object.assign(ai, real)
 })

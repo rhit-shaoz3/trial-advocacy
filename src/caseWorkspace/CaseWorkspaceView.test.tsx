@@ -148,18 +148,26 @@ describe('CaseWorkspaceView', () => {
     expect(screen.getByRole('button', { name: /Case file2 documents · 1 image · 1 audio/ })).toBeInTheDocument()
   })
 
-  it('shows the next open task, the case team, and the instructor note', () => {
+  it("shows the next open task, the student's team and their opponents, and the instructor note", () => {
     renderView()
 
     const next = screen.getByRole('region', { name: 'Next task' })
     expect(next).toHaveTextContent('Outline the deposition')
     expect(within(next).getByText(/Due Oct 12/)).toHaveClass('cw-overdue')
 
-    const team = screen.getByRole('region', { name: 'Case team' })
-    expect(team).toHaveTextContent('4 participants')
-    expect(team).toHaveTextContent('Ada LawyerDefense counsel')
-    expect(team).toHaveTextContent('Cy CounselPlaintiff counsel')
-    expect(team).not.toHaveTextContent(/\byou\b/i)
+    const team = screen.getByRole('region', { name: 'Your team' })
+    const [ours, theirs] = within(team).getAllByRole('list')
+    expect(team).toHaveTextContent('Defendant · Team 7')
+    expect(within(ours).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'ALAda Lawyer (you)Defense counsel',
+      'BPBen PartnerDefense counsel',
+    ])
+    expect(within(team).getByRole('heading', { name: 'Opposing team' })).toBeInTheDocument()
+    expect(team).toHaveTextContent('Plaintiff · Team 3')
+    expect(within(theirs).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'CCCy CounselPlaintiff counsel',
+      'DADee AdvocatePlaintiff counsel',
+    ])
 
     const note = screen.getByRole('region', { name: 'Instructor note' })
     expect(note).toHaveTextContent('Mind the timeline.')
@@ -219,7 +227,18 @@ describe('CaseWorkspaceView', () => {
     expect(screen.getByText('Not on a team yet')).toBeInTheDocument()
     expect(screen.getAllByText('The case file hasn’t been posted yet.')).toHaveLength(1)
     expect(screen.getByRole('region', { name: 'Next task' })).toHaveTextContent('No tasks have been assigned yet.')
-    expect(screen.getByRole('region', { name: 'Case team' })).toHaveTextContent('Not on a team yet.')
+    const team = screen.getByRole('region', { name: 'Your team' })
+    expect(team).toHaveTextContent('Not on a team yet.')
+    expect(within(team).queryByRole('heading', { name: 'Opposing team' })).not.toBeInTheDocument()
+  })
+
+  it('says when the opponents will appear, for a team not yet matched', () => {
+    renderView({ workspace: { ...sampleWorkspace, world: null, side: null } })
+    const team = screen.getByRole('region', { name: 'Your team' })
+    expect(team).toHaveTextContent('Team 7 · Waiting for a case world')
+    expect(within(team).getAllByRole('listitem')).toHaveLength(2)
+    expect(team).toHaveTextContent('Ben PartnerTeammate')
+    expect(team).toHaveTextContent('Your opponents appear once your team is matched.')
   })
 
   it("links each AI witness to the team's interview", async () => {

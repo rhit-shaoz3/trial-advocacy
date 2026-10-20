@@ -1,7 +1,7 @@
 import type request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { pool } from '../db/pool.ts'
-import { createCourseAs, resetDatabase, signedInAgent } from '../test/helpers.ts'
+import { createCourseAs, resetDatabase, sampleFacts, signedInAgent } from '../test/helpers.ts'
 import { matchTeams } from './matchups.ts'
 import { partnerKey } from './teams.ts'
 
@@ -18,7 +18,7 @@ let caseId: string
 const email = (n: number) => `s${n}@example.com`
 
 async function newCase(title: string) {
-  const res = await prof.post(`/api/courses/${course.id}/cases`).send({ title })
+  const res = await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title })
   return res.body.case.id as string
 }
 
@@ -129,7 +129,7 @@ describe('changing case worlds', () => {
 
   it('freezes the worlds of a closed case', async () => {
     const [t1, t2] = await pairInOrder(4)
-    await prof.patch(caseUrl()).send({ title: 'Rivera v. Thrill Park', summary: '', status: 'closed' })
+    await prof.patch(caseUrl()).send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park', summary: '', status: 'closed' })
 
     const res = await prof.post(`${caseUrl()}/matchups`).send({ plaintiffTeamId: t1.id, defenseTeamId: t2.id })
     expect(res.status).toBe(409)
@@ -196,7 +196,7 @@ describe("a student's case world", () => {
     const { agent: student } = await signedInAgent('student', email(1), 'Ada Lawyer')
     const [t1, t2] = await pairInOrder(4)
     await prof.post(`${caseUrl()}/matchups`).send({ plaintiffTeamId: t2.id, defenseTeamId: t1.id })
-    await prof.patch(caseUrl()).send({ title: 'Rivera v. Thrill Park', summary: '', status: 'active' })
+    await prof.patch(caseUrl()).send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park', summary: '', status: 'active' })
 
     const { cases } = (await student.get(`/api/courses/${course.id}/my-cases`)).body
     expect(cases[0].team.number).toBe(1)
@@ -224,10 +224,10 @@ describe('the course home cases', () => {
     // Drafts stay off the dashboard.
     expect(await home()).toEqual([])
 
-    await prof.patch(caseUrl()).send({ title: 'Rivera v. Thrill Park', summary: 'Coaster.', status: 'active' })
+    await prof.patch(caseUrl()).send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park', summary: 'Coaster.', status: 'active' })
     // A launched case the student isn't paired in doesn't show either.
     const other = await newCase('State v. Hale')
-    await prof.patch(caseUrl(other)).send({ title: 'State v. Hale', summary: '', status: 'active' })
+    await prof.patch(caseUrl(other)).send({ importantFacts: sampleFacts, title: 'State v. Hale', summary: '', status: 'active' })
 
     expect(await home()).toEqual([
       {
@@ -248,7 +248,7 @@ describe('the course home cases', () => {
   it('lists every launched case for the instructor, with its worlds and paired students', async () => {
     const [t1, t2] = await pairInOrder(4)
     await prof.post(`${caseUrl()}/matchups`).send({ plaintiffTeamId: t1.id, defenseTeamId: t2.id })
-    await prof.patch(caseUrl()).send({ title: 'Rivera v. Thrill Park', summary: '', status: 'active' })
+    await prof.patch(caseUrl()).send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park', summary: '', status: 'active' })
     await newCase('Still a draft')
 
     const { cases } = (await prof.get(`/api/courses/${course.id}/home`)).body

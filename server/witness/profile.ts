@@ -2,11 +2,11 @@ import { listMaterialTexts, type MaterialText, type Witness } from '../courses/c
 import type { CourseCase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { finishPendingTranscriptions } from '../courses/materialText.ts'
-import type { DepositionSettings, PartyRole, WitnessDocument, WitnessProfile } from './prompt.ts'
+import type { DepositionSettings, PartyRole, SettledFacts, WitnessDocument, WitnessProfile } from './prompt.ts'
 
 // Builds an AI witness's profile from what the instructor set up in the app:
 // the witness (side, deposition, files they've seen, persona), the case
-// (title, summary, in-world date, disputed issues), and every case file's
+// (title, summary, in-world date, disputed issues, most important facts), and every case file's
 // transcription.
 
 /** Why a witness can't be deposed right now; the message is shown to whoever asked. */
@@ -70,10 +70,11 @@ export function witnessDocuments(witness: Witness, materials: MaterialText[]): W
 }
 
 export function buildProfile(
-  courseCase: Pick<CourseCase, 'title' | 'summary' | 'inWorldDate' | 'disputedIssues'>,
+  courseCase: Pick<CourseCase, 'title' | 'summary' | 'inWorldDate' | 'disputedIssues' | 'importantFacts'>,
   witness: Witness,
   materials: MaterialText[],
   today = new Date(),
+  settledFacts: SettledFacts = { accepted: [], denied: [] },
 ): WitnessProfile {
   if (!witness.alignedSide) throw new WitnessNotReadyError(`Choose which side ${witness.name} is a witness for.`)
   const names = partyNames(courseCase.title)
@@ -91,19 +92,28 @@ export function buildProfile(
     caseSummary: courseCase.summary,
     inWorldDate: formatCaseDate(courseCase.inWorldDate ?? today.toISOString().slice(0, 10)),
     keyDisputedIssues: courseCase.disputedIssues || undefined,
+    importantFacts: courseCase.importantFacts,
     documents: witnessDocuments(witness, materials),
+    settledFacts,
   }
 }
 
-/** Loads the case files (finishing any transcription still pending) and builds the profile. */
-export async function loadProfile(courseCase: Parameters<typeof buildProfile>[0] & { id: string }, witness: Witness) {
+/**
+ * Loads the case files (finishing any transcription still pending) and builds
+ * the profile, with the instructor's rulings for `settledFacts`.
+ */
+export async function loadProfile(
+  courseCase: Parameters<typeof buildProfile>[0] & { id: string },
+  witness: Witness,
+  settledFacts?: SettledFacts,
+) {
   if (!witness.depositionMaterialId) throw new WitnessNotReadyError(`Choose ${witness.name}'s deposition file.`)
   let materials = await listMaterialTexts(courseCase.id)
   if (materials.some((m) => m.textStatus === 'pending')) {
     await finishPendingTranscriptions(materials)
     materials = await listMaterialTexts(courseCase.id)
   }
-  return buildProfile(courseCase, witness, materials)
+  return buildProfile(courseCase, witness, materials, new Date(), settledFacts)
 }
 
 /** Who is asking: the side's party, and the witness's own lawyer when the other side asks. */

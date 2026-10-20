@@ -60,6 +60,14 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     getInterview: vi.fn(),
     askWitness: vi.fn(),
     restartInterview: vi.fn(),
+    endInterview: vi.fn(),
+    listMyReviews: vi.fn().mockResolvedValue([]),
+    markReviewsSeen: vi.fn().mockResolvedValue(undefined),
+    listReviews: vi.fn().mockResolvedValue([]),
+    decideFact: vi.fn(),
+    completeReview: vi.fn(),
+    retryReview: vi.fn(),
+    getReviewTranscript: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
 }

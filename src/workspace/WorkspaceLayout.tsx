@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ChevronLeft,
   LayoutDashboard,
+  Gavel,
   Library,
   Settings,
 } from 'lucide-react'
@@ -63,7 +64,10 @@ export function WorkspaceLayout() {
       icon: BriefcaseBusiness,
     },
     { to: `${base}/calendar${search}`, label: 'Calendar', icon: CalendarDays },
-    { to: `${base}/resources${search}`, label: 'Resource library', icon: Library },
+    // Instructors judge the facts AI witnesses add; students keep the resource library.
+    isInstructor
+      ? { to: `${base}/review${search}`, label: 'Review', icon: Gavel, badge: home?.reviewCount ?? 0 }
+      : { to: `${base}/resources${search}`, label: 'Resource library', icon: Library },
   ]
   if (isInstructor) {
     nav.push({ to: `${base}/manage${search}`, label: 'Manage course', icon: Settings })

@@ -14,6 +14,7 @@ import {
   type CasePhase,
   type CaseStatus,
   type CourseCase,
+  type ImportantFacts,
 } from './cases.ts'
 import { listStorageKeys, removeStoredFiles, setInstructorNote, setWitnessSettings } from './caseContent.ts'
 import { materialsRouter, tasksRouter, witnessesRouter } from './caseContentRoutes.ts'
@@ -31,6 +32,32 @@ declare module 'express-serve-static-core' {
 const MAX_TITLE_LENGTH = 120
 const MAX_SUMMARY_LENGTH = 2000
 const MAX_NOTE_LENGTH = 2000
+const MAX_FACTS_PER_SIDE = 20
+const MAX_FACT_LENGTH = 500
+
+/**
+ * Reads `importantFacts: { plaintiff: string[], defense: string[] }`. Facts are
+ * trimmed and blank ones dropped; each side needs at least one.
+ */
+function readImportantFacts(body: unknown): ImportantFacts {
+  const value = (body as Record<string, unknown> | undefined)?.importantFacts as Record<string, unknown> | undefined
+  const readSide = (side: keyof ImportantFacts, label: string) => {
+    const list = value?.[side]
+    if (list !== undefined && (!Array.isArray(list) || list.some((f) => typeof f !== 'string'))) {
+      throw new HttpError(400, `List the ${label}'s important facts as text.`)
+    }
+    const facts = ((list ?? []) as string[]).map((f) => f.trim()).filter(Boolean)
+    if (facts.length === 0) throw new HttpError(400, `List at least one important fact for the ${label}.`)
+    if (facts.length > MAX_FACTS_PER_SIDE) {
+      throw new HttpError(400, `List at most ${MAX_FACTS_PER_SIDE} important facts for the ${label}.`)
+    }
+    if (facts.some((f) => f.length > MAX_FACT_LENGTH)) {
+      throw new HttpError(400, `Each important fact must be at most ${MAX_FACT_LENGTH} characters.`)
+    }
+    return facts
+  }
+  return { plaintiff: readSide('plaintiff', 'plaintiff'), defense: readSide('defense', 'defense') }
+}
 
 /**
  * Validates the body of a create or edit request. Edits must send the status,
@@ -50,7 +77,7 @@ function readCaseFields(body: unknown, defaultStatus?: CaseStatus): CaseFields {
   }
   if (!CASE_STATUSES.includes(status as CaseStatus)) throw new HttpError(400, 'Choose a valid status.')
 
-  return { title, summary, status: status as CaseStatus }
+  return { title, summary, status: status as CaseStatus, importantFacts: readImportantFacts(body) }
 }
 
 /** Mounted under /api/courses/:courseId/cases, after the course is loaded. */
@@ -160,6 +187,7 @@ caseRouter.post('/launch', async (req, res) => {
     title: current.title,
     summary: current.summary,
     status: 'active',
+    importantFacts: current.importantFacts,
   })
   res.json({ case: launched })
 })

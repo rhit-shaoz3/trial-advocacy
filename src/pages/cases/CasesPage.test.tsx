@@ -17,6 +17,7 @@ const coaster: CourseCase = {
   instructorNote: '',
   inWorldDate: null,
   disputedIssues: '',
+  importantFacts: { plaintiff: ['The lap bar light was red.'], defense: ['The ride passed inspection.'] },
   createdAt: '2026-10-01T15:00:00.000Z',
   updatedAt: '2026-10-01T15:00:00.000Z',
 }
@@ -73,11 +74,14 @@ describe('CasesPage', () => {
     expect(screen.queryByLabelText('Status')).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('Case title'), 'Rivera v. Thrill Park')
     await user.type(screen.getByLabelText(/Summary/), 'A rollercoaster stalls mid-loop.')
+    await user.type(screen.getByLabelText('Plaintiff fact 1'), 'The lap bar light was red.')
+    await user.type(screen.getByLabelText('Defense fact 1'), 'The ride passed inspection.')
     await user.click(screen.getByRole('button', { name: 'Create case' }))
 
     expect(createCase).toHaveBeenCalledWith('c1', {
       title: 'Rivera v. Thrill Park',
       summary: 'A rollercoaster stalls mid-loop.',
+      importantFacts: { plaintiff: ['The lap bar light was red.'], defense: ['The ride passed inspection.'] },
     })
     expect(await screen.findByRole('heading', { name: 'Rivera v. Thrill Park' })).toBeInTheDocument()
     expect(form).not.toBeInTheDocument()
@@ -90,9 +94,50 @@ describe('CasesPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'New case' }))
     await user.type(screen.getByLabelText('Case title'), ' ')
+    await user.type(screen.getByLabelText('Plaintiff fact 1'), 'A fact.')
+    await user.type(screen.getByLabelText('Defense fact 1'), 'A fact.')
     await user.click(screen.getByRole('button', { name: 'Create case' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Case title is required.')
+  })
+
+  it('needs at least one important fact for each side', async () => {
+    const createCase = vi.fn().mockResolvedValue(coaster)
+    const { user } = renderAt('/courses/c1/cases', { createCase })
+
+    await user.click(await screen.findByRole('button', { name: 'New case' }))
+    await user.type(screen.getByLabelText('Case title'), 'Rivera v. Thrill Park')
+    await user.type(screen.getByLabelText('Plaintiff fact 1'), '   ')
+    await user.click(screen.getByRole('button', { name: 'Create case' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('List at least one important fact for the plaintiff.')
+
+    await user.type(screen.getByLabelText('Plaintiff fact 1'), 'The light was red.')
+    await user.click(screen.getByRole('button', { name: 'Create case' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('List at least one important fact for the defense.')
+    expect(createCase).not.toHaveBeenCalled()
+  })
+
+  it('adds and removes fact rows, keeping at least one per side', async () => {
+    const createCase = vi.fn().mockResolvedValue(coaster)
+    const { user } = renderAt('/courses/c1/cases', { createCase, getCase: vi.fn().mockResolvedValue(coaster) })
+
+    await user.click(await screen.findByRole('button', { name: 'New case' }))
+    await user.type(screen.getByLabelText('Case title'), 'Rivera v. Thrill Park')
+    expect(screen.getByRole('button', { name: 'Remove plaintiff fact 1' })).toBeDisabled()
+    await user.type(screen.getByLabelText('Plaintiff fact 1'), 'First.')
+    await user.click(screen.getByRole('button', { name: 'Add plaintiff fact' }))
+    expect(screen.getByLabelText('Plaintiff fact 2')).toHaveFocus()
+    await user.keyboard('Second.')
+    await user.click(screen.getByRole('button', { name: 'Add plaintiff fact' }))
+    await user.keyboard('Third.')
+    await user.click(screen.getByRole('button', { name: 'Remove plaintiff fact 1' }))
+    expect(screen.getByLabelText('Plaintiff fact 1')).toHaveValue('Second.')
+    await user.type(screen.getByLabelText('Defense fact 1'), 'Inspected.')
+    await user.click(screen.getByRole('button', { name: 'Create case' }))
+
+    expect(createCase).toHaveBeenCalledWith('c1', expect.objectContaining({
+      importantFacts: { plaintiff: ['Second.', 'Third.'], defense: ['Inspected.'] },
+    }))
   })
 })
 
@@ -158,12 +203,19 @@ describe('CaseDetailPage', () => {
     expect(title).toHaveValue('Rivera v. Thrill Park')
     await user.type(title, ' LLC')
     await user.selectOptions(screen.getByLabelText('Status'), 'Active')
+    expect(screen.getByLabelText('Plaintiff fact 1')).toHaveValue('The lap bar light was red.')
+    await user.click(screen.getByRole('button', { name: 'Add defense fact' }))
+    await user.keyboard('Riders were told to stay seated.')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(updateCase).toHaveBeenCalledWith('c1', 'k1', {
       title: 'Rivera v. Thrill Park LLC',
       summary: 'A rollercoaster stalls mid-loop.',
       status: 'active',
+      importantFacts: {
+        plaintiff: ['The lap bar light was red.'],
+        defense: ['The ride passed inspection.', 'Riders were told to stay seated.'],
+      },
     })
     expect(await screen.findByRole('heading', { name: 'Rivera v. Thrill Park LLC' })).toBeInTheDocument()
     expect(screen.getByText('Active')).toBeInTheDocument()

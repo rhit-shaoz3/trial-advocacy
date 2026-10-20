@@ -1,0 +1,186 @@
+/* The instructor's review panel */
+
+.review-tabs {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1.25rem 0;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.review-tab {
+  margin-bottom: -1px;
+  padding: 0.6rem 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ws-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.review-tab[aria-selected='true'] {
+  border-bottom-color: var(--ws-red);
+  color: var(--ws-navy);
+}
+
+.review-list {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-card {
+  padding: 1.2rem 1.4rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.7rem;
+  background: var(--surface);
+}
+
+.review-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.review-card h2 {
+  margin: 0.2rem 0 0;
+  color: var(--ws-navy);
+  font: 400 1.35rem var(--ws-serif);
+}
+
+.review-meta {
+  margin: 0.2rem 0 0;
+  color: var(--ws-muted);
+  font-size: 0.85rem;
+}
+
+.review-note {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 0;
+  color: var(--ws-muted);
+}
+
+.review-note p {
+  margin: 0;
+}
+
+.review-facts {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: fact;
+}
+
+.review-facts li {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.55rem;
+  counter-increment: fact;
+}
+
+.review-fact-text {
+  margin: 0 0 0.6rem;
+}
+
+.review-fact-text::before {
+  content: counter(fact) '. ';
+  color: var(--ws-muted);
+  font-weight: 700;
+}
+
+.review-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.review-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.review-choice input {
+  margin: 0;
+}
+
+.review-choice:has(input:checked) {
+  border-color: transparent;
+}
+
+.review-choice-accept_world:has(input:checked),
+.review-choice-accept_case:has(input:checked),
+.review-decision-accept_world,
+.review-decision-accept_case {
+  background: #e1eee7;
+  color: #2f6b47;
+}
+
+.review-choice-deny_world:has(input:checked),
+.review-choice-deny_case:has(input:checked),
+.review-decision-deny_world,
+.review-decision-deny_case {
+  background: #f6e3e0;
+  color: #8a3b33;
+}
+
+.review-card-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.review-finish {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.review-transcript {
+  flex: 1 1 20rem;
+  font-size: 0.88rem;
+}
+
+.review-transcript summary {
+  color: var(--link, var(--ws-blue));
+  cursor: pointer;
+}
+
+.review-transcript ol {
+  display: grid;
+  gap: 0.6rem;
+  max-height: 24rem;
+  margin: 0.6rem 0 0;
+  padding: 0.75rem 1rem;
+  overflow-y: auto;
+  border-left: 2px solid var(--ws-line);
+  list-style: none;
+}
+
+.review-transcript p {
+  margin: 0;
+}
+
+.review-objection {
+  color: var(--ws-muted);
+  font-style: italic;
+}

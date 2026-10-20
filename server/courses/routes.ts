@@ -15,7 +15,15 @@ import {
   type CourseFields,
   type TaughtCourse,
 } from './courses.ts'
-import { askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
+import { askQuestion, endInterview, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
+import {
+  findTeamWorld,
+  markReviewsSeen,
+  openReviewCount,
+  teamReviewResults,
+  unseenReviewCount,
+} from '../reviews/reviews.ts'
+import { reviewsRouter } from '../reviews/reviewRoutes.ts'
 import { findMaterialFile, findWitness, listStorageKeys, removeStoredFiles, setTaskDone, visibleTo } from './caseContent.ts'
 import { sendMaterialFile } from './caseContentRoutes.ts'
 import { findCase } from './cases.ts'
@@ -138,8 +146,12 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
           cases: await homeCasesForInstructor(course.id),
           upcoming: [],
           stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+          reviewCount: await openReviewCount(course.id),
         }
-      : await studentHome(course.id, req.user!.id)),
+      : {
+          ...(await studentHome(course.id, req.user!.id)),
+          newReviewResults: await unseenReviewCount(course.id, req.user!.id),
+        }),
   })
 })
 
@@ -194,12 +206,17 @@ async function teamInterview(req: Request): Promise<InterviewContext> {
   }
   const teamId = await findStudentTeamId(caseId, req.user!.id)
   if (!teamId || !workspace.side) throw new HttpError(409, 'Your team needs a case world before it can interview witnesses.')
-  const [courseCase, witness] = await Promise.all([findCase(courseId, caseId), findWitness(caseId, witnessId)])
+  const [courseCase, witness, world] = await Promise.all([
+    findCase(courseId, caseId),
+    findWitness(caseId, witnessId),
+    findTeamWorld(teamId),
+  ])
   if (!courseCase || !witness) throw new HttpError(404, 'Witness not found.')
   return {
     courseCase,
     witness,
     owner: { teamId, side: workspace.side },
+    matchupId: world?.matchupId ?? null,
     userId: req.user!.id,
     closed: workspace.case.status !== 'active',
   }
@@ -217,6 +234,30 @@ coursesRouter.post('/:courseId/my-cases/:caseId/witnesses/:witnessId/interview/r
   const ctx = await teamInterview(req)
   if (ctx.closed) throw new HttpError(409, 'This case is closed, so the interview can no longer change.')
   res.json({ interview: await restartInterview(ctx) })
+})
+
+/** Ends the interview and sends it to the instructor for review: `{ interview, sentForReview }`. */
+coursesRouter.post('/:courseId/my-cases/:caseId/witnesses/:witnessId/interview/end', async (req, res) => {
+  const ctx = await teamInterview(req)
+  if (ctx.closed) throw new HttpError(409, 'This case is closed, so the interview can no longer change.')
+  res.json(await endInterview(ctx))
+})
+
+/** The team's completed reviews: which facts the instructor accepted and which denied. */
+coursesRouter.get('/:courseId/my-cases/:caseId/reviews', async (req, res) => {
+  const { courseId, caseId } = req.params
+  await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  res.json({ reviews: teamId ? await teamReviewResults(caseId, teamId, req.user!.id) : [] })
+})
+
+/** Marks the team's review results as read by this student. */
+coursesRouter.post('/:courseId/my-cases/:caseId/reviews/seen', async (req, res) => {
+  const { courseId, caseId } = req.params
+  await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  if (teamId) await markReviewsSeen(caseId, teamId, req.user!.id)
+  res.status(204).end()
 })
 
 // Everything below manages one course and is only for the instructor who teaches it.
@@ -237,5 +278,6 @@ courseRouter.delete('/', async (req, res) => {
 })
 courseRouter.use('/roster', rosterRouter)
 courseRouter.use('/cases', casesRouter)
+courseRouter.use('/reviews', reviewsRouter)
 
 coursesRouter.use('/:courseId', courseRouter)

@@ -3,7 +3,7 @@ import { app } from '../app.ts'
 import { pool } from '../db/pool.ts'
 
 export async function resetDatabase() {
-  await pool.query('TRUNCATE users, session, courses, enrollments, cases, teams, team_members, matchups, matchup_teams, case_materials, case_witnesses, case_tasks, task_completions CASCADE')
+  await pool.query('TRUNCATE users, session, courses, enrollments, cases, teams, team_members, matchups, matchup_teams, case_materials, case_witnesses, case_tasks, task_completions, interviews, interview_reviews CASCADE')
 }
 
 /** Signs up a new account and returns an agent that stays logged in as it. */
@@ -16,6 +16,12 @@ export async function signedInAgent(
   const res = await agent.post('/api/auth/signup').send({ name, email, password: 'correct-horse', role })
   if (res.status !== 201) throw new Error(`Sign-up failed: ${JSON.stringify(res.body)}`)
   return { agent, userId: res.body.user.id as string }
+}
+
+/** Every case needs at least one important fact per side. */
+export const sampleFacts = {
+  plaintiff: ['The lap bar light was red when the ride left the station.'],
+  defense: ['The ride passed its safety inspection that morning.'],
 }
 
 export const fallTrial = { code: 'LAW 540', title: 'Trial Advocacy', season: 'Fall', year: 2026 }

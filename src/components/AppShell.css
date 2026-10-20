@@ -120,6 +120,20 @@
   box-shadow: inset 2px 0 var(--ws-red);
 }
 
+.ws-nav-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  margin-left: auto;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--ws-red);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
 .ws-sidebar-bottom {
   margin-top: auto;
   padding-top: 1.5rem;

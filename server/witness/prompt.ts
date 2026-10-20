@@ -41,6 +41,17 @@ export interface WitnessProfile {
   /** The instructor's most important facts for each side; the witness never contradicts them. */
   importantFacts?: { plaintiff: string[]; defense: string[] }
   documents: WitnessDocument[]
+  /**
+   * The instructor's rulings on facts witnesses added in earlier interviews,
+   * for this witness's case world and the whole case: true facts to keep to,
+   * and facts ruled untrue that must never be said.
+   */
+  settledFacts?: SettledFacts
+}
+
+export interface SettledFacts {
+  accepted: string[]
+  denied: string[]
 }
 
 /** Who is taking this deposition. */
@@ -90,6 +101,10 @@ export function buildSystemPrompt(profile: WitnessProfile, settings: DepositionS
     has_important_facts: Boolean(profile.importantFacts?.plaintiff.length || profile.importantFacts?.defense.length),
     plaintiff_important_facts: profile.importantFacts?.plaintiff ?? [],
     defense_important_facts: profile.importantFacts?.defense ?? [],
+    settled_facts: profile.settledFacts?.accepted ?? [],
+    has_settled_facts: Boolean(profile.settledFacts?.accepted.length),
+    denied_facts: profile.settledFacts?.denied ?? [],
+    has_denied_facts: Boolean(profile.settledFacts?.denied.length),
     documents: profile.documents.map((d) => ({
       title: d.title,
       type: d.type,

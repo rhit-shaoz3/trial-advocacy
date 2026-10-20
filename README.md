@@ -95,6 +95,9 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | GET    | `/api/courses/:id/my-cases/:caseId` |                     | Students: `{ workspace }`, the case dashboard: `{ case, team, world, side, materials, witnesses, tasks, preview }`, showing only shared items and their side's. Witnesses carry only `{ id, name, role, description, audience, canInterview }`, never their AI setup. Each task has the team's `completedAt` / `completedBy`. `404` for drafts |
 | GET    | `/api/courses/:id/my-cases/:caseId/materials/:materialId/file` | | `302` to a 5-minute download link, if the student's side can see it |
 | GET / POST | `/api/courses/:id/my-cases/:caseId/witnesses/:witnessId/interview` (`/questions`, `/restart`) | `{ question }` | The team's interview of a witness its side can see, shared by both partners and always asked as the team's own side (any `side` in the request is ignored); same shapes as the instructor's. `409` before the team is matched, or once the case is closed (read-only) |
+| POST   | `/api/courses/:id/my-cases/:caseId/witnesses/:witnessId/interview/end` | | Ends the team's interview and sends it to the instructor for review (unless it's empty): `{ interview, sentForReview }`, with `interview` a fresh, empty one |
+| GET    | `/api/courses/:id/my-cases/:caseId/reviews` | | `{ reviews: [{ id, witness, completedAt, accepted, denied, seen }] }`: the team's completed reviews, each fact only as accepted or denied |
+| POST   | `/api/courses/:id/my-cases/:caseId/reviews/seen` | | `204`; marks the team's review results read for this student |
 | PUT    | `/api/courses/:id/my-cases/:caseId/tasks/:taskId` | `{ done: boolean }`   | `{ workspace }`; marks it done (or not) for the student's whole team. `409` if the case is closed or the student has no team |
 | GET    | `/api/courses/teaching` |                                | Instructors: `{ courses }` they teach, with `entryCode` and `studentCount` |
 | POST   | `/api/courses`     | `{ code, title, season, year }`     | Instructors: `201 { course }` with a new entry code |
@@ -142,6 +145,10 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | GET / POST | `/api/courses/:id/cases/:caseId/tasks` | `{ title, description?, dueAt?, audience? }` | `{ tasks }` (soonest due first) / `201 { task }`; `dueAt` is an ISO timestamp or `null` |
 | PUT / DELETE | `/api/courses/:id/cases/:caseId/tasks/:taskId` | Same as POST                   | `{ task }` / `204`; deleting removes teams' completions |
 | PUT    | `/api/courses/:id/cases/:caseId/note` | `{ note }`                                    | `{ case }`; the instructor note shown on every student's case dashboard |
+| GET    | `/api/courses/:id/reviews?status=open\|completed` | | `{ reviews }` to do (including `summarizing` and `failed`) or completed: `{ id, caseTitle, witness, worldNumber, teamNumber, side, team, status, error, createdAt, completedAt, facts: [{ id, text, decision }] }` |
+| PUT    | `/api/courses/:id/reviews/:reviewId/facts/:factId` | `{ decision }` | `{ review }`; `accept_world`, `deny_world`, `accept_case`, or `deny_case`. `409` once completed |
+| POST   | `/api/courses/:id/reviews/:reviewId/complete` \| `/retry` | | `{ review }`; complete needs a ruling on every fact (`409`); retry is for a `failed` summary |
+| GET    | `/api/courses/:id/reviews/:reviewId/transcript` | | `{ turns: [{ question, objection, answer, askedBy }] }` |
 | GET    | `/api/courses/:id/cases/:caseId/launch` |                                             | `{ checks: [{ key, ok, message }] }`: everyone paired, every team matched, at least one case file uploaded |
 | POST   | `/api/courses/:id/cases/:caseId/launch` |                                             | `{ case }`, now `active`; `409` if not ready (the message lists what's missing) or already launched |
 | GET    | `/api/courses/:id/cases/:caseId/preview?side=&matchup=` |                             | `{ workspace }`: the case dashboard as a team on `side` sees it (that world's team, with `matchup`), with `preview: true` |
@@ -179,6 +186,12 @@ Set `ANTHROPIC_API_KEY` in `.env.local` (and as a Heroku config var). For the te
 | `npm run witness:eval -- --witness "Name"` | Run the witness's behavioral eval against the real model (about a dollar; `--case <id>`, `--repeat N`, `--effort low`) |
 
 `npm test` covers transcription bookkeeping, witness setup, interviews, prompt rendering, request building, reply parsing, and eval checks with Claude faked; it never calls the API.
+
+## Review panel
+
+The instructor is the judge of the facts AI witnesses add. When a team presses **End interview** (as opposed to *Start over*, which discards), the conversation goes to the instructor's **Review** page (it replaces Resource library for instructors; the course dashboard and the nav show how many are waiting). In the background, Claude compares the transcript with the case files and the facts already settled for that world and case, and lists only the **new facts** the witness added (`server/witness/newFacts.ts`; a review with none is completed automatically).
+
+For each new fact the instructor chooses **accept for this world**, **deny for this world**, **accept for all worlds**, or **deny for all worlds**, then **Finish review**. From then on, every witness prompt for that world (or every world, for the case-wide rulings) lists the accepted facts as settled and the denied ones as things that aren't true (`server/reviews/reviews.ts`, `settledFacts`). The team gets a notice and a **Reviews** tab in the case showing each fact only as *Accepted* or *Denied*. Rulings are stored in `interview_reviews` and `review_facts`; there is no vector store, since the whole case file already goes into each prompt.
 
 ## Deploying to Heroku
 

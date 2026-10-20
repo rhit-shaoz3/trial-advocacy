@@ -223,6 +223,7 @@ describe('GET /api/courses/:courseId/home', () => {
       activity: [],
       upcoming: [],
       stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
+      newReviewResults: 0,
     })
   })
 
@@ -230,7 +231,9 @@ describe('GET /api/courses/:courseId/home', () => {
     const { agent: prof } = await signedInAgent('instructor')
     const course = await createCourseAs(prof)
 
-    expect((await prof.get(`/api/courses/${course.id}/home`)).status).toBe(200)
+    const res = await prof.get(`/api/courses/${course.id}/home`)
+    expect(res.status).toBe(200)
+    expect(res.body.reviewCount).toBe(0)
   })
 
   it('404s for students who are not enrolled or give a bad id, and 401s when logged out', async () => {

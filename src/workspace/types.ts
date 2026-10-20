@@ -62,4 +62,8 @@ export interface CourseHome {
   activity: ActivityItem[]
   upcoming: UpcomingItem[]
   stats: { tasksCompleted: number; tasksCompletedThisWeek: number }
+  /** Instructor: conversations waiting for review. */
+  reviewCount?: number
+  /** Student: completed reviews of their interviews they haven't opened yet. */
+  newReviewResults?: number
 }

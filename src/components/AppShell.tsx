@@ -11,6 +11,8 @@ export interface ShellNavItem {
   icon: LucideIcon
   /** Only active on an exact match (for links to a section's root). */
   end?: boolean
+  /** A count shown beside the label, e.g. items waiting for review. */
+  badge?: number
 }
 
 /**
@@ -61,10 +63,11 @@ export function AppShell({
 
         <nav aria-label={navLabel}>
           <span className="ws-nav-label">{navHeading}</span>
-          {nav.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={label} to={to} end={end}>
+          {nav.map(({ to, label, icon: Icon, end, badge }) => (
+            <NavLink key={label} to={to} end={end} aria-label={badge ? `${label}, ${badge} waiting` : undefined}>
               <Icon aria-hidden="true" />
               {label}
+              {badge ? <span className="ws-nav-badge">{badge}</span> : null}
             </NavLink>
           ))}
         </nav>

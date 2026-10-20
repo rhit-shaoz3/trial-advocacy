@@ -8,6 +8,7 @@ const teamsPath = (courseId: string, caseId: string) => `${casePath(courseId, ca
 const myCasePath = (courseId: string, caseId: string) =>
   `${coursePath(courseId)}/my-cases/${encodeURIComponent(caseId)}`
 const matchupsPath = (courseId: string, caseId: string) => `${casePath(courseId, caseId)}/matchups`
+const reviewsPath = (courseId: string) => `${coursePath(courseId)}/reviews`
 /** A team's interview lives under my-cases; the instructor's test one under the case, by side. */
 function interviewPath(courseId: string, caseId: string, witnessId: string, as: InterviewAs, action = '') {
   const base = as === 'team' ? myCasePath(courseId, caseId) : casePath(courseId, caseId)
@@ -330,6 +331,39 @@ export const httpCourseService: CourseService = {
       body: JSON.stringify({ question }),
     })
     return body.interview
+  },
+
+  async endInterview(courseId, caseId, witnessId) {
+    return apiRequest(interviewPath(courseId, caseId, witnessId, 'team', '/end'), { method: 'POST' })
+  },
+
+  async listMyReviews(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/reviews`)).reviews
+  },
+
+  async markReviewsSeen(courseId, caseId) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/reviews/seen`, { method: 'POST' })
+  },
+
+  async listReviews(courseId, status) {
+    return (await apiRequest(`${reviewsPath(courseId)}?status=${status}`)).reviews
+  },
+
+  async decideFact(courseId, reviewId, factId, decision) {
+    const path = `${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/facts/${encodeURIComponent(factId)}`
+    return (await apiRequest(path, { method: 'PUT', body: JSON.stringify({ decision }) })).review
+  },
+
+  async completeReview(courseId, reviewId) {
+    return (await apiRequest(`${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/complete`, { method: 'POST' })).review
+  },
+
+  async retryReview(courseId, reviewId) {
+    return (await apiRequest(`${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/retry`, { method: 'POST' })).review
+  },
+
+  async getReviewTranscript(courseId, reviewId) {
+    return (await apiRequest(`${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/transcript`)).turns
   },
 
   async restartInterview(courseId, caseId, witnessId, as) {

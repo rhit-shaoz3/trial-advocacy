@@ -67,6 +67,18 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toMatch(/&quot;|&amp;|&#39;/)
   })
 
+  it("includes the instructor's rulings on facts from earlier interviews", () => {
+    const prompt = buildSystemPrompt(
+      { ...profile, settledFacts: { accepted: ['Dana mopped at 8:45.'], denied: ['A sign was posted.', 'Sam was there.'] } },
+      adverse,
+    )
+    expect(prompt).toContain('# Facts settled in earlier interviews')
+    expect(prompt).toContain('<settled_facts>\n- Dana mopped at 8:45.\n</settled_facts>')
+    expect(prompt).toContain('# Things that are not true')
+    expect(prompt).toContain('<untrue_facts>\n- A sign was posted.\n- Sam was there.\n</untrue_facts>')
+    expect(prompt).toContain('one of the most important facts, or a settled fact, and never say anything listed as not true')
+  })
+
   it("lists both sides' most important facts, and how to handle questions near them", () => {
     const prompt = buildSystemPrompt(profile, adverse)
 
@@ -78,15 +90,23 @@ describe('buildSystemPrompt', () => {
     expect(section).toContain('Never make up a fact that contradicts any of these important facts.')
     expect(section).toContain('you may say you don\'t know, as long as that doesn\'t damage your credibility')
     expect(section).toContain('say "Let me check" instead, to avoid the question for now')
-    expect(prompt).toContain('contradicts a record, your own account, or one of the most important facts')
+    expect(prompt).toContain('one of the most important facts, or a settled fact')
   })
 
   it('leaves out optional sections that do not apply', () => {
     const bare = buildSystemPrompt(
-      { ...profile, personaNotes: undefined, keyDisputedIssues: undefined, importantFacts: undefined },
+      {
+        ...profile,
+        personaNotes: undefined,
+        keyDisputedIssues: undefined,
+        importantFacts: undefined,
+        settledFacts: { accepted: [], denied: [] },
+      },
       adverse,
     )
     expect(bare).not.toContain('# The most important facts')
+    expect(bare).not.toContain('# Facts settled in earlier interviews')
+    expect(bare).not.toContain('# Things that are not true')
     expect(bare).not.toContain('Background and demeanor')
     expect(bare).not.toContain('must stay genuinely disputed')
     expect(bare).not.toContain('You are testifying as an expert')

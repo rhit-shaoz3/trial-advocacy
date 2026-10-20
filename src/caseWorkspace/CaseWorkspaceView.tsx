@@ -11,6 +11,7 @@ import {
   Image,
   FileAudio,
   FileVideo,
+  Gavel,
   MessageSquare,
   Users,
 } from 'lucide-react'
@@ -27,12 +28,12 @@ import {
   shortDate,
   type FileCategory,
 } from '../courses/caseLabels'
-import type { CaseMaterial, CaseWorkspace, MyTeamMember, Side } from '../courses/types'
+import type { CaseMaterial, CaseWorkspace, MyTeamMember, ReviewResult, Side } from '../courses/types'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
 import './caseWorkspace.css'
 
-type Tab = 'overview' | 'case-file' | 'witnesses' | 'tasks'
+type Tab = 'overview' | 'case-file' | 'witnesses' | 'tasks' | 'reviews'
 type WorkspaceTask = CaseWorkspace['tasks'][number]
 
 /** How many case files the overview lists before "View all". */
@@ -61,6 +62,8 @@ export function CaseWorkspaceView({
   onToggleTask,
   interviewHref,
   instructorName,
+  reviews,
+  onOpenReviews,
   now = new Date(),
 }: {
   workspace: CaseWorkspace
@@ -70,9 +73,18 @@ export function CaseWorkspaceView({
   /** Marks a task done or not done for the team; leave out to make tasks read-only. */
   onToggleTask?(taskId: string, done: boolean): Promise<void>
   instructorName?: string | null
+  /** The team's completed reviews; leave out (the preview) to hide the Reviews tab. */
+  reviews?: ReviewResult[]
+  /** Called when the student opens the Reviews tab, to mark the results read. */
+  onOpenReviews?(): void
   now?: Date
 }) {
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTabState] = useState<Tab>('overview')
+  const unseen = reviews?.filter((r) => !r.seen).length ?? 0
+  function setTab(next: Tab) {
+    setTabState(next)
+    if (next === 'reviews') onOpenReviews?.()
+  }
   const { case: c, team, world, materials, witnesses, tasks } = workspace
   const byCategory = FILE_CATEGORIES.map((category) => ({
     category,
@@ -87,6 +99,7 @@ export function CaseWorkspaceView({
     { id: 'case-file', label: 'Case file', count: materials.length },
     { id: 'witnesses', label: 'Witnesses', count: witnesses.length },
     { id: 'tasks', label: 'Tasks', count: openTasks.length },
+    ...(reviews ? [{ id: 'reviews' as const, label: 'Reviews', count: unseen }] : []),
   ]
 
   return (
@@ -104,6 +117,8 @@ export function CaseWorkspaceView({
           <p className="cw-subtitle">{assignmentLine(workspace)}</p>
         </div>
       </header>
+
+      {unseen > 0 && tab !== 'reviews' && <NewResultsBanner onOpen={() => setTab('reviews')} />}
 
       <div className="cw-tabs" role="tablist" aria-label="Case sections">
         {tabs.map((t) => (
@@ -275,6 +290,8 @@ export function CaseWorkspaceView({
           </ListPanel>
         )}
 
+        {tab === 'reviews' && reviews && <ReviewsPanel reviews={reviews} />}
+
         {tab === 'tasks' && (
           <ListPanel title="Tasks" sub={`Everything assigned in ${c.title}.`} empty="No tasks have been assigned yet.">
             {tasks.map((t) => (
@@ -283,6 +300,74 @@ export function CaseWorkspaceView({
           </ListPanel>
         )}
       </div>
+    </div>
+  )
+}
+
+/** The instructor's rulings on new facts from the team's interviews: what stands and what doesn't. */
+function ReviewsPanel({ reviews }: { reviews: ReviewResult[] }) {
+  return (
+    <section className="cw-card" aria-labelledby="cw-reviews-title">
+      <span className="ws-eyebrow">Case workspace</span>
+      <h2 id="cw-reviews-title">Reviews</h2>
+      <p className="cw-section-sub">
+        When your team ends an interview, your instructor rules on any new facts the witness added. Rely on the
+        accepted facts; don&rsquo;t rely on the denied ones.
+      </p>
+      {reviews.length === 0 ? (
+        <p className="cw-empty">No reviewed interviews yet. End an interview to send it for review.</p>
+      ) : (
+        <ul className="cw-reviews">
+          {reviews.map((r) => (
+            <li key={r.id} aria-label={`Review of ${r.witness.name}`}>
+              <div className="cw-review-head">
+                <strong>Interview of {r.witness.name}</strong>
+                {!r.seen && <span className="cw-badge cw-badge-new">New</span>}
+                <small>Reviewed {shortDate(r.completedAt)}</small>
+              </div>
+              {r.accepted.length === 0 && r.denied.length === 0 ? (
+                <p className="cw-empty">No new facts: the witness kept to the record.</p>
+              ) : (
+                <div className="cw-review-lists">
+                  <FactList title="Accepted" tone="accepted" facts={r.accepted} />
+                  <FactList title="Denied" tone="denied" facts={r.denied} />
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function FactList({ title, tone, facts }: { title: string; tone: 'accepted' | 'denied'; facts: string[] }) {
+  if (facts.length === 0) return null
+  return (
+    <div className={`cw-fact-list cw-fact-list-${tone}`}>
+      <h3>
+        {title} ({facts.length})
+      </h3>
+      <ul aria-label={title}>
+        {facts.map((f, i) => (
+          <li key={i}>{f}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** Shown above the tabs while the team has review results it hasn't opened. */
+function NewResultsBanner({ onOpen }: { onOpen(): void }) {
+  return (
+    <div className="ws-notice cw-new-results" role="status">
+      <Gavel aria-hidden="true" />
+      <p>
+        <strong>New review results.</strong> Your instructor ruled on facts from your interviews.
+      </p>
+      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
+        See results
+      </button>
     </div>
   )
 }

@@ -36,6 +36,7 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     uploadMaterial: vi.fn(),
     updateMaterial: vi.fn(),
     deleteMaterial: vi.fn().mockResolvedValue(undefined),
+    setInitialMaterial: vi.fn(),
     materialDownloadUrl: (courseId, caseId, id) => `/download/${courseId}/${caseId}/${id}`,
     materialTextUrl: (courseId, caseId, id) => `/text/${courseId}/${caseId}/${id}`,
     retryTranscription: vi.fn(),

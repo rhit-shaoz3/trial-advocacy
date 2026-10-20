@@ -41,6 +41,7 @@ const sampleWorkspace: CaseWorkspace = {
       uploadedAt: '2026-10-01T15:00:00.000Z',
       textStatus: 'ready',
       textError: null,
+      initial: true,
     },
     {
       id: 'm2',
@@ -52,6 +53,7 @@ const sampleWorkspace: CaseWorkspace = {
       uploadedAt: '2026-10-02T15:00:00.000Z',
       textStatus: 'ready',
       textError: null,
+      initial: false,
     },
     {
       id: 'm3',
@@ -63,6 +65,7 @@ const sampleWorkspace: CaseWorkspace = {
       uploadedAt: '2026-10-03T15:00:00.000Z',
       textStatus: 'ready',
       textError: null,
+      initial: false,
     },
     {
       id: 'm4',
@@ -74,6 +77,7 @@ const sampleWorkspace: CaseWorkspace = {
       uploadedAt: '2026-10-04T15:00:00.000Z',
       textStatus: 'ready',
       textError: null,
+      initial: false,
     },
   ],
   witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', audience: 'all', side: null, canInterview: false }],
@@ -139,12 +143,11 @@ describe('CaseWorkspaceView', () => {
     expect(within(progress).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '33')
     expect(progress).toHaveTextContent('1 of 3 tasks complete')
 
-    const factPattern = screen.getByRole('region', { name: 'Fact pattern' })
-    expect(factPattern).toHaveTextContent('A rollercoaster stalls')
-    expect(within(factPattern).getByRole('link', { name: /Fact pattern\.pdf/ })).toHaveAttribute('href', '/files/m1')
-    // The overview lists the first three files and links to the rest.
-    expect(within(factPattern).getAllByRole('link')).toHaveLength(3)
-    expect(within(factPattern).getByRole('button', { name: 'View all 4 files' })).toBeInTheDocument()
+    // The overview shows only the initial file, not the case summary or the rest of the case file.
+    const background = screen.getByRole('region', { name: 'Case background' })
+    expect(background).not.toHaveTextContent('A rollercoaster stalls')
+    expect(within(background).getAllByRole('link')).toHaveLength(1)
+    expect(within(background).getByRole('link', { name: /Fact pattern\.pdf/ })).toHaveAttribute('href', '/files/m1')
     expect(screen.getByRole('button', { name: /Case file2 documents · 1 image · 1 audio/ })).toBeInTheDocument()
   })
 
@@ -177,12 +180,13 @@ describe('CaseWorkspaceView', () => {
   it('opens the case file, grouped by kind of file, and the witnesses and tasks tabs', async () => {
     const { user } = renderView()
 
-    await user.click(screen.getByRole('button', { name: 'View all 4 files' }))
+    await user.click(screen.getByRole('button', { name: /^Case file/ }))
     expect(screen.getByRole('tab', { name: 'Case file, 4' })).toHaveAttribute('aria-selected', 'true')
     const documents = screen.getByRole('region', { name: 'Documents 2' })
     const report = within(documents).getByRole('link', { name: /Incident report\.pdf/ })
     expect(report).toHaveAttribute('href', '/files/m2')
     expect(report).toHaveTextContent('Defense only')
+    expect(within(documents).getByRole('link', { name: /Fact pattern\.pdf/ })).toHaveTextContent('Start here')
     const images = screen.getByRole('region', { name: 'Images 1' })
     expect(within(images).getByRole('link', { name: /Ride photo\.jpg/ })).toHaveTextContent('Image')
     expect(screen.getByRole('region', { name: 'Audio 1' })).toHaveTextContent('911 call.mp3')
@@ -225,7 +229,7 @@ describe('CaseWorkspaceView', () => {
       workspace: { ...sampleWorkspace, team: null, world: null, side: null, materials: [], tasks: [] },
     })
     expect(screen.getByText('Not on a team yet')).toBeInTheDocument()
-    expect(screen.getAllByText('The case file hasn’t been posted yet.')).toHaveLength(1)
+    expect(screen.getByText('The case background hasn’t been posted yet.')).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Next task' })).toHaveTextContent('No tasks have been assigned yet.')
     const team = screen.getByRole('region', { name: 'Your team' })
     expect(team).toHaveTextContent('Not on a team yet.')

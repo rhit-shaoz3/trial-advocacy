@@ -184,11 +184,12 @@ export async function launchChecks(courseId: string, caseId: string): Promise<La
   const matched = new Set(matchups.flatMap((m) => [m.plaintiffTeamId, m.defenseTeamId]))
   const waiting = teams.filter((t) => !matched.has(t.id)).length
   const paired = teams.reduce((n, t) => n + t.members.length, 0)
-  const { rows } = await pool.query<{ n: number }>(
-    'SELECT count(*)::int AS n FROM case_materials WHERE case_id = $1',
+  const { rows } = await pool.query<{ n: number; initial: string | null }>(
+    `SELECT count(*)::int AS n, max(coalesce(nullif(description, ''), filename)) FILTER (WHERE initial) AS initial
+     FROM case_materials WHERE case_id = $1`,
     [caseId],
   )
-  const files = rows[0].n
+  const { n: files, initial } = rows[0]
 
   return [
     {
@@ -212,12 +213,15 @@ export async function launchChecks(courseId: string, caseId: string): Promise<La
             : `${plural(matchups.length, 'case world is', 'case worlds are')} set up.`,
     },
     {
+      // Every team starts from the initial file, so the case can't launch without one.
       key: 'caseFile',
-      ok: files > 0,
+      ok: initial !== null,
       message:
-        files > 0
-          ? `${plural(files, 'case file is', 'case files are')} uploaded.`
-          : 'Upload the case file.',
+        files === 0
+          ? 'Upload the case file.'
+          : initial === null
+            ? 'Choose the initial file every team starts from.'
+            : `Teams start from ${initial}; ${plural(files, 'case file is', 'case files are')} uploaded.`,
     },
   ]
 }

@@ -45,7 +45,8 @@ export async function uploadCaseFile(
   agent: request.Agent,
   caseUrl: string,
   filename: string,
-  { audience = 'all', description = '' }: { audience?: string; description?: string } = {},
+  // With no audience, the server's default applies (instructors only).
+  { audience, description = '' }: { audience?: string; description?: string } = {},
   data = Buffer.from('%PDF-1.7 test'),
 ) {
   const start = await agent.post(`${caseUrl}/materials/uploads`).send({ filename, size: data.length })

@@ -255,8 +255,10 @@ export async function retryReview(courseId: string, reviewId: string) {
   const review = await findReview(courseId, reviewId)
   if (review.status !== 'failed') throw new HttpError(409, 'Only a review that failed can be retried.')
   await pool.query(`UPDATE interview_reviews SET status = 'summarizing', error = NULL WHERE id = $1`, [reviewId])
+  // Read it before the summary starts, or a quick summary could finish first and the reply skip "summarizing".
+  const retried = await findReview(courseId, reviewId)
   queueReview(reviewId)
-  return findReview(courseId, reviewId)
+  return retried
 }
 
 /** The conversation behind a review, for the instructor to check how a fact came up. */

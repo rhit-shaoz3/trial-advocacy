@@ -14,6 +14,13 @@ const myCaseUrl = () => `/api/courses/${course.id}/my-cases/${caseId}`
 const upload = (filename: string, options?: { audience?: string; description?: string }, data?: Buffer) =>
   uploadCaseFile(prof, caseUrl(), filename, options, data)
 
+/** Uploads the file every team starts from. */
+async function uploadInitial(filename: string) {
+  const id = (await upload(filename)).body.material.id as string
+  await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: id })
+  return id
+}
+
 /** s1+s2 (plaintiff) v s3+s4 (defense) in World A. Returns the team and matchup ids. */
 async function pairAndMatch() {
   await prof.post(`${caseUrl()}/teams`).send({ emails: [email(1), email(2)] })
@@ -47,7 +54,8 @@ describe('case materials', () => {
     expect(res.status).toBe(201)
     expect(res.body.material).toEqual({
       id: expect.any(String),
-      audience: 'all',
+      // Teams ask for case files, so they start with the instructor.
+      audience: 'instructor',
       filename: 'Fact pattern.pdf',
       description: 'Read first.',
       contentType: 'application/pdf',
@@ -55,6 +63,7 @@ describe('case materials', () => {
       uploadedAt: expect.any(String),
       textStatus: 'pending',
       textError: null,
+      initial: false,
     })
     const photo = (await upload('scene.JPG', { audience: 'plaintiff' })).body.material
     expect(photo).toMatchObject({ audience: 'plaintiff', contentType: 'image/jpeg' })
@@ -91,6 +100,35 @@ describe('case materials', () => {
     const big = await prof.post(`${caseUrl()}/materials/uploads`).send({ filename: 'big.pdf', size: 100 * 1024 * 1024 + 1 })
     expect(big.status).toBe(413)
     expect(big.body.error).toBe('That file is too large. The limit is 100 MB.')
+  })
+})
+
+describe('the initial file', () => {
+  it('is one file per case, always shared with everyone, listed first', async () => {
+    const memo = (await upload('Memo.pdf', { audience: 'plaintiff' })).body.material.id
+    const complaint = (await upload('Complaint.pdf')).body.material.id
+    const choose = (materialId: unknown) => prof.put(`${caseUrl()}/materials/initial`).send({ materialId })
+
+    const first = await choose(complaint)
+    expect(first.status).toBe(200)
+    expect(first.body.materials.map((m: { filename: string; initial: boolean; audience: string }) => [m.filename, m.initial, m.audience])).toEqual([
+      ['Complaint.pdf', true, 'all'],
+      ['Memo.pdf', false, 'plaintiff'],
+    ])
+
+    // It can't be narrowed to one side or to instructors while it's the initial file.
+    const narrowed = await prof.patch(`${caseUrl()}/materials/${complaint}`).send({ audience: 'instructor' })
+    expect(narrowed.status).toBe(400)
+    expect(narrowed.body.error).toMatch(/Choose another initial file first/)
+
+    // Choosing another moves it; the old one keeps its audience.
+    const moved = (await choose(memo)).body.materials
+    expect(moved.filter((m: { initial: boolean }) => m.initial).map((m: { filename: string }) => m.filename)).toEqual(['Memo.pdf'])
+    expect(moved.find((m: { filename: string }) => m.filename === 'Memo.pdf').audience).toBe('all')
+
+    expect((await choose(null)).body.materials.some((m: { initial: boolean }) => m.initial)).toBe(false)
+    expect((await choose(caseId)).status).toBe(404)
+    expect((await choose('nope')).status).toBe(404)
   })
 })
 
@@ -164,12 +202,15 @@ describe('launching the case worlds', () => {
     )
 
     await pairAndMatch()
-    await upload('Fact pattern.pdf')
+    const factPattern = (await upload('Fact pattern.pdf', { description: 'Fact pattern' })).body.material.id
+    const noInitial = (await prof.get(`${caseUrl()}/launch`)).body.checks[2]
+    expect(noInitial).toEqual({ key: 'caseFile', ok: false, message: 'Choose the initial file every team starts from.' })
+    await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: factPattern })
     const after = (await prof.get(`${caseUrl()}/launch`)).body.checks
     expect(after.map((c: { message: string }) => c.message)).toEqual([
       'All 4 students are on a team.',
       '1 case world is set up.',
-      '1 case file is uploaded.',
+      'Teams start from Fact pattern; 1 case file is uploaded.',
     ])
     expect(after.every((c: { ok: boolean }) => c.ok)).toBe(true)
 
@@ -195,7 +236,9 @@ describe("a student's case dashboard", () => {
     plaintiff = (await signedInAgent('student', email(1), 'Ada Lawyer')).agent
     defense = (await signedInAgent('student', email(3), 'Cy Counsel')).agent
     await pairAndMatch()
-    await upload('Fact pattern.pdf')
+    await uploadInitial('Fact pattern.pdf')
+    // Kept with the instructor until a team asks for it.
+    await upload('Accident log.pdf')
     await upload('Plaintiff memo.pdf', { audience: 'plaintiff' })
     await upload('Defense memo.pdf', { audience: 'defense' })
     await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Elena Torres', role: 'Ride operator' })
@@ -399,7 +442,7 @@ describe('case phases', () => {
       plaintiff = (await signedInAgent('student', email(1))).agent
       defense = (await signedInAgent('student', email(3))).agent
       await pairAndMatch()
-      await upload('Fact pattern.pdf')
+      await uploadInitial('Fact pattern.pdf')
       await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Rider', alignedSide: 'plaintiff' })
       await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Operator', alignedSide: 'defense' })
       await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Bystander' })
@@ -448,7 +491,7 @@ describe('case phases', () => {
   it('keeps the phase when the case launches', async () => {
     await signedInAgent('student', email(1))
     await pairAndMatch()
-    await upload('Fact pattern.pdf')
+    await uploadInitial('Fact pattern.pdf')
     await setPhase('investigate')
     await launch()
     expect((await prof.get(caseUrl())).body.case).toMatchObject({ status: 'active', phase: 'investigate' })

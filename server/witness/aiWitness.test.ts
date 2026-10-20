@@ -52,6 +52,8 @@ beforeEach(async () => {
   await upload('Accident log.pdf', '6/10/19 | Atlas | Rider fell')
   await upload('Torres deposition.pdf', 'Q: Where were you? A: At the booth.', 'instructor')
   await upload('Lin deposition.pdf', 'Q: Did you see it? A: No.', 'instructor')
+  await upload('Complaint.txt', 'Rivera alleges the operator left the booth.')
+  await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: files['Complaint.txt'] })
   await transcriptionsSettled()
 
   asked = []
@@ -126,8 +128,22 @@ describe('instructor-only files', () => {
   it('are never shown to or downloadable by students', async () => {
     await launch()
     const { workspace } = (await ada.get(myCaseUrl())).body
-    expect(workspace.materials.map((m: { filename: string }) => m.filename)).toEqual(['Operator manual.txt', 'Accident log.pdf'])
+    expect(workspace.materials.map((m: { filename: string }) => m.filename)).toEqual([
+      'Complaint.txt',
+      'Operator manual.txt',
+      'Accident log.pdf',
+    ])
     expect((await ada.get(`${myCaseUrl()}/materials/${files['Torres deposition.pdf']}/file`)).status).toBe(404)
+  })
+
+  it("can't make a witness's deposition the initial file", async () => {
+    await createWitness()
+    const res = await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: files['Torres deposition.pdf'] })
+    expect(res.status).toBe(400)
+    const materials = (await prof.get(`${caseUrl()}/materials`)).body.materials as { filename: string; initial: boolean; audience: string }[]
+    expect(materials.find((m) => m.filename === 'Torres deposition.pdf')).toMatchObject({ initial: false, audience: 'instructor' })
+    // The initial file it would have replaced is untouched.
+    expect(materials.find((m) => m.initial)?.filename).toBe('Complaint.txt')
   })
 
   it('can be moved to and from instructors only', async () => {
@@ -194,6 +210,9 @@ describe('interviewing an AI witness', () => {
   })
 
   it('builds the witness from the case file', async () => {
+    // Evidence kept with the instructor is still a record; another witness's deposition is their account.
+    await prof.patch(`${caseUrl()}/materials/${files['Accident log.pdf']}`).send({ audience: 'instructor', description: 'Accident log' })
+    await createWitness({ name: 'Dr. Lin', alignedSide: 'plaintiff', depositionMaterialId: files['Lin deposition.pdf'], knownMaterialIds: [] })
     await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })
     const [{ profile, settings }] = asked
     expect(profile).toMatchObject({
@@ -214,6 +233,8 @@ describe('interviewing an AI witness', () => {
       ['Operator manual', 'record', true],
       ['Accident log', 'record', false],
       ['Lin deposition', 'other_witness', false],
+      // The initial file: pleadings, so allegations rather than facts.
+      ['Complaint', 'background', false],
     ])
     expect(profile.documents[0].content).toBe('Q: Where were you? A: At the booth.')
     // The plaintiff team is the other side, so her lawyer defends.

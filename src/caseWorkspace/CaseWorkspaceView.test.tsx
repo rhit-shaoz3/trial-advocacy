@@ -20,6 +20,7 @@ const sampleWorkspace: CaseWorkspace = {
     title: 'Rivera v. Thrill Park',
     summary: 'A rollercoaster stalls at the top of its lift hill.',
     status: 'active',
+    phase: 'subpoena',
     instructorNote: 'Mind the timeline.',
   },
   team: { number: 7, members: [member('Ada Lawyer', true), member('Ben Partner')] },
@@ -75,7 +76,8 @@ const sampleWorkspace: CaseWorkspace = {
       textError: null,
     },
   ],
-  witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', audience: 'all', canInterview: false }],
+  witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', audience: 'all', side: null, canInterview: false }],
+  investigatorAvailable: false,
   tasks: [
     {
       id: 't1',
@@ -245,7 +247,7 @@ describe('CaseWorkspaceView', () => {
         ...sampleWorkspace,
         witnesses: [
           { ...sampleWorkspace.witnesses[0], canInterview: true },
-          { id: 'w2', name: 'Bystander', role: '', description: '', audience: 'all', canInterview: false },
+          { id: 'w2', name: 'Bystander', role: '', description: '', audience: 'all', side: null, canInterview: false },
         ],
       },
       interviewHref: (id) => `/interview/${id}`,
@@ -262,5 +264,54 @@ describe('CaseWorkspaceView', () => {
     await user.click(screen.getByRole('tab', { name: 'Witnesses, 1' }))
     expect(screen.getByRole('tabpanel')).toHaveTextContent('Interview')
     expect(screen.queryByRole('link', { name: /Interview/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('CaseWorkspaceView phases', () => {
+  // Ada's team is on the defense (sampleWorkspace.side).
+  const elena = { ...sampleWorkspace.witnesses[0], side: 'defense' as const, canInterview: true }
+  const rider = { id: 'w2', name: 'Riley Rivera', role: 'Rider', description: '', audience: 'all' as const, side: 'plaintiff' as const, canInterview: true }
+
+  it('shows the phase and keeps the investigator locked in subpoena', async () => {
+    const { user } = renderView()
+    expect(screen.getByText('Subpoena phase')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+    expect(screen.getByRole('tabpanel')).toHaveTextContent(
+      'Your background investigator becomes available in the investigate phase.',
+    )
+  })
+
+  it('opens the investigator from the investigate phase on', async () => {
+    const { user } = renderView({
+      workspace: { ...sampleWorkspace, case: { ...sampleWorkspace.case, phase: 'investigate' }, investigatorAvailable: true },
+    })
+    expect(screen.getByText('Investigate phase')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Your background investigator is on the way.')
+  })
+
+  it("says the other side's witnesses come in the deposition phase", async () => {
+    const { user } = renderView({ workspace: { ...sampleWorkspace, witnesses: [elena] }, interviewHref: (id) => `/interview/${id}` })
+    await user.click(screen.getByRole('tab', { name: 'Witnesses, 1' }))
+    expect(screen.getByRole('tabpanel')).toHaveTextContent("The other side's witnesses are revealed in the deposition phase.")
+    expect(screen.getByRole('link', { name: 'Interview Elena Torres' })).toBeInTheDocument()
+  })
+
+  it("lets the team depose the other side's witnesses in the deposition phase", async () => {
+    const { user } = renderView({
+      workspace: {
+        ...sampleWorkspace,
+        case: { ...sampleWorkspace.case, phase: 'deposition' },
+        investigatorAvailable: true,
+        witnesses: [elena, rider],
+      },
+      interviewHref: (id) => `/interview/${id}`,
+    })
+    await user.click(screen.getByRole('tab', { name: 'Witnesses, 2' }))
+    expect(screen.getByRole('link', { name: 'Interview Elena Torres' })).toHaveAttribute('href', '/interview/w1')
+    expect(screen.getByRole('link', { name: 'Depose Riley Rivera' })).toHaveAttribute('href', '/interview/w2')
+    expect(screen.getByText("Plaintiff's witness")).toBeInTheDocument()
+    expect(screen.queryByText("Defense's witness")).not.toBeInTheDocument()
   })
 })

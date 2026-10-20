@@ -2,13 +2,16 @@ import { Router, type RequestHandler } from 'express'
 import { HttpError } from '../httpError.ts'
 import { isUuid, readString } from '../validation.ts'
 import {
+  CASE_PHASES,
   CASE_STATUSES,
   createCase,
   deleteCase,
   findCase,
   listCases,
+  setCasePhase,
   updateCase,
   type CaseFields,
+  type CasePhase,
   type CaseStatus,
   type CourseCase,
   type ImportantFacts,
@@ -155,6 +158,16 @@ caseRouter.put('/witness-settings', async (req, res) => {
   }
   await setWitnessSettings(req.courseCase!.id, { inWorldDate: date || null, disputedIssues })
   res.json({ case: await findCase(req.course!.id, req.courseCase!.id) })
+})
+
+/** Moves every world in the case to `{ phase }`: subpoena, investigate, or deposition. */
+caseRouter.put('/phase', async (req, res) => {
+  const phase = readString(req.body, 'phase')
+  if (!CASE_PHASES.includes(phase as CasePhase)) throw new HttpError(400, 'Choose a valid phase.')
+  if (req.courseCase!.status === 'closed') {
+    throw new HttpError(409, 'This case is closed, so its phase can no longer change.')
+  }
+  res.json({ case: await setCasePhase(req.course!.id, req.courseCase!.id, phase as CasePhase) })
 })
 
 /** What still has to happen before the case worlds can launch. */

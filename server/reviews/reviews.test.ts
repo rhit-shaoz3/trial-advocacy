@@ -63,6 +63,8 @@ beforeEach(async () => {
     })
   ).body.witness.id
   await prof.post(`${caseUrl()}/launch`)
+  // The witness testifies for the defense; plaintiff teams can only question her in the deposition phase.
+  await prof.put(`${caseUrl()}/phase`).send({ phase: 'deposition' })
 
   profiles = []
   factInputs = []

@@ -272,6 +272,14 @@ export const httpCourseService: CourseService = {
     await apiRequest(`${casePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
   },
 
+  async setCasePhase(courseId, caseId, phase) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/phase`, {
+      method: 'PUT',
+      body: JSON.stringify({ phase }),
+    })
+    return body.case
+  },
+
   async saveInstructorNote(courseId, caseId, note) {
     const body = await apiRequest(`${casePath(courseId, caseId)}/note`, {
       method: 'PUT',

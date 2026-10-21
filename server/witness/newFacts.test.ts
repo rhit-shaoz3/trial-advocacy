@@ -28,10 +28,12 @@ const toolUse = (facts: unknown) =>
   ({ type: 'tool_use', id: 't1', name: 'report_new_facts', input: { facts } }) as Anthropic.Messages.ContentBlock
 
 describe('buildFactsRequest', () => {
-  it('sends the record, the rulings, and the transcript, and forces the facts tool', () => {
+  it('sends the record, the rulings, and the transcript, and asks for the facts tool', () => {
     const request = buildFactsRequest(input)
     expect(request.model).toBe(NEW_FACTS_MODEL)
-    expect(request.tool_choice).toEqual({ type: 'tool', name: 'report_new_facts' })
+    // This model rejects a forced tool call ("tool" or "any"), so the tool is requested in the instructions.
+    expect(request.tool_choice).toEqual({ type: 'auto' })
+    expect(request.system).toContain('calling the report_new_facts tool exactly once')
     const text = request.messages[0].content as string
     expect(text).toContain('<document title="Incident statement">\nI walked aisle 5 around 9.\n</document>')
     expect(text).toContain('<settled_facts>\n- Dana mopped at 8:45.\n</settled_facts>')

@@ -39,7 +39,9 @@ Leave out:
 - objections and anything said by a lawyer
 - trivial small talk (agreeing they're under oath, spelling their name)
 
-If the witness added nothing new, report an empty list. Report at most ${MAX_NEW_FACTS} facts, the most significant first.`
+If the witness added nothing new, report an empty list. Report at most ${MAX_NEW_FACTS} facts, the most significant first.
+
+Give your answer by calling the ${TOOL_NAME} tool exactly once, and write nothing else.`
 
 export function buildFactsRequest(input: NewFactsInput, model = NEW_FACTS_MODEL): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const documents = input.documents
@@ -64,7 +66,9 @@ export function buildFactsRequest(input: NewFactsInput, model = NEW_FACTS_MODEL)
         },
       },
     ],
-    tool_choice: { type: 'tool', name: TOOL_NAME },
+    // This model doesn't accept a forced tool call ("tool" or "any"), so the
+    // instructions ask for the tool and findNewFacts fails if it isn't used.
+    tool_choice: { type: 'auto' },
     messages: [
       {
         role: 'user',

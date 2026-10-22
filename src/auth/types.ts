@@ -9,6 +9,8 @@ export interface User {
   role: Role
   /** The colour theme picked on the account page. */
   theme: Palette
+  /** Their profile picture, or null to show initials. */
+  avatarUrl: string | null
   createdAt: string
 }
 
@@ -41,4 +43,7 @@ export interface AuthService {
   logIn(input: LogInInput): Promise<User>
   logOut(): Promise<void>
   updateProfile(input: ProfileInput): Promise<User>
+  /** Replaces the profile picture with this (already cropped) PNG or JPEG. */
+  uploadAvatar(image: Blob): Promise<User>
+  removeAvatar(): Promise<User>
 }

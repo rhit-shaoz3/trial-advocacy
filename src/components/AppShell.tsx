@@ -1,6 +1,7 @@
 import { LogOut, Scale, type LucideIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router'
+import { AccountDialog } from '../account/AccountDialog'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from './Avatar'
 import './AppShell.css'
@@ -41,6 +42,7 @@ export function AppShell({
 }) {
   const { user, logOut } = useAuth()
   const navigate = useNavigate()
+  const [accountOpen, setAccountOpen] = useState(false)
   if (!user) return null
 
   async function handleLogOut() {
@@ -77,12 +79,20 @@ export function AppShell({
           {sidebarExtra}
           <ThemeToggle />
           <div className="ws-profile">
-            <Avatar name={user.name} />
-            <span>
-              <strong>{user.name}</strong>
-              <small>{user.role === 'student' ? 'Student' : 'Instructor'}</small>
-            </span>
-            <button type="button" onClick={handleLogOut} aria-label="Log out" title="Log out">
+            <button
+              type="button"
+              className="ws-profile-open"
+              aria-haspopup="dialog"
+              title="Your account"
+              onClick={() => setAccountOpen(true)}
+            >
+              <Avatar name={user.name} src={user.avatarUrl} />
+              <span>
+                <strong>{user.name}</strong>
+                <small>{user.role === 'student' ? 'Student' : 'Instructor'}</small>
+              </span>
+            </button>
+            <button type="button" className="ws-profile-logout" onClick={handleLogOut} aria-label="Log out" title="Log out">
               <LogOut aria-hidden="true" />
             </button>
           </div>
@@ -90,6 +100,7 @@ export function AppShell({
       </aside>
 
       <div className="ws-main">{children}</div>
+      {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} />}
     </div>
   )
 }

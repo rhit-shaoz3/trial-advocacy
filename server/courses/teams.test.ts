@@ -39,7 +39,7 @@ describe('listing', () => {
     expect(res.status).toBe(200)
     expect(res.body.teams).toEqual([])
     expect(res.body.unpaired.map((s: { email: string }) => s.email).sort()).toEqual(STUDENTS)
-    expect(res.body.unpaired[0]).toEqual({ email: expect.any(String), name: null, joined: false })
+    expect(res.body.unpaired[0]).toEqual({ email: expect.any(String), name: null, joined: false, avatarUrl: null })
   })
 })
 
@@ -54,8 +54,8 @@ describe('pairing by hand', () => {
         id: expect.any(String),
         number: 1,
         members: [
-          { email: ada, name: 'Ada Lawyer', joined: true },
-          { email: ben, name: null, joined: false },
+          { email: ada, name: 'Ada Lawyer', joined: true, avatarUrl: null },
+          { email: ben, name: null, joined: false, avatarUrl: null },
         ],
       },
     ])
@@ -268,9 +268,9 @@ describe("a student's cases", () => {
         team: {
           number: 1,
           members: [
-            { email: ada, name: 'Ada Lawyer', joined: true, you: true },
-            { email: ben, name: 'Ben Counsel', joined: true, you: false },
-            { email: cy, name: null, joined: false, you: false },
+            { email: ada, name: 'Ada Lawyer', joined: true, avatarUrl: null, you: true },
+            { email: ben, name: 'Ben Counsel', joined: true, avatarUrl: null, you: false },
+            { email: cy, name: null, joined: false, avatarUrl: null, you: false },
           ],
         },
         world: null,

@@ -62,6 +62,7 @@ export function CaseWorkspaceView({
   onToggleTask,
   interviewHref,
   instructorName,
+  instructorAvatarUrl,
   reviews,
   onOpenReviews,
   now = new Date(),
@@ -73,6 +74,7 @@ export function CaseWorkspaceView({
   /** Marks a task done or not done for the team; leave out to make tasks read-only. */
   onToggleTask?(taskId: string, done: boolean): Promise<void>
   instructorName?: string | null
+  instructorAvatarUrl?: string | null
   /** The team's completed reviews; leave out (the preview) to hide the Reviews tab. */
   reviews?: ReviewResult[]
   /** Called when the student opens the Reviews tab, to mark the results read. */
@@ -217,7 +219,7 @@ export function CaseWorkspaceView({
                   <blockquote>{c.instructorNote}</blockquote>
                   {instructorName && (
                     <span className="cw-note-by">
-                      <Avatar name={instructorName} size="sm" />
+                      <Avatar name={instructorName} src={instructorAvatarUrl} size="sm" />
                       {instructorName}
                     </span>
                   )}
@@ -722,7 +724,7 @@ function People({ members, role }: { members: MyTeamMember[]; role: string }) {
     <ul className="cw-people">
       {members.map((m) => (
         <li key={m.email}>
-          <Avatar name={displayName(m)} size="sm" />
+          <Avatar name={displayName(m)} src={m.avatarUrl} size="sm" />
           <span className="cw-person-text">
             <strong>
               {displayName(m)}

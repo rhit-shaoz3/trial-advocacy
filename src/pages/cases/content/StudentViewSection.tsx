@@ -39,10 +39,12 @@ export function StudentViewSection({
   courseId,
   caseId,
   instructorName,
+  instructorAvatarUrl,
 }: {
   courseId: string
   caseId: string
   instructorName?: string | null
+  instructorAvatarUrl?: string | null
 }) {
   const service = useCourseService()
   const [options, setOptions] = useState<Perspective[] | null>(null)
@@ -114,6 +116,7 @@ export function StudentViewSection({
             workspace={workspace}
             downloadUrl={(id) => service.materialDownloadUrl(courseId, caseId, id)}
             instructorName={instructorName}
+            instructorAvatarUrl={instructorAvatarUrl}
           />
         </div>
       )}

@@ -1,5 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express'
 import { fileURLToPath } from 'node:url'
+import { myAvatarRouter, usersRouter } from './auth/avatars.ts'
 import { authRouter } from './auth/routes.ts'
 import { isProduction } from './config.ts'
 import { coursesRouter } from './courses/routes.ts'
@@ -19,7 +20,9 @@ if (isProduction) app.set('trust proxy', 1)
 if (localStore) app.use('/api/storage/local', localStorageRouter)
 
 app.use('/api', express.json(), sessionMiddleware)
+app.use('/api/auth/me/avatar', myAvatarRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/users', usersRouter)
 app.use('/api/courses', coursesRouter)
 
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found.')))

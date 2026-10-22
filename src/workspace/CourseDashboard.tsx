@@ -310,7 +310,7 @@ function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: st
       <div className="ws-case-footer">
         <span className="ws-avatar-stack" aria-label={c.participants.map((p) => p.name).join(', ')}>
           {shown.map((p) => (
-            <Avatar key={p.name} name={p.name} size="sm" />
+            <Avatar key={p.name} name={p.name} src={p.avatarUrl} size="sm" />
           ))}
           {hidden > 0 && <span className="ws-avatar-more">+{hidden}</span>}
         </span>

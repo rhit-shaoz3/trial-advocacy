@@ -8,7 +8,9 @@ import {
   createTeam,
   deleteTeam,
   listTeams,
+  MAX_AUTO_TEAM_SIZE,
   MAX_TEAM_SIZE,
+  MIN_AUTO_TEAM_SIZE,
   removeMember,
 } from './teams.ts'
 
@@ -58,8 +60,14 @@ teamsRouter.post('/', async (req, res) => {
   res.status(201).json(await createTeam(req.course!.id, req.courseCase!.id, readEmails(req.body)))
 })
 
+/** `{ teamSize }` (default 2): how many students per team. Students left over stay off a team. */
 teamsRouter.post('/auto', async (req, res) => {
-  res.json(await autoPair(req.course!.id, req.courseCase!.id))
+  const value = (req.body as Record<string, unknown> | undefined)?.teamSize ?? MIN_AUTO_TEAM_SIZE
+  const teamSize = Number(value)
+  if (!Number.isInteger(teamSize) || teamSize < MIN_AUTO_TEAM_SIZE || teamSize > MAX_AUTO_TEAM_SIZE) {
+    throw new HttpError(400, `Choose ${MIN_AUTO_TEAM_SIZE} to ${MAX_AUTO_TEAM_SIZE} students per team.`)
+  }
+  res.json(await autoPair(req.course!.id, req.courseCase!.id, teamSize))
 })
 
 teamsRouter.delete('/', async (req, res) => {

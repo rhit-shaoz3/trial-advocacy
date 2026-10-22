@@ -105,7 +105,11 @@ export interface Team {
   members: RosterEntry[]
 }
 
-export const MAX_TEAM_SIZE = 3
+/** Auto-pair makes teams of this many students, as the instructor chooses. */
+export const MIN_AUTO_TEAM_SIZE = 2
+export const MAX_AUTO_TEAM_SIZE = 6
+/** The most a team can hold, leaving room to add a leftover student by hand. */
+export const MAX_TEAM_SIZE = MAX_AUTO_TEAM_SIZE + 1
 
 export type Side = 'plaintiff' | 'defense'
 
@@ -358,7 +362,8 @@ export interface CourseService {
   listTeams(courseId: string, caseId: string): Promise<CaseTeams>
   createTeam(courseId: string, caseId: string, emails: string[]): Promise<CaseTeams>
   /** Pairs every unpaired student at random, avoiding past partners. */
-  autoPair(courseId: string, caseId: string): Promise<CaseTeams>
+  /** Puts the students not on a team into teams of `teamSize` (default 2); leftovers stay off a team. */
+  autoPair(courseId: string, caseId: string, teamSize?: number): Promise<CaseTeams>
   clearTeams(courseId: string, caseId: string): Promise<CaseTeams>
   deleteTeam(courseId: string, caseId: string, teamId: string): Promise<CaseTeams>
   addTeamMember(courseId: string, caseId: string, teamId: string, email: string): Promise<CaseTeams>

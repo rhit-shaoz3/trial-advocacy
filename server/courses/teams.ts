@@ -5,7 +5,11 @@ import { HttpError } from '../httpError.ts'
 import type { RosterEntry } from './roster.ts'
 
 /** Two is the norm; three only absorbs the odd student out. */
-export const MAX_TEAM_SIZE = 3
+/** Auto-pair makes teams of this many students, as the instructor chooses. */
+export const MIN_AUTO_TEAM_SIZE = 2
+export const MAX_AUTO_TEAM_SIZE = 6
+/** The most a team can hold, leaving room to add a leftover student by hand. */
+export const MAX_TEAM_SIZE = MAX_AUTO_TEAM_SIZE + 1
 
 // Shapes sent to the client; match `Team`, `Matchup`, and `CaseTeams` in src/courses/types.ts.
 export interface Team {
@@ -204,13 +208,21 @@ async function deleteEmptyTeams(client: PoolClient, caseId: string) {
 }
 
 /**
- * Pairs every unpaired student in the case at random, avoiding anyone they
- * were teamed with in the course's other cases where possible.
+ * Puts the students not on a team into new teams of exactly `teamSize`, at
+ * random, avoiding anyone they were teamed with in the course's other cases
+ * where possible. Students left over stay off a team, for the instructor to
+ * place by hand.
  */
-export function autoPair(courseId: string, caseId: string) {
+export function autoPair(courseId: string, caseId: string, teamSize = MIN_AUTO_TEAM_SIZE) {
   return changeTeams(courseId, caseId, async (client) => {
     const { unpaired } = await listTeams(courseId, caseId, client)
     if (unpaired.length === 0) throw new HttpError(409, 'Everyone is already on a team.')
+    if (unpaired.length < teamSize) {
+      throw new HttpError(
+        409,
+        `Only ${unpaired.length} ${unpaired.length === 1 ? 'student is' : 'students are'} left, not enough for a team of ${teamSize}. Add them to a team by hand.`,
+      )
+    }
 
     const { rows } = await client.query<{ a: string; b: string }>(
       `SELECT a.email AS a, b.email AS b
@@ -221,7 +233,7 @@ export function autoPair(courseId: string, caseId: string) {
     )
     const past = new Set(rows.map((r) => partnerKey(r.a, r.b)))
 
-    for (const group of pairStudents(unpaired.map((s) => s.email), past)) {
+    for (const group of pairStudents(unpaired.map((s) => s.email), past, randomInt, teamSize).teams) {
       await insertTeam(client, courseId, caseId, group)
     }
   })
@@ -230,15 +242,16 @@ export function autoPair(courseId: string, caseId: string) {
 export const partnerKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
 /**
- * Splits students into random pairs, preferring partners who are not in
- * `pastPartners` (keys from `partnerKey`). With an odd count, the last
- * student joins one of the pairs; a lone student makes a team of one.
+ * Splits students into random teams of exactly `size`, preferring partners
+ * who are not in `pastPartners` (keys from `partnerKey`). The students left
+ * over (fewer than `size`) come back in `leftover`, not on any team.
  */
 export function pairStudents(
   emails: string[],
   pastPartners: Set<string>,
   random: (max: number) => number = randomInt,
-): string[][] {
+  size = MIN_AUTO_TEAM_SIZE,
+): { teams: string[][]; leftover: string[] } {
   const remaining = [...emails]
   for (let i = remaining.length - 1; i > 0; i--) {
     const j = random(i + 1)
@@ -246,18 +259,15 @@ export function pairStudents(
   }
 
   const fresh = (a: string, b: string) => !pastPartners.has(partnerKey(a, b))
-  const groups: string[][] = []
-  while (remaining.length >= 2) {
-    const a = remaining.shift()!
-    const index = Math.max(0, remaining.findIndex((b) => fresh(a, b)))
-    groups.push([a, ...remaining.splice(index, 1)])
+  const teams: string[][] = []
+  while (remaining.length >= size) {
+    const team = [remaining.shift()!]
+    while (team.length < size) {
+      // The next student who hasn't worked with anyone already on the team, or else the next one.
+      const index = Math.max(0, remaining.findIndex((b) => team.every((m) => fresh(m, b))))
+      team.push(...remaining.splice(index, 1))
+    }
+    teams.push(team)
   }
-
-  if (remaining.length === 1) {
-    const [last] = remaining
-    const group = groups.find((g) => g.every((m) => fresh(last, m))) ?? groups.at(-1)
-    if (group) group.push(last)
-    else groups.push([last])
-  }
-  return groups
+  return { teams, leftover: remaining }
 }

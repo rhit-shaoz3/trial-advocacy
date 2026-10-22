@@ -113,8 +113,8 @@ export const httpCourseService: CourseService = {
     })
   },
 
-  async autoPair(courseId, caseId) {
-    return apiRequest(`${teamsPath(courseId, caseId)}/auto`, { method: 'POST' })
+  async autoPair(courseId, caseId, teamSize = 2) {
+    return apiRequest(`${teamsPath(courseId, caseId)}/auto`, { method: 'POST', body: JSON.stringify({ teamSize }) })
   },
 
   async clearTeams(courseId, caseId) {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router'
 import type { CaseMaterial, CaseWorkspace, CourseCase, CourseService } from '../../../courses/types'
 import { fakeCourseService } from '../../../test/fakeCourseService'
 import { LaunchPanel } from './LaunchPanel'
+import { CALM_LIFTOFF_MS, LIFTOFF_MS } from './liftoff'
 import { MaterialsSection } from './MaterialsSection'
 import { StudentViewSection } from './StudentViewSection'
 import { TasksSection } from './TasksSection'
@@ -75,7 +76,27 @@ describe('LaunchPanel', () => {
     await user.click(await screen.findByRole('button', { name: 'Launch case worlds' }))
 
     expect(service.launchCase).toHaveBeenCalledWith('c1', 'k1')
-    expect(onLaunched).toHaveBeenCalledWith(launched)
+    // The rocket lifts off first, then the page moves on.
+    expect(await screen.findByRole('heading', { name: 'Liftoff!' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Every case world is live.')
+    expect(onLaunched).not.toHaveBeenCalled()
+    await waitFor(() => expect(onLaunched).toHaveBeenCalledWith(launched), { timeout: LIFTOFF_MS + 1000 })
+  })
+
+  it('keeps the launch short and still with reduced motion', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), addEventListener() {}, removeEventListener() {} }))
+    const onLaunched = vi.fn()
+    const { user } = renderWith(<LaunchPanel courseId="c1" caseId="k1" refreshKey={0} onLaunched={onLaunched} />, {
+      getLaunchChecks: vi.fn().mockResolvedValue(checks.map((c) => ({ ...c, ok: true }))),
+      launchCase: vi.fn().mockResolvedValue({ id: 'k1', status: 'active' }),
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Launch case worlds' }))
+    const started = Date.now()
+    await waitFor(() => expect(onLaunched).toHaveBeenCalled(), { timeout: CALM_LIFTOFF_MS + 1000 })
+    expect(Date.now() - started).toBeLessThan(LIFTOFF_MS)
+    vi.unstubAllGlobals()
   })
 })
 

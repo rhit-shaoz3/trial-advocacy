@@ -81,4 +81,10 @@ describe('PhasePanel', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByText(/its phase can no longer change/)).toBeInTheDocument()
   })
+
+  it('stays hidden until the case worlds launch', () => {
+    renderPanel({ ...coaster, status: 'draft' })
+    expect(screen.queryByRole('heading', { name: 'Case phase' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Phases' })).not.toBeInTheDocument()
+  })
 })

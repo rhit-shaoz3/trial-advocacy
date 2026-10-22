@@ -79,9 +79,17 @@ export interface CourseCase {
   disputedIssues: string
   /** The AI witnesses never contradict these. */
   importantFacts: ImportantFacts
+  /** The furthest step of the guided setup reached. */
+  setupStep?: SetupStep
+  /** When the instructor finished the guided setup; null while it's unfinished. */
+  setupCompletedAt?: string | null
   createdAt: string
   updatedAt: string
 }
+
+/** The guided setup's steps, in order (matches SETUP_STEPS on the server). */
+export const SETUP_STEPS = ['details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'tasks'] as const
+export type SetupStep = (typeof SETUP_STEPS)[number]
 
 export interface WitnessSettingsInput {
   inWorldDate: string | null
@@ -93,8 +101,8 @@ export interface CaseInput {
   summary: string
   /** Defaults to draft when creating. */
   status?: CourseCaseStatus
-  /** At least one per side. */
-  importantFacts: ImportantFacts
+  /** Launching needs at least one per side. Left out of an edit, they stay as they are. */
+  importantFacts?: ImportantFacts
 }
 
 /** Students paired for one case: usually two, three for the odd one out. */
@@ -300,7 +308,7 @@ export type TaskInput = Omit<CaseTask, 'id'>
 
 /** One thing that must be true before the case worlds can launch. */
 export interface LaunchCheck {
-  key: 'paired' | 'matched' | 'caseFile'
+  key: 'importantFacts' | 'paired' | 'matched' | 'caseFile'
   ok: boolean
   message: string
 }
@@ -356,8 +364,11 @@ export interface CourseService {
   listCases(courseId: string): Promise<CourseCase[]>
   createCase(courseId: string, input: CaseInput): Promise<CourseCase>
   getCase(courseId: string, caseId: string): Promise<CourseCase>
-  updateCase(courseId: string, caseId: string, input: Required<CaseInput>): Promise<CourseCase>
+  updateCase(courseId: string, caseId: string, input: CaseInput & { status: CourseCaseStatus }): Promise<CourseCase>
   deleteCase(courseId: string, caseId: string): Promise<void>
+  /** The guided setup reached `step` (the furthest step reached is kept). */
+  reachSetupStep(courseId: string, caseId: string, step: SetupStep): Promise<CourseCase>
+  completeSetup(courseId: string, caseId: string): Promise<CourseCase>
   // Teams for one case. Every change resolves to the case's teams afterwards.
   listTeams(courseId: string, caseId: string): Promise<CaseTeams>
   createTeam(courseId: string, caseId: string, emails: string[]): Promise<CaseTeams>

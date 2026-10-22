@@ -172,7 +172,7 @@ describe('DELETE /api/courses/:courseId', () => {
     const course = await createCourseAs(agent)
     const { agent: student } = await signedInAgent()
     await student.post('/api/courses/join').send({ entryCode: course.entryCode })
-    const caseId = (await agent.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title: 'Rivera' })).body.case.id
+    const caseId = (await agent.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, summary: 'A test case.', title: 'Rivera' })).body.case.id
     const uploaded = await uploadCaseFile(agent, `/api/courses/${course.id}/cases/${caseId}`, 'case.pdf')
     const { storageKey } = (await pool.query('SELECT storage_key AS "storageKey" FROM case_materials')).rows[0]
     expect(uploaded.status).toBe(201)

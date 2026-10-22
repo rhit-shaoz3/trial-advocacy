@@ -13,7 +13,7 @@ beforeEach(async () => {
   await resetDatabase()
   prof = (await signedInAgent('instructor', 'prof@example.com')).agent
   const course = await createCourseAs(prof)
-  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title: 'Rivera' })).body.case.id
+  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, summary: 'A test case.', title: 'Rivera' })).body.case.id
   caseUrl = `/api/courses/${course.id}/cases/${caseId}`
 })
 
@@ -51,7 +51,7 @@ describe('uploading case files', () => {
     expect(unfinished.status).toBe(400)
     expect(unfinished.body.error).toBe('The upload did not finish. Try again.')
 
-    const otherCase = (await prof.post(caseUrl.replace(/\/cases\/.*/, '/cases')).send({ importantFacts: sampleFacts, title: 'Other' })).body.case.id
+    const otherCase = (await prof.post(caseUrl.replace(/\/cases\/.*/, '/cases')).send({ importantFacts: sampleFacts, summary: 'A test case.', title: 'Other' })).body.case.id
     const foreign = await prof
       .post(`${caseUrl}/materials`)
       .send({ uploadKey: `uploads/${otherCase}/00000000-0000-4000-8000-000000000000`, filename: 'a.pdf' })

@@ -4,17 +4,21 @@ import { isUuid, readString } from '../validation.ts'
 import {
   CASE_PHASES,
   CASE_STATUSES,
+  completeSetup,
   createCase,
   deleteCase,
   findCase,
   listCases,
+  reachSetupStep,
   setCasePhase,
+  SETUP_STEPS,
   updateCase,
   type CaseFields,
   type CasePhase,
   type CaseStatus,
   type CourseCase,
   type ImportantFacts,
+  type SetupStep,
 } from './cases.ts'
 import { listStorageKeys, removeStoredFiles, setInstructorNote, setWitnessSettings } from './caseContent.ts'
 import { materialsRouter, tasksRouter, witnessesRouter } from './caseContentRoutes.ts'
@@ -36,18 +40,20 @@ const MAX_FACTS_PER_SIDE = 20
 const MAX_FACT_LENGTH = 500
 
 /**
- * Reads `importantFacts: { plaintiff: string[], defense: string[] }`. Facts are
- * trimmed and blank ones dropped; each side needs at least one.
+ * Reads `importantFacts: { plaintiff: string[], defense: string[] }`, or
+ * undefined if it's left out. Facts are trimmed and blank ones dropped. A side
+ * may have none for now (the guided setup lets the instructor skip them), but
+ * launching needs at least one each.
  */
-function readImportantFacts(body: unknown): ImportantFacts {
+function readImportantFacts(body: unknown): ImportantFacts | undefined {
   const value = (body as Record<string, unknown> | undefined)?.importantFacts as Record<string, unknown> | undefined
+  if (value === undefined) return undefined
   const readSide = (side: keyof ImportantFacts, label: string) => {
     const list = value?.[side]
     if (list !== undefined && (!Array.isArray(list) || list.some((f) => typeof f !== 'string'))) {
       throw new HttpError(400, `List the ${label}'s important facts as text.`)
     }
     const facts = ((list ?? []) as string[]).map((f) => f.trim()).filter(Boolean)
-    if (facts.length === 0) throw new HttpError(400, `List at least one important fact for the ${label}.`)
     if (facts.length > MAX_FACTS_PER_SIDE) {
       throw new HttpError(400, `List at most ${MAX_FACTS_PER_SIDE} important facts for the ${label}.`)
     }
@@ -62,8 +68,9 @@ function readImportantFacts(body: unknown): ImportantFacts {
 /**
  * Validates the body of a create or edit request. Edits must send the status,
  * so a client that leaves it out can't quietly turn an active case back into a draft.
+ * A new case needs its description; older cases may still be saved without one.
  */
-function readCaseFields(body: unknown, defaultStatus?: CaseStatus): CaseFields {
+function readCaseFields(body: unknown, defaultStatus?: CaseStatus, creating = false): CaseFields {
   const title = readString(body, 'title').trim()
   const summary = readString(body, 'summary').trim()
   const status = readString(body, 'status') || defaultStatus
@@ -72,6 +79,7 @@ function readCaseFields(body: unknown, defaultStatus?: CaseStatus): CaseFields {
   if (title.length > MAX_TITLE_LENGTH) {
     throw new HttpError(400, `Case title must be at most ${MAX_TITLE_LENGTH} characters.`)
   }
+  if (creating && !summary) throw new HttpError(400, 'Add a short description of the case.')
   if (summary.length > MAX_SUMMARY_LENGTH) {
     throw new HttpError(400, `Summary must be at most ${MAX_SUMMARY_LENGTH} characters.`)
   }
@@ -88,7 +96,7 @@ casesRouter.get('/', async (req, res) => {
 })
 
 casesRouter.post('/', async (req, res) => {
-  res.status(201).json({ case: await createCase(req.course!.id, readCaseFields(req.body, 'draft')) })
+  res.status(201).json({ case: await createCase(req.course!.id, readCaseFields(req.body, 'draft', true)) })
 })
 
 casesRouter.get('/:caseId', async (req, res) => {
@@ -101,6 +109,12 @@ casesRouter.get('/:caseId', async (req, res) => {
 casesRouter.patch('/:caseId', async (req, res) => {
   const { caseId } = req.params
   const fields = readCaseFields(req.body)
+  // A launched case's AI witnesses keep to its important facts, so neither side can lose them all.
+  const facts = fields.importantFacts
+  if (facts && fields.status !== 'draft') {
+    if (facts.plaintiff.length === 0) throw new HttpError(400, 'List at least one important fact for the plaintiff.')
+    if (facts.defense.length === 0) throw new HttpError(400, 'List at least one important fact for the defense.')
+  }
   const updated = isUuid(caseId) ? await updateCase(req.course!.id, caseId, fields) : null
   if (!updated) throw new HttpError(404, 'Case not found.')
   res.json({ case: updated })
@@ -170,6 +184,18 @@ caseRouter.put('/phase', async (req, res) => {
   res.json({ case: await setCasePhase(req.course!.id, req.courseCase!.id, phase as CasePhase) })
 })
 
+/** The guided setup reached `{ step }` (the furthest step is kept). */
+caseRouter.put('/setup', async (req, res) => {
+  const step = readString(req.body, 'step')
+  if (!SETUP_STEPS.includes(step as SetupStep)) throw new HttpError(400, 'Choose a valid setup step.')
+  res.json({ case: await reachSetupStep(req.course!.id, req.courseCase!.id, step as SetupStep) })
+})
+
+/** The instructor finished the guided setup; the case page shows its tabs from now on. */
+caseRouter.post('/setup/complete', async (req, res) => {
+  res.json({ case: await completeSetup(req.course!.id, req.courseCase!.id) })
+})
+
 /** What still has to happen before the case worlds can launch. */
 caseRouter.get('/launch', async (req, res) => {
   res.json({ checks: await launchChecks(req.course!.id, req.courseCase!.id) })
@@ -187,7 +213,6 @@ caseRouter.post('/launch', async (req, res) => {
     title: current.title,
     summary: current.summary,
     status: 'active',
-    importantFacts: current.importantFacts,
   })
   res.json({ case: launched })
 })

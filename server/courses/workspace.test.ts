@@ -41,7 +41,7 @@ beforeEach(async () => {
   prof = (await signedInAgent('instructor', 'prof@example.com', 'Prof. Ruiz')).agent
   course = await createCourseAs(prof)
   await prof.post(`/api/courses/${course.id}/roster`).send({ emails: [1, 2, 3, 4].map(email) })
-  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title: 'Rivera v. Thrill Park' })).body.case.id
+  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, summary: 'A test case.', title: 'Rivera v. Thrill Park' })).body.case.id
 })
 
 afterAll(async () => {
@@ -191,6 +191,7 @@ describe('launching the case worlds', () => {
   it('lists what is missing, then launches once everything is ready', async () => {
     const before = (await prof.get(`${caseUrl()}/launch`)).body.checks
     expect(before).toEqual([
+      { key: 'importantFacts', ok: true, message: 'Important facts: 1 for the plaintiff, 1 for the defense.' },
       { key: 'paired', ok: false, message: 'Pair students into teams.' },
       { key: 'matched', ok: false, message: 'Match teams into case worlds.' },
       { key: 'caseFile', ok: false, message: 'Upload the case file.' },
@@ -203,11 +204,12 @@ describe('launching the case worlds', () => {
 
     await pairAndMatch()
     const factPattern = (await upload('Fact pattern.pdf', { description: 'Fact pattern' })).body.material.id
-    const noInitial = (await prof.get(`${caseUrl()}/launch`)).body.checks[2]
+    const noInitial = (await prof.get(`${caseUrl()}/launch`)).body.checks[3]
     expect(noInitial).toEqual({ key: 'caseFile', ok: false, message: 'Choose the initial file every team starts from.' })
     await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: factPattern })
     const after = (await prof.get(`${caseUrl()}/launch`)).body.checks
     expect(after.map((c: { message: string }) => c.message)).toEqual([
+      'Important facts: 1 for the plaintiff, 1 for the defense.',
       'All 4 students are on a team.',
       '1 case world is set up.',
       'Teams start from Fact pattern; 1 case file is uploaded.',
@@ -223,8 +225,8 @@ describe('launching the case worlds', () => {
   it('reports students and teams still left out', async () => {
     await prof.post(`${caseUrl()}/teams`).send({ emails: [email(1), email(2)] })
     const checks = (await prof.get(`${caseUrl()}/launch`)).body.checks
-    expect(checks[0].message).toBe('2 students are not on a team yet.')
-    expect(checks[1].message).toBe('1 team is waiting for an opponent.')
+    expect(checks[1].message).toBe('2 students are not on a team yet.')
+    expect(checks[2].message).toBe('1 team is waiting for an opponent.')
   })
 })
 
@@ -259,7 +261,7 @@ describe("a student's case dashboard", () => {
     expect(workspace.case).toEqual({
       id: caseId,
       title: 'Rivera v. Thrill Park',
-      summary: '',
+      summary: 'A test case.',
       status: 'active',
       phase: 'subpoena',
       instructorNote: 'Mind the timeline.',

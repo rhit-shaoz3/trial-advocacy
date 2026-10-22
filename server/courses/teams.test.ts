@@ -12,7 +12,7 @@ const STUDENTS = ['ada', 'ben', 'cy', 'dee', 'eve', 'fay', 'gus'].map((n) => `${
 const [ada, ben, cy, dee, eve] = STUDENTS
 
 async function newCase(title = 'Rivera v. Thrill Park') {
-  const res = await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title })
+  const res = await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, summary: 'A test case.', title })
   return res.body.case.id as string
 }
 

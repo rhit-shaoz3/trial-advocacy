@@ -18,7 +18,8 @@
 }
 
 /* The most important facts for each side, side by side on wide screens. */
-.case-form .case-facts {
+.case-form .case-facts,
+.setup-form .case-facts {
   display: grid;
   flex-basis: 100%;
   grid-template-columns: 1fr 1fr;
@@ -27,7 +28,8 @@
 }
 
 @media (max-width: 720px) {
-  .case-form .case-facts {
+  .case-form .case-facts,
+  .setup-form .case-facts {
     grid-template-columns: 1fr;
   }
 }
@@ -65,7 +67,8 @@
   gap: 0.35rem;
 }
 
-.case-form .case-facts-list input {
+.case-form .case-facts-list input,
+.setup-form .case-facts-list input {
   flex: 1;
   min-width: 0;
 }
@@ -168,6 +171,13 @@ a.case-row:hover {
 .badge-case-closed {
   background: #e6e9ee;
   color: #4f5b6b;
+}
+
+/* A case whose guided setup isn't finished yet. */
+.badge-setup {
+  margin-left: 0.4rem;
+  background: #e5ecf4;
+  color: #315e86;
 }
 
 .teams-actions {

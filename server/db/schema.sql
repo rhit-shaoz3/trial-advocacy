@@ -224,6 +224,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS case_materials_initial_idx ON case_materials (
 -- instructor says so: subpoena (each side sees only its own witnesses),
 -- investigate (the background investigator opens), deposition (every witness
 -- is revealed to both sides).
+-- The guided setup a new case goes through: the furthest step the instructor
+-- has reached, and when they finished (null until then). Cases made before
+-- the guided setup count as finished: the column's first default fills them
+-- in, then new cases start unfinished.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS setup_completed_at timestamptz DEFAULT now();
+ALTER TABLE cases ALTER COLUMN setup_completed_at DROP DEFAULT;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS setup_step text NOT NULL DEFAULT 'details'
+  CHECK (setup_step IN ('details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'tasks'));
+
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS phase text NOT NULL DEFAULT 'subpoena'
   CHECK (phase IN ('subpoena', 'investigate', 'deposition'));
 

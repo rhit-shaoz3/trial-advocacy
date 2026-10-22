@@ -132,6 +132,10 @@ describe('buildSystemPrompt', () => {
     expect(defended).toContain('# Your lawyer is present')
     expect(defended).toContain('Ms. Patel, the lawyer representing you, is defending this deposition.')
     expect(defended).toContain('Ms. Patel: Objection, compound.')
+    // Misleading questions: the lawyer objects and the witness won't answer them as asked.
+    expect(defended).toContain('Ms. Patel: Objection, misstates the testimony.')
+    expect(defended).toContain("Don't answer it the way it's asked")
+    expect(defended).toContain('Being misleading is never a reason to instruct you not to answer.')
   })
 
   it("never lets the witness's own lawyer object to their side's questions", () => {
@@ -154,7 +158,11 @@ describe('buildRequest', () => {
     const before = process.env.CLAUDE_WITNESS_MODEL
     process.env.CLAUDE_WITNESS_MODEL = 'claude-sonnet-5-5'
     try {
-      expect(buildRequest({ profile, settings: adverse, transcript: [], question: 'Hi?' }).model).toBe('claude-sonnet-5-5')
+      const request = buildRequest({ profile, settings: adverse, transcript: [], question: 'Hi?' })
+      expect(request.model).toBe('claude-sonnet-5-5')
+      // Models other than Haiku keep the server-side fallback.
+      expect(request.fallbacks).toBe('default')
+      expect(request.betas).toEqual(['server-side-fallback-2026-07-01'])
       expect(buildRequest({ profile, settings: adverse, transcript: [], question: 'Hi?', model: 'claude-opus-5-5' }).model).toBe(
         'claude-opus-5-5',
       )
@@ -164,19 +172,27 @@ describe('buildRequest', () => {
     }
   })
 
-  it('uses the witness model with caching and server-side fallback', () => {
-    const request = buildRequest({ profile, settings: adverse, transcript: [], question: 'Your name?' })
+  it('uses the witness model (Haiku, which has no server-side fallback) with caching', () => {
+    // With no model given, the settings decide (Haiku unless .env says otherwise).
+    expect(buildRequest({ profile, settings: adverse, transcript: [], question: 'Your name?' }).model).toBe(modelFor('witness'))
+    const request = buildRequest({ profile, settings: adverse, transcript: [], question: 'Your name?', model: 'claude-haiku-5-5' })
 
-    expect(request.model).toBe(modelFor('witness'))
+    expect(request.model).toBe('claude-haiku-5-5')
     expect(request.thinking).toEqual({ type: 'adaptive' })
-    expect(request.output_config).toEqual({ effort: 'low' })
-    expect(request.fallbacks).toBe('default')
-    expect(request.betas).toEqual(['server-side-fallback-2026-07-01'])
+    expect(request.output_config).toEqual({ effort: 'high' })
+    expect(request).not.toHaveProperty('fallbacks')
+    expect(request).not.toHaveProperty('betas')
     // The case file is cached for the hour an interview can last; the transcript for 5 minutes.
     expect(request.cache_control).toEqual({ type: 'ephemeral' })
     const [system] = request.system as Anthropic.Beta.Messages.BetaTextBlockParam[]
     expect(system.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })
     expect(system.text).toBe(buildSystemPrompt(profile, adverse))
+  })
+
+  it('keeps the server-side fallback on models that have one', () => {
+    const request = buildRequest({ profile, settings: adverse, transcript: [], question: 'Your name?', model: 'claude-sonnet-5-5' })
+    expect(request.fallbacks).toBe('default')
+    expect(request.betas).toEqual(['server-side-fallback-2026-07-01'])
   })
 })
 

@@ -3,12 +3,15 @@ import { modelFor } from '../ai/models.ts'
 import { buildSystemPrompt, type DepositionSettings, type WitnessProfile } from './prompt.ts'
 
 /**
- * Thinking depth per answer. The witness has a lot of rules to weigh (what it
- * knows, what it may add, which side it's on), so thinking stays on, at the
- * lowest effort to keep costs down. Tune it against the eval (npm run
- * witness:eval -- --effort medium).
+ * Thinking depth per answer. Answers are short, but the witness has a lot of
+ * rules to weigh (what it knows, what it may add, which side it's on, when its
+ * lawyer objects), and "high" is where Haiku follows instructions most
+ * strictly. Tune it against the eval.
  */
-export const WITNESS_EFFORT = 'low'
+export const WITNESS_EFFORT = 'high'
+
+/** Haiku has no server-side fallback: the parameter would do nothing, or fail with a model list. */
+const hasServerFallback = (model: string) => !model.startsWith('claude-haiku')
 
 /** One question and the witness's reply, exactly as the model gave it (objection included). */
 export interface TranscriptTurn {
@@ -68,16 +71,16 @@ export function buildRequest(options: {
   model?: string
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 }): Anthropic.Beta.Messages.MessageCreateParamsNonStreaming {
+  const model = options.model ?? modelFor('witness')
   return {
-    model: options.model ?? modelFor('witness'),
+    model,
     max_tokens: 16000,
     // Adaptive thinking: the model decides how much to reason; effort caps it.
     thinking: { type: 'adaptive' },
     output_config: { effort: options.effort ?? WITNESS_EFFORT },
-    // If a safety classifier declines (unlikely for a deposition), retry on
-    // Anthropic's recommended fallback model instead of failing the turn.
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    // On models that have one, a safety decline (unlikely for a deposition)
+    // retries on Anthropic's recommended fallback model instead of failing the turn.
+    ...(hasServerFallback(model) && { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
     // The system prompt (case documents included) is large and the same for
     // the whole interview, so it's cached for an hour: interviews end after an
     // hour, so one cache write covers the whole session, pauses included. The

@@ -23,6 +23,7 @@ const workspace: CaseWorkspace = {
       uploadedAt: '2026-10-01T15:00:00.000Z',
       textStatus: 'ready',
       textError: null,
+      initial: true,
     },
   ],
   witnesses: [],

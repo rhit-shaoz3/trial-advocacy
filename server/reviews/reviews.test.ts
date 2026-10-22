@@ -52,7 +52,8 @@ beforeEach(async () => {
   const upload = async (filename: string, text: string, audience = 'all') =>
     (await uploadCaseFile(prof, caseUrl(), filename, { audience, description: filename.replace(/\.\w+$/, '') }, Buffer.from(text)))
       .body.material.id as string
-  await upload('Accident log.txt', 'The ride stopped at 3:02.')
+  const log = await upload('Accident log.txt', 'The ride stopped at 3:02.')
+  await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: log })
   const deposition = await upload('Torres deposition.txt', 'Q: Where were you? A: At the booth.', 'instructor')
   await transcriptionsSettled()
   witnessId = (

@@ -398,12 +398,14 @@ function WitnessForm({
             </select>
           </label>
           <label className="content-form-grow">
-            Witness&rsquo;s lawyer (optional)
+            Witness&rsquo;s lawyer&rsquo;s name (optional)
             <input
               type="text"
               value={counsel}
               onChange={(e) => setCounsel(e.target.value)}
-              placeholder="Ms. Park"
+              // The lawyer objects for the witness whenever the other side asks; blank shows as "Defending counsel".
+              placeholder="Defending counsel"
+              title="The witness's lawyer objects to improper questions from the other side. Leave blank to show them as Defending counsel."
               maxLength={120}
             />
           </label>

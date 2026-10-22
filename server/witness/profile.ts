@@ -1,4 +1,4 @@
-import { listMaterialTexts, type MaterialText, type Witness } from '../courses/caseContent.ts'
+import { listMaterialTexts, listWitnesses, type MaterialText, type Witness } from '../courses/caseContent.ts'
 import type { CourseCase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { finishPendingTranscriptions } from '../courses/materialText.ts'
@@ -40,32 +40,35 @@ const title = (m: Pick<MaterialText, 'description' | 'filename'>) => m.descripti
 
 /**
  * How the witness treats each file: the deposition is their own sworn account;
- * files the instructor ticked as seen are records they know; other files the
- * students can see are records they don't know; other instructor-only files
- * (other witnesses' depositions, usually) are someone else's account.
+ * the initial file (the complaint and pretrial order) is background, allegations
+ * and all; other witnesses' depositions are someone else's account; the rest
+ * are records. Only files the instructor ticked as seen are ones they know.
+ * Who can see a file doesn't matter: evidence stays with the instructor until
+ * teams ask for it, and is a record all the same.
  */
-export function witnessDocuments(witness: Witness, materials: MaterialText[]): WitnessDocument[] {
+export function witnessDocuments(
+  witness: Witness,
+  materials: MaterialText[],
+  otherDepositionIds: ReadonlySet<string> = new Set(),
+): WitnessDocument[] {
   const known = new Set(witness.knownMaterialIds)
   const readable = materials.filter((m) => m.textStatus === 'ready' && m.text)
   const deposition = readable.find((m) => m.id === witness.depositionMaterialId)
   if (!deposition) throw new WitnessNotReadyError(`${witness.name}'s deposition file can't be read yet.`)
 
+  const typeOf = (m: MaterialText): WitnessDocument['type'] =>
+    m.initial ? 'background' : otherDepositionIds.has(m.id) ? 'other_witness' : 'record'
+  const document = (m: MaterialText, witnessKnows: boolean): WitnessDocument => ({
+    title: title(m),
+    type: typeOf(m),
+    witnessKnows,
+    content: m.text!,
+  })
   const others = readable.filter((m) => m.id !== deposition.id)
   return [
     { title: title(deposition), type: 'own_statement', witnessKnows: true, content: deposition.text! },
-    ...others
-      .filter((m) => known.has(m.id))
-      .map((m): WitnessDocument => ({ title: title(m), type: 'record', witnessKnows: true, content: m.text! })),
-    ...others
-      .filter((m) => !known.has(m.id))
-      .map(
-        (m): WitnessDocument => ({
-          title: title(m),
-          type: m.audience === 'instructor' ? 'other_witness' : 'record',
-          witnessKnows: false,
-          content: m.text!,
-        }),
-      ),
+    ...others.filter((m) => known.has(m.id)).map((m) => document(m, true)),
+    ...others.filter((m) => !known.has(m.id)).map((m) => document(m, false)),
   ]
 }
 
@@ -75,6 +78,8 @@ export function buildProfile(
   materials: MaterialText[],
   today = new Date(),
   settledFacts: SettledFacts = { accepted: [], denied: [] },
+  /** The deposition files of the case's other witnesses. */
+  otherDepositionIds: ReadonlySet<string> = new Set(),
 ): WitnessProfile {
   if (!witness.alignedSide) throw new WitnessNotReadyError(`Choose which side ${witness.name} is a witness for.`)
   const names = partyNames(courseCase.title)
@@ -93,7 +98,7 @@ export function buildProfile(
     inWorldDate: formatCaseDate(courseCase.inWorldDate ?? today.toISOString().slice(0, 10)),
     keyDisputedIssues: courseCase.disputedIssues || undefined,
     importantFacts: courseCase.importantFacts,
-    documents: witnessDocuments(witness, materials),
+    documents: witnessDocuments(witness, materials, otherDepositionIds),
     settledFacts,
   }
 }
@@ -113,15 +118,26 @@ export async function loadProfile(
     await finishPendingTranscriptions(materials)
     materials = await listMaterialTexts(courseCase.id)
   }
-  return buildProfile(courseCase, witness, materials, new Date(), settledFacts)
+  const otherDepositionIds = new Set(
+    (await listWitnesses(courseCase.id))
+      .filter((w) => w.id !== witness.id && w.depositionMaterialId)
+      .map((w) => w.depositionMaterialId!),
+  )
+  return buildProfile(courseCase, witness, materials, new Date(), settledFacts, otherDepositionIds)
 }
 
-/** Who is asking: the side's party, and the witness's own lawyer when the other side asks. */
+/** Who speaks for the witness's lawyer when the instructor didn't name one. */
+export const DEFAULT_COUNSEL = 'Defending counsel'
+
+/**
+ * Who is asking: the side's party. When the other side asks, the witness's own
+ * lawyer is always there to object (named by the instructor, or DEFAULT_COUNSEL).
+ */
 export function depositionSettings(profile: WitnessProfile, witness: Witness, side: Side): DepositionSettings {
   const role = partyRole(side)
   return {
     examiningPartyRole: role,
     examiningPartyName: role === 'plaintiff' ? profile.plaintiffName : profile.defendantName,
-    defendingCounselName: witness.defendingCounsel || undefined,
+    defendingCounselName: witness.defendingCounsel || DEFAULT_COUNSEL,
   }
 }

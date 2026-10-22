@@ -14,5 +14,9 @@ describe('modelFor', () => {
     expect(modelFor('transcribe', env)).toBe('claude-sonnet-5-5')
     expect(modelFor('review', env)).toBe('claude-sonnet-5-5')
     expect(modelFor('eval', { CLAUDE_EVAL_MODEL: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
+    // The witness also accepts the older WITNESS_MODEL name; its own CLAUDE_ name wins.
+    expect(modelFor('witness', { WITNESS_MODEL: 'claude-sonnet-5-5', CLAUDE_MODEL: 'claude-haiku-5-5' })).toBe('claude-sonnet-5-5')
+    expect(modelFor('witness', { WITNESS_MODEL: 'claude-sonnet-5-5', CLAUDE_WITNESS_MODEL: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
+    expect(modelFor('review', { WITNESS_MODEL: 'claude-sonnet-5-5' })).toBe('claude-haiku-5-5')
   })
 })

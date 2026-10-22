@@ -66,7 +66,9 @@ export interface DepositionSettings {
   defendingCounselName?: string
 }
 
-const loadTemplate = (name: string) => readFileSync(new URL(`./templates/${name}`, import.meta.url), 'utf8')
+// A Windows checkout (core.autocrlf) has CRLF templates; the prompt is the same everywhere.
+const loadTemplate = (name: string) =>
+  readFileSync(new URL(`./templates/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const INITIALIZATION = loadTemplate('witness-initialization.md')
 const SESSION = loadTemplate('deposition-session.md')
 

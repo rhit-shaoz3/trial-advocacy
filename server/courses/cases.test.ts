@@ -124,8 +124,8 @@ describe('important facts', () => {
     const t2 = (await prof.post(`${caseUrl}/teams`).send({ emails: ['ben@example.com'] })).body.teams[1].id
     await prof.post(`${caseUrl}/matchups`).send({ plaintiffTeamId: t1, defenseTeamId: t2 })
     await pool.query(
-      `INSERT INTO case_materials (case_id, filename, content_type, size_bytes, storage_key)
-       VALUES ($1, 'Fact pattern.pdf', 'application/pdf', 1, 'k')`,
+      `INSERT INTO case_materials (case_id, filename, content_type, size_bytes, storage_key, initial)
+       VALUES ($1, 'Fact pattern.pdf', 'application/pdf', 1, 'k', true)`,
       [id],
     )
 

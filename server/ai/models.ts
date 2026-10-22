@@ -14,7 +14,11 @@ const STEP_VARIABLE: Record<AiStep, string> = {
   eval: 'CLAUDE_EVAL_MODEL',
 }
 
-/** The step's own setting, else CLAUDE_MODEL, else the default (Haiku). */
+/**
+ * The step's own setting, else CLAUDE_MODEL, else the default (Haiku). For
+ * the witness, WITNESS_MODEL (the older name) also works.
+ */
 export function modelFor(step: AiStep, env: NodeJS.ProcessEnv = process.env): string {
-  return env[STEP_VARIABLE[step]]?.trim() || env.CLAUDE_MODEL?.trim() || DEFAULT_MODEL
+  const own = env[STEP_VARIABLE[step]]?.trim() || (step === 'witness' ? env.WITNESS_MODEL?.trim() : '')
+  return own || env.CLAUDE_MODEL?.trim() || DEFAULT_MODEL
 }

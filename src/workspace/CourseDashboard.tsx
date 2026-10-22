@@ -10,7 +10,6 @@ import {
   Gavel,
   Users,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
@@ -26,6 +25,8 @@ import {
   shortMonth,
   timeAgo,
 } from './format'
+import { InstructorDashboard } from './InstructorDashboard'
+import { StatCard } from './StatCard'
 import type { ActivityItem, CaseStatus, CaseSummary, UpcomingItem } from './types'
 import { useWorkspace } from './useWorkspace'
 import './workspace.css'
@@ -46,10 +47,17 @@ const ACTIVITY_ICON = { task: ClipboardCheck, document: FileText, approval: Badg
 const ACTIVITY_TONE = { task: 'blue', document: 'amber', approval: 'green' }
 
 /**
- * The course home: greeting, stats, cases, recent activity, upcoming. Students
- * see their own cases; the instructor sees every team's.
+ * The course home. Students get theirs here: greeting, stats, their cases,
+ * recent activity, upcoming. The instructor gets their own (InstructorDashboard).
  */
 export function CourseDashboard({ now = new Date() }: { now?: Date }) {
+  const { user } = useAuth()
+  const { home } = useWorkspace()
+  if (user?.role === 'instructor' && home.instructor) return <InstructorDashboard now={now} />
+  return <StudentDashboard now={now} />
+}
+
+function StudentDashboard({ now }: { now: Date }) {
   const { user } = useAuth()
   const { home, search } = useWorkspace()
   const base = `/courses/${home.course.id}`
@@ -217,35 +225,6 @@ export function CourseDashboard({ now = new Date() }: { now?: Date }) {
         </section>
       </div>
     </main>
-  )
-}
-
-function StatCard({
-  icon,
-  tone,
-  value,
-  label,
-  note,
-  urgent,
-}: {
-  icon: ReactNode
-  tone: string
-  value: number
-  label: string
-  note?: string
-  urgent?: boolean
-}) {
-  return (
-    <div className="ws-stat">
-      <span className={`ws-icon-tile ws-tone-${tone}`} aria-hidden="true">
-        {icon}
-      </span>
-      <div>
-        <strong>{value}</strong>
-        <span>{label}</span>
-      </div>
-      {note && <small className={urgent ? 'ws-urgent' : undefined}>{note}</small>}
-    </div>
   )
 }
 

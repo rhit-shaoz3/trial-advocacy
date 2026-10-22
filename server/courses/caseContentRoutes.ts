@@ -7,6 +7,7 @@ import { storage } from '../storage/storage.ts'
 import { isUuid, readString } from '../validation.ts'
 import {
   AUDIENCES,
+  InitialMaterialAudienceError,
   MATERIAL_AUDIENCES,
   createMaterial,
   createTask,
@@ -22,6 +23,7 @@ import {
   listTasks,
   listWitnesses,
   removeStoredFiles,
+  setInitialMaterial,
   setMaterialText,
   updateMaterial,
   updateTask,
@@ -140,7 +142,8 @@ materialsRouter.post('/uploads', async (req, res) => {
 
 /**
  * Step 2, after the browser's PUT succeeds: `{ uploadKey, filename,
- * audience?, description? }` adds the uploaded file to the case file.
+ * audience?, description? }` adds the uploaded file to the case file. Files
+ * are for instructors only unless chosen otherwise: teams ask for them.
  */
 materialsRouter.post('/', async (req, res) => {
   const caseId = req.courseCase!.id
@@ -163,7 +166,7 @@ materialsRouter.post('/', async (req, res) => {
   const material = await createMaterial({
     id,
     caseId,
-    audience: readMaterialAudience((req.body as Record<string, unknown>).audience, 'all'),
+    audience: readMaterialAudience((req.body as Record<string, unknown>).audience, 'instructor'),
     filename,
     description: readText(req.body, 'description', 'Description'),
     contentType,
@@ -176,12 +179,33 @@ materialsRouter.post('/', async (req, res) => {
   res.status(201).json({ material })
 })
 
+/** `{ materialId }` makes that file the one every team starts from; `{ materialId: null }` clears it. */
+materialsRouter.put('/initial', async (req, res) => {
+  const caseId = req.courseCase!.id
+  const value = (req.body as Record<string, unknown> | undefined)?.materialId
+  const id = value === null ? null : readId(typeof value === 'string' ? value : '', 'File not found.')
+  const result = await setInitialMaterial(caseId, id)
+  if (!result) throw new HttpError(404, 'File not found.')
+  if (result === 'deposition') {
+    throw new HttpError(400, "That's a witness's deposition, which students must never see. Choose another file.")
+  }
+  res.json({ materials: await listMaterials(caseId) })
+})
+
 materialsRouter.patch('/:materialId', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
-  const material = await updateMaterial(req.courseCase!.id, id, {
-    audience: readMaterialAudience(req.body?.audience),
-    description: readText(req.body, 'description', 'Description'),
-  })
+  let material
+  try {
+    material = await updateMaterial(req.courseCase!.id, id, {
+      audience: readMaterialAudience(req.body?.audience),
+      description: readText(req.body, 'description', 'Description'),
+    })
+  } catch (err) {
+    if (err instanceof InitialMaterialAudienceError) {
+      throw new HttpError(400, 'Every team starts from the initial file, so everyone sees it. Choose another initial file first.')
+    }
+    throw err
+  }
   if (!material) throw new HttpError(404, 'File not found.')
   res.json({ material })
 })

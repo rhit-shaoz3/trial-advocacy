@@ -31,6 +31,8 @@ export interface CaseMaterial {
   uploadedAt: Date
   textStatus: TextStatus
   textError: string | null
+  /** The file every team starts from; always shared with everyone. */
+  initial: boolean
 }
 
 export interface Witness {
@@ -61,14 +63,15 @@ export interface CaseTask {
 // Materials
 
 const MATERIAL_COLUMNS = `id, audience, filename, description, content_type AS "contentType",
-  size_bytes AS "sizeBytes", uploaded_at AS "uploadedAt", text_status AS "textStatus", text_error AS "textError"`
+  size_bytes AS "sizeBytes", uploaded_at AS "uploadedAt", text_status AS "textStatus", text_error AS "textError",
+  initial`
 
-/** In upload order. */
+/** The initial file first, then in upload order. */
 export async function listMaterials(caseId: string, audiences: readonly MaterialAudience[] = MATERIAL_AUDIENCES) {
   const { rows } = await pool.query<CaseMaterial>(
     `SELECT ${MATERIAL_COLUMNS} FROM case_materials
      WHERE case_id = $1 AND audience = ANY($2)
-     ORDER BY uploaded_at, filename`,
+     ORDER BY initial DESC, uploaded_at, filename`,
     [caseId, audiences],
   )
   return rows
@@ -106,6 +109,9 @@ export async function createMaterial(input: {
   return rows[0]
 }
 
+/** The initial file is always shared with everyone, so it can't be narrowed. */
+export class InitialMaterialAudienceError extends Error {}
+
 /** Returns null if there was no such material. */
 export async function updateMaterial(
   caseId: string,
@@ -114,11 +120,46 @@ export async function updateMaterial(
 ) {
   const { rows } = await pool.query<CaseMaterial>(
     `UPDATE case_materials SET audience = $3, description = $4
-     WHERE case_id = $1 AND id = $2
+     WHERE case_id = $1 AND id = $2 AND (NOT initial OR $3 = 'all')
      RETURNING ${MATERIAL_COLUMNS}`,
     [caseId, id, fields.audience, fields.description],
   )
-  return rows[0] ?? null
+  if (rows[0]) return rows[0]
+  const { rowCount } = await pool.query('SELECT 1 FROM case_materials WHERE case_id = $1 AND id = $2', [caseId, id])
+  if (rowCount) throw new InitialMaterialAudienceError()
+  return null
+}
+
+/**
+ * Makes `id` the case's initial file (shared with everyone from then on), in
+ * place of any other; null clears it. Returns false if there was no such
+ * material, or 'deposition' if it's a witness's deposition, which students
+ * must never see.
+ */
+export async function setInitialMaterial(caseId: string, id: string | null): Promise<boolean | 'deposition'> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('UPDATE case_materials SET initial = false WHERE case_id = $1 AND initial', [caseId])
+    if (id) {
+      const { rows } = await client.query<{ deposition: boolean }>(
+        `UPDATE case_materials m SET initial = true, audience = 'all' WHERE m.case_id = $1 AND m.id = $2
+         RETURNING EXISTS (SELECT 1 FROM case_witnesses w WHERE w.deposition_material_id = m.id) AS deposition`,
+        [caseId, id],
+      )
+      if (rows.length === 0 || rows[0].deposition) {
+        await client.query('ROLLBACK')
+        return rows.length === 0 ? false : 'deposition'
+      }
+    }
+    await client.query('COMMIT')
+    return true
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 /** Returns false if there was no such material, else its storage key (null for an old in-database file). */
@@ -211,12 +252,13 @@ export interface MaterialText {
   description: string
   textStatus: TextStatus
   text: string | null
+  initial: boolean
 }
 
 /** Every file in a case with its transcription, for building an AI witness's prompt. */
 export async function listMaterialTexts(caseId: string) {
   const { rows } = await pool.query<MaterialText>(
-    `SELECT id, audience, filename, description, text_status AS "textStatus", text_content AS text
+    `SELECT id, audience, filename, description, text_status AS "textStatus", text_content AS text, initial
      FROM case_materials WHERE case_id = $1 ORDER BY uploaded_at, filename`,
     [caseId],
   )

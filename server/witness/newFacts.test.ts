@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { describe, expect, it } from 'vitest'
-import { buildFactsRequest, findNewFacts, MAX_NEW_FACTS, NEW_FACTS_MODEL, type NewFactsInput } from './newFacts.ts'
+import { modelFor } from '../ai/models.ts'
+import { buildFactsRequest, findNewFacts, MAX_NEW_FACTS, type NewFactsInput } from './newFacts.ts'
 
 const input: NewFactsInput = {
   caseName: 'Ortiz v. FreshMart',
@@ -30,18 +31,27 @@ const toolUse = (facts: unknown) =>
 describe('buildFactsRequest', () => {
   it('sends the record, the rulings, and the transcript, and asks for the facts tool', () => {
     const request = buildFactsRequest(input)
-    expect(request.model).toBe(NEW_FACTS_MODEL)
-    // This model rejects a forced tool call ("tool" or "any"), so the tool is requested in the instructions.
+    expect(request.model).toBe(modelFor('review'))
+    // Some models reject a forced tool call ("tool" or "any"), so the tool is requested in the instructions.
     expect(request.tool_choice).toEqual({ type: 'auto' })
     expect(request.system).toContain('calling the report_new_facts tool exactly once')
-    const text = request.messages[0].content as string
-    expect(text).toContain('<document title="Incident statement">\nI walked aisle 5 around 9.\n</document>')
-    expect(text).toContain('<settled_facts>\n- Dana mopped at 8:45.\n</settled_facts>')
-    expect(text).toContain('<facts_ruled_untrue>\n- A sign was posted.\n</facts_ruled_untrue>')
-    expect(text).toContain('Q: When did you mop?\nA: Around 8:45, and I used the yellow bucket.')
-    expect(buildFactsRequest({ ...input, settled: { accepted: [], denied: [] } }).messages[0].content).toContain(
-      '<settled_facts>\n(none)\n</settled_facts>',
-    )
+
+    const [record, rest] = request.messages[0].content as Anthropic.Messages.TextBlockParam[]
+    // The case file comes first and is cached, so reviews in the same case can share it.
+    expect(record.cache_control).toEqual({ type: 'ephemeral' })
+    expect(record.text).toContain('Case: Ortiz v. FreshMart')
+    expect(record.text).toContain('<document title="Incident statement">\nI walked aisle 5 around 9.\n</document>')
+    expect(record.text).not.toContain('Dana Lee')
+    // What changes from review to review comes after it.
+    expect(rest.cache_control).toBeUndefined()
+    expect(rest.text).toContain('Witness: Dana Lee')
+    expect(rest.text).toContain('<settled_facts>\n- Dana mopped at 8:45.\n</settled_facts>')
+    expect(rest.text).toContain('<facts_ruled_untrue>\n- A sign was posted.\n</facts_ruled_untrue>')
+    expect(rest.text).toContain('Q: When did you mop?\nA: Around 8:45, and I used the yellow bucket.')
+
+    const none = buildFactsRequest({ ...input, settled: { accepted: [], denied: [] } }).messages[0]
+      .content as Anthropic.Messages.TextBlockParam[]
+    expect(none[1].text).toContain('<settled_facts>\n(none)\n</settled_facts>')
   })
 })
 

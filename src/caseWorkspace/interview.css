@@ -162,6 +162,44 @@
   font-size: 0.88rem;
 }
 
+/* Time left in a team's interview, pinned to the corner while the transcript scrolls. */
+.iv-timer {
+  position: sticky;
+  top: 1rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 0.4rem;
+  margin-bottom: -0.5rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(16, 35, 63, 0.08);
+  color: var(--ws-navy);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.iv-timer svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.iv-timer-warning {
+  border-color: #e4c98f;
+  background: #fbf3e2;
+  color: #8b5a12;
+}
+
+.iv-warning {
+  border-left: 3px solid var(--ws-gold);
+  background: #fbf3e2;
+  color: #6f4a10;
+}
+
 .iv-sr {
   position: absolute;
   width: 1px;

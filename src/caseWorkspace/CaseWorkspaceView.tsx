@@ -39,9 +39,6 @@ import './caseWorkspace.css'
 type Tab = 'overview' | 'case-file' | 'witnesses' | 'investigator' | 'tasks' | 'reviews'
 type WorkspaceTask = CaseWorkspace['tasks'][number]
 
-/** How many case files the overview lists before "View all". */
-const OVERVIEW_FILES = 3
-
 const CATEGORY_ICON: Record<FileCategory, typeof FileText> = {
   document: FileText,
   image: Image,
@@ -89,6 +86,7 @@ export function CaseWorkspaceView({
     if (next === 'reviews') onOpenReviews?.()
   }
   const { case: c, team, world, materials, witnesses, tasks } = workspace
+  const initialFile = materials.find((m) => m.initial)
   const byCategory = FILE_CATEGORIES.map((category) => ({
     category,
     files: materials.filter((m) => fileCategory(m.contentType) === category),
@@ -150,28 +148,23 @@ export function CaseWorkspaceView({
             <div className="cw-main">
               <ProgressBanner workspace={workspace} />
 
-              <section className="cw-card" aria-labelledby="cw-fact-pattern">
-                <span className="ws-eyebrow">Case file</span>
-                <h2 id="cw-fact-pattern">Fact pattern</h2>
-                {c.summary && <p className="cw-summary">{c.summary}</p>}
-                {materials.length === 0 ? (
-                  <p className="cw-empty">The case file hasn&rsquo;t been posted yet.</p>
-                ) : (
+              <section className="cw-card" aria-labelledby="cw-start-here">
+                <span className="ws-eyebrow">Start here</span>
+                <h2 id="cw-start-here">Case background</h2>
+                {initialFile ? (
                   <>
+                    <p className="cw-summary">
+                      Every team begins with this file. Read it first, then ask your instructor for the
+                      evidence you need as you build your case.
+                    </p>
                     <ul className="cw-files">
-                      {materials.slice(0, OVERVIEW_FILES).map((m) => (
-                        <li key={m.id}>
-                          <MaterialLink material={m} href={downloadUrl(m.id)} now={now} />
-                        </li>
-                      ))}
+                      <li>
+                        <MaterialLink material={initialFile} href={downloadUrl(initialFile.id)} now={now} />
+                      </li>
                     </ul>
-                    {materials.length > OVERVIEW_FILES && (
-                      <button type="button" className="cw-more" onClick={() => setTab('case-file')}>
-                        View all {materials.length} files
-                        <ArrowRight aria-hidden="true" />
-                      </button>
-                    )}
                   </>
+                ) : (
+                  <p className="cw-empty">The case background hasn&rsquo;t been posted yet.</p>
                 )}
               </section>
 
@@ -238,7 +231,10 @@ export function CaseWorkspaceView({
           <section className="cw-card" aria-labelledby="cw-list-title">
             <span className="ws-eyebrow">Case workspace</span>
             <h2 id="cw-list-title">Case file</h2>
-            <p className="cw-section-sub">Every piece of the fact pattern for {c.title}.</p>
+            <p className="cw-section-sub">
+              The case background, and the evidence in {c.title} your instructor has given your team. Ask
+              your instructor for anything else you need.
+            </p>
             {byCategory.length === 0 ? (
               <p className="cw-empty">The case file hasn&rsquo;t been posted yet.</p>
             ) : (
@@ -433,7 +429,7 @@ function ProgressBanner({ workspace }: { workspace: CaseWorkspace }) {
       ? 'Students see this once the instructor launches the case worlds.'
       : c.status === 'closed'
         ? 'This case is finished. Its material stays here for reference.'
-        : 'Study the case file, review the witnesses, and work through the tasks with your partner.'
+        : 'Start with the case background, review the witnesses, and work through the tasks with your partner.'
   return (
     <section className="cw-banner" aria-label="Case progress">
       <span className="cw-banner-eyebrow">Current phase</span>
@@ -482,6 +478,7 @@ function MaterialLink({
         </small>
         {m.description && <span className="cw-row-desc">{m.description}</span>}
       </span>
+      {m.initial && row && <span className="cw-badge">Start here</span>}
       {m.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[m.audience]}</span>}
       <Download className="cw-row-end" aria-hidden="true" />
     </a>

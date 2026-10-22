@@ -201,6 +201,14 @@ export const httpCourseService: CourseService = {
     return body.material
   },
 
+  async setInitialMaterial(courseId, caseId, materialId) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/materials/initial`, {
+      method: 'PUT',
+      body: JSON.stringify({ materialId }),
+    })
+    return body.materials
+  },
+
   async deleteMaterial(courseId, caseId, materialId) {
     await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}`, {
       method: 'DELETE',

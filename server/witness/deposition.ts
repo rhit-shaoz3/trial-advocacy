@@ -1,15 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { modelFor } from '../ai/models.ts'
 import { buildSystemPrompt, type DepositionSettings, type WitnessProfile } from './prompt.ts'
-
-export const WITNESS_MODEL = 'claude-opus-5-5'
 
 /**
  * Thinking depth per answer. Answers are short, but the witness has a lot of
- * rules to weigh (what it knows, what it may add, which side it's on), so
- * this stays at the model's default rather than dropping to "low". Tune it
- * against the eval (npm run witness:eval).
+ * rules to weigh (what it knows, what it may add, which side it's on, when its
+ * lawyer objects), and "high" is where Haiku follows instructions most
+ * strictly. Tune it against the eval.
  */
-export const WITNESS_EFFORT = 'medium'
+export const WITNESS_EFFORT = 'high'
+
+/** Haiku has no server-side fallback: the parameter would do nothing, or fail with a model list. */
+const hasServerFallback = (model: string) => !model.startsWith('claude-haiku')
 
 /** One question and the witness's reply, exactly as the model gave it (objection included). */
 export interface TranscriptTurn {
@@ -24,7 +26,7 @@ export interface WitnessReply {
   objection: { speaker: string; text: string } | null
   /** What the witness said. */
   answer: string
-  /** The model that answered (differs from WITNESS_MODEL if a fallback served it). */
+  /** The model that answered (differs from the requested one if a fallback served it). */
   model: string
   usage: Anthropic.Beta.Messages.BetaUsage
 }
@@ -69,20 +71,29 @@ export function buildRequest(options: {
   model?: string
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 }): Anthropic.Beta.Messages.MessageCreateParamsNonStreaming {
+  const model = options.model ?? modelFor('witness')
   return {
-    model: options.model ?? WITNESS_MODEL,
+    model,
     max_tokens: 16000,
-    // Thinking is always on for this model; effort sets how much.
+    // Adaptive thinking: the model decides how much to reason; effort caps it.
     thinking: { type: 'adaptive' },
     output_config: { effort: options.effort ?? WITNESS_EFFORT },
-    // If a safety classifier declines (unlikely for a deposition), retry on
-    // Anthropic's recommended fallback model instead of failing the turn.
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    // The system prompt (case documents included) is large and identical for
-    // the whole deposition, so cache it; the top-level breakpoint also caches
-    // the growing transcript turn by turn.
-    system: [{ type: 'text', text: buildSystemPrompt(options.profile, options.settings), cache_control: { type: 'ephemeral' } }],
+    // On models that have one, a safety decline (unlikely for a deposition)
+    // retries on Anthropic's recommended fallback model instead of failing the turn.
+    ...(hasServerFallback(model) && { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
+    // The system prompt (case documents included) is large and the same for
+    // the whole interview, so it's cached for an hour: interviews end after an
+    // hour, so one cache write covers the whole session, pauses included. The
+    // top-level breakpoint caches the growing transcript turn by turn for the
+    // usual 5 minutes (it changes every question, so a longer cache wouldn't
+    // pay off). Longer-lived entries must come first, as they do here.
+    system: [
+      {
+        type: 'text',
+        text: buildSystemPrompt(options.profile, options.settings),
+        cache_control: { type: 'ephemeral', ttl: '1h' },
+      },
+    ],
     cache_control: { type: 'ephemeral' },
     messages: buildMessages(options.transcript, options.question),
   }

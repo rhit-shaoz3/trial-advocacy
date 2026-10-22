@@ -937,3 +937,8 @@ a.case-row:hover {
   border-radius: 0.8rem;
   background: var(--ws-paper);
 }
+
+.badge-initial {
+  display: inline-block;
+  margin-top: 0.3rem;
+}

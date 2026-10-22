@@ -214,6 +214,12 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS disputed_issues text NOT NULL DEFAULT
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS plaintiff_key_facts text[] NOT NULL DEFAULT '{}';
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS defense_key_facts text[] NOT NULL DEFAULT '{}';
 
+-- The one case file every team starts from (e.g. the complaint and pretrial
+-- order), shown on their Overview. It's always shared with everyone; the rest
+-- of the case file stays with the instructor until teams ask for it.
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS initial boolean NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS case_materials_initial_idx ON case_materials (case_id) WHERE initial;
+
 -- Every case world in a case moves through the same phases, when the
 -- instructor says so: subpoena (each side sees only its own witnesses),
 -- investigate (the background investigator opens), deposition (every witness

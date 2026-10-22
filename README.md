@@ -168,7 +168,7 @@ Errors come back as `{ error: "message" }`. Logins are kept in an httpOnly sessi
 
 ## AI witnesses
 
-Teams interview AI witnesses, played by Claude (`claude-opus-5-5`). A witness isn't fine-tuned: each answer is generated from a system prompt rendered from two Mustache templates in `server/witness/templates/`, the **witness initialization** (who the witness is, the case, the case documents labelled by how binding they are and whether the witness knows them, and the rules for filling gaps truthfully) followed by the **deposition session** (which side is asking, how to answer, and the defending lawyer's objections). The code is in `server/witness/` and `server/ai/`.
+Teams interview AI witnesses, played by Claude (the model set by `CLAUDE_MODEL`, `claude-haiku-5-5` by default; see below). A witness isn't fine-tuned: each answer is generated from a system prompt rendered from two Mustache templates in `server/witness/templates/`, the **witness initialization** (who the witness is, the case, the case documents labelled by how binding they are and whether the witness knows them, and the rules for filling gaps truthfully) followed by the **deposition session** (which side is asking, how to answer, and the defending lawyer's objections). The code is in `server/witness/` and `server/ai/`.
 
 The instructor sets a witness up in the app:
 
@@ -177,16 +177,22 @@ The instructor sets a witness up in the app:
 3. **Create the witness** in the Witnesses tab: the side they testify for, their deposition file, the other files they have seen, their background and demeanor, and their lawyer (who may object when the other side asks). A witness with a side and a deposition is an AI witness.
 4. **Set the case-wide settings** in the same tab: today's date inside the case and the issues every witness must leave disputed.
 
-The witness reads its deposition as its own account, the files it has seen as records it knows, the other student files as records it doesn't know, and other instructor-only files (other witnesses' depositions) as someone else's account. Before the deposition, teams **interview** each witness: the *Interview* button in the student Witnesses tab. Each team shares one interview per witness, always as its own side (the witness treats them as that side's lawyers; they can't switch), saved turn by turn; *Start over* begins a new one. Every team starts with an empty interview. The instructor tests a witness with *Test as plaintiff* / *Test as defense* in the Witnesses tab; those runs are kept apart from the teams, and the Student view preview shows the Interview button without opening anything. Depositions themselves, with instructor deadlines, come later.
+The witness reads its deposition as its own account, the files it has seen as records it knows, the other student files as records it doesn't know, and other instructor-only files (other witnesses' depositions) as someone else's account. Before the deposition, teams **interview** each witness: the *Interview* button in the student Witnesses tab. Each team shares one interview per witness, always as its own side (the witness treats them as that side's lawyers; they can't switch), saved turn by turn; *Start over* begins a new one. Every team starts with an empty interview. A team's interview lasts at most **one hour from its first question**: students are told when they start, see a countdown in the corner, and get a warning with 5 minutes left; then it ends on its own and goes to the instructor for review, like *End interview* (the server also ends interviews nobody comes back to, every minute). The instructor tests a witness with *Test as plaintiff* / *Test as defense* in the Witnesses tab; those runs are kept apart from the teams, and the Student view preview shows the Interview button without opening anything. Depositions themselves, with instructor deadlines, come later.
 
-Each question costs a couple of cents (the case documents are cached for the interview; the first question writes the cache, about 20 cents). Transcribing a long PDF costs well under a dollar, once.
+**Costs.** Each AI step uses the model in `CLAUDE_MODEL` (default `claude-haiku-5-5`, the cheapest); set `CLAUDE_WITNESS_MODEL`, `CLAUDE_TRANSCRIBE_MODEL`, `CLAUDE_REVIEW_MODEL`, or `CLAUDE_EVAL_MODEL` to change one step, and restart the server. To keep costs down:
+- The witness's case file and instructions are cached for an hour (an interview's whole length), so only the first question pays full price for them; the growing transcript is cached for 5 minutes.
+- Witnesses think at low effort; file reading doesn't think at all (copying text doesn't need it).
+- Each file is read once. *Retry* only works on a file whose reading failed; a file that already has text isn't read again (upload a new version instead).
+- The review step caches the case file too, so reviews close together share it.
 
-Set `ANTHROPIC_API_KEY` in `.env.local` (and as a Heroku config var). For the terminal tools, eval cases, saved transcripts, and eval results live in the git-ignored `.material/witnesses/<name>/`, since they quote the confidential fact pattern:
+Check actual spend in the Claude Console.
+
+Set `ANTHROPIC_API_KEY` (and optionally `CLAUDE_MODEL`) in `.env.local`, and as Heroku config vars. For the terminal tools, eval cases, saved transcripts, and eval results live in the git-ignored `.material/witnesses/<name>/`, since they quote the confidential fact pattern:
 
 | Command | What it does |
 | --- | --- |
 | `npm run witness:chat -- --witness "Name" --side plaintiff` | Question an app witness in the terminal, without saving to the app (`--side defense`, `--attorney "Mr. X"`) |
-| `npm run witness:eval -- --witness "Name"` | Run the witness's behavioral eval against the real model (about a dollar; `--case <id>`, `--repeat N`, `--effort low`) |
+| `npm run witness:eval -- --witness "Name"` | Run the witness's behavioral eval against the real model (prints the tokens used; `--case <id>`, `--repeat N`, `--effort medium`) |
 
 `npm test` covers transcription bookkeeping, witness setup, interviews, prompt rendering, request building, reply parsing, and eval checks with Claude faked; it never calls the API.
 
@@ -204,8 +210,9 @@ The `Procfile` runs migrations on each release and starts the API, which also se
 heroku addons:create heroku-postgresql:essential-0
 heroku config:set SESSION_SECRET=<long random string>
 heroku config:set ANTHROPIC_API_KEY=<your Claude API key>
+heroku config:set CLAUDE_MODEL=claude-haiku-5-5   # optional; this is the default
 ```
 
-Without `ANTHROPIC_API_KEY`, uploads still work but files aren't transcribed and the AI witnesses say they aren't set up. Set a monthly spend limit in the Claude Console; each student question costs a couple of cents.
+Without `ANTHROPIC_API_KEY`, uploads still work but files aren't transcribed and the AI witnesses say they aren't set up. Set a monthly spend limit in the Claude Console; costs depend on the model in `CLAUDE_MODEL`.
 
 Case files are stored in Amazon S3, and the app won't start in production without it. Follow [docs/s3-setup.md](docs/s3-setup.md) to create the bucket and access key, then set `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`. After the first deploy, add the app's `https://<app>.herokuapp.com` address to the bucket's CORS `AllowedOrigins` (step 3 there), or uploads fail. Locally, without those settings, files go to a git-ignored `.storage/` folder.

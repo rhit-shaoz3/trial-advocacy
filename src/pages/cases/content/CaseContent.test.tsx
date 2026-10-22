@@ -29,6 +29,7 @@ const factPattern: CaseMaterial = {
   uploadedAt: '2026-10-01T15:00:00.000Z',
   textStatus: 'ready',
   textError: null,
+  initial: false,
 }
 
 afterEach(() => {
@@ -91,6 +92,24 @@ describe('MaterialsSection', () => {
       audience: 'plaintiff',
       description: 'Read first.',
     })
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('makes a file the initial file, which everyone sees, and keeps new files to instructors', async () => {
+    const report: CaseMaterial = { ...factPattern, id: 'm2', filename: 'Report.pdf', audience: 'instructor' }
+    const setInitialMaterial = vi.fn().mockResolvedValue([{ ...factPattern, initial: true }, report])
+    const onChange = vi.fn()
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" onChange={onChange} />, {
+      listMaterials: vi.fn().mockResolvedValue([factPattern, report]),
+      setInitialMaterial,
+    })
+
+    expect(await screen.findByLabelText('Visible to (new files)')).toHaveValue('instructor')
+    await user.click(screen.getByRole('button', { name: 'Make Fact pattern.pdf the initial file' }))
+    expect(setInitialMaterial).toHaveBeenCalledWith('c1', 'k1', 'm1')
+    expect(await screen.findByText('Initial file')).toBeInTheDocument()
+    expect(screen.getByLabelText('Who can see Fact pattern.pdf')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Make Report.pdf the initial file' })).toBeInTheDocument()
     expect(onChange).toHaveBeenCalled()
   })
 

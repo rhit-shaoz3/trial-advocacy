@@ -1,10 +1,10 @@
 import type Anthropic from '@anthropic-ai/sdk'
+import { modelFor } from '../ai/models.ts'
 
 // After a team ends an interview, the AI reads the transcript against the
 // record (the case files and facts already settled by the instructor) and
 // lists the new facts the witness added, for the instructor to rule on.
 
-export const NEW_FACTS_MODEL = 'claude-opus-5-5'
 export const MAX_NEW_FACTS = 25
 
 export interface NewFactsInput {
@@ -43,7 +43,10 @@ If the witness added nothing new, report an empty list. Report at most ${MAX_NEW
 
 Give your answer by calling the ${TOOL_NAME} tool exactly once, and write nothing else.`
 
-export function buildFactsRequest(input: NewFactsInput, model = NEW_FACTS_MODEL): Anthropic.Messages.MessageCreateParamsNonStreaming {
+export function buildFactsRequest(
+  input: NewFactsInput,
+  model = modelFor('review'),
+): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const documents = input.documents
     .map((d) => `<document title="${d.title}">\n${d.content.trim()}\n</document>`)
     .join('\n')
@@ -66,18 +69,30 @@ export function buildFactsRequest(input: NewFactsInput, model = NEW_FACTS_MODEL)
         },
       },
     ],
-    // This model doesn't accept a forced tool call ("tool" or "any"), so the
-    // instructions ask for the tool and findNewFacts fails if it isn't used.
+    // Some models (Claude Opus 5.5, for one) don't accept a forced tool call
+    // ("tool" or "any"), so the instructions ask for the tool and
+    // findNewFacts fails if it isn't used.
     tool_choice: { type: 'auto' },
     messages: [
       {
         role: 'user',
-        content: `Case: ${input.caseName}
-Witness: ${input.witnessName}
+        content: [
+          // The case file is the same for every review in the case, so it's
+          // cached (with the instructions and tool before it): reviews close
+          // together, like several teams ending interviews at the end of
+          // class, read it at a fraction of the price.
+          {
+            type: 'text',
+            text: `Case: ${input.caseName}
 
 <case_documents>
 ${documents}
-</case_documents>
+</case_documents>`,
+            cache_control: { type: 'ephemeral' },
+          },
+          {
+            type: 'text',
+            text: `Witness: ${input.witnessName}
 
 <settled_facts>
 ${list(input.settled.accepted)}
@@ -90,6 +105,8 @@ ${list(input.settled.denied)}
 <deposition_transcript>
 ${transcript}
 </deposition_transcript>`,
+          },
+        ],
       },
     ],
   }

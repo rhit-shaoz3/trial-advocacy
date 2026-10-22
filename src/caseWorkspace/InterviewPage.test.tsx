@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,6 +15,7 @@ const empty: Interview = {
   witness: { id: 'w1', name: 'Elena Torres', role: 'Ride operator' },
   turns: [],
   maxTurns: 150,
+  endsAt: null,
   canAsk: true,
   notice: null,
 }
@@ -156,3 +157,55 @@ describe('InterviewPage: ending for review', () => {
     expect(screen.queryByRole('button', { name: 'End interview' })).not.toBeInTheDocument()
   })
 })
+
+describe('InterviewPage: the one-hour limit', () => {
+  const start = new Date('2026-10-21T15:00:00.000Z')
+  const minutes = (n: number) => n * 60 * 1000
+  const running = (left: number) => ({
+    ...empty,
+    turns: [turn(0, 'Where were you?', 'On break.')],
+    endsAt: new Date(start.getTime() + left).toISOString(),
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('tells the team about the limit before the first question', async () => {
+    renderPage({ getInterview: vi.fn().mockResolvedValue(empty) })
+    expect(await screen.findByText(/Each interview lasts up to 1 hour from your first question/)).toBeInTheDocument()
+    expect(screen.queryByText(/left$/)).not.toBeInTheDocument()
+  })
+
+  it('counts down, warns at 5 minutes, and opens a fresh interview at 0:00', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(start)
+    const getInterview = vi.fn().mockResolvedValueOnce(running(minutes(6))).mockResolvedValue(empty)
+    renderPage({ getInterview })
+
+    expect(await screen.findByText('6:00 left')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await act(async () => {
+      vi.advanceTimersByTime(minutes(1))
+    })
+    expect(screen.getByText('5:00 left').closest('.iv-timer')).toHaveClass('iv-timer-warning')
+    expect(screen.getByRole('alert')).toHaveTextContent('5 minutes left.')
+
+    await act(async () => {
+      vi.advanceTimersByTime(minutes(5))
+    })
+    expect(getInterview).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText("Time's up. This interview was sent to your instructor for review.")).toBeInTheDocument()
+    expect(screen.queryByText(/left$/)).not.toBeInTheDocument()
+    expect(screen.queryByText('On break.')).not.toBeInTheDocument()
+  })
+
+  it('shows no timer on the instructor test interview', async () => {
+    renderPage({ getInterview: vi.fn().mockResolvedValue({ ...empty, turns: [turn(0, 'Hi?', 'Hello.')] }) }, instructor, '/courses/c1/cases/k1/witnesses/w1?side=plaintiff')
+    await screen.findByText('Hello.')
+    expect(screen.queryByText(/left$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Each interview lasts up to/)).not.toBeInTheDocument()
+  })
+})
+

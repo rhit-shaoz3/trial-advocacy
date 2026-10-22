@@ -430,3 +430,114 @@ describe('reviews on the dashboard', () => {
     expect(within(nav).queryByRole('link', { name: /Review/ })).not.toBeInTheDocument()
   })
 })
+
+describe("the instructor's own dashboard", () => {
+  const instructorHome: CourseHome = {
+    ...emptyHome,
+    reviewCount: 2,
+    instructor: {
+      stats: { studentsJoined: 30, studentsOnRoster: 32, activeCases: 1, draftCases: 1, questionsThisWeek: 214, reviewsWaiting: 2 },
+      cases: [
+        {
+          id: 'k2',
+          title: 'Practice case',
+          status: 'draft',
+          phase: 'subpoena',
+          worldCount: 0,
+          launch: { ready: 2, total: 3, next: '2 students are not on a team yet.' },
+          tasks: null,
+        },
+        {
+          id: 'k1',
+          title: 'Rivera v. Thrill Park',
+          status: 'active',
+          phase: 'investigate',
+          worldCount: 8,
+          launch: null,
+          tasks: { due: 2, teamsDoneDue: 9, assigned: 4, teamsDoneAll: 3, teams: 16 },
+        },
+      ],
+      attention: [
+        { id: 'reviews', kind: 'reviews', text: '2 interviews are waiting for your review.', target: { page: 'review' } },
+        {
+          id: 'transcription-k1',
+          kind: 'transcription',
+          text: "Rivera v. Thrill Park: 1 file couldn't be read for the AI witnesses.",
+          target: { page: 'case', caseId: 'k1', tab: 'materials' },
+        },
+        { id: 'roster', kind: 'roster', text: "2 students on your roster haven't signed up yet.", target: { page: 'manage' } },
+      ],
+      deadlines: [
+        { id: 't1', title: 'Outline the deposition', caseId: 'k1', caseTitle: 'Rivera v. Thrill Park', dueAt: '2026-10-16T23:59:00.000Z', teamsDone: 9, teams: 16 },
+      ],
+      activity: [
+        { id: 'a1', kind: 'interview', actor: 'Team 3', action: 'ended an interview with Elena Torres', caseTitle: 'Rivera v. Thrill Park', at: new Date(NOW.getTime() - 12 * 60_000).toISOString() },
+        { id: 'a2', kind: 'join', actor: null, action: '30 students joined the course', caseTitle: null, at: '2026-10-08T09:00:00.000Z' },
+      ],
+    },
+  }
+  const renderInstructor = () =>
+    renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(instructorHome) }), '/courses/c1', ruiz)
+
+  it('sums up the course instead of a student to-do list', async () => {
+    renderInstructor()
+    const summary = await screen.findByRole('region', { name: 'Course summary' })
+    expect(summary).toHaveTextContent('30/32Students signed up2 pending')
+    expect(summary).toHaveTextContent('1Active case+1 draft')
+    expect(summary).toHaveTextContent('214Witness questions this week')
+    expect(summary).toHaveTextContent('2Reviews waitingNeeds your ruling')
+    expect(screen.getByText(/3 things need your attention/)).toBeInTheDocument()
+    expect(screen.queryByText('Tasks completed')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Your cases' })).not.toBeInTheDocument()
+  })
+
+  it("links each thing that needs the instructor to where it's fixed", async () => {
+    renderInstructor()
+    const panel = await screen.findByRole('region', { name: 'Needs your attention' })
+    expect(within(panel).getByRole('link', { name: 'Review now' })).toHaveAttribute('href', '/courses/c1/review')
+    expect(within(panel).getByRole('link', { name: 'Open case file' })).toHaveAttribute('href', '/courses/c1/cases/k1?tab=materials')
+    expect(within(panel).getByRole('link', { name: 'Manage course' })).toHaveAttribute('href', '/courses/c1/manage')
+  })
+
+  it('monitors each case: a draft’s launch checklist, an active case’s phase and teams caught up', async () => {
+    renderInstructor()
+    const draft = await screen.findByRole('article', { name: 'Practice case' })
+    expect(draft).toHaveTextContent('Draft')
+    expect(draft).toHaveTextContent('Launch checklist2 of 3 ready')
+    expect(draft).toHaveTextContent('2 students are not on a team yet.')
+    expect(within(draft).getByRole('link', { name: 'Set up case: Practice case' })).toHaveAttribute('href', '/courses/c1/cases/k2')
+
+    const active = screen.getByRole('article', { name: 'Rivera v. Thrill Park' })
+    expect(within(active).getByRole('list', { name: 'Phase 2 of 3: Investigate' })).toBeInTheDocument()
+    expect(within(active).getByText('Investigate', { selector: '[aria-current="step"]' })).toBeInTheDocument()
+    expect(within(active).getByRole('progressbar', { name: 'Teams done with tasks due so far' })).toHaveAttribute('aria-valuenow', '9')
+    expect(active).toHaveTextContent('9 of 16 teams')
+    expect(active).toHaveTextContent('2 tasks due so far')
+    // Moving the phase happens on the case page.
+    expect(within(active).getByRole('link', { name: 'Open case: Rivera v. Thrill Park' })).toHaveAttribute('href', '/courses/c1/cases/k1')
+  })
+
+  it('shows deadlines with how many teams finished, and recent activity', async () => {
+    renderInstructor()
+    const deadlines = await screen.findByRole('region', { name: 'Upcoming deadlines' })
+    expect(within(deadlines).getByRole('link', { name: 'Outline the deposition' })).toHaveAttribute('href', '/courses/c1/cases/k1?tab=tasks')
+    expect(deadlines).toHaveTextContent('9/16teams done')
+
+    const activity = screen.getByRole('region', { name: 'Recent activity' })
+    expect(activity).toHaveTextContent('Team 3 ended an interview with Elena Torres')
+    expect(activity).toHaveTextContent('Rivera v. Thrill Park · 12 minutes ago')
+    expect(activity).toHaveTextContent('30 students joined the course')
+  })
+
+  it("says when nothing needs the instructor, and leaves the student's dashboard as it was", async () => {
+    renderCourse(
+      fakeCourseService({
+        getCourseHome: vi.fn().mockResolvedValue({ ...instructorHome, instructor: { ...instructorHome.instructor!, attention: [] } }),
+      }),
+      '/courses/c1',
+      ruiz,
+    )
+    expect(await screen.findByText(/Nothing needs you right now/)).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Needs your attention' })).not.toBeInTheDocument()
+  })
+})

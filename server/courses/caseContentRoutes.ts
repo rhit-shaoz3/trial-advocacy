@@ -7,6 +7,7 @@ import { storage } from '../storage/storage.ts'
 import { isUuid, readString } from '../validation.ts'
 import {
   AUDIENCES,
+  InitialMaterialAudienceError,
   MATERIAL_AUDIENCES,
   createMaterial,
   createTask,
@@ -22,6 +23,7 @@ import {
   listTasks,
   listWitnesses,
   removeStoredFiles,
+  setInitialMaterial,
   setMaterialText,
   updateMaterial,
   updateTask,
@@ -140,7 +142,8 @@ materialsRouter.post('/uploads', async (req, res) => {
 
 /**
  * Step 2, after the browser's PUT succeeds: `{ uploadKey, filename,
- * audience?, description? }` adds the uploaded file to the case file.
+ * audience?, description? }` adds the uploaded file to the case file. Files
+ * are for instructors only unless chosen otherwise: teams ask for them.
  */
 materialsRouter.post('/', async (req, res) => {
   const caseId = req.courseCase!.id
@@ -163,7 +166,7 @@ materialsRouter.post('/', async (req, res) => {
   const material = await createMaterial({
     id,
     caseId,
-    audience: readMaterialAudience((req.body as Record<string, unknown>).audience, 'all'),
+    audience: readMaterialAudience((req.body as Record<string, unknown>).audience, 'instructor'),
     filename,
     description: readText(req.body, 'description', 'Description'),
     contentType,
@@ -176,12 +179,33 @@ materialsRouter.post('/', async (req, res) => {
   res.status(201).json({ material })
 })
 
+/** `{ materialId }` makes that file the one every team starts from; `{ materialId: null }` clears it. */
+materialsRouter.put('/initial', async (req, res) => {
+  const caseId = req.courseCase!.id
+  const value = (req.body as Record<string, unknown> | undefined)?.materialId
+  const id = value === null ? null : readId(typeof value === 'string' ? value : '', 'File not found.')
+  const result = await setInitialMaterial(caseId, id)
+  if (!result) throw new HttpError(404, 'File not found.')
+  if (result === 'deposition') {
+    throw new HttpError(400, "That's a witness's deposition, which students must never see. Choose another file.")
+  }
+  res.json({ materials: await listMaterials(caseId) })
+})
+
 materialsRouter.patch('/:materialId', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
-  const material = await updateMaterial(req.courseCase!.id, id, {
-    audience: readMaterialAudience(req.body?.audience),
-    description: readText(req.body, 'description', 'Description'),
-  })
+  let material
+  try {
+    material = await updateMaterial(req.courseCase!.id, id, {
+      audience: readMaterialAudience(req.body?.audience),
+      description: readText(req.body, 'description', 'Description'),
+    })
+  } catch (err) {
+    if (err instanceof InitialMaterialAudienceError) {
+      throw new HttpError(400, 'Every team starts from the initial file, so everyone sees it. Choose another initial file first.')
+    }
+    throw err
+  }
   if (!material) throw new HttpError(404, 'File not found.')
   res.json({ material })
 })
@@ -202,16 +226,26 @@ materialsRouter.get('/:materialId/text', async (req, res) => {
 })
 
 /**
- * Transcribes the file again (after a failure, say) in the background and
- * returns it as pending; the page checks back until it is done. Long PDFs
- * take longer than Heroku's 30-second request limit, so this never waits.
+ * Transcribes a file again after a failure, in the background, and returns it
+ * as pending; the page checks back until it is done. Long PDFs take longer
+ * than Heroku's 30-second request limit, so this never waits. A file already
+ * read (or with nothing to read) isn't read again (`409`), and one still being
+ * read isn't started twice.
  */
 materialsRouter.post('/:materialId/text', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
   const caseId = req.courseCase!.id
-  if (!(await getMaterialText(caseId, id))) throw new HttpError(404, 'File not found.')
-  await setMaterialText(id, { status: 'pending' })
-  queueTranscription(id)
+  const file = await getMaterialText(caseId, id)
+  if (!file) throw new HttpError(404, 'File not found.')
+  // Only a failed reading is run again: every reading is a paid Claude call.
+  if (file.textStatus === 'ready') {
+    throw new HttpError(409, 'This file has already been read. Upload a new version to read it again.')
+  }
+  if (file.textStatus === 'none') throw new HttpError(409, "There's nothing to read in this file.")
+  if (file.textStatus === 'failed') {
+    await setMaterialText(id, { status: 'pending' })
+    queueTranscription(id)
+  }
   const material = (await listMaterials(caseId)).find((m) => m.id === id)
   if (!material) throw new HttpError(404, 'File not found.')
   res.json({ material })

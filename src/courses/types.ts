@@ -163,6 +163,8 @@ export interface CaseMaterial {
   uploadedAt: string
   textStatus: TextStatus
   textError: string | null
+  /** The file every team starts from, shown on their Overview; always shared with everyone. */
+  initial: boolean
 }
 
 export interface MaterialInput {
@@ -222,6 +224,12 @@ export interface Interview {
     createdAt: string
   }[]
   maxTurns: number
+  /**
+   * When a team's interview ends on its own (an hour after the first
+   * question) and goes to the instructor for review. Null before the first
+   * question, and for instructor tests.
+   */
+  endsAt: string | null
   canAsk: boolean
   /** Why questions can't be asked, when they can't. */
   notice: string | null
@@ -374,6 +382,8 @@ export interface CourseService {
   uploadMaterial(courseId: string, caseId: string, file: File, input: MaterialInput): Promise<CaseMaterial>
   updateMaterial(courseId: string, caseId: string, materialId: string, input: MaterialInput): Promise<CaseMaterial>
   deleteMaterial(courseId: string, caseId: string, materialId: string): Promise<void>
+  /** Makes the file the one every team starts from (null clears it); resolves with the whole case file. */
+  setInitialMaterial(courseId: string, caseId: string, materialId: string | null): Promise<CaseMaterial[]>
   materialDownloadUrl(courseId: string, caseId: string, materialId: string): string
   /** The file's transcription (what the AI witnesses read), as plain text. */
   materialTextUrl(courseId: string, caseId: string, materialId: string): string

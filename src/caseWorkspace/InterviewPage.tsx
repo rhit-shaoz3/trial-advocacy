@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ChevronRight, Gavel, RotateCcw, Send } from 'lucide-react'
+import { ChevronRight, Clock, Gavel, RotateCcw, Send } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { useCourseService } from '../courses/CourseServiceContext'
@@ -7,6 +7,18 @@ import type { Interview, InterviewAs, Side } from '../courses/types'
 import { ROLE_LABEL } from '../courses/worldLabel'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import './interview.css'
+
+/** Matches INTERVIEW_MINUTES on the server: a team's interview lasts an hour from its first question. */
+const INTERVIEW_MINUTES = 60
+/** When the countdown turns amber and the team is warned. */
+const WARNING_MS = 5 * 60 * 1000
+const TIME_UP_NOTE = "Time's up. This interview was sent to your instructor for review."
+
+/** 47:12 */
+function clock(ms: number) {
+  const seconds = Math.ceil(ms / 1000)
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
 
 /**
  * A team's interview of an AI witness, as a chat: each question goes to the
@@ -35,6 +47,9 @@ export function InterviewPage() {
   /** Shown after the team ends an interview and it goes to the instructor. */
   const [sentNote, setSentNote] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const [now, setNow] = useState(() => Date.now())
+  /** When the page last asked the server to end a timed-out interview (so it doesn't ask every second). */
+  const lastTimeUpFetch = useRef(0)
 
   const casePath = `/courses/${courseId}/cases/${caseId}`
   const backPath = isInstructor ? `${casePath}?tab=witnesses` : `${casePath}${workspace?.search ?? ''}`
@@ -51,6 +66,32 @@ export function InterviewPage() {
       cancelled = true
     }
   }, [service, courseId, caseId, witnessId, as])
+
+  // The countdown: ticks each second while a team's interview has a deadline.
+  const endsAt = interview?.endsAt ? new Date(interview.endsAt).getTime() : null
+  useEffect(() => {
+    if (endsAt === null) return
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [endsAt])
+  const remaining = endsAt === null ? null : Math.max(0, endsAt - now)
+
+  // At 0:00 the server ends the interview and sends it for review; fetching
+  // it again picks up the fresh one. Retried every few seconds in case the
+  // server's clock is a moment behind.
+  useEffect(() => {
+    if (remaining !== 0 || Date.now() - lastTimeUpFetch.current < 5000) return
+    lastTimeUpFetch.current = Date.now()
+    service
+      .getInterview(courseId, caseId, witnessId, as)
+      .then((fresh) => {
+        if (fresh.endsAt === interview?.endsAt) return // not ended yet; try again shortly
+        setInterview(fresh)
+        setSentNote(TIME_UP_NOTE)
+      })
+      .catch(() => {}) // the next tick tries again
+  }, [remaining, now, service, courseId, caseId, witnessId, as, interview?.endsAt])
 
   const turns = interview?.turns.length ?? 0
   useEffect(() => {
@@ -170,6 +211,18 @@ export function InterviewPage() {
             </div>
           </header>
 
+          {remaining !== null && (
+            <div className={`iv-timer${remaining <= WARNING_MS ? ' iv-timer-warning' : ''}`}>
+              <Clock aria-hidden="true" />
+              <span aria-live="off">{clock(remaining)} left</span>
+            </div>
+          )}
+          {remaining !== null && remaining > 0 && remaining <= WARNING_MS && (
+            <p className="iv-notice iv-warning" role="alert">
+              Less than 5 minutes left. The interview ends automatically and is sent to your instructor for review.
+            </p>
+          )}
+
           {sentNote && (
             <p className="iv-notice" role="status">
               {sentNote}
@@ -181,7 +234,7 @@ export function InterviewPage() {
               <li className="iv-empty">
                 {isInstructor
                   ? `Ask a question to see how the witness answers ${ROLE_LABEL[interview.side].toLowerCase()}’s counsel. Test interviews are kept apart from the teams’ interviews.`
-                  : 'Ask your first question to start the interview. Your partner sees the same conversation.'}
+                  : `Ask your first question to start the interview. Your partner sees the same conversation. Each interview lasts up to ${INTERVIEW_MINUTES / 60} hour from your first question, then ends and goes to your instructor for review; a timer will appear in the corner.`}
               </li>
             )}
             {interview.turns.map((t) => (

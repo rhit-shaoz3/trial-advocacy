@@ -48,7 +48,8 @@ export function MaterialsSection({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
-  const [audience, setAudience] = useState<MaterialAudience>('all')
+  // Teams start from the initial file and ask for the rest, so new files stay with the instructor.
+  const [audience, setAudience] = useState<MaterialAudience>('instructor')
   const [retrying, setRetrying] = useState<string | null>(null)
   const [queued, setQueued] = useState<QueuedFile[]>([])
   const [dragging, setDragging] = useState(false)
@@ -155,6 +156,16 @@ export function MaterialsSection({
     }
   }
 
+  async function handleInitial(material: CaseMaterial) {
+    setErrors([])
+    try {
+      setMaterials(await service.setInitialMaterial(courseId, caseId, material.id))
+      onChange?.()
+    } catch (err) {
+      setErrors([err instanceof Error ? err.message : 'Something went wrong.'])
+    }
+  }
+
   async function handleDelete(material: CaseMaterial) {
     if (!window.confirm(`Delete ${material.filename}? Students will no longer see it.`)) return
     setErrors([])
@@ -172,11 +183,12 @@ export function MaterialsSection({
       <h2 id="materials-heading">Case file</h2>
       <p className="muted section-hint">
         Split the fact pattern into sections and upload each piece (documents, images, audio, and
-        video, up to 100 MB each) so students can find what they need. Drag files in or choose them,
-        then give each one a label: students see it as the file&rsquo;s title. They see the files in their
-        Case file tab, grouped by type. Choose who can see each file: keep a witness&rsquo;s deposition
-        to instructors only, so the AI witness can read it but students can&rsquo;t. Each file is
-        transcribed for the AI witnesses once it&rsquo;s uploaded.
+        video, up to 100 MB each). Drag files in or choose them, then give each one a label: students
+        see it as the file&rsquo;s title. Make one file the <strong>initial file</strong>, such as the
+        complaint: every team starts from it on their Overview. The rest stay with instructors until a
+        team asks for them; then change who can see the file, and it appears in that side&rsquo;s Case
+        file tab. Keep witnesses&rsquo; depositions to instructors only, so the AI witness can read them
+        but students can&rsquo;t. Each file is transcribed for the AI witnesses once it&rsquo;s uploaded.
       </p>
 
       <div
@@ -331,6 +343,18 @@ export function MaterialsSection({
                       {formatSize(m.sizeBytes)}
                       {m.description && ` · ${m.description}`}
                     </small>
+                    {m.initial ? (
+                      <span className="badge badge-case-active badge-initial">Initial file</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="link-button content-meta"
+                        onClick={() => handleInitial(m)}
+                        aria-label={`Make ${m.filename} the initial file`}
+                      >
+                        Make initial file
+                      </button>
+                    )}
                   </td>
                   <td>{fileTypeLabel(m.contentType)}</td>
                   <td>
@@ -339,6 +363,9 @@ export function MaterialsSection({
                       value={m.audience}
                       onChange={(e) => handleAudience(m, e.target.value as MaterialAudience)}
                       aria-label={`Who can see ${m.filename}`}
+                      // Every team starts from the initial file, so everyone sees it.
+                      disabled={m.initial}
+                      title={m.initial ? 'Every team sees the initial file.' : undefined}
                     >
                       {MATERIAL_AUDIENCES.map((a) => (
                         <option key={a} value={a}>

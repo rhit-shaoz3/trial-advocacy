@@ -5,6 +5,23 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trial Advocacy</title>
+    <script>
+      // Pick light/dark and the colour theme before the page draws, so it never
+      // flashes the wrong one. Keep in sync with src/theme/theme.ts: light/dark
+      // follows the computer unless toggled earlier in this visit; the colour
+      // theme is the user's last choice on this device.
+      try {
+        var mode = sessionStorage.getItem('theme')
+        var dark = mode ? mode === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light'
+      }
+      try {
+        var palette = localStorage.getItem('palette')
+        if (/^(navy|forest|lagoon|vivid|stone)$/.test(palette || '')) document.documentElement.dataset.palette = palette
+      } catch (e) {}
+    </script>
     <!-- Fonts for the course workspace (src/workspace). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

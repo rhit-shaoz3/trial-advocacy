@@ -4,6 +4,7 @@ import { Link, NavLink, useNavigate } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from './Avatar'
 import './AppShell.css'
+import { ThemeToggle } from '../theme/ThemeToggle'
 
 export interface ShellNavItem {
   to: string
@@ -74,6 +75,7 @@ export function AppShell({
 
         <div className="ws-sidebar-bottom">
           {sidebarExtra}
+          <ThemeToggle />
           <div className="ws-profile">
             <Avatar name={user.name} />
             <span>

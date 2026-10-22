@@ -63,7 +63,7 @@
   padding: 1.3rem 1.4rem;
   border: 1px solid var(--ws-line);
   border-radius: 0.7rem;
-  background: #fff;
+  background: var(--surface);
   list-style: none;
 }
 
@@ -136,7 +136,7 @@
   padding: 0.65rem 0.8rem;
   border: 1px solid var(--ws-line);
   border-radius: 0.5rem;
-  background: #fff;
+  background: var(--surface);
   color: var(--ws-text);
   font: inherit;
   font-size: 0.92rem;
@@ -144,7 +144,7 @@
 }
 
 .iv-composer textarea:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -157,8 +157,8 @@
 .iv-notice {
   padding: 0.8rem 1rem;
   border-radius: 0.5rem;
-  background: #f1efe9;
-  color: #4d5866;
+  background: var(--subtle);
+  color: var(--fg-soft);
   font-size: 0.88rem;
 }
 
@@ -189,15 +189,15 @@
 }
 
 .iv-timer-warning {
-  border-color: #e4c98f;
-  background: #fbf3e2;
-  color: #8b5a12;
+  border-color: var(--tint-amber-border);
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .iv-warning {
   border-left: 3px solid var(--ws-gold);
-  background: #fbf3e2;
-  color: #6f4a10;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .iv-sr {

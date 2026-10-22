@@ -1,37 +1,12 @@
-/*
- * One palette for the whole app, from the Figma mock: navy, parchment, and
- * restrained red/gold accents. Light-only, like the mock.
- */
+/* Colours come from theme/tokens.css (the themes, light and dark). */
+@import './theme/tokens.css';
+
 :root {
-  --ws-navy: #10233f;
-  --ws-navy-light: #193453;
-  --ws-blue: #315e86;
-  --ws-red: #a84b43;
-  --ws-gold: #b98b42;
-  --ws-paper: #f5f3ee;
-  --ws-text: #1c293a;
-  --ws-muted: #6e7885;
-  --ws-line: #deded9;
-  --ws-row-line: #eeeeec;
-  --ws-shadow: 0 12px 34px rgba(20, 35, 59, 0.08);
   --ws-serif: 'DM Serif Display', Georgia, serif;
   --ws-sans: Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  /* Generic names used by the forms, tables, and cards. */
-  --bg: var(--ws-paper);
-  --fg: var(--ws-text);
-  --surface: #ffffff;
-  --subtle: #efece5;
-  --border: var(--ws-line);
-  --muted: var(--ws-muted);
-  --accent: var(--ws-navy);
-  --link: var(--ws-blue);
-  --error: var(--ws-red);
-  --error-bg: #f3e4e2;
-
   font-family: var(--ws-sans);
   line-height: 1.5;
-  color-scheme: light;
   -webkit-font-smoothing: antialiased;
   color: var(--fg);
   background-color: var(--bg);
@@ -109,24 +84,24 @@ a {
 
 .btn-primary {
   border: none;
-  background: var(--ws-navy);
-  color: #fff;
+  background: var(--button);
+  color: var(--on-brand);
   box-shadow: 0 5px 14px rgba(16, 35, 63, 0.15);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--ws-navy-light);
+  background: var(--button-hover);
   transform: translateY(-1px);
 }
 
 .btn-secondary {
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--surface);
   color: var(--ws-navy);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  border-color: #aeb5bc;
+  border-color: var(--border-strong);
   transform: translateY(-1px);
 }
 
@@ -158,7 +133,7 @@ a {
 .btn-primary:focus-visible,
 .btn-secondary:focus-visible,
 .btn-danger:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -179,7 +154,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  color: #384454;
+  color: var(--fg-soft);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -192,7 +167,7 @@ a {
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
-  background: #fff;
+  background: var(--surface);
   color: var(--fg);
   font: inherit;
   font-size: 0.9rem;
@@ -202,7 +177,7 @@ a {
 .panel-form input:focus-visible,
 .panel-form select:focus-visible,
 .panel-form textarea:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
   border-color: transparent;
 }

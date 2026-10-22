@@ -179,13 +179,13 @@
 
 /* Same colors as the workspace's Active / In review status pills. */
 .badge-joined {
-  background: #e1eee7;
-  color: #426d59;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
 }
 
 .badge-pending {
-  background: #f2e8d8;
-  color: #8b692f;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .visually-hidden {

@@ -23,4 +23,9 @@ export const httpAuthService: AuthService = {
   async logOut() {
     await request('/logout', { method: 'POST' })
   },
+
+  async updateProfile(input) {
+    const body = await request('/me', { method: 'PATCH', body: JSON.stringify(input) })
+    return body.user as User
+  },
 }

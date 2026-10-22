@@ -35,12 +35,6 @@
   color: var(--on-brand);
 }
 
-.auth-theme-toggle {
-  position: absolute;
-  top: 1.25rem;
-  right: 1.25rem;
-}
-
 /*
  * On narrow screens the sidebar becomes a top bar and its bottom section is
  * pinned beside the brand (see AppShell.css), so sit next to the log-out

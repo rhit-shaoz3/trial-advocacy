@@ -18,6 +18,7 @@ import {
   Users,
 } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
+import { WitnessAvatar } from '../components/WitnessAvatar'
 import {
   AUDIENCE_LABEL,
   CATEGORY_HEADING,
@@ -274,9 +275,7 @@ export function CaseWorkspaceView({
               const action = theirs ? 'Depose' : 'Interview'
               return (
               <li key={w.id} className="cw-row">
-                <span className="ws-icon-tile ws-icon-tile-sm ws-tone-amber" aria-hidden="true">
-                  <Users />
-                </span>
+                <WitnessAvatar src={w.avatarUrl} />
                 <div className="cw-row-body">
                   <strong>{w.name}</strong>
                   {w.role && <small>{w.role}</small>}

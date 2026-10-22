@@ -12,6 +12,12 @@ import { StudentViewSection } from './StudentViewSection'
 import { TasksSection } from './TasksSection'
 import { WitnessesSection } from './WitnessesSection'
 
+// The canvas isn't available in jsdom; the crop maths has its own tests.
+vi.mock('../../../components/avatarCrop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../components/avatarCrop')>()),
+  cropToBlob: vi.fn().mockResolvedValue(new Blob(['cropped'], { type: 'image/jpeg' })),
+}))
+
 function renderWith(ui: ReactNode, overrides: Partial<CourseService> = {}) {
   const service = fakeCourseService(overrides)
   const user = userEvent.setup()
@@ -230,6 +236,7 @@ describe('WitnessesSection', () => {
       description: '',
       audience: 'all',
       ...blankAi,
+      avatarPreset: null,
     })
     const item = await screen.findByRole('listitem', { name: 'Elena Torres' })
     expect(item).toHaveTextContent('Everyone')
@@ -244,6 +251,65 @@ describe('WitnessesSection', () => {
     await user.click(within(screen.getByRole('listitem', { name: 'Elena Torres' })).getByRole('button', { name: 'Remove' }))
     expect(service.deleteWitness).toHaveBeenCalledWith('c1', 'k1', 'w1')
     expect(screen.getByText('No witnesses yet.')).toBeInTheDocument()
+  })
+
+  it('gives the witness one of the picture designs', async () => {
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: 4, avatarUrl: '/witness-avatars/04.svg' }
+    const createWitness = vi.fn().mockResolvedValue(elena)
+    const { user } = renderSection({ createWitness })
+
+    await user.click(await screen.findByRole('button', { name: 'Add witness' }))
+    const form = screen.getByRole('form', { name: 'New witness' })
+    expect(within(form).getByRole('radio', { name: 'No picture' })).toBeChecked()
+    await user.type(within(form).getByLabelText('Name'), 'Elena Torres')
+    await user.click(within(form).getByRole('radio', { name: 'Picture 4' }))
+    await user.click(within(form).getByRole('button', { name: 'Save witness' }))
+
+    expect(createWitness).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ avatarPreset: 4 }))
+    const item = await screen.findByRole('listitem', { name: 'Elena Torres' })
+    expect(item.querySelector('img')).toHaveAttribute('src', '/witness-avatars/04.svg')
+  })
+
+  it('uploads a cropped picture for the witness once it is saved', async () => {
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:picture'), revokeObjectURL: vi.fn() }))
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: null, avatarUrl: null }
+    const withPicture = { ...elena, avatarUrl: '/api/witnesses/w1/avatar?v=1' }
+    const createWitness = vi.fn().mockResolvedValue(elena)
+    const uploadWitnessAvatar = vi.fn().mockResolvedValue(withPicture)
+    const { user } = renderSection({ createWitness, uploadWitnessAvatar })
+
+    await user.click(await screen.findByRole('button', { name: 'Add witness' }))
+    const form = screen.getByRole('form', { name: 'New witness' })
+    await user.type(within(form).getByLabelText('Name'), 'Elena Torres')
+    await user.upload(within(form).getByLabelText('Upload a picture'), new File(['photo'], 'elena.png', { type: 'image/png' }))
+    const preview = within(form).getByRole('img', { name: 'Your new picture' })
+    Object.defineProperties(preview, { naturalWidth: { value: 400 }, naturalHeight: { value: 400 } })
+    fireEvent.load(preview)
+    await user.click(within(form).getByRole('button', { name: 'Use this picture' }))
+    expect(within(form).getByRole('radio', { name: 'Uploaded picture' })).toBeChecked()
+    await user.click(within(form).getByRole('button', { name: 'Save witness' }))
+
+    expect(createWitness).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ avatarPreset: null }))
+    expect(uploadWitnessAvatar).toHaveBeenCalledWith('c1', 'k1', 'w1', expect.any(Blob))
+    const item = await screen.findByRole('listitem', { name: 'Elena Torres' })
+    expect(item.querySelector('img')).toHaveAttribute('src', '/api/witnesses/w1/avatar?v=1')
+    vi.unstubAllGlobals()
+  })
+
+  it('removes an uploaded picture when No picture is chosen', async () => {
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: null, avatarUrl: '/api/witnesses/w1/avatar?v=1' }
+    const updateWitness = vi.fn().mockResolvedValue(elena)
+    const removeWitnessAvatar = vi.fn().mockResolvedValue({ ...elena, avatarUrl: null })
+    const { user } = renderSection({ listWitnesses: vi.fn().mockResolvedValue([elena]), updateWitness, removeWitnessAvatar })
+
+    await user.click(within(await screen.findByRole('listitem', { name: 'Elena Torres' })).getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('radio', { name: 'Uploaded picture' })).toBeChecked()
+    await user.click(screen.getByRole('radio', { name: 'No picture' }))
+    await user.click(screen.getByRole('button', { name: 'Save witness' }))
+
+    expect(removeWitnessAvatar).toHaveBeenCalledWith('c1', 'k1', 'w1')
+    const item = await screen.findByRole('listitem', { name: 'Elena Torres' })
+    expect(item.querySelector('img')).toBeNull()
   })
 
   it('sets up an AI witness from its deposition and the files it has seen', async () => {

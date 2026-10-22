@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { ChevronRight, Clock, Gavel, RotateCcw, Send } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
+import { Avatar } from '../components/Avatar'
+import { WitnessAvatar } from '../components/WitnessAvatar'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { Interview, InterviewAs, Side } from '../courses/types'
 import { ROLE_LABEL } from '../courses/worldLabel'
@@ -180,12 +182,15 @@ export function InterviewPage() {
       ) : (
         <section className="iv" aria-label={`Interview of ${witness!.name}`}>
           <header className="iv-header">
-            <div>
-              <span className="ws-eyebrow">
-                {isInstructor ? 'Test interview' : 'Witness interview'} · As {ROLE_LABEL[interview.side].toLowerCase()}&rsquo;s counsel
-              </span>
-              <h1>{witness!.name}</h1>
-              {witness!.role && <p className="iv-role">{witness!.role}</p>}
+            <div className="iv-portrait">
+              <WitnessAvatar src={witness!.avatarUrl} size="xl" />
+              <div>
+                <span className="ws-eyebrow">
+                  {isInstructor ? 'Test interview' : 'Witness interview'} · As {ROLE_LABEL[interview.side].toLowerCase()}&rsquo;s counsel
+                </span>
+                <h1>{witness!.name}</h1>
+                {witness!.role && <p className="iv-role">{witness!.role}</p>}
+              </div>
             </div>
             <div className="iv-header-actions">
               {!isInstructor && (
@@ -239,28 +244,31 @@ export function InterviewPage() {
             )}
             {interview.turns.map((t) => (
               <li key={t.position} className="iv-turn">
-                <div className="iv-q">
-                  <span className="iv-label">Q.</span>
-                  <p>{t.question}</p>
-                  {t.askedBy && <small>{t.askedBy}</small>}
-                </div>
-                {t.objection && <p className="iv-objection">{t.objection}</p>}
-                <div className="iv-a">
-                  <span className="iv-label">A.</span>
+                <Question text={t.question} name={t.askedBy} avatarUrl={t.askedByAvatarUrl} you={t.askedBy === user?.name} />
+                {t.objection && (
+                  <p className="iv-objection">
+                    <Gavel aria-hidden="true" />
+                    <span>{t.objection}</span>
+                  </p>
+                )}
+                <Answer name={witness!.name} avatarUrl={witness!.avatarUrl}>
                   <p>{t.answer}</p>
-                </div>
+                </Answer>
               </li>
             ))}
             {asking && (
               <li className="iv-turn" aria-busy="true">
-                <div className="iv-q">
-                  <span className="iv-label">Q.</span>
-                  <p>{asking}</p>
-                </div>
-                <div className="iv-a iv-thinking" role="status">
-                  <span className="iv-label">A.</span>
-                  <p>{witness!.name} is answering…</p>
-                </div>
+                <Question text={asking} name={user?.name ?? null} avatarUrl={user?.avatarUrl} you />
+                <Answer name={witness!.name} avatarUrl={witness!.avatarUrl} thinking>
+                  <p role="status">
+                    <span className="iv-dots" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    <span>{witness!.name} is answering…</span>
+                  </p>
+                </Answer>
               </li>
             )}
           </ol>
@@ -302,5 +310,47 @@ export function InterviewPage() {
         </section>
       )}
     </main>
+  )
+}
+
+/** A question, on the right, with the photo (or initials) of whoever asked it. */
+function Question({ text, name, avatarUrl, you }: { text: string; name: string | null; avatarUrl?: string | null; you: boolean }) {
+  return (
+    <div className="iv-msg iv-msg-q">
+      <div className="iv-bubble-wrap">
+        <span className="iv-who">
+          <span className="iv-sr">Question from </span>
+          {you ? 'You' : (name ?? 'Your team')}
+        </span>
+        <p className="iv-bubble">{text}</p>
+      </div>
+      <Avatar name={name ?? '?'} src={avatarUrl} size="sm" />
+    </div>
+  )
+}
+
+/** The witness's answer, on the left, beside their picture. */
+function Answer({
+  name,
+  avatarUrl,
+  thinking = false,
+  children,
+}: {
+  name: string
+  avatarUrl?: string | null
+  thinking?: boolean
+  children: ReactNode
+}) {
+  return (
+    <div className={`iv-msg iv-msg-a${thinking ? ' iv-thinking' : ''}`}>
+      <WitnessAvatar src={avatarUrl} size="sm" />
+      <div className="iv-bubble-wrap">
+        <span className="iv-who">
+          <span className="iv-sr">Answer from </span>
+          {name}
+        </span>
+        <div className="iv-bubble">{children}</div>
+      </div>
+    </div>
   )
 }

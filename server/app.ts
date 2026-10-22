@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { myAvatarRouter, usersRouter } from './auth/avatars.ts'
 import { authRouter } from './auth/routes.ts'
 import { isProduction } from './config.ts'
+import { witnessPicturesRouter } from './courses/caseContentRoutes.ts'
 import { coursesRouter } from './courses/routes.ts'
 import { HttpError } from './httpError.ts'
 import { sessionMiddleware } from './session.ts'
@@ -23,6 +24,7 @@ app.use('/api', express.json(), sessionMiddleware)
 app.use('/api/auth/me/avatar', myAvatarRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/users', usersRouter)
+app.use('/api/witnesses', witnessPicturesRouter)
 app.use('/api/courses', coursesRouter)
 
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found.')))

@@ -196,9 +196,18 @@ export interface Witness {
   knownMaterialIds: string[]
   /** The witness's lawyer, who may object when the other side asks. */
   defendingCounsel: string
+  /** Which of the WITNESS_AVATAR_PRESETS picture designs the witness uses, or null. */
+  avatarPreset?: number | null
+  /** The design or uploaded picture to show, or null for an icon. */
+  avatarUrl?: string | null
 }
 
-export type WitnessInput = Omit<Witness, 'id'>
+/** How many witness picture designs there are, in public/witness-avatars/ (01.svg to 12.svg). */
+export const WITNESS_AVATAR_PRESETS = 12
+
+export const witnessAvatarPresetUrl = (preset: number) => `/witness-avatars/${String(preset).padStart(2, '0')}.svg`
+
+export type WitnessInput = Omit<Witness, 'id' | 'avatarUrl'>
 
 /** What students see of a witness (never its AI setup). */
 export interface WorkspaceWitness {
@@ -211,13 +220,15 @@ export interface WorkspaceWitness {
   side: Side | null
   /** An AI witness the team can interview. */
   canInterview: boolean
+  /** The witness's picture, or null for an icon. */
+  avatarUrl?: string | null
 }
 
 /** A team's (or the instructor's test) interview of an AI witness, before any deposition. */
 export interface Interview {
   id: string
   side: Side
-  witness: { id: string; name: string; role: string }
+  witness: { id: string; name: string; role: string; avatarUrl?: string | null }
   turns: {
     position: number
     question: string
@@ -225,6 +236,8 @@ export interface Interview {
     objection: string | null
     answer: string
     askedBy: string | null
+    /** The asker's profile picture, or null for initials. */
+    askedByAvatarUrl?: string | null
     createdAt: string
   }[]
   maxTurns: number
@@ -251,7 +264,7 @@ export interface InterviewReview {
   id: string
   caseId: string
   caseTitle: string
-  witness: { id: string; name: string; role: string }
+  witness: { id: string; name: string; role: string; avatarUrl?: string | null }
   worldNumber: number
   teamNumber: number
   side: Side
@@ -275,7 +288,7 @@ export interface ReviewTurn {
 /** A completed review as the team sees it: only whether each fact stands. */
 export interface ReviewResult {
   id: string
-  witness: { id: string; name: string }
+  witness: { id: string; name: string; avatarUrl?: string | null }
   completedAt: string
   accepted: string[]
   denied: string[]
@@ -397,6 +410,9 @@ export interface CourseService {
   createWitness(courseId: string, caseId: string, input: WitnessInput): Promise<Witness>
   updateWitness(courseId: string, caseId: string, witnessId: string, input: WitnessInput): Promise<Witness>
   deleteWitness(courseId: string, caseId: string, witnessId: string): Promise<void>
+  /** Gives the witness an uploaded (already cropped) picture in place of a design. */
+  uploadWitnessAvatar(courseId: string, caseId: string, witnessId: string, image: Blob): Promise<Witness>
+  removeWitnessAvatar(courseId: string, caseId: string, witnessId: string): Promise<Witness>
   /** Soonest due first. */
   listTasks(courseId: string, caseId: string): Promise<CaseTask[]>
   createTask(courseId: string, caseId: string, input: TaskInput): Promise<CaseTask>

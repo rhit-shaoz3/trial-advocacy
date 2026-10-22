@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Witness avatar 04">
+<circle cx="60" cy="60" r="60" fill="#F3E0D2"/>
+<path d="M18 120 C18 96 34 86 60 86 C86 86 102 96 102 120 Z" fill="#2E3A59"/>
+<rect x="52" y="72" width="16" height="14" rx="6" fill="#9A6239"/>
+<ellipse cx="60" cy="54" rx="23" ry="27" fill="#9A6239"/>
+<path d="M38 44 C36 28 46 24 60 24 C74 24 84 28 82 44 C76 36 68 33 60 33 C50 33 43 36 38 44 Z" fill="#141413"/>
+<path d="M44 46 Q51 45 57 46 M63 46 Q69 45 76 46" fill="none" stroke="#141413" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="51" cy="54" r="2.6" fill="#141413"/><circle cx="69" cy="54" r="2.6" fill="#141413"/>
+<path d="M60 58 Q58 63 61 64" fill="none" stroke="#7D4D2A" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M54 73 Q60 75 66 73" fill="none" stroke="#141413" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

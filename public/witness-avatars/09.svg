@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Witness avatar 09">
+<circle cx="60" cy="60" r="60" fill="#F3E0D2"/>
+<path d="M18 120 C18 96 34 86 60 86 C86 86 102 96 102 120 Z" fill="#2E3A59"/>
+<path d="M34 50 C30 26 40 16 60 16 C80 16 90 26 86 50 C88 58 86 64 82 66 L38 66 C34 64 32 58 34 50 Z" fill="#1E1410"/><g fill="#1E1410"><circle cx="40" cy="30" r="8"/><circle cx="52" cy="22" r="8"/><circle cx="68" cy="22" r="8"/><circle cx="80" cy="30" r="8"/></g>
+<rect x="52" y="72" width="16" height="14" rx="6" fill="#855A36"/>
+<ellipse cx="60" cy="54" rx="23" ry="27" fill="#A36E45"/>
+<path d="M37 46 C37 34 46 28 60 28 C74 28 83 34 83 46 C76 40 68 38 60 38 C50 38 43 40 37 46 Z" fill="#1E1410"/>
+<path d="M44 46 Q51 45 57 46 M63 46 Q69 45 76 46" fill="none" stroke="#1E1410" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="51" cy="54" r="2.6" fill="#1E1410"/><circle cx="69" cy="54" r="2.6" fill="#1E1410"/>
+<path d="M60 58 Q58 63 61 64" fill="none" stroke="#855A36" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M54 73 Q60 75 66 73" fill="none" stroke="#1E1410" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,42 @@
+.witness-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.witness-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.witness-avatar svg {
+  width: 55%;
+  height: 55%;
+}
+
+.witness-avatar-sm {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.witness-avatar-lg {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.witness-avatar-xl {
+  width: 6.5rem;
+  height: 6.5rem;
+  box-shadow:
+    0 0 0 4px var(--surface),
+    0 10px 28px rgba(0, 0, 0, 0.18);
+}

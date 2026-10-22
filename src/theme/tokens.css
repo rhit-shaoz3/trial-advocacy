@@ -76,7 +76,7 @@
   color-scheme: light;
 }
 
-/* ---------- Slate & peach: blue slate and pale sky on alabaster, with burnt peach and pearl beige ---------- */
+/* ---------- Pale sky: pale sky and blue slate on alabaster, with burnt peach and pearl beige ---------- */
 :root[data-palette='slate'] {
   /* Ink */
   --ws-navy: #2e4651;
@@ -483,7 +483,7 @@
   color-scheme: dark;
 }
 
-/* ---------- Slate & peach, dark ---------- */
+/* ---------- Pale sky, dark ---------- */
 :root[data-theme='dark'][data-palette='slate'] {
   /* Ink */
   --ws-navy: #dbe8ee;

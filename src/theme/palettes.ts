@@ -20,8 +20,8 @@ export const PALETTE_INFO: Record<
     accents: ['#b98b42', '#a84b43'],
   },
   slate: {
-    label: 'Slate & peach',
-    description: 'Blue slate and pale sky, with burnt peach',
+    label: 'Pale sky',
+    description: 'Pale sky and blue slate on alabaster, with burnt peach and pearl beige',
     light: { sidebar: '#4f6d7a', page: '#eaeaea', card: '#ffffff', button: '#4f6d7a' },
     dark: { sidebar: '#10191d', page: '#172126', card: '#cfdbe0', button: '#4f6d7a' },
     accents: ['#dd6e42', '#e8dab2'],

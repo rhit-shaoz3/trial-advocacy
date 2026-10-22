@@ -39,6 +39,8 @@ describe('POST /api/auth/signup', () => {
       name: 'Ada Lawyer',
       email: 'ada@example.com',
       role: 'student',
+      theme: 'navy',
+      avatarUrl: null,
       createdAt: expect.any(String),
     })
     expect(JSON.stringify(res.body)).not.toContain('correct-horse')
@@ -195,6 +197,33 @@ describe('POST /api/auth/login', () => {
     expect(firstId).toBeDefined()
     expect(secondId).toBeDefined()
     expect(secondId).not.toBe(firstId)
+  })
+})
+
+describe('PATCH /api/auth/me', () => {
+  it('changes the name and colour theme of the signed-in user', async () => {
+    const agent = request.agent(app)
+    await agent.post('/api/auth/signup').send(validSignup)
+
+    const renamed = await agent.patch('/api/auth/me').send({ name: '  Ada L. Lovelace ' })
+    expect(renamed.status).toBe(200)
+    expect(renamed.body.user).toMatchObject({ name: 'Ada L. Lovelace', theme: 'navy' })
+
+    const themed = await agent.patch('/api/auth/me').send({ theme: 'forest' })
+    expect(themed.body.user).toMatchObject({ name: 'Ada L. Lovelace', theme: 'forest' })
+    expect((await agent.get('/api/auth/me')).body.user).toMatchObject({ name: 'Ada L. Lovelace', theme: 'forest' })
+  })
+
+  it('validates, and needs a login', async () => {
+    const agent = request.agent(app)
+    await agent.post('/api/auth/signup').send(validSignup)
+
+    expect((await agent.patch('/api/auth/me').send({ name: '   ' })).body.error).toBe('Name is required.')
+    expect((await agent.patch('/api/auth/me').send({ name: 'x'.repeat(101) })).body.error).toBe(
+      'Name must be at most 100 characters.',
+    )
+    expect((await agent.patch('/api/auth/me').send({ theme: 'pink' })).body.error).toBe('Choose one of the themes.')
+    expect((await request(app).patch('/api/auth/me').send({ name: 'Eve' })).status).toBe(401)
   })
 })
 

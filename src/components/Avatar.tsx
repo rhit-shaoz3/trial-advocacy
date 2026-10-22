@@ -1,13 +1,14 @@
 import { avatarTone, initials } from '../workspace/format'
 
-export function Avatar({ name, size }: { name: string; size?: 'sm' }) {
+/** A person's profile picture in a circle, or their initials until they add one. */
+export function Avatar({ name, src, size }: { name: string; src?: string | null; size?: 'sm' | 'lg' }) {
   return (
     <span
-      className={`ws-avatar ws-avatar-${avatarTone(name)}${size ? ` ws-avatar-${size}` : ''}`}
+      className={`ws-avatar ws-avatar-${avatarTone(name)}${size ? ` ws-avatar-${size}` : ''}${src ? ' ws-avatar-photo' : ''}`}
       title={name}
       aria-hidden="true"
     >
-      {initials(name)}
+      {src ? <img src={src} alt="" /> : initials(name)}
     </span>
   )
 }

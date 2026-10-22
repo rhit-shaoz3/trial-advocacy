@@ -1,4 +1,4 @@
-import { findUserByEmail } from '../auth/users.ts'
+import { avatarUrlSql, findUserByEmail } from '../auth/users.ts'
 import { pool } from '../db/pool.ts'
 
 // Shape sent to the client; matches `RosterEntry` in src/courses/types.ts.
@@ -7,12 +7,14 @@ export interface RosterEntry {
   /** Null until the student has an account. */
   name: string | null
   joined: boolean
+  /** Their profile picture, or null for initials. */
+  avatarUrl: string | null
 }
 
 /** Joined students by name, then pending emails. */
 export async function listRoster(courseId: string) {
   const { rows } = await pool.query<RosterEntry>(
-    `SELECT e.email, u.name, e.user_id IS NOT NULL AS joined
+    `SELECT e.email, u.name, e.user_id IS NOT NULL AS joined, ${avatarUrlSql('u')} AS "avatarUrl"
      FROM enrollments e
      LEFT JOIN users u ON u.id = e.user_id
      WHERE e.course_id = $1

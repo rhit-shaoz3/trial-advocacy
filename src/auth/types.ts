@@ -1,3 +1,5 @@
+import type { Palette } from '../theme/theme'
+
 export type Role = 'student' | 'instructor'
 
 export interface User {
@@ -5,7 +7,17 @@ export interface User {
   name: string
   email: string
   role: Role
+  /** The colour theme picked on the account page. */
+  theme: Palette
+  /** Their profile picture, or null to show initials. */
+  avatarUrl: string | null
   createdAt: string
+}
+
+/** What the account page can change. */
+export interface ProfileInput {
+  name?: string
+  theme?: Palette
 }
 
 export interface SignUpInput {
@@ -30,4 +42,8 @@ export interface AuthService {
   signUp(input: SignUpInput): Promise<User>
   logIn(input: LogInInput): Promise<User>
   logOut(): Promise<void>
+  updateProfile(input: ProfileInput): Promise<User>
+  /** Replaces the profile picture with this (already cropped) PNG or JPEG. */
+  uploadAvatar(image: Blob): Promise<User>
+  removeAvatar(): Promise<User>
 }

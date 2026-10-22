@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { applyPalette } from '../theme/theme'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 import { httpAuthService } from './httpAuthService'
 import type { AuthService, User } from './types'
@@ -20,6 +21,13 @@ export function AuthProvider({ children, service = httpAuthService }: Props) {
       .finally(() => setLoading(false))
   }, [service])
 
+  // Show the user's colour theme once they're known (it's also remembered on
+  // this device, so the next page load starts with it).
+  const theme = user?.theme
+  useEffect(() => {
+    if (theme) applyPalette(theme)
+  }, [theme])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -30,6 +38,9 @@ export function AuthProvider({ children, service = httpAuthService }: Props) {
         await service.logOut()
         setUser(null)
       },
+      updateProfile: async (input) => setUser(await service.updateProfile(input)),
+      uploadAvatar: async (image) => setUser(await service.uploadAvatar(image)),
+      removeAvatar: async () => setUser(await service.removeAvatar()),
     }),
     [user, loading, service],
   )

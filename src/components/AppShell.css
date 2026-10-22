@@ -32,7 +32,7 @@
 
 .ws a:focus-visible,
 .ws button:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -46,8 +46,8 @@
   flex-direction: column;
   width: var(--ws-sidebar-width);
   padding: 1.6rem 1.15rem 1.1rem;
-  background: var(--ws-navy);
-  color: #fff;
+  background: var(--brand);
+  color: var(--on-brand);
   overflow-y: auto;
 }
 
@@ -56,7 +56,7 @@
   align-items: center;
   gap: 0.75rem;
   padding-left: 0.35rem;
-  color: #fff;
+  color: var(--on-brand);
   text-decoration: none;
 }
 
@@ -91,7 +91,7 @@
 .ws-nav-label {
   display: block;
   margin: 0 0.75rem 0.75rem;
-  color: #677b92;
+  color: var(--on-brand-muted);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -105,7 +105,7 @@
   margin-bottom: 0.25rem;
   padding: 0.75rem 0.85rem;
   border-radius: 0.4rem;
-  color: #9babbc;
+  color: var(--on-brand-muted);
   font-size: 0.9rem;
   text-decoration: none;
 }
@@ -113,7 +113,7 @@
 .ws-sidebar nav a:hover,
 .ws-sidebar nav a.active {
   background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .ws-sidebar nav a.active {
@@ -129,7 +129,7 @@
   padding: 0 0.35rem;
   border-radius: 999px;
   background: var(--ws-red);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 0.7rem;
   font-weight: 800;
 }
@@ -148,7 +148,7 @@
 }
 
 .ws-course-card span {
-  color: #8698aa;
+  color: var(--on-brand-muted);
   font-size: 0.66rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -163,7 +163,7 @@
 
 .ws-course-card small {
   display: block;
-  color: #8698aa;
+  color: var(--on-brand-muted);
   font-size: 0.75rem;
 }
 
@@ -173,13 +173,13 @@
   gap: 0.35rem;
   margin-bottom: 0.9rem;
   padding: 0.45rem 0.35rem;
-  color: #9babbc;
+  color: var(--on-brand-muted);
   font-size: 0.8rem;
   text-decoration: none;
 }
 
 .ws-all-courses:hover {
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .ws-all-courses svg {
@@ -195,11 +195,6 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.ws-profile > span:nth-child(2) {
-  flex: 1;
-  min-width: 0;
-}
-
 .ws-profile strong {
   display: block;
   overflow: hidden;
@@ -211,24 +206,53 @@
 .ws-profile small {
   display: block;
   margin-top: 0.1rem;
-  color: #7f91a5;
+  color: var(--on-brand-muted);
   font-size: 0.7rem;
 }
 
-.ws-profile button {
+.ws-profile-logout {
   display: grid;
   place-items: center;
   padding: 0.35rem;
   border: 0;
   border-radius: 0.3rem;
   background: none;
-  color: #7f91a5;
+  color: var(--on-brand-muted);
   cursor: pointer;
 }
 
-.ws-profile button:hover {
+.ws-profile-logout:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  color: var(--on-brand);
+}
+
+/* Your name and picture: opens the account dialog */
+
+.ws-profile-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.25rem;
+  margin: -0.25rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-profile .ws-profile-open:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+}
+
+.ws-profile-open > span:last-child {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Page area */
@@ -241,8 +265,8 @@
 
 .ws-sample-banner {
   padding: 0.5rem 2.5rem;
-  background: #f1e7d4;
-  color: #7a5a24;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -322,23 +346,23 @@
 }
 
 .ws-btn-primary {
-  background: var(--ws-navy);
-  color: #fff;
+  background: var(--button);
+  color: var(--on-brand);
   box-shadow: 0 5px 14px rgba(16, 35, 63, 0.15);
 }
 
 .ws-btn-primary:hover {
-  background: var(--ws-navy-light);
+  background: var(--button-hover);
 }
 
 .ws-btn-secondary {
   border: 1px solid var(--ws-line);
-  background: #fff;
+  background: var(--surface);
   color: var(--ws-navy);
 }
 
 .ws-btn-secondary:hover {
-  border-color: #aeb5bc;
+  border-color: var(--border-strong);
 }
 
 /* Section headings */
@@ -367,9 +391,9 @@
 
 .ws-empty {
   padding: 2.25rem 1.5rem;
-  border: 1px dashed #c9ccc8;
+  border: 1px dashed var(--border-strong);
   border-radius: 0.55rem;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--surface-translucent);
   text-align: center;
 }
 
@@ -385,14 +409,14 @@
   flex: none;
   width: 2.2rem;
   height: 2.2rem;
-  border: 2px solid #fff;
+  border: 2px solid var(--surface);
   border-radius: 50%;
   font-size: 0.68rem;
   font-weight: 800;
 }
 
 .ws-sidebar .ws-avatar {
-  border-color: var(--ws-navy);
+  border-color: var(--brand);
 }
 
 .ws-avatar-sm {
@@ -401,24 +425,41 @@
   font-size: 0.62rem;
 }
 
+.ws-avatar-lg {
+  width: 6rem;
+  height: 6rem;
+  font-size: 1.6rem;
+}
+
+.ws-avatar-photo {
+  overflow: hidden;
+}
+
+.ws-avatar-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .ws-avatar-blue {
-  background: #d6e1eb;
-  color: #294d6e;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
 }
 
 .ws-avatar-sand {
-  background: #eadfc9;
-  color: #785e32;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .ws-avatar-green {
-  background: #d2e0d8;
-  color: #3f6755;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
 }
 
 .ws-avatar-rose {
-  background: #ead6d4;
-  color: #854840;
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
 }
 
 .ws-avatar-stack {
@@ -436,10 +477,10 @@
   min-width: 2rem;
   height: 2rem;
   padding: 0 0.35rem;
-  border: 2px solid #fff;
+  border: 2px solid var(--surface);
   border-radius: 999px;
-  background: #e6e9ee;
-  color: #4f5b6b;
+  background: var(--tint-grey-bg);
+  color: var(--fg-soft);
   font-size: 0.68rem;
   font-weight: 700;
 }
@@ -517,8 +558,8 @@
     border: 0;
   }
 
-  .ws-profile > span:nth-child(2),
-  .ws-profile .ws-avatar {
+  /* Just the picture, which still opens the account dialog. */
+  .ws-profile-open > span:last-child {
     display: none;
   }
 

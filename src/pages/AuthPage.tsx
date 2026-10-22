@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/useAuth'
 import type { Role } from '../auth/types'
 import './AuthPage.css'
+import { ThemeToggle } from '../theme/ThemeToggle'
 
 type Mode = 'login' | 'signup'
 
@@ -58,6 +59,7 @@ export function AuthPage() {
 
   return (
     <main className="auth">
+      <ThemeToggle className="auth-theme-toggle" />
       <div className="auth-card">
         <header className="auth-header">
           <h1>Trial Advocacy</h1>

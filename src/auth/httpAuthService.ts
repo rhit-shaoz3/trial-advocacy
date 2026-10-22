@@ -23,4 +23,19 @@ export const httpAuthService: AuthService = {
   async logOut() {
     await request('/logout', { method: 'POST' })
   },
+
+  async updateProfile(input) {
+    const body = await request('/me', { method: 'PATCH', body: JSON.stringify(input) })
+    return body.user as User
+  },
+
+  async uploadAvatar(image) {
+    const body = await request('/me/avatar', { method: 'PUT', body: image, headers: { 'Content-Type': image.type } })
+    return body.user as User
+  },
+
+  async removeAvatar() {
+    const body = await request('/me/avatar', { method: 'DELETE' })
+    return body.user as User
+  },
 }

@@ -1,4 +1,4 @@
-/* A witness interview (InterviewPage), styled like a transcript. */
+/* A witness interview (InterviewPage): the witness's portrait, then the questions and answers as a chat. */
 
 .iv {
   display: flex;
@@ -15,17 +15,24 @@
 .iv-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding-bottom: 1rem;
+  padding-bottom: 1.25rem;
   border-bottom: 1px solid var(--ws-line);
+}
+
+.iv-portrait {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  min-width: 0;
 }
 
 .iv-header h1 {
   margin-top: 0.3rem;
   color: var(--ws-navy);
-  font: 400 1.9rem/1.15 var(--ws-serif);
+  font: 400 2.1rem/1.15 var(--ws-serif);
 }
 
 .iv-role {
@@ -63,7 +70,7 @@
   padding: 1.3rem 1.4rem;
   border: 1px solid var(--ws-line);
   border-radius: 0.7rem;
-  background: #fff;
+  background: var(--surface);
   list-style: none;
 }
 
@@ -75,53 +82,125 @@
 .iv-turn {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.7rem;
 }
 
-.iv-q,
-.iv-a {
-  display: grid;
-  grid-template-columns: 1.6rem 1fr;
-  column-gap: 0.4rem;
-  line-height: 1.55;
+/* Questions on the right with the asker's photo; answers on the left with the witness's. */
+.iv-msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
 }
 
-.iv-q p,
-.iv-a p {
+.iv-msg-q {
+  justify-content: flex-end;
+}
+
+.iv-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: min(36rem, 80%);
+}
+
+.iv-msg-q .iv-bubble-wrap {
+  align-items: flex-end;
+}
+
+.iv-who {
+  padding: 0 0.6rem;
+  color: var(--ws-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.iv-bubble {
+  padding: 0.65rem 0.95rem;
+  border-radius: 1.1rem;
+  line-height: 1.5;
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
 
-.iv-q p {
-  color: var(--ws-navy);
-  font-weight: 600;
+.iv-msg-q .iv-bubble {
+  border-bottom-right-radius: 0.3rem;
+  background: var(--button);
+  color: var(--on-brand);
 }
 
-.iv-a p {
+.iv-msg-a .iv-bubble {
+  border-bottom-left-radius: 0.3rem;
+  background: var(--subtle);
   color: var(--ws-text);
 }
 
-.iv-q small {
-  grid-column: 2;
-  color: var(--ws-muted);
-  font-size: 0.7rem;
-}
-
-.iv-label {
-  color: var(--ws-muted);
-  font-weight: 800;
-}
-
 .iv-objection {
-  margin-left: 2rem;
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 0.4rem;
+  max-width: 90%;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--ws-red) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ws-red) 8%, var(--surface));
   color: var(--ws-red);
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-style: italic;
 }
 
-.iv-thinking p {
+.iv-objection svg {
+  flex: none;
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.iv-thinking .iv-bubble p {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   color: var(--ws-muted);
   font-style: italic;
+}
+
+.iv-dots {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+.iv-dots span {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: currentColor;
+  animation: iv-dot 1.2s ease-in-out infinite;
+}
+
+.iv-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.iv-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes iv-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.2rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iv-dots span {
+    animation: none;
+  }
 }
 
 .iv-composer {
@@ -136,7 +215,7 @@
   padding: 0.65rem 0.8rem;
   border: 1px solid var(--ws-line);
   border-radius: 0.5rem;
-  background: #fff;
+  background: var(--surface);
   color: var(--ws-text);
   font: inherit;
   font-size: 0.92rem;
@@ -144,7 +223,7 @@
 }
 
 .iv-composer textarea:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -157,8 +236,8 @@
 .iv-notice {
   padding: 0.8rem 1rem;
   border-radius: 0.5rem;
-  background: #f1efe9;
-  color: #4d5866;
+  background: var(--subtle);
+  color: var(--fg-soft);
   font-size: 0.88rem;
 }
 
@@ -189,15 +268,15 @@
 }
 
 .iv-timer-warning {
-  border-color: #e4c98f;
-  background: #fbf3e2;
-  color: #8b5a12;
+  border-color: var(--tint-amber-border);
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .iv-warning {
   border-left: 3px solid var(--ws-gold);
-  background: #fbf3e2;
-  color: #6f4a10;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .iv-sr {
@@ -212,6 +291,15 @@
 @media (max-width: 40rem) {
   .iv-transcript {
     padding: 1rem;
+  }
+
+  .iv-portrait .witness-avatar-xl {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+
+  .iv-bubble-wrap {
+    max-width: 85%;
   }
 
   .iv-composer {

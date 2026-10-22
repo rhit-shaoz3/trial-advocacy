@@ -13,6 +13,8 @@ const ada: User = {
   name: 'Ada Lawyer',
   email: 'ada@example.com',
   role: 'student',
+  theme: 'navy',
+  avatarUrl: null,
   createdAt: '2026-01-01T00:00:00.000Z',
 }
 
@@ -21,7 +23,7 @@ function fakeService(overrides: Partial<AuthService> = {}): AuthService {
     getCurrentUser: vi.fn().mockResolvedValue(null),
     signUp: vi.fn(async ({ name, email, role }) => ({ ...ada, name, email, role })),
     logIn: vi.fn().mockResolvedValue(ada),
-    logOut: vi.fn().mockResolvedValue(undefined),
+    logOut: vi.fn().mockResolvedValue(undefined), updateProfile: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn(),
     ...overrides,
   }
 }

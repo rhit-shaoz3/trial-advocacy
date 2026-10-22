@@ -11,6 +11,15 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
 
+-- The colour theme the user picked on the account page (light/dark follows
+-- their computer and isn't stored).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS theme text NOT NULL DEFAULT 'navy'
+  CHECK (theme IN ('navy', 'forest', 'lagoon', 'vivid', 'stone'));
+
+-- The user's profile picture in file storage (avatars/<userId>/<uuid>), or
+-- null to show their initials.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key text;
+
 -- A course offering in one term, e.g. LAW 540 in Fall 2026. Students join
 -- with the entry code, which is stored uppercase.
 CREATE TABLE IF NOT EXISTS courses (
@@ -245,6 +254,11 @@ ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS persona_notes text NOT NULL 
 ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS deposition_material_id uuid REFERENCES case_materials (id) ON DELETE SET NULL;
 ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS known_material_ids uuid[] NOT NULL DEFAULT '{}';
 ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS defending_counsel text NOT NULL DEFAULT '';
+-- The witness's picture: one of the designs in public/witness-avatars/
+-- (1-12), or an uploaded picture in file storage (witnesses/<id>/<uuid>).
+-- Choosing one clears the other; with neither, the witness shows an icon.
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS avatar_preset smallint CHECK (avatar_preset BETWEEN 1 AND 12);
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS avatar_key text;
 
 -- One interview of an AI witness, before any deposition: by a team (both
 -- partners share it, always as their team's side) or, with no team, an

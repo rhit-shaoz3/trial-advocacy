@@ -206,8 +206,8 @@ describe("a student's case world", () => {
       opponents: {
         number: 2,
         members: [
-          { email: email(3), name: null, joined: false, you: false },
-          { email: email(4), name: null, joined: false, you: false },
+          { email: email(3), name: null, joined: false, avatarUrl: null, you: false },
+          { email: email(4), name: null, joined: false, avatarUrl: null, you: false },
         ],
       },
     })
@@ -240,7 +240,7 @@ describe('the course home cases', () => {
         progress: null,
         nextMilestone: null,
         nextTask: null,
-        participants: [{ name: 'Ada Lawyer' }, { name: email(2) }, { name: email(3) }, { name: email(4) }],
+        participants: [{ name: 'Ada Lawyer', avatarUrl: null }, { name: email(2), avatarUrl: null }, { name: email(3), avatarUrl: null }, { name: email(4), avatarUrl: null }],
       },
     ])
   })

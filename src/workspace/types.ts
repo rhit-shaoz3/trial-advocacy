@@ -8,6 +8,8 @@ export type CaseStatus = 'active' | 'in-review' | 'closed'
 
 export interface CaseParticipant {
   name: string
+  /** Their profile picture, or null for initials. */
+  avatarUrl?: string | null
 }
 
 export interface CaseSummary {

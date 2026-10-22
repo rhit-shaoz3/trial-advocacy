@@ -149,6 +149,8 @@ describe('witnesses, tasks, and the note', () => {
       depositionMaterialId: null,
       knownMaterialIds: [],
       defendingCounsel: '',
+      avatarPreset: null,
+      avatarUrl: null,
     })
     const { id } = res.body.witness
     const edited = await prof.put(`${caseUrl()}/witnesses/${id}`).send({ name: 'Elena Torres', audience: 'defense' })

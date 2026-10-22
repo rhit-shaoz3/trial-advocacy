@@ -16,7 +16,7 @@ import { listTeams } from './teams.ts'
 import { isAiWitness } from '../witness/profile.ts'
 
 /** What students see of a witness: never its AI setup (deposition file, persona, files it has seen). */
-export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'audience'> & {
+export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'audience' | 'avatarUrl'> & {
   /** The side the witness testifies for, or null for neither. */
   side: Side | null
   /** Whether the witness is an AI witness the team can interview. */
@@ -101,6 +101,7 @@ async function assemble(
       audience: w.audience,
       side: w.alignedSide,
       canInterview: isAiWitness(w),
+      avatarUrl: w.avatarUrl,
     })),
     investigatorAvailable: caseRow.phase !== 'subpoena',
     tasks: tasks.map((t) => ({

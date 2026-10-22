@@ -256,6 +256,7 @@ export function CaseDetailPage() {
                 courseId={courseId}
                 caseId={courseCase.id}
                 instructorName={workspace?.home.course.instructorName}
+                instructorAvatarUrl={workspace?.home.course.instructorAvatarUrl}
               />
             )}
           </div>

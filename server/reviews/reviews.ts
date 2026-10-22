@@ -1,5 +1,5 @@
 import { ai, AiNotConfiguredError } from '../ai/ai.ts'
-import { listMaterialTexts } from '../courses/caseContent.ts'
+import { listMaterialTexts, witnessAvatarUrlSql } from '../courses/caseContent.ts'
 import { finishPendingTranscriptions } from '../courses/materialText.ts'
 import type { Side } from '../courses/matchups.ts'
 import { pool } from '../db/pool.ts'
@@ -21,7 +21,7 @@ export interface InterviewReview {
   id: string
   caseId: string
   caseTitle: string
-  witness: { id: string; name: string; role: string }
+  witness: { id: string; name: string; role: string; avatarUrl: string | null }
   worldNumber: number
   teamNumber: number
   side: Side
@@ -37,7 +37,7 @@ export interface InterviewReview {
 /** What students see of a completed review: only whether each fact stands. */
 export interface ReviewResult {
   id: string
-  witness: { id: string; name: string }
+  witness: { id: string; name: string; avatarUrl: string | null }
   completedAt: Date
   accepted: string[]
   denied: string[]
@@ -186,7 +186,7 @@ async function transcriptOf(interviewId: string) {
 
 const REVIEW_SELECT = `
   SELECT r.id, r.case_id AS "caseId", c.title AS "caseTitle",
-         json_build_object('id', w.id, 'name', w.name, 'role', w.role) AS witness,
+         json_build_object('id', w.id, 'name', w.name, 'role', w.role, 'avatarUrl', ${witnessAvatarUrlSql('w')}) AS witness,
          r.world_number AS "worldNumber", r.team_number AS "teamNumber", r.side,
          coalesce((SELECT json_agg(coalesce(u.name, m.email) ORDER BY lower(coalesce(u.name, m.email)))
                    FROM team_members m
@@ -288,7 +288,7 @@ export async function openReviewCount(courseId: string) {
 /** The team's completed reviews, newest first: which facts stand and which don't. */
 export async function teamReviewResults(caseId: string, teamId: string, userId: string): Promise<ReviewResult[]> {
   const { rows } = await pool.query<ReviewResult>(
-    `SELECT r.id, json_build_object('id', w.id, 'name', w.name) AS witness, r.completed_at AS "completedAt",
+    `SELECT r.id, json_build_object('id', w.id, 'name', w.name, 'avatarUrl', ${witnessAvatarUrlSql('w')}) AS witness, r.completed_at AS "completedAt",
             coalesce((SELECT json_agg(f.text ORDER BY f.position) FROM review_facts f
                       WHERE f.review_id = r.id AND f.decision LIKE 'accept%'), '[]') AS accepted,
             coalesce((SELECT json_agg(f.text ORDER BY f.position) FROM review_facts f

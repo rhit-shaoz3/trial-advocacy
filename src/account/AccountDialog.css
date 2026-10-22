@@ -1,0 +1,230 @@
+.account-dialog {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.8rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+
+.account-dialog::backdrop {
+  background: rgba(8, 14, 24, 0.55);
+}
+
+.account-panel {
+  display: grid;
+  gap: 0;
+  padding: 0 1.5rem 1.25rem;
+}
+
+.account-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 0 0.75rem;
+  background: var(--surface);
+}
+
+.account-head h2 {
+  margin: 0;
+  color: var(--ws-navy);
+  font: 400 1.6rem/1.2 var(--ws-serif);
+}
+
+.account-close {
+  display: grid;
+  place-items: center;
+  padding: 0.35rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--ws-muted);
+  cursor: pointer;
+}
+
+.account-close:hover {
+  background: var(--surface-hover);
+  color: var(--ws-text);
+}
+
+.account-close svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.account-section {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--ws-row-line);
+}
+
+.account-section h3 {
+  margin: 0;
+  color: var(--ws-navy);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-hint {
+  margin: 0;
+  color: var(--ws-muted);
+  font-size: 0.8rem;
+}
+
+/* Picture */
+
+.account-picture {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.account-picture-actions {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.account-picture-actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.account-picture-actions svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.account-picture-actions .btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.account-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.account-file:focus-visible + .account-file-label,
+.account-file-label:has(+ .account-file:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Name */
+
+.account-name {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.account-name input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+}
+
+.account-name input:focus {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+/* Themes */
+
+.account-themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+}
+
+.account-theme {
+  position: relative;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 2px solid var(--ws-line);
+  border-radius: 0.6rem;
+  cursor: pointer;
+}
+
+.account-theme:hover {
+  border-color: var(--border-strong);
+}
+
+.account-theme:has(input:checked) {
+  border-color: var(--button);
+  box-shadow: 0 0 0 1px var(--button);
+}
+
+.account-theme:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.account-theme input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.account-swatch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+  height: 3.6rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.4rem;
+}
+
+.account-swatch-half {
+  display: grid;
+  grid-template-columns: 28% 1fr;
+}
+
+.account-swatch-card {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  margin: 0.45rem 0.35rem;
+  padding: 0.25rem;
+  border-radius: 0.2rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.account-swatch-card span {
+  width: 55%;
+  height: 0.45rem;
+  border-radius: 0.15rem;
+}
+
+.account-theme-text strong {
+  display: block;
+  color: var(--ws-navy);
+  font-size: 0.82rem;
+}
+
+.account-theme-text small {
+  display: block;
+  color: var(--ws-muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}

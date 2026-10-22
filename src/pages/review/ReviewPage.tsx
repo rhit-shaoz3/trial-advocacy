@@ -5,6 +5,7 @@ import { FACT_DECISIONS, type FactDecision, type InterviewReview, type ReviewTur
 import { ROLE_LABEL, worldLabel } from '../../courses/worldLabel'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import './Review.css'
+import { WitnessAvatar } from '../../components/WitnessAvatar'
 
 type Tab = 'open' | 'completed'
 
@@ -171,7 +172,8 @@ function ReviewCard({
   return (
     <article className="review-card" aria-labelledby={`review-${r.id}`}>
       <header className="review-card-header">
-        <div>
+        <WitnessAvatar src={r.witness.avatarUrl} size="lg" />
+        <div className="review-card-title">
           <span className="ws-eyebrow">{r.caseTitle}</span>
           <h2 id={`review-${r.id}`}>Interview of {r.witness.name}</h2>
           <p className="review-meta">

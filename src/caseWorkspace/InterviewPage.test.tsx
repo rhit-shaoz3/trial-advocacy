@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -28,14 +28,14 @@ const turn = (position: number, question: string, answer: string, objection: str
   createdAt: '2026-10-15T12:00:00.000Z',
 })
 
-const student: User = { id: 'u1', name: 'Ada Lawyer', email: 'ada@example.com', role: 'student', createdAt: '2026-09-01T00:00:00.000Z' }
-const instructor: User = { id: 'u2', name: 'Prof. Ruiz', email: 'prof@example.com', role: 'instructor', createdAt: '2026-09-01T00:00:00.000Z' }
+const student: User = { id: 'u1', name: 'Ada Lawyer', email: 'ada@example.com', role: 'student', theme: 'navy', avatarUrl: null, createdAt: '2026-09-01T00:00:00.000Z' }
+const instructor: User = { id: 'u2', name: 'Prof. Ruiz', email: 'prof@example.com', role: 'instructor', theme: 'navy', avatarUrl: null, createdAt: '2026-09-01T00:00:00.000Z' }
 
 function renderPage(overrides: Partial<CourseService>, user: User = student, url = '/courses/c1/cases/k1/witnesses/w1') {
   const service = fakeCourseService(overrides)
   const events = userEvent.setup()
   render(
-    <AuthContext.Provider value={{ user, loading: false, signUp: vi.fn(), logIn: vi.fn(), logOut: vi.fn() }}>
+    <AuthContext.Provider value={{ user, loading: false, signUp: vi.fn(), logIn: vi.fn(), logOut: vi.fn(), updateProfile: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn() }}>
       <MemoryRouter initialEntries={[url]}>
         <CourseServiceContext.Provider value={service}>
           <Routes>
@@ -68,8 +68,38 @@ describe('InterviewPage', () => {
     expect(askWitness).toHaveBeenCalledWith('c1', 'k1', 'w1', 'team', 'Where were you?')
     const transcript = screen.getByRole('list', { name: 'Transcript' })
     expect(await screen.findByText('At the booth.')).toBeInTheDocument()
-    expect(transcript).toHaveTextContent('Q.Where were you?Ada LawyerA.At the booth.')
+    // The question on the right as yours, the answer on the left as the witness's.
+    const question = within(transcript).getByText('Where were you?').closest('.iv-msg')
+    expect(question).toHaveClass('iv-msg-q')
+    expect(question).toHaveTextContent('Question from You')
+    const answer = within(transcript).getByText('At the booth.').closest('.iv-msg')
+    expect(answer).toHaveClass('iv-msg-a')
+    expect(answer).toHaveTextContent('Answer from Elena Torres')
     expect(screen.getByLabelText('Your question')).toHaveValue('')
+  })
+
+  it("shows the witness's picture, and each asker's photo or initials", async () => {
+    const interview: Interview = {
+      ...empty,
+      witness: { ...empty.witness, avatarUrl: '/witness-avatars/04.svg' },
+      turns: [
+        { ...turn(0, 'Where were you?', 'At the booth.'), askedBy: 'Ben Counsel', askedByAvatarUrl: '/api/users/u3/avatar?v=1' },
+        { ...turn(1, 'And then?', 'I called for help.'), askedByAvatarUrl: null },
+      ],
+    }
+    renderPage({ getInterview: vi.fn().mockResolvedValue(interview) })
+    const transcript = await screen.findByRole('list', { name: 'Transcript' })
+
+    const portrait = document.querySelector('.iv-portrait img')
+    expect(portrait).toHaveAttribute('src', '/witness-avatars/04.svg')
+    const fromBen = within(transcript).getByText('Where were you?').closest('.iv-msg')!
+    expect(fromBen).toHaveTextContent('Question from Ben Counsel')
+    expect(fromBen.querySelector('img')).toHaveAttribute('src', '/api/users/u3/avatar?v=1')
+    const fromAda = within(transcript).getByText('And then?').closest('.iv-msg')!
+    expect(fromAda.querySelector('img')).toBeNull()
+    expect(fromAda).toHaveTextContent('AL')
+    const answer = within(transcript).getByText('I called for help.').closest('.iv-msg')!
+    expect(answer.querySelector('img')).toHaveAttribute('src', '/witness-avatars/04.svg')
   })
 
   it('shows objections and keeps the question when asking fails', async () => {

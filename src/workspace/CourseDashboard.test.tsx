@@ -18,6 +18,8 @@ const ada: User = {
   name: 'Ada Lawyer',
   email: 'ada@example.com',
   role: 'student',
+  theme: 'navy',
+  avatarUrl: null,
   createdAt: '2026-01-01T00:00:00.000Z',
 }
 
@@ -42,7 +44,7 @@ function renderCourse(courseService: CourseService, url = '/courses/c1', signedI
     getCurrentUser: vi.fn().mockResolvedValue(signedIn),
     signUp: vi.fn(),
     logIn: vi.fn(),
-    logOut: vi.fn().mockResolvedValue(undefined),
+    logOut: vi.fn().mockResolvedValue(undefined), updateProfile: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn(),
   }
   const user = userEvent.setup()
   render(

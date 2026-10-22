@@ -47,6 +47,11 @@
   flex-wrap: wrap;
 }
 
+.review-card-title {
+  flex: 1;
+  min-width: 12rem;
+}
+
 .review-card h2 {
   margin: 0.2rem 0 0;
   color: var(--ws-navy);
@@ -127,16 +132,16 @@
 .review-choice-accept_case:has(input:checked),
 .review-decision-accept_world,
 .review-decision-accept_case {
-  background: #e1eee7;
-  color: #2f6b47;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
 }
 
 .review-choice-deny_world:has(input:checked),
 .review-choice-deny_case:has(input:checked),
 .review-decision-deny_world,
 .review-decision-deny_case {
-  background: #f6e3e0;
-  color: #8a3b33;
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
 }
 
 .review-card-footer {

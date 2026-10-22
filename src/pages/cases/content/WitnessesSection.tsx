@@ -12,6 +12,9 @@ import {
   type WitnessInput,
 } from '../../../courses/types'
 import { ROLE_LABEL } from '../../../courses/worldLabel'
+import { WitnessAvatar } from '../../../components/WitnessAvatar'
+import { initialPicture, type PictureChoice } from './witnessPicture'
+import { WitnessPicturePicker } from './WitnessPicturePicker'
 
 const BLANK: WitnessInput = {
   name: '',
@@ -23,6 +26,7 @@ const BLANK: WitnessInput = {
   depositionMaterialId: null,
   knownMaterialIds: [],
   defendingCounsel: '',
+  avatarPreset: null,
 }
 
 const isAiWitness = (w: Witness) => w.alignedSide !== null && w.depositionMaterialId !== null
@@ -65,14 +69,24 @@ export function WitnessesSection({
     }
   }, [service, courseId, caseId])
 
-  async function handleSave(input: WitnessInput) {
-    if (editing === 'new') {
-      const created = await service.createWitness(courseId, caseId, input)
-      setWitnesses((prev) => [...(prev ?? []), created])
-    } else if (editing) {
-      const updated = await service.updateWitness(courseId, caseId, editing, input)
-      setWitnesses((prev) => prev?.map((w) => (w.id === updated.id ? updated : w)) ?? null)
+  async function handleSave(input: WitnessInput, picture: PictureChoice, hadUpload: boolean) {
+    if (!editing) return
+    let saved =
+      editing === 'new'
+        ? await service.createWitness(courseId, caseId, input)
+        : await service.updateWitness(courseId, caseId, editing, input)
+    const show = (witness: Witness) =>
+      setWitnesses((prev) =>
+        editing === 'new' ? [...(prev ?? []), witness] : (prev?.map((w) => (w.id === witness.id ? witness : w)) ?? null),
+      )
+    // The witness is saved; the picture goes up after it, with its own error.
+    try {
+      if (picture.kind === 'new') saved = await service.uploadWitnessAvatar(courseId, caseId, saved.id, picture.image)
+      else if (picture.kind === 'none' && hadUpload) saved = await service.removeWitnessAvatar(courseId, caseId, saved.id)
+    } catch (err) {
+      setError(`Saved ${saved.name}, but not the picture. ${err instanceof Error ? err.message : ''}`.trim())
     }
+    show(saved)
     setEditing(null)
   }
 
@@ -145,7 +159,8 @@ export function WitnessesSection({
                 />
               </li>
             ) : (
-              <li key={w.id} className="content-item" aria-label={w.name}>
+              <li key={w.id} className="content-item content-witness" aria-label={w.name}>
+                <WitnessAvatar src={w.avatarUrl} />
                 <div>
                   <strong>{w.name}</strong>
                   {w.role && <span className="muted"> · {w.role}</span>}
@@ -274,12 +289,13 @@ function WitnessForm({
   onCancel,
 }: {
   label: string
-  initial: WitnessInput
+  initial: WitnessInput & { avatarUrl?: string | null }
   materials: CaseMaterial[]
-  /** Throw to show the error in the form. */
-  onSave(input: WitnessInput): Promise<void>
+  /** Throw to show the error in the form. `hadUpload`: the witness had an uploaded picture before. */
+  onSave(input: WitnessInput, picture: PictureChoice, hadUpload: boolean): Promise<void>
   onCancel(): void
 }) {
+  const [picture, setPicture] = useState<PictureChoice>(() => initialPicture(initial))
   const [name, setName] = useState(initial.name)
   const [role, setRole] = useState(initial.role)
   const [description, setDescription] = useState(initial.description)
@@ -302,17 +318,22 @@ function WitnessForm({
     setError(null)
     setSaving(true)
     try {
-      await onSave({
-        name,
-        role,
-        description,
-        audience,
-        alignedSide,
-        depositionMaterialId: depositionId || null,
-        knownMaterialIds: known.filter((id) => id !== depositionId),
-        personaNotes,
-        defendingCounsel: counsel,
-      })
+      await onSave(
+        {
+          name,
+          role,
+          description,
+          audience,
+          alignedSide,
+          depositionMaterialId: depositionId || null,
+          knownMaterialIds: known.filter((id) => id !== depositionId),
+          personaNotes,
+          defendingCounsel: counsel,
+          avatarPreset: picture.kind === 'preset' ? picture.preset : null,
+        },
+        picture,
+        initialPicture(initial).kind === 'uploaded',
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setSaving(false)
@@ -366,6 +387,12 @@ function WitnessForm({
           rows={2}
         />
       </label>
+
+      <WitnessPicturePicker
+        value={picture}
+        uploadedUrl={initialPicture(initial).kind === 'uploaded' ? initial.avatarUrl : null}
+        onChange={setPicture}
+      />
 
       <fieldset className="content-form-full content-fieldset">
         <legend>AI witness</legend>

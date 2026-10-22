@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto'
 import type { PoolClient } from 'pg'
+import { avatarUrlSql } from '../auth/users.ts'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
 import type { RosterEntry } from './roster.ts'
@@ -39,7 +40,8 @@ export async function listTeams(courseId: string, caseId: string, db: Pick<PoolC
   const { rows: teams } = await db.query<Team>(
     `SELECT t.id, t.number,
             coalesce(
-              json_agg(json_build_object('email', m.email, 'name', u.name, 'joined', e.user_id IS NOT NULL)
+              json_agg(json_build_object('email', m.email, 'name', u.name, 'joined', e.user_id IS NOT NULL,
+                                'avatarUrl', ${avatarUrlSql('u')})
                        ORDER BY e.user_id IS NULL, lower(u.name), m.email)
                 FILTER (WHERE m.email IS NOT NULL),
               '[]') AS members
@@ -53,7 +55,7 @@ export async function listTeams(courseId: string, caseId: string, db: Pick<PoolC
     [caseId],
   )
   const { rows: unpaired } = await db.query<RosterEntry>(
-    `SELECT e.email, u.name, e.user_id IS NOT NULL AS joined
+    `SELECT e.email, u.name, e.user_id IS NOT NULL AS joined, ${avatarUrlSql('u')} AS "avatarUrl"
      FROM enrollments e
      LEFT JOIN users u ON u.id = e.user_id
      WHERE e.course_id = $1

@@ -80,14 +80,27 @@ By default the tests reuse the username and password from `DATABASE_URL` in `.en
 
 GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint, build and all tests on every pull request and on pushes to `main`, using a throwaway Postgres container.
 
+## Themes and dark mode
+
+Every colour comes from a token in [`src/theme/tokens.css`](src/theme/tokens.css), so stylesheets use `var(--token)` instead of raw colours. Two attributes on `<html>` pick the tokens:
+
+- `data-palette`: the account's theme, one of `navy` (the default), `forest`, `lagoon`, `vivid` or `stone`. It's saved on the account (`PATCH /api/auth/me`) and kept in `localStorage`, so it applies before the user loads.
+- `data-theme`: `light` or `dark`. Each visit starts from the system setting; the toggle in the sidebar (and on the sign-in page) lasts for that visit only (`sessionStorage`).
+
+A small script in `index.html` sets both before the page paints, so there's no flash of the wrong colours. Each palette has a light and a dark block in `tokens.css`; a new colour needs a token in all ten.
+
 ## API
 
 | Method | Path               | Body                                | Result                    |
 | ------ | ------------------ | ----------------------------------- | ------------------------- |
-| GET    | `/api/auth/me`     |                                     | `{ user }` or `{ user: null }` |
+| GET    | `/api/auth/me`     |                                     | `{ user }` or `{ user: null }`; `user` has `theme` and `avatarUrl` (null until they add a profile picture) |
 | POST   | `/api/auth/signup` | `{ name, email, password, role }`   | `201 { user }`, `409` if email taken |
 | POST   | `/api/auth/login`  | `{ email, password }`               | `{ user }`, `401` if wrong |
 | POST   | `/api/auth/logout` |                                     | `204`                     |
+| PATCH  | `/api/auth/me`     | `{ name?, theme? }`                 | `{ user }`; `theme` is `navy`, `forest`, `lagoon`, `vivid` or `stone`. `401` signed out, `400` blank or too-long name (100 characters) or an unknown theme |
+| PUT    | `/api/auth/me/avatar` | The picture itself, `Content-Type: image/png` or `image/jpeg` (at most 1 MB) | `{ user }` with the new `avatarUrl`; the old picture is deleted. The browser crops it to 512×512 first. `400` not a PNG or JPEG (checked from the file, not the header), `413` too large |
+| DELETE | `/api/auth/me/avatar` |                                  | `{ user }` with `avatarUrl: null` (back to initials) |
+| GET    | `/api/users/:id/avatar` |                                | Signed-in users: the picture. `avatarUrl` (`/api/users/:id/avatar?v=…`) changes with every new picture, so that URL is cached for good. `404` without one |
 | GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
 | POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
 | GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Students get the active and closed cases they're on a team in, each with `world: { number, side }` (or `null` before matching), `progress` (percent of their team's tasks done), and `nextTask`; `upcoming` lists their open tasks' deadlines and `stats` counts completed tasks. The instructor gets every active and closed case with `worldCount`. `activity` is always empty for now |
@@ -109,7 +122,7 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | GET    | `/api/courses/:id`                           |                                  | `{ course }` |
 | PATCH  | `/api/courses/:id`                           | `{ code, title, season, year }`  | `{ course }`; entry code and roster unchanged |
 | DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster and the cases with everything in them |
-| GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined }] }` |
+| GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined, avatarUrl }] }` |
 | POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | `{ added, skipped: [{ email, reason }], roster }` |
 | DELETE | `/api/courses/:id/roster/:email`             |                                  | `204`, `404` if not on the roster |
 | GET    | `/api/courses/:id/cases`                     |                                  | `{ cases: [{ id, title, summary, status, phase, importantFacts, setupStep, setupCompletedAt, createdAt, updatedAt }] }`, oldest first. `setupStep` is the furthest step of the guided setup reached, and `setupCompletedAt` is null until it's finished. `importantFacts` is `{ plaintiff: string[], defense: string[] }`: the most important facts for each side, which the AI witnesses never contradict and students never see |
@@ -138,8 +151,10 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | GET    | `/api/courses/:id/cases/:caseId/materials/:materialId/file` |                  | `302` to a 5-minute download link |
 | GET / POST | `/api/courses/:id/cases/:caseId/materials/:materialId/text` | | The transcription as `text/plain` (`404` until ready) / transcribe again: `{ material }` when done |
 | DELETE | `/api/courses/:id/cases/:caseId/materials/:materialId` |                       | `204`; also deletes the stored file |
-| GET / POST | `/api/courses/:id/cases/:caseId/witnesses` | `{ name, role?, description?, audience?, alignedSide?, depositionMaterialId?, knownMaterialIds?, personaNotes?, defendingCounsel? }` | `{ witnesses }` / `201 { witness }`. With `alignedSide` (`plaintiff` / `defense`) and a deposition file from this case, an AI witness |
+| GET / POST | `/api/courses/:id/cases/:caseId/witnesses` | `{ name, role?, description?, audience?, alignedSide?, depositionMaterialId?, knownMaterialIds?, personaNotes?, defendingCounsel?, avatarPreset? }` | `{ witnesses }` / `201 { witness }`. With `alignedSide` (`plaintiff` / `defense`) and a deposition file from this case, an AI witness. `avatarPreset` (1–12) picks one of the designs in `public/witness-avatars/` and replaces an uploaded picture; every witness payload (students' and interviews' too) has `avatarUrl`: the design, the uploaded picture, or null |
 | PUT / DELETE | `/api/courses/:id/cases/:caseId/witnesses/:witnessId` | Same as POST            | `{ witness }` / `204` |
+| PUT / DELETE | `/api/courses/:id/cases/:caseId/witnesses/:witnessId/avatar` | PUT: the picture itself, PNG or JPEG (at most 1 MB) | `{ witness }`; an uploaded picture (cropped in the browser) in place of the design, or (DELETE) none |
+| GET    | `/api/witnesses/:witnessId/avatar` |                    | The course's instructor and students: the uploaded picture, cached for good at its versioned `avatarUrl`; `404` for anyone else |
 | GET | `/api/courses/:id/cases/:caseId/witnesses/:witnessId/interview?side=` | | The instructor's test interview as `plaintiff` or `defense`, kept apart from every team's: `{ interview: { id, side, witness, turns, maxTurns, canAsk, notice } }` |
 | POST | `…/witnesses/:witnessId/interview/questions?side=` | `{ question }` | Asks the witness; `{ interview }` with the answer. `409` if the witness isn't set up, `503` without an API key |
 | POST | `…/witnesses/:witnessId/interview/restart?side=` | | Ends it and starts an empty one: `{ interview }` |

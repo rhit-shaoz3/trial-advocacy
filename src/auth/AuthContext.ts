@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { LogInInput, SignUpInput, User } from './types'
+import type { LogInInput, ProfileInput, SignUpInput, User } from './types'
 
 export interface AuthContextValue {
   user: User | null
@@ -7,6 +7,11 @@ export interface AuthContextValue {
   signUp(input: SignUpInput): Promise<void>
   logIn(input: LogInInput): Promise<void>
   logOut(): Promise<void>
+  /** Saves name or theme changes and updates `user`. */
+  updateProfile(input: ProfileInput): Promise<void>
+  /** Uploads a new (cropped) profile picture. */
+  uploadAvatar(image: Blob): Promise<void>
+  removeAvatar(): Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

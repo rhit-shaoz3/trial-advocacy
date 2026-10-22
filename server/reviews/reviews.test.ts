@@ -250,7 +250,7 @@ describe('the team sees the results', () => {
     expect(reviews).toEqual([
       {
         id: review.id,
-        witness: { id: witnessId, name: 'Elena Torres' },
+        witness: { id: witnessId, name: 'Elena Torres', avatarUrl: null },
         completedAt: expect.any(String),
         accepted: ['World fact.', 'Case fact.'],
         denied: ['World lie.', 'Case lie.'],

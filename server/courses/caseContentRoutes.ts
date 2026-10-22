@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from 'express'
 import { randomUUID } from 'node:crypto'
 import { extname } from 'node:path'
+import { pictureFrom, readPicture, sendPicture } from '../auth/avatars.ts'
+import { requireUser } from '../auth/requireUser.ts'
 import { HttpError } from '../httpError.ts'
 import { KEY_PATTERN, MAX_UPLOAD_BYTES } from '../storage/shared.ts'
 import { storage } from '../storage/storage.ts'
@@ -25,9 +27,12 @@ import {
   removeStoredFiles,
   setInitialMaterial,
   setMaterialText,
+  setWitnessAvatarKey,
   updateMaterial,
   updateTask,
   updateWitness,
+  WITNESS_AVATAR_PRESETS,
+  witnessAvatarKeyFor,
   type Audience,
   type MaterialAudience,
   type TaskFields,
@@ -295,7 +300,17 @@ async function readWitness(caseId: string, body: unknown): Promise<WitnessFields
     depositionMaterialId,
     knownMaterialIds,
     defendingCounsel: readText(body, 'defendingCounsel', 'Defending lawyer', MAX_NAME_LENGTH),
+    avatarPreset: readAvatarPreset(fields.avatarPreset),
   }
+}
+
+/** One of the picture designs (1 to 12), or null for none (or an uploaded picture). */
+function readAvatarPreset(value: unknown) {
+  if (value === undefined || value === null) return null
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > WITNESS_AVATAR_PRESETS) {
+    throw new HttpError(400, `Choose one of the ${WITNESS_AVATAR_PRESETS} pictures.`)
+  }
+  return value as number
 }
 
 /** Mounted under /api/courses/:courseId/cases/:caseId/witnesses. */
@@ -311,15 +326,43 @@ witnessesRouter.post('/', async (req, res) => {
 
 witnessesRouter.put('/:witnessId', async (req, res) => {
   const id = readId(req.params.witnessId, 'Witness not found.')
-  const witness = await updateWitness(req.courseCase!.id, id, await readWitness(req.courseCase!.id, req.body))
-  if (!witness) throw new HttpError(404, 'Witness not found.')
-  res.json({ witness })
+  const updated = await updateWitness(req.courseCase!.id, id, await readWitness(req.courseCase!.id, req.body))
+  if (!updated) throw new HttpError(404, 'Witness not found.')
+  if (updated.removedKey) await removeStoredFiles([updated.removedKey])
+  res.json({ witness: updated.witness })
 })
 
 witnessesRouter.delete('/:witnessId', async (req, res) => {
   const id = readId(req.params.witnessId, 'Witness not found.')
-  if (!(await deleteWitness(req.courseCase!.id, id))) throw new HttpError(404, 'Witness not found.')
+  const deleted = await deleteWitness(req.courseCase!.id, id)
+  if (!deleted) throw new HttpError(404, 'Witness not found.')
+  if (deleted.avatarKey) await removeStoredFiles([deleted.avatarKey])
   res.status(204).end()
+})
+
+/** An uploaded picture for the witness (cropped in the browser), replacing its picture design if it had one. */
+witnessesRouter.put('/:witnessId/avatar', readPicture, async (req, res) => {
+  const caseId = req.courseCase!.id
+  const id = readId(req.params.witnessId as string, 'Witness not found.')
+  const { data, type } = pictureFrom(req)
+  if (!(await findWitness(caseId, id))) throw new HttpError(404, 'Witness not found.')
+  const key = `witnesses/${id}/${randomUUID()}`
+  await storage.put(key, data, type)
+  const result = await setWitnessAvatarKey(caseId, id, key)
+  if (!result) {
+    await removeStoredFiles([key])
+    throw new HttpError(404, 'Witness not found.')
+  }
+  if (result.oldKey) await removeStoredFiles([result.oldKey])
+  res.json({ witness: result.witness })
+})
+
+witnessesRouter.delete('/:witnessId/avatar', async (req, res) => {
+  const id = readId(req.params.witnessId, 'Witness not found.')
+  const result = await setWitnessAvatarKey(req.courseCase!.id, id, null)
+  if (!result) throw new HttpError(404, 'Witness not found.')
+  if (result.oldKey) await removeStoredFiles([result.oldKey])
+  res.json({ witness: result.witness })
 })
 
 function readTask(body: unknown): TaskFields {
@@ -386,4 +429,16 @@ tasksRouter.delete('/:taskId', async (req, res) => {
   const id = readId(req.params.taskId, 'Task not found.')
   if (!(await deleteTask(req.courseCase!.id, id))) throw new HttpError(404, 'Task not found.')
   res.status(204).end()
+})
+
+/**
+ * `GET /api/witnesses/:witnessId/avatar`: a witness's uploaded picture, for
+ * the course's instructor and its students.
+ */
+export const witnessPicturesRouter = Router()
+
+witnessPicturesRouter.get('/:witnessId/avatar', requireUser, async (req, res) => {
+  const key = isUuid(req.params.witnessId) ? await witnessAvatarKeyFor(req.params.witnessId, req.user!.id) : null
+  if (!key) throw new HttpError(404, 'No picture.')
+  await sendPicture(req, res, key)
 })

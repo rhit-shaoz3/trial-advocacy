@@ -46,6 +46,8 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     createWitness: vi.fn(),
     updateWitness: vi.fn(),
     deleteWitness: vi.fn().mockResolvedValue(undefined),
+    uploadWitnessAvatar: vi.fn(),
+    removeWitnessAvatar: vi.fn(),
     listTasks: vi.fn().mockResolvedValue([]),
     createTask: vi.fn(),
     updateTask: vi.fn(),

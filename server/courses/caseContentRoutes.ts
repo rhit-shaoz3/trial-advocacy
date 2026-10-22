@@ -202,16 +202,26 @@ materialsRouter.get('/:materialId/text', async (req, res) => {
 })
 
 /**
- * Transcribes the file again (after a failure, say) in the background and
- * returns it as pending; the page checks back until it is done. Long PDFs
- * take longer than Heroku's 30-second request limit, so this never waits.
+ * Transcribes a file again after a failure, in the background, and returns it
+ * as pending; the page checks back until it is done. Long PDFs take longer
+ * than Heroku's 30-second request limit, so this never waits. A file already
+ * read (or with nothing to read) isn't read again (`409`), and one still being
+ * read isn't started twice.
  */
 materialsRouter.post('/:materialId/text', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
   const caseId = req.courseCase!.id
-  if (!(await getMaterialText(caseId, id))) throw new HttpError(404, 'File not found.')
-  await setMaterialText(id, { status: 'pending' })
-  queueTranscription(id)
+  const file = await getMaterialText(caseId, id)
+  if (!file) throw new HttpError(404, 'File not found.')
+  // Only a failed reading is run again: every reading is a paid Claude call.
+  if (file.textStatus === 'ready') {
+    throw new HttpError(409, 'This file has already been read. Upload a new version to read it again.')
+  }
+  if (file.textStatus === 'none') throw new HttpError(409, "There's nothing to read in this file.")
+  if (file.textStatus === 'failed') {
+    await setMaterialText(id, { status: 'pending' })
+    queueTranscription(id)
+  }
   const material = (await listMaterials(caseId)).find((m) => m.id === id)
   if (!material) throw new HttpError(404, 'File not found.')
   res.json({ material })

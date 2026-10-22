@@ -5,10 +5,10 @@ import {
   buildMessages,
   buildRequest,
   splitObjection,
-  WITNESS_MODEL,
   WitnessRefusalError,
   type MessagesClient,
 } from './deposition.ts'
+import { modelFor } from '../ai/models.ts'
 import { buildSystemPrompt, type DepositionSettings, type WitnessProfile } from './prompt.ts'
 
 // A made-up witness (a grocery slip-and-fall), so no real case material is in the repo.
@@ -150,24 +150,39 @@ describe('buildRequest', () => {
     ])
   })
 
+  it('takes the model from the settings, or the one asked for', () => {
+    const before = process.env.CLAUDE_WITNESS_MODEL
+    process.env.CLAUDE_WITNESS_MODEL = 'claude-sonnet-5-5'
+    try {
+      expect(buildRequest({ profile, settings: adverse, transcript: [], question: 'Hi?' }).model).toBe('claude-sonnet-5-5')
+      expect(buildRequest({ profile, settings: adverse, transcript: [], question: 'Hi?', model: 'claude-opus-5-5' }).model).toBe(
+        'claude-opus-5-5',
+      )
+    } finally {
+      if (before === undefined) delete process.env.CLAUDE_WITNESS_MODEL
+      else process.env.CLAUDE_WITNESS_MODEL = before
+    }
+  })
+
   it('uses the witness model with caching and server-side fallback', () => {
     const request = buildRequest({ profile, settings: adverse, transcript: [], question: 'Your name?' })
 
-    expect(request.model).toBe(WITNESS_MODEL)
+    expect(request.model).toBe(modelFor('witness'))
     expect(request.thinking).toEqual({ type: 'adaptive' })
-    expect(request.output_config).toEqual({ effort: 'medium' })
+    expect(request.output_config).toEqual({ effort: 'low' })
     expect(request.fallbacks).toBe('default')
     expect(request.betas).toEqual(['server-side-fallback-2026-07-01'])
+    // The case file is cached for the hour an interview can last; the transcript for 5 minutes.
     expect(request.cache_control).toEqual({ type: 'ephemeral' })
     const [system] = request.system as Anthropic.Beta.Messages.BetaTextBlockParam[]
-    expect(system.cache_control).toEqual({ type: 'ephemeral' })
+    expect(system.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })
     expect(system.text).toBe(buildSystemPrompt(profile, adverse))
   })
 })
 
 function fakeClient(response: Partial<Anthropic.Beta.Messages.BetaMessage>): MessagesClient {
   const message = {
-    model: WITNESS_MODEL,
+    model: 'claude-haiku-5-5',
     stop_reason: 'end_turn',
     stop_details: null,
     usage: { input_tokens: 10, output_tokens: 5 },
@@ -187,7 +202,7 @@ describe('askWitness', () => {
 
     const result = await askWitness(client, { profile, settings: adverse, transcript: [], question: 'Were you working?' })
 
-    expect(result).toMatchObject({ reply: 'Yes.', answer: 'Yes.', objection: null, model: WITNESS_MODEL })
+    expect(result).toMatchObject({ reply: 'Yes.', answer: 'Yes.', objection: null, model: 'claude-haiku-5-5' })
   })
 
   it('separates the defending lawyer\'s objection from the answer', async () => {

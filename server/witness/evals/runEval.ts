@@ -6,7 +6,8 @@ import { parseArgs } from 'node:util'
 import { z } from 'zod'
 import { pool } from '../../db/pool.ts'
 import { loadAppWitness, witnessFolder } from '../cliWitness.ts'
-import { askWitness, WITNESS_MODEL, type WitnessReply } from '../deposition.ts'
+import { modelFor } from '../../ai/models.ts'
+import { askWitness, type WitnessReply } from '../deposition.ts'
 import type { DepositionSettings, WitnessProfile } from '../prompt.ts'
 import { checkReply, type CheckFailure, type EvalCase } from './checks.ts'
 
@@ -14,7 +15,8 @@ import { checkReply, type CheckFailure, type EvalCase } from './checks.ts'
  * Behavioral eval for an AI witness, set up as in the app: runs each
  * scripted case against the real model, then grades the reply with the rule
  * checks and a grader model. Every run calls the API and costs money (it
- * prints the cost at the end).
+ * prints the tokens used at the end). The witness uses CLAUDE_WITNESS_MODEL
+ * (or CLAUDE_MODEL); the grader uses CLAUDE_EVAL_MODEL (or CLAUDE_MODEL).
  *
  *   npm run witness:eval -- --witness "Elena Torres"                 every case once
  *   npm run witness:eval -- --witness "Elena Torres" --case alcohol  only ids containing "alcohol"
@@ -33,9 +35,8 @@ const { values } = parseArgs({
   },
 })
 
-const GRADER_MODEL = 'claude-opus-5-5'
-// Claude Opus 5.5 rates per million tokens: input, cache writes (5-minute, 1.25x), cache reads, output.
-const PRICE = { input: 4, cacheWrite: 5, cacheRead: 0.2, output: 20 }
+const WITNESS_MODEL = modelFor('witness')
+const GRADER_MODEL = modelFor('eval')
 
 const Verdict = z.object({
   pass: z.boolean(),
@@ -43,14 +44,13 @@ const Verdict = z.object({
 })
 
 const client = new Anthropic()
-let cost = 0
-function addCost(usage: Anthropic.Beta.Messages.BetaUsage | Anthropic.Messages.Usage) {
-  cost +=
-    (usage.input_tokens * PRICE.input +
-      (usage.cache_creation_input_tokens ?? 0) * PRICE.cacheWrite +
-      (usage.cache_read_input_tokens ?? 0) * PRICE.cacheRead +
-      usage.output_tokens * PRICE.output) /
-    1_000_000
+// Token totals across the run; prices depend on the model, so see the Claude Console for cost.
+const tokens = { input: 0, cacheWrites: 0, cacheReads: 0, output: 0 }
+function addUsage(usage: Anthropic.Beta.Messages.BetaUsage | Anthropic.Messages.Usage) {
+  tokens.input += usage.input_tokens
+  tokens.cacheWrites += usage.cache_creation_input_tokens ?? 0
+  tokens.cacheReads += usage.cache_read_input_tokens ?? 0
+  tokens.output += usage.output_tokens
 }
 
 async function grade(profile: WitnessProfile, c: EvalCase, reply: WitnessReply) {
@@ -75,7 +75,7 @@ async function grade(profile: WitnessProfile, c: EvalCase, reply: WitnessReply) 
     ],
     output_config: { format: zodOutputFormat(Verdict) },
   })
-  addCost(response.usage)
+  addUsage(response.usage)
   if (!response.parsed_output) throw new Error(`The grader returned no verdict for ${c.id}`)
   return response.parsed_output
 }
@@ -105,7 +105,7 @@ async function runCase(profile: WitnessProfile, c: EvalCase, run: number): Promi
     question: c.question,
     effort: values.effort as Parameters<typeof askWitness>[1]['effort'],
   })
-  addCost(reply.usage)
+  addUsage(reply.usage)
   const ruleFailures = checkReply(reply, c.checks)
   const grader = await grade(profile, c, reply)
   return {
@@ -154,11 +154,14 @@ await Promise.all(
 )
 
 const passed = results.filter((r) => r.pass).length
-console.log(`\n${passed}/${results.length} passed. Cost: about $${cost.toFixed(2)}.`)
+console.log(
+  `\n${passed}/${results.length} passed. Tokens: ${tokens.input} input, ${tokens.cacheWrites} cache writes, ` +
+    `${tokens.cacheReads} cache reads, ${tokens.output} output (see the Claude Console for cost).`,
+)
 
 const dir = new URL('eval-results/', folder)
 await mkdir(dir, { recursive: true })
 const file = new URL(`${new Date().toISOString().replace(/[:.]/g, '-')}.json`, dir)
-await writeFile(file, JSON.stringify({ model: WITNESS_MODEL, effort: values.effort ?? 'default', cost, results }, null, 2))
+await writeFile(file, JSON.stringify({ model: WITNESS_MODEL, grader: GRADER_MODEL, effort: values.effort ?? 'default', tokens, results }, null, 2))
 console.log(`Saved the results to ${fileURLToPath(file)}`)
 if (passed < results.length) process.exitCode = 1

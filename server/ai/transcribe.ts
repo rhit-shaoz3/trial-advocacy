@@ -1,6 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-
-export const TRANSCRIBE_MODEL = 'claude-opus-5-5'
+import { modelFor } from './models.ts'
 
 /** Largest file sent to Claude inline (base64 grows it by a third; requests cap at 32 MB). */
 export const MAX_TRANSCRIBE_BYTES = 23 * 1024 * 1024
@@ -25,6 +24,22 @@ const INSTRUCTIONS = `Transcribe this case file into plain text for a legal trai
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
 
 /**
+ * The request for one file. No thinking: copying a file out word for word
+ * doesn't need reasoning, and thinking is billed as output. No caching
+ * either, since each file is read once.
+ */
+export function buildTranscribeRequest(
+  filename: string,
+  source: Anthropic.Messages.ContentBlockParam,
+): Anthropic.Messages.MessageStreamParams {
+  return {
+    model: modelFor('transcribe'),
+    max_tokens: 64000,
+    messages: [{ role: 'user', content: [source, { type: 'text', text: `File name: ${filename}\n\n${INSTRUCTIONS}` }] }],
+  }
+}
+
+/**
  * Text files are used as they are; PDFs and images are transcribed by Claude.
  * Audio and video aren't supported yet (returns null: nothing to read).
  */
@@ -47,15 +62,7 @@ export async function transcribeFile(client: Anthropic, file: FileToTranscribe):
   }
 
   // Transcriptions can be long, so stream to stay clear of request timeouts.
-  const message = await client.messages
-    .stream({
-      model: TRANSCRIBE_MODEL,
-      max_tokens: 64000,
-      thinking: { type: 'adaptive' },
-      output_config: { effort: 'low' },
-      messages: [{ role: 'user', content: [source, { type: 'text', text: `File name: ${file.filename}\n\n${INSTRUCTIONS}` }] }],
-    })
-    .finalMessage()
+  const message = await client.messages.stream(buildTranscribeRequest(file.filename, source)).finalMessage()
 
   if (message.stop_reason === 'refusal') throw new TranscriptionError('Claude declined to read this file.')
   if (message.stop_reason === 'max_tokens') throw new TranscriptionError('The file is too long to read in one go. Split it into smaller files.')

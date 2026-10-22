@@ -6,6 +6,7 @@ import { pool } from '../db/pool.ts'
 import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 import type { NewFactsInput } from '../witness/newFacts.ts'
 import type { WitnessProfile } from '../witness/prompt.ts'
+import { endExpiredInterviews } from '../witness/interviews.ts'
 import { reviewsSettled } from './reviews.ts'
 
 // A team ends an interview; the AI (faked) lists the new facts the witness
@@ -269,3 +270,67 @@ describe('the team sees the results', () => {
     expect((await eve.get(`/api/courses/${course.id}/home`)).body.newReviewResults).toBe(0)
   })
 })
+
+describe('the one-hour limit', () => {
+  /** Moves the open interview's questions `minutes` into the past. */
+  const backdate = (minutes: number) =>
+    pool.query(
+      `UPDATE interview_turns t SET created_at = now() - make_interval(mins => $1)
+       FROM interviews i WHERE i.id = t.interview_id AND i.ended_at IS NULL`,
+      [minutes],
+    )
+
+  it('starts the clock at the first question, an hour long', async () => {
+    expect((await ada.get(interview())).body.interview.endsAt).toBeNull()
+    const asked = await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    const endsAt = new Date(asked.body.interview.endsAt).getTime()
+    expect(endsAt - Date.now()).toBeGreaterThan(59 * 60 * 1000)
+    expect(endsAt - Date.now()).toBeLessThanOrEqual(60 * 60 * 1000)
+    // Partners see the same clock.
+    expect((await bo.get(interview())).body.interview.endsAt).toBe(asked.body.interview.endsAt)
+  })
+
+  it('ends the interview and sends it for review once the hour is up', async () => {
+    nextFacts = ['Torres was on break at 3:00.']
+    await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    await backdate(61)
+
+    const late = await ada.post(`${interview()}/questions`).send({ question: 'Anything else?' })
+    expect(late.status).toBe(409)
+    expect(late.body.error).toBe('This interview reached its 1-hour limit and was sent to your instructor for review.')
+    await reviewsSettled()
+    expect(await openReviews()).toMatchObject([{ status: 'open', facts: [{ text: 'Torres was on break at 3:00.' }] }])
+
+    // The next visit starts a fresh interview with a fresh hour.
+    const fresh = (await ada.get(interview())).body.interview
+    expect(fresh).toMatchObject({ turns: [], endsAt: null, canAsk: true })
+  })
+
+  it('opening an expired interview ends it and opens a fresh one', async () => {
+    nextFacts = ['Torres was on break at 3:00.']
+    await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    await backdate(61)
+    expect((await bo.get(interview())).body.interview.turns).toEqual([])
+    await reviewsSettled()
+    expect(await openReviews()).toHaveLength(1)
+  })
+
+  it('times out interviews nobody comes back to, but never instructor tests', async () => {
+    nextFacts = ['Torres was on break at 3:00.']
+    await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    await eve.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    const test = `${caseUrl()}/witnesses/${witnessId}/interview`
+    await prof.post(`${test}/questions?side=plaintiff`).send({ question: 'Where were you?' })
+    expect((await prof.get(`${test}?side=plaintiff`)).body.interview.endsAt).toBeNull()
+
+    expect(await endExpiredInterviews()).toBe(0)
+    await backdate(61)
+    // Ada's and Eve's team interviews end; the instructor's test doesn't.
+    expect(await endExpiredInterviews()).toBe(2)
+    await reviewsSettled()
+    expect(await openReviews()).toHaveLength(2)
+    expect((await prof.get(`${test}?side=plaintiff`)).body.interview.turns).toHaveLength(1)
+    expect(await endExpiredInterviews()).toBe(0)
+  })
+})
+

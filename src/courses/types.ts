@@ -222,6 +222,12 @@ export interface Interview {
     createdAt: string
   }[]
   maxTurns: number
+  /**
+   * When a team's interview ends on its own (an hour after the first
+   * question) and goes to the instructor for review. Null before the first
+   * question, and for instructor tests.
+   */
+  endsAt: string | null
   canAsk: boolean
   /** Why questions can't be asked, when they can't. */
   notice: string | null

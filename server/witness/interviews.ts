@@ -16,10 +16,16 @@ import { depositionSettings, isAiWitness, loadProfile, WitnessNotReadyError } fr
 // instructor's test runs (no team) are kept apart, one per side. "Start over"
 // ends an interview and the next visit opens a new, empty one; "End
 // interview" does the same but first sends it to the instructor for review.
+// A team's interview lasts at most an hour from its first question (so one
+// cached copy of the case file covers it); then it ends and goes for review.
 
 export const MAX_QUESTION_LENGTH = 2000
 /** Keeps a runaway interview from growing the prompt (and the bill) without end. */
 export const MAX_TURNS = 150
+/** How long a team's interview lasts, from its first question. The witness's case file is cached for this long. */
+export const INTERVIEW_MINUTES = 60
+const INTERVIEW_MS = INTERVIEW_MINUTES * 60 * 1000
+export const TIME_LIMIT_NOTICE = `This interview reached its ${INTERVIEW_MINUTES / 60}-hour limit and was sent to your instructor for review.`
 
 /** Who owns an interview: a team, or the instructor testing (team null). */
 export interface InterviewOwner {
@@ -34,6 +40,8 @@ export interface Interview {
   witness: { id: string; name: string; role: string }
   turns: { position: number; question: string; objection: string | null; answer: string; askedBy: string | null; createdAt: Date }[]
   maxTurns: number
+  /** When a team's interview ends on its own: an hour after the first question. Null before that, and for instructor tests. */
+  endsAt: Date | null
   /** False when the witness isn't set up yet, or the case is closed. */
   canAsk: boolean
   /** Why questions can't be asked, when they can't. */
@@ -85,6 +93,38 @@ function notice(witness: Witness, closed: boolean) {
   return null
 }
 
+/** When a team's interview times out: an hour after its first question. */
+function deadline(owner: InterviewOwner, turns: { createdAt: Date }[]) {
+  if (!owner.teamId || turns.length === 0) return null
+  return new Date(new Date(turns[0].createdAt).getTime() + INTERVIEW_MS)
+}
+
+/**
+ * Ends an interview (once, even if partners or the timer get there at the
+ * same moment) and, for a team's, sends it for review. Returns whether it
+ * went for review.
+ */
+async function closeInterview(interviewId: string, teamId: string | null) {
+  const { rowCount } = await pool.query('UPDATE interviews SET ended_at = now() WHERE id = $1 AND ended_at IS NULL', [
+    interviewId,
+  ])
+  if (rowCount !== 1 || !teamId) return false
+  return (await createReview(interviewId, teamId)) !== null
+}
+
+/** Ends every team interview past its hour and sends it for review. Run every minute by the server. */
+export async function endExpiredInterviews(now = new Date()) {
+  const { rows } = await pool.query<{ id: string; teamId: string }>(
+    `SELECT i.id, i.team_id AS "teamId"
+     FROM interviews i
+     WHERE i.ended_at IS NULL AND i.team_id IS NOT NULL
+       AND (SELECT min(t.created_at) FROM interview_turns t WHERE t.interview_id = i.id) <= $1`,
+    [new Date(now.getTime() - INTERVIEW_MS)],
+  )
+  for (const r of rows) await closeInterview(r.id, r.teamId)
+  return rows.length
+}
+
 async function view(witness: Witness, owner: InterviewOwner, interviewId: string, closed: boolean): Promise<Interview> {
   const turns = await listTurns(interviewId)
   const reason = notice(witness, closed) ?? (turns.length >= MAX_TURNS ? 'This interview has reached its question limit. Start over to begin a new one.' : null)
@@ -102,6 +142,7 @@ async function view(witness: Witness, owner: InterviewOwner, interviewId: string
       createdAt: t.createdAt,
     })),
     maxTurns: MAX_TURNS,
+    endsAt: deadline(owner, turns),
     canAsk: reason === null,
     notice: reason,
   }
@@ -118,8 +159,15 @@ export interface InterviewContext {
   closed: boolean
 }
 
-export async function getInterview(ctx: InterviewContext) {
-  return view(ctx.witness, ctx.owner, await openInterview(ctx.witness.id, ctx.owner, ctx.userId), ctx.closed)
+/** The open interview (a fresh one if the last ran out of time). */
+export async function getInterview(ctx: InterviewContext): Promise<Interview> {
+  const interviewId = await openInterview(ctx.witness.id, ctx.owner, ctx.userId)
+  const current = await view(ctx.witness, ctx.owner, interviewId, ctx.closed)
+  if (current.endsAt && current.endsAt <= new Date() && !ctx.closed) {
+    await closeInterview(interviewId, ctx.owner.teamId)
+    return getInterview(ctx)
+  }
+  return current
 }
 
 /** Ends the current interview and opens a fresh one. */
@@ -135,12 +183,8 @@ export async function restartInterview(ctx: InterviewContext) {
  */
 export async function endInterview(ctx: InterviewContext) {
   const current = await findOpen(ctx.witness.id, ctx.owner)
-  let reviewId: string | null = null
-  if (current) {
-    await pool.query('UPDATE interviews SET ended_at = now() WHERE id = $1', [current])
-    if (ctx.owner.teamId) reviewId = await createReview(current, ctx.owner.teamId)
-  }
-  return { interview: await getInterview(ctx), sentForReview: reviewId !== null }
+  const sentForReview = current ? await closeInterview(current, ctx.owner.teamId) : false
+  return { interview: await getInterview(ctx), sentForReview }
 }
 
 /** Asks the next question (`{ question }`) and stores the witness's reply. */
@@ -153,6 +197,10 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
   const interviewId = await openInterview(ctx.witness.id, ctx.owner, ctx.userId)
   const before = await view(ctx.witness, ctx.owner, interviewId, ctx.closed)
   if (!before.canAsk) throw new HttpError(409, before.notice!)
+  if (before.endsAt && before.endsAt <= new Date()) {
+    await closeInterview(interviewId, ctx.owner.teamId)
+    throw new HttpError(409, TIME_LIMIT_NOTICE)
+  }
 
   const transcript = await listTurns(interviewId)
   let reply

@@ -18,7 +18,7 @@ import type { WorkspaceContext } from './useWorkspace'
 
 /**
  * One course, in the app shell with course navigation. Students and the
- * course's instructor see the same pages; instructors see "All cases" instead
+ * course's instructor see the same pages; instructors see "Cases" instead
  * of "My cases" and get a "Manage course" tab. Loads the course home once and
  * hands it to the pages inside.
  */
@@ -60,7 +60,7 @@ export function WorkspaceLayout() {
     { to: `${base}${search}`, label: 'Dashboard', icon: LayoutDashboard, end: true },
     {
       to: `${base}/cases${search}`,
-      label: isInstructor ? 'All cases' : 'My cases',
+      label: isInstructor ? 'Cases' : 'My cases',
       icon: BriefcaseBusiness,
     },
     { to: `${base}/calendar${search}`, label: 'Calendar', icon: CalendarDays },

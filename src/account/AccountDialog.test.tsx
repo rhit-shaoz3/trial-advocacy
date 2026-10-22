@@ -101,7 +101,7 @@ describe('the account dialog', () => {
     service.updateProfile.mockRejectedValueOnce(new Error('Could not reach the server.'))
     const dialog = await openAccount(service)
 
-    await userEvent.click(within(dialog).getByRole('radio', { name: /Stone/ }))
+    await userEvent.click(within(dialog).getByRole('radio', { name: /Earth/ }))
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Could not reach the server.')
     expect(document.documentElement.dataset.palette).toBe('navy')

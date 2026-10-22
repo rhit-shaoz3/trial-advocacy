@@ -84,10 +84,10 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 
 Every colour comes from a token in [`src/theme/tokens.css`](src/theme/tokens.css), so stylesheets use `var(--token)` instead of raw colours. Two attributes on `<html>` pick the tokens:
 
-- `data-palette`: the account's theme, one of `navy` (the default), `forest`, `lagoon`, `vivid` or `stone`. It's saved on the account (`PATCH /api/auth/me`) and kept in `localStorage`, so it applies before the user loads.
+- `data-palette`: the account's theme, one of `navy` (the default), `slate`, `earth`, `vibrant`, `forest`, `lagoon` or `contrast`. It's saved on the account (`PATCH /api/auth/me`) and kept in `localStorage`, so it applies before the user loads.
 - `data-theme`: `light` or `dark`. Each visit starts from the system setting; the toggle in the sidebar (and on the sign-in page) lasts for that visit only (`sessionStorage`).
 
-A small script in `index.html` sets both before the page paints, so there's no flash of the wrong colours. Each palette has a light and a dark block in `tokens.css`; a new colour needs a token in all ten.
+A small script in `index.html` sets both before the page paints, so there's no flash of the wrong colours. Each palette has a light and a dark block in `tokens.css`. In dark mode the page goes dark but cards stay light-toned: each dark block also sets `--card-*` colours (its light theme, dimmed), and one rule at the end of the file gives them to every card class it lists, so a new kind of card needs adding there. A new colour needs a token in every palette, light, dark and card.
 
 ## API
 
@@ -97,7 +97,7 @@ A small script in `index.html` sets both before the page paints, so there's no f
 | POST   | `/api/auth/signup` | `{ name, email, password, role }`   | `201 { user }`, `409` if email taken |
 | POST   | `/api/auth/login`  | `{ email, password }`               | `{ user }`, `401` if wrong |
 | POST   | `/api/auth/logout` |                                     | `204`                     |
-| PATCH  | `/api/auth/me`     | `{ name?, theme? }`                 | `{ user }`; `theme` is `navy`, `forest`, `lagoon`, `vivid` or `stone`. `401` signed out, `400` blank or too-long name (100 characters) or an unknown theme |
+| PATCH  | `/api/auth/me`     | `{ name?, theme? }`                 | `{ user }`; `theme` is `navy`, `slate`, `earth`, `vibrant`, `forest`, `lagoon` or `contrast`. `401` signed out, `400` blank or too-long name (100 characters) or an unknown theme |
 | PUT    | `/api/auth/me/avatar` | The picture itself, `Content-Type: image/png` or `image/jpeg` (at most 1 MB) | `{ user }` with the new `avatarUrl`; the old picture is deleted. The browser crops it to 512×512 first. `400` not a PNG or JPEG (checked from the file, not the header), `413` too large |
 | DELETE | `/api/auth/me/avatar` |                                  | `{ user }` with `avatarUrl: null` (back to initials) |
 | GET    | `/api/users/:id/avatar` |                                | Signed-in users: the picture. `avatarUrl` (`/api/users/:id/avatar?v=…`) changes with every new picture, so that URL is cached for good. `404` without one |

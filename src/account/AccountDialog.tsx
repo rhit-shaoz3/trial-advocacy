@@ -226,7 +226,14 @@ function ThemeSection() {
                 ))}
               </span>
               <span className="account-theme-text">
-                <strong>{info.label}</strong>
+                <strong>
+                  {info.label}
+                  <span className="account-accents" aria-hidden="true">
+                    {info.accents.map((color) => (
+                      <span key={color} style={{ background: color }} />
+                    ))}
+                  </span>
+                </strong>
                 <small>{info.description}</small>
               </span>
             </label>

@@ -232,6 +232,25 @@ describe('log in', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toHaveValue('')
   })
+  it('shows and hides the password', async () => {
+    const { user } = await renderApp()
+    const password = screen.getByLabelText('Password')
+    expect(password).toHaveAttribute('type', 'password')
+
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+    expect(password).toHaveAttribute('type', 'text')
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(password).toHaveAttribute('type', 'password')
+  })
+
+  it('switches to sign up from the link under the form', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('button', { name: 'Create an account' }))
+
+    expect(screen.getByRole('tab', { name: 'Sign up' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Create your account.')
+  })
 })
 
 describe('log out', () => {

@@ -6,8 +6,9 @@ import { PHASE_CONFIRM, PHASE_HINT, PHASE_LABEL } from './casePhase'
 
 /**
  * The case's phase, shared by all of its worlds: the three steps with the
- * current one marked, and buttons to move forward or back. Read-only once the
- * case is closed.
+ * current one marked, and buttons to move forward or back. Hidden until the
+ * case worlds launch (a draft's phase means nothing yet), and read-only once
+ * the case is closed.
  */
 export function PhasePanel({
   courseId,
@@ -25,6 +26,8 @@ export function PhasePanel({
   const previous: CasePhase | undefined = CASE_PHASES[current - 1]
   const next: CasePhase | undefined = CASE_PHASES[current + 1]
   const closed = courseCase.status === 'closed'
+
+  if (courseCase.status === 'draft') return null
 
   async function moveTo(phase: CasePhase) {
     if (!window.confirm(PHASE_CONFIRM[phase])) return

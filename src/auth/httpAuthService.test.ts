@@ -78,4 +78,16 @@ describe('httpAuthService', () => {
     await expect(httpAuthService.logOut()).resolves.toBeUndefined()
     expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/logout')
   })
+
+  it('uploads the profile picture as the image itself, with its type', async () => {
+    const fetchMock = mockFetch(200, { user: ada })
+    const image = new Blob(['jpeg bytes'], { type: 'image/jpeg' })
+
+    await expect(httpAuthService.uploadAvatar(image)).resolves.toEqual(ada)
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/me/avatar', {
+      method: 'PUT',
+      body: image,
+      headers: { 'Content-Type': 'image/jpeg' },
+    })
+  })
 })

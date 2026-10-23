@@ -1,3 +1,4 @@
+import { avatarUrlSql } from '../auth/users.ts'
 import { pool } from '../db/pool.ts'
 import type { Side } from './matchups.ts'
 import type { RosterEntry } from './roster.ts'
@@ -55,6 +56,7 @@ export async function listMyCases(courseId: string, userId: string): Promise<MyC
   const teamIds = rows.flatMap((r) => [r.teamId, r.opponentTeamId]).filter((id) => id !== null)
   const { rows: memberRows } = await pool.query<Member & { teamId: string }>(
     `SELECT m.team_id AS "teamId", m.email, u.name, e.user_id IS NOT NULL AS joined,
+            ${avatarUrlSql('u')} AS "avatarUrl",
             e.user_id IS NOT DISTINCT FROM $2::uuid AS you
      FROM team_members m
      JOIN enrollments e ON e.course_id = m.course_id AND e.email = m.email
@@ -66,7 +68,7 @@ export async function listMyCases(courseId: string, userId: string): Promise<MyC
   const membersOf = (teamId: string) =>
     memberRows
       .filter((m) => m.teamId === teamId)
-      .map(({ email, name, joined, you }) => ({ email, name, joined, you }))
+      .map(({ email, name, joined, avatarUrl, you }) => ({ email, name, joined, avatarUrl, you }))
 
   return rows.map((r) => ({
     id: r.id,
@@ -100,10 +102,10 @@ export interface CaseSummary {
   nextMilestone: null
   /** The team's soonest-due open task. */
   nextTask: { title: string; dueAt: Date | null } | null
-  participants: { name: string }[]
+  participants: { name: string; avatarUrl: string | null }[]
 }
 
-const nameOf = (m: RosterEntry) => ({ name: m.name ?? m.email })
+const nameOf = (m: RosterEntry) => ({ name: m.name ?? m.email, avatarUrl: m.avatarUrl })
 
 interface TeamTask {
   id: string
@@ -193,7 +195,7 @@ export async function homeCasesForInstructor(courseId: string): Promise<CaseSumm
   const { rows } = await pool.query<Omit<CaseSummary, 'world' | 'progress' | 'nextMilestone' | 'nextTask'>>(
     `SELECT c.id, c.title, c.summary, c.status,
             (SELECT count(*)::int FROM matchups mu WHERE mu.case_id = c.id) AS "worldCount",
-            coalesce((SELECT json_agg(json_build_object('name', coalesce(u.name, m.email))
+            coalesce((SELECT json_agg(json_build_object('name', coalesce(u.name, m.email), 'avatarUrl', ${avatarUrlSql('u')})
                                       ORDER BY t.number, lower(u.name), m.email)
                       FROM team_members m
                       JOIN teams t ON t.id = m.team_id

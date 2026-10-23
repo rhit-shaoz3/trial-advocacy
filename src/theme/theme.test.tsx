@@ -74,13 +74,15 @@ describe('colour themes', () => {
 
   it("shows the signed-in user's theme", async () => {
     systemSetting(false)
-    const ada: User = { id: 'u1', name: 'Ada', email: 'ada@example.com', role: 'student', theme: 'stone', createdAt: '2026-09-01T00:00:00.000Z' }
+    const ada: User = { id: 'u1', name: 'Ada', email: 'ada@example.com', role: 'student', theme: 'stone', avatarUrl: null, createdAt: '2026-09-01T00:00:00.000Z' }
     const service: AuthService = {
       getCurrentUser: vi.fn().mockResolvedValue(ada),
       signUp: vi.fn(),
       logIn: vi.fn(),
       logOut: vi.fn(),
       updateProfile: vi.fn(),
+      uploadAvatar: vi.fn(),
+      removeAvatar: vi.fn(),
     }
     render(
       <AuthProvider service={service}>

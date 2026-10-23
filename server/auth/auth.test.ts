@@ -40,6 +40,7 @@ describe('POST /api/auth/signup', () => {
       email: 'ada@example.com',
       role: 'student',
       theme: 'navy',
+      avatarUrl: null,
       createdAt: expect.any(String),
     })
     expect(JSON.stringify(res.body)).not.toContain('correct-horse')

@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto'
+import { avatarUrlSql } from '../auth/users.ts'
 import { pool } from '../db/pool.ts'
 
 // Shapes sent to the client; match `Course` and `TaughtCourse` in src/courses/types.ts.
@@ -8,6 +9,7 @@ export interface PublicCourse {
   title: string
   term: string
   instructorName: string | null
+  instructorAvatarUrl: string | null
 }
 
 /** What the course's instructor sees: adds the private entry code. */
@@ -28,12 +30,14 @@ export interface CourseFields {
 }
 
 const SELECT_COURSE = `
-  SELECT c.id, c.code, c.title, c.term, u.name AS "instructorName"
+  SELECT c.id, c.code, c.title, c.term, u.name AS "instructorName",
+         ${avatarUrlSql('u')} AS "instructorAvatarUrl"
   FROM courses c
   LEFT JOIN users u ON u.id = c.instructor_id`
 
 const SELECT_TAUGHT_COURSE = `
   SELECT c.id, c.code, c.title, c.term, u.name AS "instructorName",
+         ${avatarUrlSql('u')} AS "instructorAvatarUrl",
          split_part(c.term, ' ', 1) AS season,
          extract(year FROM c.term_start)::int AS year,
          c.entry_code AS "entryCode",

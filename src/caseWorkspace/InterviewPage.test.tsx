@@ -28,14 +28,14 @@ const turn = (position: number, question: string, answer: string, objection: str
   createdAt: '2026-10-15T12:00:00.000Z',
 })
 
-const student: User = { id: 'u1', name: 'Ada Lawyer', email: 'ada@example.com', role: 'student', theme: 'navy', createdAt: '2026-09-01T00:00:00.000Z' }
-const instructor: User = { id: 'u2', name: 'Prof. Ruiz', email: 'prof@example.com', role: 'instructor', theme: 'navy', createdAt: '2026-09-01T00:00:00.000Z' }
+const student: User = { id: 'u1', name: 'Ada Lawyer', email: 'ada@example.com', role: 'student', theme: 'navy', avatarUrl: null, createdAt: '2026-09-01T00:00:00.000Z' }
+const instructor: User = { id: 'u2', name: 'Prof. Ruiz', email: 'prof@example.com', role: 'instructor', theme: 'navy', avatarUrl: null, createdAt: '2026-09-01T00:00:00.000Z' }
 
 function renderPage(overrides: Partial<CourseService>, user: User = student, url = '/courses/c1/cases/k1/witnesses/w1') {
   const service = fakeCourseService(overrides)
   const events = userEvent.setup()
   render(
-    <AuthContext.Provider value={{ user, loading: false, signUp: vi.fn(), logIn: vi.fn(), logOut: vi.fn(), updateProfile: vi.fn() }}>
+    <AuthContext.Provider value={{ user, loading: false, signUp: vi.fn(), logIn: vi.fn(), logOut: vi.fn(), updateProfile: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn() }}>
       <MemoryRouter initialEntries={[url]}>
         <CourseServiceContext.Provider value={service}>
           <Routes>

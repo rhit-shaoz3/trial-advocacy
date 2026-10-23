@@ -9,6 +9,9 @@ export interface AuthContextValue {
   logOut(): Promise<void>
   /** Saves name or theme changes and updates `user`. */
   updateProfile(input: ProfileInput): Promise<void>
+  /** Uploads a new (cropped) profile picture. */
+  uploadAvatar(image: Blob): Promise<void>
+  removeAvatar(): Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

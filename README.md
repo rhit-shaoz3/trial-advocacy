@@ -93,11 +93,14 @@ A small script in `index.html` sets both before the page paints, so there's no f
 
 | Method | Path               | Body                                | Result                    |
 | ------ | ------------------ | ----------------------------------- | ------------------------- |
-| GET    | `/api/auth/me`     |                                     | `{ user }` or `{ user: null }` |
+| GET    | `/api/auth/me`     |                                     | `{ user }` or `{ user: null }`; `user` has `theme` and `avatarUrl` (null until they add a profile picture) |
 | POST   | `/api/auth/signup` | `{ name, email, password, role }`   | `201 { user }`, `409` if email taken |
 | POST   | `/api/auth/login`  | `{ email, password }`               | `{ user }`, `401` if wrong |
 | POST   | `/api/auth/logout` |                                     | `204`                     |
 | PATCH  | `/api/auth/me`     | `{ name?, theme? }`                 | `{ user }`; `theme` is `navy`, `forest`, `lagoon`, `vivid` or `stone`. `401` signed out, `400` blank or too-long name (100 characters) or an unknown theme |
+| PUT    | `/api/auth/me/avatar` | The picture itself, `Content-Type: image/png` or `image/jpeg` (at most 1 MB) | `{ user }` with the new `avatarUrl`; the old picture is deleted. The browser crops it to 512×512 first. `400` not a PNG or JPEG (checked from the file, not the header), `413` too large |
+| DELETE | `/api/auth/me/avatar` |                                  | `{ user }` with `avatarUrl: null` (back to initials) |
+| GET    | `/api/users/:id/avatar` |                                | Signed-in users: the picture. `avatarUrl` (`/api/users/:id/avatar?v=…`) changes with every new picture, so that URL is cached for good. `404` without one |
 | GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
 | POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
 | GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Students get the active and closed cases they're on a team in, each with `world: { number, side }` (or `null` before matching), `progress` (percent of their team's tasks done), and `nextTask`; `upcoming` lists their open tasks' deadlines and `stats` counts completed tasks. The instructor gets every active and closed case with `worldCount`. `activity` is always empty for now |
@@ -119,7 +122,7 @@ These manage one course and are only for the instructor who teaches it (anyone e
 | GET    | `/api/courses/:id`                           |                                  | `{ course }` |
 | PATCH  | `/api/courses/:id`                           | `{ code, title, season, year }`  | `{ course }`; entry code and roster unchanged |
 | DELETE | `/api/courses/:id`                           |                                  | `204`; also deletes the roster and the cases with everything in them |
-| GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined }] }` |
+| GET    | `/api/courses/:id/roster`                    |                                  | `{ roster: [{ email, name, joined, avatarUrl }] }` |
 | POST   | `/api/courses/:id/roster`                    | `{ emails: string[] }`           | `{ added, skipped: [{ email, reason }], roster }` |
 | DELETE | `/api/courses/:id/roster/:email`             |                                  | `204`, `404` if not on the roster |
 | GET    | `/api/courses/:id/cases`                     |                                  | `{ cases: [{ id, title, summary, status, phase, importantFacts, createdAt, updatedAt }] }`, oldest first. `importantFacts` is `{ plaintiff: string[], defense: string[] }`: the most important facts for each side, which the AI witnesses never contradict and students never see |

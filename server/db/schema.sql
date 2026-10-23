@@ -16,6 +16,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
 ALTER TABLE users ADD COLUMN IF NOT EXISTS theme text NOT NULL DEFAULT 'navy'
   CHECK (theme IN ('navy', 'forest', 'lagoon', 'vivid', 'stone'));
 
+-- The user's profile picture in file storage (avatars/<userId>/<uuid>), or
+-- null to show their initials.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key text;
+
 -- A course offering in one term, e.g. LAW 540 in Fall 2026. Students join
 -- with the entry code, which is stored uppercase.
 CREATE TABLE IF NOT EXISTS courses (

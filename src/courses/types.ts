@@ -7,6 +7,8 @@ export interface Course {
   /** e.g. "Fall 2026" */
   term: string
   instructorName: string | null
+  /** The instructor's profile picture, or null for initials. */
+  instructorAvatarUrl?: string | null
 }
 
 export const SEASONS = ['Fall', 'Winter', 'Spring', 'Summer'] as const
@@ -34,6 +36,8 @@ export interface RosterEntry {
   name: string | null
   /** False while the student is pending (added by email, no account yet). */
   joined: boolean
+  /** Their profile picture, or null for initials. */
+  avatarUrl?: string | null
 }
 
 export interface AddStudentsResult {

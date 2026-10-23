@@ -28,8 +28,8 @@ describe('adding students', () => {
     expect(res.body.added).toEqual(['ada@example.com', 'new@example.com'])
     expect(res.body.skipped).toEqual([])
     expect(res.body.roster).toEqual([
-      { email: 'ada@example.com', name: 'Ada Lawyer', joined: true },
-      { email: 'new@example.com', name: null, joined: false },
+      { email: 'ada@example.com', name: 'Ada Lawyer', joined: true, avatarUrl: null },
+      { email: 'new@example.com', name: null, joined: false, avatarUrl: null },
     ])
   })
 
@@ -66,7 +66,7 @@ describe('pending students', () => {
 
     expect((await ada.get('/api/courses')).body.courses).toHaveLength(1)
     const roster = (await prof.get(rosterUrl())).body.roster
-    expect(roster).toEqual([{ email: 'ada@example.com', name: 'Ada Lawyer', joined: true }])
+    expect(roster).toEqual([{ email: 'ada@example.com', name: 'Ada Lawyer', joined: true, avatarUrl: null }])
   })
 
   it('can also claim their spot with the entry code', async () => {

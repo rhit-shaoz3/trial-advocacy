@@ -39,6 +39,8 @@ export function AuthProvider({ children, service = httpAuthService }: Props) {
         setUser(null)
       },
       updateProfile: async (input) => setUser(await service.updateProfile(input)),
+      uploadAvatar: async (image) => setUser(await service.uploadAvatar(image)),
+      removeAvatar: async () => setUser(await service.removeAvatar()),
     }),
     [user, loading, service],
   )

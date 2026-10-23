@@ -23,6 +23,7 @@ describe('POST /api/courses', () => {
       title: 'Trial Advocacy',
       term: 'Fall 2026',
       instructorName: 'Prof. Ruiz',
+      instructorAvatarUrl: null,
       season: 'Fall',
       year: 2026,
       entryCode: expect.stringMatching(/^[A-HJ-NP-Z2-9]{6}$/),
@@ -218,7 +219,7 @@ describe('GET /api/courses/:courseId/home', () => {
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({
-      course: { id: course.id, code: 'LAW 540', title: 'Trial Advocacy', term: 'Fall 2026', instructorName: 'Prof. Ruiz' },
+      course: { id: course.id, code: 'LAW 540', title: 'Trial Advocacy', term: 'Fall 2026', instructorName: 'Prof. Ruiz', instructorAvatarUrl: null },
       cases: [],
       activity: [],
       upcoming: [],
@@ -267,8 +268,8 @@ describe('GET /api/courses', () => {
     const res = await agent.get('/api/courses')
 
     expect(res.body.courses).toEqual([
-      { id: trial.id, code: 'LAW 540', title: 'Trial Advocacy', term: 'Fall 2026', instructorName: 'Prof. Ruiz' },
-      { id: evidence.id, code: 'LAW 520', title: 'Evidence', term: 'Spring 2026', instructorName: 'Prof. Ruiz' },
+      { id: trial.id, code: 'LAW 540', title: 'Trial Advocacy', term: 'Fall 2026', instructorName: 'Prof. Ruiz', instructorAvatarUrl: null },
+      { id: evidence.id, code: 'LAW 520', title: 'Evidence', term: 'Spring 2026', instructorName: 'Prof. Ruiz', instructorAvatarUrl: null },
     ])
   })
 

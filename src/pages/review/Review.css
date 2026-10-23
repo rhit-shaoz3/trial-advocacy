@@ -130,16 +130,20 @@
 
 .review-choice-accept_world:has(input:checked),
 .review-choice-accept_case:has(input:checked),
+.review-choice-allow:has(input:checked),
 .review-decision-accept_world,
-.review-decision-accept_case {
+.review-decision-accept_case,
+.review-document-allow {
   background: var(--tint-green-bg);
   color: var(--tint-green-fg);
 }
 
 .review-choice-deny_world:has(input:checked),
 .review-choice-deny_case:has(input:checked),
+.review-choice-deny:has(input:checked),
 .review-decision-deny_world,
-.review-decision-deny_case {
+.review-decision-deny_case,
+.review-document-deny {
   background: var(--tint-rose-bg);
   color: var(--tint-rose-fg);
 }
@@ -188,4 +192,73 @@
 .review-objection {
   color: var(--ws-muted);
   font-style: italic;
+}
+
+/* Background investigator reports */
+
+.review-assignment {
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--ws-gold);
+  border-radius: 0.35rem;
+  background: var(--subtle);
+}
+
+.review-assignment p,
+.review-report p {
+  margin: 0.25rem 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.review-label {
+  color: var(--ws-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.review-report {
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.45rem;
+}
+
+.review-report summary {
+  color: var(--ws-navy);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.review-report p {
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.review-documents,
+.review-records {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.review-documents h3,
+.review-records h3 {
+  margin: 0;
+  color: var(--ws-navy);
+  font-size: 0.95rem;
+}
+
+.review-documents p,
+.review-records p {
+  margin: 0;
+}
+
+.review-doc-list {
+  margin-top: 0.25rem;
+}
+
+.review-records ul {
+  margin: 0;
+  padding-left: 1.25rem;
 }

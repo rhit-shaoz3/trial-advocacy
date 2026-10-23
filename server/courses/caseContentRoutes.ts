@@ -26,6 +26,7 @@ import {
   listWitnesses,
   removeStoredFiles,
   setInitialMaterial,
+  setMaterialShares,
   setMaterialText,
   setWitnessAvatarKey,
   updateMaterial,
@@ -39,6 +40,7 @@ import {
   type WitnessFields,
 } from './caseContent.ts'
 import { queueTranscription } from './materialText.ts'
+import { listTeams } from './teams.ts'
 import { askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
 
 const MAX_FILENAME_LENGTH = 200
@@ -215,6 +217,28 @@ materialsRouter.patch('/:materialId', async (req, res) => {
   res.json({ material })
 })
 
+/** Shares a file with particular case worlds and teams, on top of its audience: `{ matchupIds, teamIds }`. */
+materialsRouter.put('/:materialId/shares', async (req, res) => {
+  const caseId = req.courseCase!.id
+  const id = readId(req.params.materialId, 'File not found.')
+  const readIds = (key: string) => {
+    const value = (req.body as Record<string, unknown> | undefined)?.[key] ?? []
+    if (!Array.isArray(value) || !value.every((v) => typeof v === 'string' && isUuid(v))) {
+      throw new HttpError(400, 'Choose the worlds and teams to share the file with.')
+    }
+    return [...new Set(value as string[])]
+  }
+  const matchupIds = readIds('matchupIds')
+  const teamIds = readIds('teamIds')
+  const { teams, matchups } = await listTeams(req.course!.id, caseId)
+  if (!matchupIds.every((m) => matchups.some((x) => x.id === m)) || !teamIds.every((t) => teams.some((x) => x.id === t))) {
+    throw new HttpError(400, 'Those worlds or teams are not in this case.')
+  }
+  const material = await setMaterialShares(caseId, id, { matchupIds, teamIds })
+  if (!material) throw new HttpError(404, 'File not found.')
+  res.json({ material })
+})
+
 materialsRouter.get('/:materialId/file', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
   await sendMaterialFile(res, await findMaterialFile(req.courseCase!.id, id))
@@ -247,12 +271,11 @@ materialsRouter.post('/:materialId/text', async (req, res) => {
     throw new HttpError(409, 'This file has already been read. Upload a new version to read it again.')
   }
   if (file.textStatus === 'none') throw new HttpError(409, "There's nothing to read in this file.")
-  if (file.textStatus === 'failed') {
-    await setMaterialText(id, { status: 'pending' })
-    queueTranscription(id)
-  }
+  if (file.textStatus === 'failed') await setMaterialText(id, { status: 'pending' })
+  // Read it before the reading starts, or a quick one could finish first and the reply skip "pending".
   const material = (await listMaterials(caseId)).find((m) => m.id === id)
   if (!material) throw new HttpError(404, 'File not found.')
+  if (file.textStatus === 'failed') queueTranscription(id)
   res.json({ material })
 })
 

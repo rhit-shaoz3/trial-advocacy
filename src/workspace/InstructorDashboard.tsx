@@ -14,14 +14,13 @@ import {
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { PHASE_LABEL, shortDate } from '../courses/caseLabels'
-import type { CasePhase } from '../courses/types'
+import { casePhases, type CasePhase } from '../courses/types'
 import { caseInitials, greeting, longDate, timeAgo } from './format'
 import { StatCard } from './StatCard'
 import type { AttentionItem, AttentionTarget, CaseMonitor, DeadlineProgress, InstructorActivity } from './types'
 import { useWorkspace } from './useWorkspace'
 import './workspace.css'
 
-const PHASES: CasePhase[] = ['subpoena', 'investigate', 'deposition']
 
 const ATTENTION_ICON = {
   reviews: Gavel,
@@ -222,7 +221,7 @@ function CaseMonitorCard({ caseMonitor: c, href }: { caseMonitor: CaseMonitor; h
         </div>
       </div>
 
-      {c.status !== 'draft' && <PhaseSteps phase={c.phase} />}
+      {c.status !== 'draft' && <PhaseSteps phase={c.phase} investigator={c.investigatorEnabled !== false} />}
 
       {c.launch && (
         <Meter
@@ -249,8 +248,9 @@ function CaseMonitorCard({ caseMonitor: c, href }: { caseMonitor: CaseMonitor; h
   )
 }
 
-/** Subpoena → Investigate → Deposition, with the current phase marked. */
-function PhaseSteps({ phase }: { phase: CasePhase }) {
+/** Subpoena → Investigate → Deposition (no Investigate without an investigator), with the current phase marked. */
+function PhaseSteps({ phase, investigator }: { phase: CasePhase; investigator: boolean }) {
+  const PHASES = casePhases(investigator)
   const current = PHASES.indexOf(phase)
   return (
     <ol className="ws-phases" aria-label={`Phase ${current + 1} of ${PHASES.length}: ${PHASE_LABEL[phase]}`}>

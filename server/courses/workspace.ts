@@ -1,12 +1,13 @@
 import { pool } from '../db/pool.ts'
 import {
   listCompletions,
-  listMaterials,
+  listMaterialsFor,
   listTasks,
   listWitnesses,
   visibleTo,
   type CaseMaterial,
   type CaseTask,
+  type MaterialViewer,
   type Witness,
 } from './caseContent.ts'
 import type { CasePhase } from './cases.ts'
@@ -55,6 +56,8 @@ export interface CaseWorkspace {
   side: Side | null
   materials: CaseMaterial[]
   witnesses: WorkspaceWitness[]
+  /** The case's background investigator, or null if it has none. */
+  investigator: { name: string; avatarUrl: string } | null
   /** Whether the background investigator is open yet (from the investigate phase on). */
   investigatorAvailable: boolean
   tasks: (CaseTask & { completedAt: Date | null; completedBy: string | null })[]
@@ -62,26 +65,47 @@ export interface CaseWorkspace {
   preview: boolean
 }
 
+/** The background investigator's portrait, the same in every case (public/investigator.png). */
+export const INVESTIGATOR_AVATAR_URL = '/investigator.png'
+
+type CaseRow = CaseWorkspace['case'] & { investigatorEnabled: boolean; investigatorName: string }
+
 async function findCaseRow(courseId: string, caseId: string) {
-  const { rows } = await pool.query<CaseWorkspace['case']>(
-    `SELECT id, title, summary, status, phase, instructor_note AS "instructorNote"
+  const { rows } = await pool.query<CaseRow>(
+    `SELECT id, title, summary, status, phase, instructor_note AS "instructorNote",
+            investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName"
      FROM cases WHERE course_id = $1 AND id = $2`,
     [courseId, caseId],
   )
   return rows[0] ?? null
 }
 
+/** The case world a team is in, or null before it's matched. */
+export async function teamMatchupId(teamId: string) {
+  const { rows } = await pool.query<{ matchupId: string }>(
+    'SELECT matchup_id AS "matchupId" FROM matchup_teams WHERE team_id = $1',
+    [teamId],
+  )
+  return rows[0]?.matchupId ?? null
+}
+
+/** What a student sees of the case file: their side's files, plus any shared with their team or world. */
+export async function studentViewer(caseId: string, userId: string, side: Side | null): Promise<MaterialViewer> {
+  const teamId = await findStudentTeamId(caseId, userId)
+  return { side, teamId, matchupId: teamId ? await teamMatchupId(teamId) : null }
+}
+
 async function assemble(
-  caseRow: CaseWorkspace['case'],
+  { investigatorEnabled, investigatorName, ...caseRow }: CaseRow,
   team: MyCase['team'],
   world: MyCase['world'],
-  side: Side | null,
-  teamId: string | null,
+  viewer: MaterialViewer,
   preview: boolean,
 ): Promise<CaseWorkspace> {
+  const { side, teamId } = viewer
   const audiences = visibleTo(side)
   const [materials, witnesses, tasks, completions] = await Promise.all([
-    listMaterials(caseRow.id, audiences),
+    listMaterialsFor(caseRow.id, viewer),
     listWitnesses(caseRow.id),
     listTasks(caseRow.id, audiences),
     teamId ? listCompletions(caseRow.id, teamId) : Promise.resolve([]),
@@ -103,7 +127,8 @@ async function assemble(
       canInterview: isAiWitness(w),
       avatarUrl: w.avatarUrl,
     })),
-    investigatorAvailable: caseRow.phase !== 'subpoena',
+    investigator: investigatorEnabled ? { name: investigatorName, avatarUrl: INVESTIGATOR_AVATAR_URL } : null,
+    investigatorAvailable: investigatorEnabled && caseRow.phase !== 'subpoena',
     tasks: tasks.map((t) => ({
       ...t,
       completedAt: doneBy.get(t.id)?.completedAt ?? null,
@@ -134,8 +159,8 @@ export async function getStudentWorkspace(courseId: string, caseId: string, user
   const myCase = (await listMyCases(courseId, userId)).find((c) => c.id === caseId)
   if (!myCase) return null
   const caseRow = (await findCaseRow(courseId, caseId))!
-  const teamId = myCase.team ? await findStudentTeamId(caseId, userId) : null
-  return assemble(caseRow, myCase.team, myCase.world, myCase.world?.side ?? null, teamId, false)
+  const viewer = await studentViewer(caseId, userId, myCase.world?.side ?? null)
+  return assemble(caseRow, myCase.team, myCase.world, viewer, false)
 }
 
 /**
@@ -151,7 +176,7 @@ export async function getPreviewWorkspace(
 ): Promise<CaseWorkspace | null> {
   const caseRow = await findCaseRow(courseId, caseId)
   if (!caseRow) return null
-  if (!matchupId) return assemble(caseRow, null, null, side, null, true)
+  if (!matchupId) return assemble(caseRow, null, null, { side, teamId: null, matchupId: null }, true)
 
   const { teams, matchups } = await listTeams(courseId, caseId)
   const matchup = matchups.find((m) => m.id === matchupId)
@@ -165,8 +190,7 @@ export async function getPreviewWorkspace(
     caseRow,
     { number: own.number, members: asMembers(own) },
     { number: matchup.number, side, opponents: { number: other.number, members: asMembers(other) } },
-    side,
-    own.id,
+    { side, teamId: own.id, matchupId },
     true,
   )
 }

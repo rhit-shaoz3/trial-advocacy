@@ -11,17 +11,31 @@ import type { SettledFacts } from '../witness/prompt.ts'
 // accept or deny, for the team's case world or for every world in the case.
 // Once the review is completed, the rulings bind every later interview, and
 // the team sees which facts were accepted and which denied.
+//
+// A team's request to the background investigator is reviewed the same way
+// (kind 'investigation'; its lifecycle is in server/investigator/requests.ts),
+// plus a ruling on each case file he'd unlock for the team.
 
 export const FACT_DECISIONS = ['accept_world', 'deny_world', 'accept_case', 'deny_case'] as const
 export type FactDecision = (typeof FACT_DECISIONS)[number]
-export type ReviewStatus = 'summarizing' | 'failed' | 'open' | 'completed'
+/**
+ * summarizing: the AI is reading the interview (or investigating); failed: try
+ * again; open: waiting for the instructor; finalizing: the AI is writing the
+ * investigator's clean report; completed: done, and the rulings stand.
+ */
+export type ReviewStatus = 'summarizing' | 'failed' | 'open' | 'finalizing' | 'completed'
+export type ReviewKind = 'interview' | 'investigation'
+export const DOCUMENT_DECISIONS = ['allow', 'deny'] as const
+export type DocumentDecision = (typeof DOCUMENT_DECISIONS)[number]
 
 // Shapes sent to the client; match `InterviewReview` and `ReviewResult` in src/courses/types.ts.
 export interface InterviewReview {
   id: string
+  kind: ReviewKind
   caseId: string
   caseTitle: string
-  witness: { id: string; name: string; role: string; avatarUrl: string | null }
+  /** The witness interviewed; null for an investigation. */
+  witness: { id: string; name: string; role: string; avatarUrl: string | null } | null
   worldNumber: number
   teamNumber: number
   side: Side
@@ -32,6 +46,17 @@ export interface InterviewReview {
   createdAt: Date
   completedAt: Date | null
   facts: { id: string; text: string; decision: FactDecision | null }[]
+  /** An investigation's assignment (what the team asked) and who sent it. */
+  assignment: string | null
+  askedBy: string | null
+  /** An investigation's report as the investigator wrote it, without its review block. */
+  report: string | null
+  /** The report the team got (once completed). */
+  finalReport: string | null
+  /** Records the team asked for that need legal process, for the instructor's information. */
+  recordsRequested: string[]
+  /** Case files the investigator would unlock for the team, and the instructor's call on each. */
+  documents: { materialId: string; title: string; decision: DocumentDecision | null }[]
 }
 
 /** What students see of a completed review: only whether each fact stands. */
@@ -185,8 +210,10 @@ async function transcriptOf(interviewId: string) {
 }
 
 const REVIEW_SELECT = `
-  SELECT r.id, r.case_id AS "caseId", c.title AS "caseTitle",
-         json_build_object('id', w.id, 'name', w.name, 'role', w.role, 'avatarUrl', ${witnessAvatarUrlSql('w')}) AS witness,
+  SELECT r.id, r.kind, r.case_id AS "caseId", c.title AS "caseTitle",
+         CASE WHEN w.id IS NULL THEN NULL
+              ELSE json_build_object('id', w.id, 'name', w.name, 'role', w.role, 'avatarUrl', ${witnessAvatarUrlSql('w')})
+         END AS witness,
          r.world_number AS "worldNumber", r.team_number AS "teamNumber", r.side,
          coalesce((SELECT json_agg(coalesce(u.name, m.email) ORDER BY lower(coalesce(u.name, m.email)))
                    FROM team_members m
@@ -196,10 +223,17 @@ const REVIEW_SELECT = `
          r.status, r.error, r.created_at AS "createdAt", r.completed_at AS "completedAt",
          coalesce((SELECT json_agg(json_build_object('id', f.id, 'text', f.text, 'decision', f.decision)
                                    ORDER BY f.position)
-                   FROM review_facts f WHERE f.review_id = r.id), '[]') AS facts
+                   FROM review_facts f WHERE f.review_id = r.id), '[]') AS facts,
+         r.assignment, (SELECT u.name FROM users u WHERE u.id = r.asked_by) AS "askedBy",
+         r.report, r.final_report AS "finalReport", r.records_requested AS "recordsRequested",
+         coalesce((SELECT json_agg(json_build_object('materialId', d.material_id,
+                                                     'title', coalesce(nullif(cm.description, ''), cm.filename),
+                                                     'decision', d.decision) ORDER BY d.position)
+                   FROM review_documents d JOIN case_materials cm ON cm.id = d.material_id
+                   WHERE d.review_id = r.id), '[]') AS documents
   FROM interview_reviews r
   JOIN cases c ON c.id = r.case_id
-  JOIN case_witnesses w ON w.id = r.witness_id`
+  LEFT JOIN case_witnesses w ON w.id = r.witness_id`
 
 /** The course's reviews still to do (newest first), or the completed ones (most recently completed first). */
 export async function listReviews(courseId: string, which: 'open' | 'completed') {
@@ -237,27 +271,53 @@ export async function decideFact(courseId: string, reviewId: string, factId: str
   return findReview(courseId, reviewId)
 }
 
-/** Finishes a review once every fact has a ruling; the rulings take effect now. */
+/** Records the instructor's call on letting the team have one case file the investigator found. */
+export async function decideDocument(courseId: string, reviewId: string, materialId: string, decision: DocumentDecision) {
+  const review = await findReview(courseId, reviewId)
+  if (review.status !== 'open') throw new HttpError(409, 'This review is already completed.')
+  const { rowCount } = await pool.query('UPDATE review_documents SET decision = $3 WHERE review_id = $1 AND material_id = $2', [
+    reviewId,
+    materialId,
+    decision,
+  ])
+  if (rowCount !== 1) throw new HttpError(404, 'File not found.')
+  return findReview(courseId, reviewId)
+}
+
+/**
+ * Finishes a review once every fact (and, for an investigation, every file)
+ * has a ruling. An interview's rulings take effect now; an investigation goes
+ * on to `finalizing` while the team's clean report is written (the caller
+ * starts that), and its rulings take effect when it's done.
+ */
 export async function completeReview(courseId: string, reviewId: string, userId: string) {
   const review = await findReview(courseId, reviewId)
-  if (review.status === 'completed') throw new HttpError(409, 'This review is already completed.')
+  if (review.status === 'completed' || review.status === 'finalizing') throw new HttpError(409, 'This review is already completed.')
   if (review.status !== 'open') throw new HttpError(409, 'The new facts in this conversation are not listed yet.')
   if (review.facts.some((f) => f.decision === null)) throw new HttpError(409, 'Rule on every fact first.')
+  if (review.documents.some((d) => d.decision === null)) throw new HttpError(409, 'Decide on every file first.')
   await pool.query(
-    `UPDATE interview_reviews SET status = 'completed', completed_at = now(), completed_by = $2 WHERE id = $1`,
+    review.kind === 'investigation'
+      ? `UPDATE interview_reviews SET status = 'finalizing', completed_by = $2 WHERE id = $1`
+      : `UPDATE interview_reviews SET status = 'completed', completed_at = now(), completed_by = $2 WHERE id = $1`,
     [reviewId, userId],
   )
   return findReview(courseId, reviewId)
 }
 
-/** Lists a failed review's new facts again. */
+/**
+ * Starts a failed review again: lists an interview's new facts, or, for an
+ * investigation, investigates again (no report yet) or rewrites the team's
+ * report (the instructor had finished). The caller starts an investigation's work.
+ */
 export async function retryReview(courseId: string, reviewId: string) {
   const review = await findReview(courseId, reviewId)
   if (review.status !== 'failed') throw new HttpError(409, 'Only a review that failed can be retried.')
-  await pool.query(`UPDATE interview_reviews SET status = 'summarizing', error = NULL WHERE id = $1`, [reviewId])
-  // Read it before the summary starts, or a quick summary could finish first and the reply skip "summarizing".
+  const next = review.kind === 'investigation' && review.report !== null ? 'finalizing' : 'summarizing'
+  await pool.query(`UPDATE interview_reviews SET status = $2, error = NULL WHERE id = $1`, [reviewId, next])
+  // Read it before the work starts, or a quick summary could finish first and the reply skip "summarizing".
   const retried = await findReview(courseId, reviewId)
-  queueReview(reviewId)
+  if (review.kind === 'interview') queueReview(reviewId)
   return retried
 }
 
@@ -295,24 +355,24 @@ export async function teamReviewResults(caseId: string, teamId: string, userId: 
                       WHERE f.review_id = r.id AND f.decision LIKE 'deny%'), '[]') AS denied,
             EXISTS (SELECT 1 FROM review_seen s WHERE s.review_id = r.id AND s.user_id = $3) AS seen
      FROM interview_reviews r JOIN case_witnesses w ON w.id = r.witness_id
-     WHERE r.case_id = $1 AND r.team_id = $2 AND r.status = 'completed'
+     WHERE r.case_id = $1 AND r.team_id = $2 AND r.status = 'completed' AND r.kind = 'interview'
      ORDER BY r.completed_at DESC`,
     [caseId, teamId, userId],
   )
   return rows
 }
 
-/** Marks every completed review of the team as read by this student. */
-export async function markReviewsSeen(caseId: string, teamId: string, userId: string) {
+/** Marks every completed review of the team (interviews, or investigator reports) as read by this student. */
+export async function markReviewsSeen(caseId: string, teamId: string, userId: string, kind: ReviewKind = 'interview') {
   await pool.query(
     `INSERT INTO review_seen (review_id, user_id)
-     SELECT id, $3 FROM interview_reviews WHERE case_id = $1 AND team_id = $2 AND status = 'completed'
+     SELECT id, $3 FROM interview_reviews WHERE case_id = $1 AND team_id = $2 AND status = 'completed' AND kind = $4
      ON CONFLICT DO NOTHING`,
-    [caseId, teamId, userId],
+    [caseId, teamId, userId, kind],
   )
 }
 
-/** Completed reviews of the student's teams in this course that they haven't opened yet. */
+/** Completed reviews (and investigator reports) of the student's teams in this course that they haven't opened yet. */
 export async function unseenReviewCount(courseId: string, userId: string) {
   const { rows } = await pool.query<{ n: number }>(
     `SELECT count(*)::int AS n

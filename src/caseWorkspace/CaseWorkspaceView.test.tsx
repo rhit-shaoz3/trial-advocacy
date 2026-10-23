@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
-import type { CaseWorkspace } from '../courses/types'
+import type { CaseWorkspace, Investigation } from '../courses/types'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
 
 const NOW = new Date('2026-10-15T09:00:00')
@@ -281,18 +281,15 @@ describe('CaseWorkspaceView phases', () => {
     expect(screen.getByText('Subpoena phase')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Investigator' }))
-    expect(screen.getByRole('tabpanel')).toHaveTextContent(
-      'Your background investigator becomes available in the investigate phase.',
-    )
+    const panel = screen.getByRole('tabpanel')
+    expect(within(panel).getByRole('heading', { name: 'John Hastings' })).toBeInTheDocument()
+    expect(panel).toHaveTextContent('John Hastings becomes available in the investigate phase.')
+    expect(within(panel).queryByRole('form')).not.toBeInTheDocument()
   })
 
-  it('opens the investigator from the investigate phase on', async () => {
-    const { user } = renderView({
-      workspace: { ...sampleWorkspace, case: { ...sampleWorkspace.case, phase: 'investigate' }, investigatorAvailable: true },
-    })
-    expect(screen.getByText('Investigate phase')).toBeInTheDocument()
-    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
-    expect(screen.getByRole('tabpanel')).toHaveTextContent('Your background investigator is on the way.')
+  it('has no investigator tab when the case has no investigator', () => {
+    renderView({ workspace: { ...sampleWorkspace, investigator: null } })
+    expect(screen.queryByRole('tab', { name: /Investigator/ })).not.toBeInTheDocument()
   })
 
   it("says the other side's witnesses come in the deposition phase", async () => {
@@ -319,3 +316,86 @@ describe('CaseWorkspaceView phases', () => {
     expect(screen.queryByText("Defense's witness")).not.toBeInTheDocument()
   })
 })
+
+describe('the background investigator', () => {
+  const open = {
+    ...sampleWorkspace,
+    case: { ...sampleWorkspace.case, phase: 'investigate' as const },
+    investigator: { name: 'Nora Vance', avatarUrl: '/investigator.png' },
+    investigatorAvailable: true,
+  }
+  const report = (over: Partial<Investigation> = {}): Investigation => ({
+    id: 'i1',
+    assignment: 'Check the lift hill.',
+    askedBy: 'Ada Lawyer',
+    sentAt: '2026-10-10T15:00:00.000Z',
+    status: 'completed',
+    completedAt: '2026-10-11T15:00:00.000Z',
+    report: '1. I photographed the lift hill from the parking lot.',
+    unlocked: [{ id: 'm9', title: 'Inspection log' }],
+    seen: true,
+    ...over,
+  })
+
+  it('emails him an assignment from the team', async () => {
+    const onSendInvestigation = vi.fn().mockResolvedValue(undefined)
+    const { user } = renderView({ workspace: open, investigations: [], onSendInvestigation })
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+
+    const email = screen.getByRole('form', { name: 'Email Nora Vance' })
+    expect(email).toHaveTextContent('To Nora Vance')
+    expect(email).toHaveTextContent('From Team 7')
+    const send = within(email).getByRole('button', { name: 'Send to Nora Vance' })
+    expect(send).toBeDisabled()
+    await user.type(within(email).getByLabelText('Your assignment'), 'Find who else was on the ride.')
+    await user.click(send)
+
+    expect(onSendInvestigation).toHaveBeenCalledWith('Find who else was on the ride.')
+    expect(within(email).getByLabelText('Your assignment')).toHaveValue('')
+  })
+
+  it('shows the request he is working on instead of the email', async () => {
+    const { user } = renderView({
+      workspace: open,
+      investigations: [report({ status: 'working', report: null, completedAt: null, unlocked: [] })],
+      onSendInvestigation: vi.fn(),
+    })
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+
+    expect(screen.getByRole('status')).toHaveTextContent('Nora Vance is on it.')
+    expect(screen.getByRole('status')).toHaveTextContent('Check the lift hill.')
+    expect(screen.queryByRole('form', { name: 'Email Nora Vance' })).not.toBeInTheDocument()
+  })
+
+  it('shows his reports above the email, with the files they unlocked', async () => {
+    const { user } = renderView({
+      workspace: open,
+      investigations: [report({ id: 'i2', assignment: 'Talk to the ride operators.', report: '1. Two operators declined to talk.' }), report()],
+      onSendInvestigation: vi.fn(),
+    })
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+
+    const panel = screen.getByRole('tabpanel')
+    expect(panel).toHaveTextContent('1. Two operators declined to talk.')
+    expect(within(panel).getByRole('heading', { name: 'Earlier reports' })).toBeInTheDocument()
+    expect(within(panel).getAllByRole('link', { name: 'Inspection log' })[0]).toHaveAttribute('href', '/files/m9')
+    // The newest report comes before the next email.
+    const latest = within(panel).getByText('1. Two operators declined to talk.')
+    const email = within(panel).getByRole('form', { name: 'Email Nora Vance' })
+    expect(latest.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('puts his reports in the case file, and tells the team about a new one', async () => {
+    const onOpenInvestigator = vi.fn()
+    const { user } = renderView({ workspace: open, investigations: [report({ seen: false })], onOpenInvestigator })
+
+    expect(screen.getByRole('status')).toHaveTextContent('New report from Nora Vance.')
+    expect(screen.getByRole('tab', { name: 'Investigator, 1' })).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: /Case file/ }))
+    expect(screen.getByRole('heading', { name: 'Investigator reports 1' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Read report' }))
+    expect(onOpenInvestigator).toHaveBeenCalled()
+  })
+})
+

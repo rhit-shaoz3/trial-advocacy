@@ -425,7 +425,7 @@ describe('reviews on the dashboard', () => {
   it('tells a student when their interviews have been reviewed, and keeps their resource library', async () => {
     renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, newReviewResults: 1 }) }))
 
-    expect(await screen.findByText('Your instructor reviewed your interviews.')).toBeInTheDocument()
+    expect(await screen.findByText('You have new results from your instructor.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open my cases' })).toHaveAttribute('href', '/courses/c1/cases')
     const nav = screen.getByRole('navigation', { name: 'Course' })
     expect(within(nav).getByRole('link', { name: 'Resource library' })).toBeInTheDocument()

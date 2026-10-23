@@ -6,6 +6,7 @@ import { CourseServiceContext } from '../../../courses/CourseServiceContext'
 import { MemoryRouter } from 'react-router'
 import type { CaseMaterial, CaseWorkspace, CourseCase, CourseService } from '../../../courses/types'
 import { fakeCourseService } from '../../../test/fakeCourseService'
+import { InvestigatorSection } from './InvestigatorSection'
 import { LaunchPanel } from './LaunchPanel'
 import { CALM_LIFTOFF_MS, LIFTOFF_MS } from './liftoff'
 import { MaterialsSection } from './MaterialsSection'
@@ -212,6 +213,92 @@ describe('MaterialsSection', () => {
     await user.click(screen.getByRole('button', { name: 'Delete Fact pattern.pdf' }))
     expect(service.deleteMaterial).toHaveBeenCalledWith('c1', 'k1', 'm1')
     expect(screen.queryByRole('link', { name: 'Fact pattern.pdf' })).not.toBeInTheDocument()
+  })
+})
+
+describe('MaterialsSection sharing', () => {
+  const teams = {
+    teams: [
+      { id: 't1', number: 1, members: [] },
+      { id: 't2', number: 2, members: [] },
+    ],
+    unpaired: [],
+    matchups: [{ id: 'w1', number: 1, plaintiffTeamId: 't1', defenseTeamId: 't2' }],
+  }
+
+  it('shares a file with chosen worlds and teams, keeping it to instructors otherwise', async () => {
+    const log: CaseMaterial = { ...factPattern, id: 'm2', filename: 'Inspection log.pdf', description: '', audience: 'plaintiff' }
+    const updateMaterial = vi.fn().mockResolvedValue({ ...log, audience: 'instructor' })
+    const setMaterialShares = vi.fn().mockResolvedValue({ ...log, audience: 'instructor', shares: { matchupIds: ['w1'], teamIds: ['t2'] } })
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, {
+      listMaterials: vi.fn().mockResolvedValue([log]),
+      listTeams: vi.fn().mockResolvedValue(teams),
+      updateMaterial,
+      setMaterialShares,
+    })
+
+    const select = await screen.findByLabelText('Who can see Inspection log.pdf')
+    await screen.findByRole('option', { name: 'Specific worlds or teams…' })
+    await user.selectOptions(select, 'Specific worlds or teams…')
+    expect(updateMaterial).toHaveBeenCalledWith('c1', 'k1', 'm2', { audience: 'instructor', description: '' })
+
+    const picker = screen.getByRole('group', { name: 'Also share Inspection log.pdf with' })
+    await user.click(within(picker).getByRole('checkbox', { name: 'World A: Team 1 v. Team 2' }))
+    await user.click(within(picker).getByRole('checkbox', { name: 'Team 2' }))
+    await user.click(within(picker).getByRole('button', { name: 'Save sharing' }))
+
+    expect(setMaterialShares).toHaveBeenCalledWith('c1', 'k1', 'm2', { matchupIds: ['w1'], teamIds: ['t2'] })
+    expect(await screen.findByText('Also World A, Team 2')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: /Also share/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('InvestigatorSection', () => {
+  const coaster: CourseCase = {
+    id: 'k1',
+    title: 'Rivera v. Thrill Park',
+    summary: '',
+    status: 'draft',
+    phase: 'subpoena',
+    instructorNote: '',
+    inWorldDate: null,
+    disputedIssues: '',
+    importantFacts: { plaintiff: [], defense: [] },
+    investigator: { enabled: true, name: 'John Hastings', instructions: '' },
+    createdAt: '2026-10-01T15:00:00.000Z',
+    updatedAt: '2026-10-01T15:00:00.000Z',
+  }
+
+  it('renames the investigator, gives him instructions, or turns him off', async () => {
+    const saved = { ...coaster, investigator: { enabled: true, name: 'Nora Vance', instructions: 'Be brief.' } }
+    const saveInvestigator = vi.fn().mockResolvedValue(saved)
+    const onSaved = vi.fn()
+    const { user } = renderWith(<InvestigatorSection courseId="c1" courseCase={coaster} onSaved={onSaved} />, { saveInvestigator })
+
+    const toggle = screen.getByRole('checkbox', { name: 'Use a background investigator' })
+    expect(toggle).toBeChecked()
+    const save = screen.getByRole('button', { name: 'Save investigator' })
+    expect(save).toBeDisabled()
+    await user.clear(screen.getByLabelText('Name'))
+    await user.type(screen.getByLabelText('Name'), 'Nora Vance')
+    await user.type(screen.getByLabelText(/Instructions for the investigator/), 'Be brief.')
+    await user.click(save)
+
+    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', { enabled: true, name: 'Nora Vance', instructions: 'Be brief.' })
+    expect(onSaved).toHaveBeenCalledWith(saved)
+    expect(await screen.findByText('Saved.')).toBeInTheDocument()
+
+    await user.click(toggle)
+    expect(screen.getByLabelText('Name')).toBeDisabled()
+  })
+
+  it('shows why he can\'t be turned off', async () => {
+    const saveInvestigator = vi.fn().mockRejectedValue(new Error('Move the case out of the investigate phase before turning off the investigator.'))
+    const { user } = renderWith(<InvestigatorSection courseId="c1" courseCase={coaster} onSaved={vi.fn()} />, { saveInvestigator })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Use a background investigator' }))
+    await user.click(screen.getByRole('button', { name: 'Save investigator' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Move the case out of the investigate phase')
   })
 })
 

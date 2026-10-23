@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { Upload, X } from 'lucide-react'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate } from '../../../courses/caseLabels'
-import { MATERIAL_AUDIENCES, type CaseMaterial, type MaterialAudience } from '../../../courses/types'
+import {
+  MATERIAL_AUDIENCES,
+  type CaseMaterial,
+  type CaseTeams,
+  type MaterialAudience,
+  type MaterialShares,
+} from '../../../courses/types'
+import { sharesLabel } from './shares'
+import { SharePicker } from './SharePicker'
 
 const MAX_BYTES = 100 * 1024 * 1024 // matches the server's limit
 const ACCEPT = [
@@ -27,10 +35,14 @@ let nextKey = 0
 /** "Ride log (March).pdf" → "Ride log (March)" */
 const defaultLabel = (filename: string) => filename.replace(/\.[^.]+$/, '') || filename
 
+/** The audience select's extra choice: instructors only, plus the worlds and teams picked. */
+const SPECIFIC = 'specific'
+
 /**
  * The case file: the pieces of the fact pattern (documents, images, audio,
  * video), each shown to everyone in the case, only to one side, or only to
- * instructors. Every file is also transcribed for the AI witnesses to read.
+ * instructors, and on top of that to particular case worlds or teams. Every
+ * file is also transcribed for the AI witnesses to read.
  */
 export function MaterialsSection({
   courseId,
@@ -53,6 +65,21 @@ export function MaterialsSection({
   const [retrying, setRetrying] = useState<string | null>(null)
   const [queued, setQueued] = useState<QueuedFile[]>([])
   const [dragging, setDragging] = useState(false)
+  /** The case's teams and worlds, for sharing files with them. */
+  const [teams, setTeams] = useState<CaseTeams | null>(null)
+  /** The file whose sharing is being edited. */
+  const [sharing, setSharing] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    service
+      .listTeams(courseId, caseId)
+      .then((t) => !cancelled && setTeams(t))
+      .catch(() => {}) // sharing just isn't offered
+    return () => {
+      cancelled = true
+    }
+  }, [service, courseId, caseId])
 
   useEffect(() => {
     let cancelled = false
@@ -142,8 +169,12 @@ export function MaterialsSection({
 
   const unlabeled = queued.some((p) => !p.label.trim())
 
-  async function handleAudience(material: CaseMaterial, next: MaterialAudience) {
+  async function handleAudience(material: CaseMaterial, choice: MaterialAudience | typeof SPECIFIC) {
     setErrors([])
+    // Specific worlds or teams: only instructors see it, plus whoever is picked.
+    if (choice === SPECIFIC) setSharing(material.id)
+    const next = choice === SPECIFIC ? 'instructor' : choice
+    if (next === material.audience) return
     try {
       const updated = await service.updateMaterial(courseId, caseId, material.id, {
         audience: next,
@@ -154,6 +185,13 @@ export function MaterialsSection({
     } catch (err) {
       setErrors([err instanceof Error ? err.message : 'Something went wrong.'])
     }
+  }
+
+  async function handleShares(material: CaseMaterial, shares: MaterialShares) {
+    const updated = await service.setMaterialShares(courseId, caseId, material.id, shares)
+    setMaterials((prev) => prev?.map((m) => (m.id === updated.id ? updated : m)) ?? null)
+    setSharing(null)
+    onChange?.()
   }
 
   async function handleInitial(material: CaseMaterial) {
@@ -334,66 +372,94 @@ export function MaterialsSection({
             </thead>
             <tbody>
               {materials.map((m) => (
-                <tr key={m.id}>
-                  <td>
-                    <a href={service.materialDownloadUrl(courseId, caseId, m.id)} download>
-                      {m.filename}
-                    </a>
-                    <small className="muted content-meta">
-                      {formatSize(m.sizeBytes)}
-                      {m.description && ` · ${m.description}`}
-                    </small>
-                    {m.initial ? (
-                      <span className="badge badge-case-active badge-initial">Initial file</span>
-                    ) : (
+                <Fragment key={m.id}>
+                  <tr>
+                    <td>
+                      <a href={service.materialDownloadUrl(courseId, caseId, m.id)} download>
+                        {m.filename}
+                      </a>
+                      <small className="muted content-meta">
+                        {formatSize(m.sizeBytes)}
+                        {m.description && ` · ${m.description}`}
+                      </small>
+                      {m.initial ? (
+                        <span className="badge badge-case-active badge-initial">Initial file</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="link-button content-meta"
+                          onClick={() => handleInitial(m)}
+                          aria-label={`Make ${m.filename} the initial file`}
+                        >
+                          Make initial file
+                        </button>
+                      )}
+                    </td>
+                    <td>{fileTypeLabel(m.contentType)}</td>
+                    <td>
+                      <select
+                        className="inline-select"
+                        value={m.audience}
+                        onChange={(e) => handleAudience(m, e.target.value as MaterialAudience | typeof SPECIFIC)}
+                        aria-label={`Who can see ${m.filename}`}
+                        // Every team starts from the initial file, so everyone sees it.
+                        disabled={m.initial}
+                        title={m.initial ? 'Every team sees the initial file.' : undefined}
+                      >
+                        {MATERIAL_AUDIENCES.map((a) => (
+                          <option key={a} value={a}>
+                            {AUDIENCE_LABEL[a]}
+                          </option>
+                        ))}
+                        {teams && <option value={SPECIFIC}>Specific worlds or teams…</option>}
+                      </select>
+                      {sharesLabel(teams, m.shares) && (
+                        <small className="share-chips">Also {sharesLabel(teams, m.shares)}</small>
+                      )}
+                      {teams && !m.initial && sharing !== m.id && (
+                        <button
+                          type="button"
+                          className="link-button content-meta"
+                          onClick={() => setSharing(m.id)}
+                          aria-label={`Share ${m.filename} with worlds or teams`}
+                        >
+                          Share with worlds or teams
+                        </button>
+                      )}
+                    </td>
+                    <td>
+                      <TextStatusCell
+                        material={m}
+                        textUrl={service.materialTextUrl(courseId, caseId, m.id)}
+                        retrying={retrying === m.id}
+                        onRetry={() => handleRetry(m)}
+                      />
+                    </td>
+                    <td>{shortDate(m.uploadedAt)}</td>
+                    <td className="cell-actions">
                       <button
                         type="button"
-                        className="link-button content-meta"
-                        onClick={() => handleInitial(m)}
-                        aria-label={`Make ${m.filename} the initial file`}
+                        className="btn-danger"
+                        onClick={() => handleDelete(m)}
+                        aria-label={`Delete ${m.filename}`}
                       >
-                        Make initial file
+                        Delete
                       </button>
-                    )}
-                  </td>
-                  <td>{fileTypeLabel(m.contentType)}</td>
-                  <td>
-                    <select
-                      className="inline-select"
-                      value={m.audience}
-                      onChange={(e) => handleAudience(m, e.target.value as MaterialAudience)}
-                      aria-label={`Who can see ${m.filename}`}
-                      // Every team starts from the initial file, so everyone sees it.
-                      disabled={m.initial}
-                      title={m.initial ? 'Every team sees the initial file.' : undefined}
-                    >
-                      {MATERIAL_AUDIENCES.map((a) => (
-                        <option key={a} value={a}>
-                          {AUDIENCE_LABEL[a]}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <TextStatusCell
-                      material={m}
-                      textUrl={service.materialTextUrl(courseId, caseId, m.id)}
-                      retrying={retrying === m.id}
-                      onRetry={() => handleRetry(m)}
-                    />
-                  </td>
-                  <td>{shortDate(m.uploadedAt)}</td>
-                  <td className="cell-actions">
-                    <button
-                      type="button"
-                      className="btn-danger"
-                      onClick={() => handleDelete(m)}
-                      aria-label={`Delete ${m.filename}`}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
+                  {sharing === m.id && teams && (
+                    <tr className="share-row">
+                      <td colSpan={6}>
+                        <SharePicker
+                          material={m}
+                          teams={teams}
+                          onSave={(shares) => handleShares(m, shares)}
+                          onCancel={() => setSharing(null)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

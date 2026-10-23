@@ -12,7 +12,6 @@ import {
   FileAudio,
   FileVideo,
   Gavel,
-  Lock,
   MessageSquare,
   Search,
   Users,
@@ -32,9 +31,19 @@ import {
   shortDate,
   type FileCategory,
 } from '../courses/caseLabels'
-import type { CaseMaterial, CaseWorkspace, MyTeamMember, ReviewResult, Side } from '../courses/types'
+import {
+  DEFAULT_INVESTIGATOR_NAME,
+  INVESTIGATOR_AVATAR_URL,
+  type CaseMaterial,
+  type CaseWorkspace,
+  type Investigation,
+  type MyTeamMember,
+  type ReviewResult,
+  type Side,
+} from '../courses/types'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
+import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import './caseWorkspace.css'
 
 type Tab = 'overview' | 'case-file' | 'witnesses' | 'investigator' | 'tasks' | 'reviews'
@@ -66,6 +75,9 @@ export function CaseWorkspaceView({
   instructorAvatarUrl,
   reviews,
   onOpenReviews,
+  investigations,
+  onSendInvestigation,
+  onOpenInvestigator,
   now = new Date(),
 }: {
   workspace: CaseWorkspace
@@ -80,13 +92,27 @@ export function CaseWorkspaceView({
   reviews?: ReviewResult[]
   /** Called when the student opens the Reviews tab, to mark the results read. */
   onOpenReviews?(): void
+  /** The team's requests to the background investigator; leave out (the preview) to show him without them. */
+  investigations?: Investigation[]
+  /** Emails the investigator an assignment; leave out (the preview) to hide the email. */
+  onSendInvestigation?(assignment: string): Promise<void>
+  /** Called when the student opens the investigator or a report, to mark the reports read. */
+  onOpenInvestigator?(): void
   now?: Date
 }) {
   const [tab, setTabState] = useState<Tab>('overview')
   const unseen = reviews?.filter((r) => !r.seen).length ?? 0
+  const reports = investigations?.filter((i) => i.status === 'completed') ?? []
+  const unseenReports = reports.filter((r) => !r.seen).length
+  // Cases from before the investigator setting have him; null means this case has none.
+  const investigator =
+    workspace.investigator === undefined
+      ? { name: DEFAULT_INVESTIGATOR_NAME, avatarUrl: INVESTIGATOR_AVATAR_URL }
+      : workspace.investigator
   function setTab(next: Tab) {
     setTabState(next)
     if (next === 'reviews') onOpenReviews?.()
+    if (next === 'investigator') onOpenInvestigator?.()
   }
   const { case: c, team, world, materials, witnesses, tasks } = workspace
   const initialFile = materials.find((m) => m.initial)
@@ -100,9 +126,9 @@ export function CaseWorkspaceView({
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'case-file', label: 'Case file', count: materials.length },
+    { id: 'case-file', label: 'Case file', count: materials.length + reports.length },
     { id: 'witnesses', label: 'Witnesses', count: witnesses.length },
-    { id: 'investigator', label: 'Investigator' },
+    ...(investigator ? [{ id: 'investigator' as const, label: 'Investigator', count: unseenReports }] : []),
     { id: 'tasks', label: 'Tasks', count: openTasks.length },
     ...(reviews ? [{ id: 'reviews' as const, label: 'Reviews', count: unseen }] : []),
   ]
@@ -125,6 +151,9 @@ export function CaseWorkspaceView({
       </header>
 
       {unseen > 0 && tab !== 'reviews' && <NewResultsBanner onOpen={() => setTab('reviews')} />}
+      {investigator && unseenReports > 0 && tab !== 'investigator' && (
+        <NewReportBanner name={investigator.name} onOpen={() => setTab('investigator')} />
+      )}
 
       <div className="cw-tabs" role="tablist" aria-label="Case sections">
         {tabs.map((t) => (
@@ -238,7 +267,24 @@ export function CaseWorkspaceView({
               The case background, and the evidence in {c.title} your instructor has given your team. Ask
               your instructor for anything else you need.
             </p>
-            {byCategory.length === 0 ? (
+            {reports.length > 0 && (
+              <section className="cw-group" aria-labelledby="cw-group-reports">
+                <h3 id="cw-group-reports">
+                  Investigator reports <span>{reports.length}</span>
+                </h3>
+                <div className="cw-investigation-list">
+                  {reports.map((r) => (
+                    <InvestigatorReport
+                      key={r.id}
+                      investigation={r}
+                      downloadUrl={downloadUrl}
+                      onOpen={onOpenInvestigator}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+            {byCategory.length === 0 && reports.length === 0 ? (
               <p className="cw-empty">The case file hasn&rsquo;t been posted yet.</p>
             ) : (
               byCategory.map((g) => (
@@ -302,7 +348,16 @@ export function CaseWorkspaceView({
           </ListPanel>
         )}
 
-        {tab === 'investigator' && <InvestigatorPanel available={workspace.investigatorAvailable} />}
+        {tab === 'investigator' && investigator && (
+          <InvestigatorPanel
+            investigator={investigator}
+            available={workspace.investigatorAvailable}
+            teamName={team && world ? `Team ${team.number}` : null}
+            investigations={investigations}
+            downloadUrl={downloadUrl}
+            onSend={c.status === 'active' ? onSendInvestigation : undefined}
+          />
+        )}
 
         {tab === 'reviews' && reviews && <ReviewsPanel reviews={reviews} />}
 
@@ -381,6 +436,21 @@ function NewResultsBanner({ onOpen }: { onOpen(): void }) {
       </p>
       <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
         See results
+      </button>
+    </div>
+  )
+}
+
+/** Shown above the tabs while the team has an investigator report it hasn't read. */
+function NewReportBanner({ name, onOpen }: { name: string; onOpen(): void }) {
+  return (
+    <div className="ws-notice cw-new-results" role="status">
+      <Search aria-hidden="true" />
+      <p>
+        <strong>New report from {name}.</strong> Your instructor has reviewed it, and it&rsquo;s in your case file.
+      </p>
+      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
+        Read report
       </button>
     </div>
   )
@@ -480,7 +550,12 @@ function MaterialLink({
         {m.description && <span className="cw-row-desc">{m.description}</span>}
       </span>
       {m.initial && row && <span className="cw-badge">Start here</span>}
-      {m.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[m.audience]}</span>}
+      {m.audience !== 'all' && (
+        <span className="cw-badge">
+          {/* A team only sees an instructors-only file when it's been shared with them. */}
+          {m.audience === 'instructor' ? 'Shared with your team' : AUDIENCE_LABEL[m.audience]}
+        </span>
+      )}
       <Download className="cw-row-end" aria-hidden="true" />
     </a>
   )
@@ -516,26 +591,6 @@ function WorkbenchRow({
 }
 
 const WITNESS_FOR: Record<Side, string> = { plaintiff: "Plaintiff's witness", defense: "Defense's witness" }
-
-/** The background investigator: locked until the investigate phase, and still being built after that. */
-function InvestigatorPanel({ available }: { available: boolean }) {
-  return (
-    <section className="cw-card cw-investigator" aria-labelledby="cw-investigator-title">
-      <span className="ws-eyebrow">Case workspace</span>
-      <h2 id="cw-investigator-title">Background investigator</h2>
-      <div className="cw-investigator-body">
-        <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
-          {available ? <Search /> : <Lock />}
-        </span>
-        <p>
-          {available
-            ? 'Your background investigator is on the way. Check back soon.'
-            : 'Your background investigator becomes available in the investigate phase.'}
-        </p>
-      </div>
-    </section>
-  )
-}
 
 function ListPanel({
   title,

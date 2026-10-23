@@ -104,7 +104,7 @@ function StudentDashboard({ now }: { now: Date }) {
                 ? '1 conversation is waiting for your review.'
                 : `${home.reviewCount} conversations are waiting for your review.`}
             </strong>{' '}
-            Rule on the new facts the AI witnesses added.
+            Rule on the new facts the AI witnesses and the investigator added.
           </p>
           <Link to={`${base}/review${search}`} className="ws-btn ws-btn-primary">
             Review now
@@ -115,8 +115,8 @@ function StudentDashboard({ now }: { now: Date }) {
         <div className="ws-notice" role="status">
           <Gavel aria-hidden="true" />
           <p>
-            <strong>Your instructor reviewed your interviews.</strong> See which new facts were accepted and
-            which were denied in your case&rsquo;s Reviews tab.
+            <strong>You have new results from your instructor.</strong> Rulings on your interviews are in your
+            case&rsquo;s Reviews tab, and investigator reports are in its Investigator tab and case file.
           </p>
           <Link to={`${base}/cases${search}`} className="ws-btn ws-btn-primary">
             Open my cases

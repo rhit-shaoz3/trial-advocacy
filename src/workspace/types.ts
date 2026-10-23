@@ -79,6 +79,8 @@ export interface CaseMonitor {
   title: string
   status: 'draft' | 'active' | 'closed'
   phase: CasePhase
+  /** Whether the case has a background investigator (and so an investigate phase). */
+  investigatorEnabled?: boolean
   worldCount: number
   /** Drafts: launch checklist items met, of the total, and the first one still missing. */
   launch: { ready: number; total: number; next: string | null } | null

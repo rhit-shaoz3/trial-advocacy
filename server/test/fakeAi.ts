@@ -1,6 +1,7 @@
 import { afterEach, beforeEach } from 'vitest'
 import { ai } from '../ai/ai.ts'
 import { transcriptionsSettled } from '../courses/materialText.ts'
+import { investigationsSettled } from '../investigator/requests.ts'
 import { reviewsSettled } from '../reviews/reviews.ts'
 
 // Server tests never call Claude. By default a file's "transcription" is its
@@ -14,11 +15,17 @@ beforeEach(() => {
     throw new Error('This test did not set up a fake witness.')
   }
   ai.findNewFacts = async () => []
+  ai.investigate = async () => {
+    throw new Error('This test did not set up a fake investigator.')
+  }
+  // Edits nothing; tests that check the edit swap in their own.
+  ai.finalizeReport = async (input) => input.body
 })
 
 afterEach(async () => {
   // Uploads start transcriptions in the background; let them finish before the next test resets the database.
   await transcriptionsSettled()
   await reviewsSettled()
+  await investigationsSettled()
   Object.assign(ai, real)
 })

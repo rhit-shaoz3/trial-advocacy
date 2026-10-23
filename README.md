@@ -80,6 +80,15 @@ By default the tests reuse the username and password from `DATABASE_URL` in `.en
 
 GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint, build and all tests on every pull request and on pushes to `main`, using a throwaway Postgres container.
 
+## Themes and dark mode
+
+Every colour comes from a token in [`src/theme/tokens.css`](src/theme/tokens.css), so stylesheets use `var(--token)` instead of raw colours. Two attributes on `<html>` pick the tokens:
+
+- `data-palette`: the account's theme, one of `navy` (the default), `forest`, `lagoon`, `vivid` or `stone`. It's saved on the account (`PATCH /api/auth/me`) and kept in `localStorage`, so it applies before the user loads.
+- `data-theme`: `light` or `dark`. Each visit starts from the system setting; the toggle in the sidebar (and on the sign-in page) lasts for that visit only (`sessionStorage`).
+
+A small script in `index.html` sets both before the page paints, so there's no flash of the wrong colours. Each palette has a light and a dark block in `tokens.css`; a new colour needs a token in all ten.
+
 ## API
 
 | Method | Path               | Body                                | Result                    |
@@ -88,6 +97,7 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lin
 | POST   | `/api/auth/signup` | `{ name, email, password, role }`   | `201 { user }`, `409` if email taken |
 | POST   | `/api/auth/login`  | `{ email, password }`               | `{ user }`, `401` if wrong |
 | POST   | `/api/auth/logout` |                                     | `204`                     |
+| PATCH  | `/api/auth/me`     | `{ name?, theme? }`                 | `{ user }`; `theme` is `navy`, `forest`, `lagoon`, `vivid` or `stone`. `401` signed out, `400` blank or too-long name (100 characters) or an unknown theme |
 | GET    | `/api/courses`     |                                     | `{ courses }` the user is enrolled in, newest term first |
 | POST   | `/api/courses/join`| `{ entryCode }`                     | `201 { course }`; `404` unknown code, `409` already enrolled, `403` instructors |
 | GET    | `/api/courses/:id/home` |                                | Enrolled students (and the instructor): `{ course, cases, activity, upcoming, stats }` for the course home page. Students get the active and closed cases they're on a team in, each with `world: { number, side }` (or `null` before matching), `progress` (percent of their team's tasks done), and `nextTask`; `upcoming` lists their open tasks' deadlines and `stats` counts completed tasks. The instructor gets every active and closed case with `worldCount`. `activity` is always empty for now |

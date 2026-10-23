@@ -3,7 +3,17 @@ import { Router, type Request } from 'express'
 import { claimPendingEnrollments } from '../courses/roster.ts'
 import { HttpError } from '../httpError.ts'
 import { EMAIL_PATTERN, readString } from '../validation.ts'
-import { createUser, findUserByEmail, findUserById, toPublicUser, type Role } from './users.ts'
+import {
+  createUser,
+  findUserByEmail,
+  findUserById,
+  MAX_NAME_LENGTH,
+  THEMES,
+  toPublicUser,
+  updateUser,
+  type Role,
+  type Theme,
+} from './users.ts'
 
 const BCRYPT_ROUNDS = 11
 const MIN_PASSWORD_LENGTH = 8
@@ -32,6 +42,26 @@ authRouter.get('/me', async (req, res) => {
   res.json({ user: user ? toPublicUser(user) : null })
 })
 
+/** The account page: `{ name?, theme? }`. */
+authRouter.patch('/me', async (req, res) => {
+  if (!req.session.userId) throw new HttpError(401, 'Log in first.')
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const fields: { name?: string; theme?: Theme } = {}
+  if (body.name !== undefined) {
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    if (!name) throw new HttpError(400, 'Name is required.')
+    if (name.length > MAX_NAME_LENGTH) throw new HttpError(400, `Name must be at most ${MAX_NAME_LENGTH} characters.`)
+    fields.name = name
+  }
+  if (body.theme !== undefined) {
+    if (!THEMES.includes(body.theme as Theme)) throw new HttpError(400, 'Choose one of the themes.')
+    fields.theme = body.theme as Theme
+  }
+  const user = await updateUser(req.session.userId, fields)
+  if (!user) throw new HttpError(401, 'Log in first.')
+  res.json({ user: toPublicUser(user) })
+})
+
 authRouter.post('/signup', async (req, res) => {
   const name = readString(req.body, 'name').trim()
   const email = readString(req.body, 'email').trim().toLowerCase()
@@ -39,6 +69,7 @@ authRouter.post('/signup', async (req, res) => {
   const role = readString(req.body, 'role') as Role
 
   if (!name) throw new HttpError(400, 'Name is required.')
+  if (name.length > MAX_NAME_LENGTH) throw new HttpError(400, `Name must be at most ${MAX_NAME_LENGTH} characters.`)
   if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter a valid email address.')
   if (password.length < MIN_PASSWORD_LENGTH) {
     throw new HttpError(400, `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)

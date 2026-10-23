@@ -11,6 +11,11 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
 
+-- The colour theme the user picked on the account page (light/dark follows
+-- their computer and isn't stored).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS theme text NOT NULL DEFAULT 'navy'
+  CHECK (theme IN ('navy', 'forest', 'lagoon', 'vivid', 'stone'));
+
 -- A course offering in one term, e.g. LAW 540 in Fall 2026. Students join
 -- with the entry code, which is stored uppercase.
 CREATE TABLE IF NOT EXISTS courses (

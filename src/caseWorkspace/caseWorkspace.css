@@ -34,7 +34,7 @@
 }
 
 .cw-chip {
-  color: #7c8793;
+  color: var(--muted);
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -90,7 +90,7 @@
 }
 
 .cw-tab:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -98,7 +98,7 @@
   min-width: 1.25rem;
   padding: 0.05rem 0.35rem;
   border-radius: 1rem;
-  background: #e9ebeb;
+  background: var(--tint-grey-bg);
   color: var(--ws-muted);
   font-size: 0.68rem;
   text-align: center;
@@ -127,12 +127,12 @@
   overflow: hidden;
   padding: 1.5rem 1.6rem;
   border-radius: 0.7rem;
-  background: var(--ws-navy);
-  color: #fff;
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
 .cw-banner-eyebrow {
-  color: #b8c4d2;
+  color: var(--on-brand-muted);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -141,13 +141,13 @@
 
 .cw .cw-banner h2 {
   margin-top: 0.45rem;
-  color: #fff;
+  color: var(--on-brand);
   font: 400 1.75rem/1.2 var(--ws-serif);
 }
 
 .cw .cw-banner p {
   margin-top: 0.35rem;
-  color: #c9d2dd;
+  color: var(--on-brand-muted);
   font-size: 0.85rem;
 }
 
@@ -170,11 +170,11 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #fff;
+  background: var(--surface);
 }
 
 .cw-banner small {
-  color: #a9b6c5;
+  color: var(--on-brand-muted);
   font-size: 0.72rem;
 }
 
@@ -184,7 +184,7 @@
   padding: 1.35rem 1.4rem;
   border: 1px solid var(--ws-line);
   border-radius: 0.7rem;
-  background: #fff;
+  background: var(--surface);
 }
 
 .cw .cw-card h2 {
@@ -200,7 +200,7 @@
 
 .cw .cw-summary {
   margin-top: 0.85rem;
-  color: #3c4857;
+  color: var(--fg-soft);
   font: 1rem/1.7 Georgia, 'Times New Roman', serif;
   white-space: pre-line;
 }
@@ -266,7 +266,7 @@
   padding: 0.8rem 1rem;
   border: 1px solid var(--ws-line);
   border-radius: 0.55rem;
-  background: #fff;
+  background: var(--surface);
 }
 
 .cw-row-link,
@@ -276,16 +276,16 @@
 
 .cw-row-link:hover,
 .cw-file:hover {
-  border-color: #c7ccd0;
+  border-color: var(--border-strong);
 }
 
 .cw-list .cw-row-link:hover {
-  background: #fafaf8;
+  background: var(--surface-hover);
 }
 
 .cw-row-link:focus-visible,
 .cw-file:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -312,7 +312,7 @@
 .cw .cw-row-body p,
 .cw .cw-row-desc {
   margin-top: 0.2rem;
-  color: #4d5866;
+  color: var(--fg-soft);
   font-size: 0.82rem;
   line-height: 1.5;
   white-space: pre-line;
@@ -322,15 +322,15 @@
   flex: none;
   width: 1.05rem;
   height: 1.05rem;
-  color: #8a939b;
+  color: var(--muted);
 }
 
 .cw-badge {
   flex: none;
   padding: 0.2rem 0.6rem;
   border-radius: 1rem;
-  background: #eef0f1;
-  color: #5c6670;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
   font-size: 0.68rem;
   font-weight: 700;
   white-space: nowrap;
@@ -343,8 +343,8 @@
   gap: 0.35rem;
   padding: 0.4rem 0.8rem;
   border-radius: 0.45rem;
-  background: var(--ws-navy);
-  color: #fff;
+  background: var(--button);
+  color: var(--on-brand);
   font-size: 0.78rem;
   font-weight: 700;
   text-decoration: none;
@@ -355,7 +355,7 @@
 }
 
 .cw-interview:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -365,7 +365,7 @@
 }
 
 .cw-interview-off:hover {
-  background: var(--ws-navy);
+  background: var(--button);
 }
 
 .cw-interview svg {
@@ -374,12 +374,12 @@
 }
 
 .cw-badge-done {
-  background: #e1eee7;
-  color: #426d59;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
 }
 
 .cw-badge-overdue {
-  background: #f6e3e0;
+  background: var(--tint-rose-bg);
   color: var(--ws-red);
 }
 
@@ -396,10 +396,10 @@
   width: 1.45rem;
   height: 1.45rem;
   padding: 0;
-  border: 1.5px solid #b8bfc6;
+  border: 1.5px solid var(--border-strong);
   border-radius: 0.35rem;
-  background: #fff;
-  color: #fff;
+  background: var(--surface);
+  color: var(--on-brand);
   cursor: pointer;
 }
 
@@ -410,8 +410,8 @@
 
 .cw-check[aria-checked='true'],
 .cw-check-on {
-  border-color: #4e8067;
-  background: #4e8067;
+  border-color: var(--success);
+  background: var(--success);
 }
 
 .cw-check-static {
@@ -419,7 +419,7 @@
 }
 
 .cw-check:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -442,7 +442,7 @@
 
 .cw .cw-next-desc {
   margin-top: 0.4rem;
-  color: #4d5866;
+  color: var(--fg-soft);
   font-size: 0.82rem;
   line-height: 1.5;
 }
@@ -517,14 +517,14 @@
 
 .cw-note {
   padding: 1.2rem 1.3rem;
-  border: 1px solid #e4d9c4;
+  border: 1px solid var(--tint-amber-border);
   border-left: 3px solid var(--ws-gold);
   border-radius: 0.6rem;
-  background: #f8f2e6;
+  background: var(--tint-amber-bg);
 }
 
 .cw-note-label {
-  color: #8b692f;
+  color: var(--tint-amber-fg);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -533,7 +533,7 @@
 
 .cw-note blockquote {
   margin: 0.6rem 0 0;
-  color: #3c4857;
+  color: var(--fg-soft);
   font: italic 0.95rem/1.6 Georgia, 'Times New Roman', serif;
   white-space: pre-line;
 }
@@ -675,8 +675,8 @@
 
 /* A witness for the other side, revealed in the deposition phase */
 .cw-badge-theirs {
-  background: #f6ece6;
-  color: #8a4f2f;
+  background: var(--tint-orange-bg);
+  color: var(--tint-orange-fg);
 }
 
 /* Background investigator (locked until the investigate phase) */
@@ -720,8 +720,8 @@
 }
 
 .cw-badge-new {
-  background: #f2e8d8;
-  color: #8b692f;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .cw-review-lists {
@@ -737,11 +737,11 @@
 }
 
 .cw-fact-list-accepted {
-  background: #eef5f0;
+  background: var(--tint-green-bg);
 }
 
 .cw-fact-list-denied {
-  background: #f8ecea;
+  background: var(--tint-rose-bg);
 }
 
 .cw .cw-fact-list h3 {
@@ -753,11 +753,11 @@
 }
 
 .cw-fact-list-accepted h3 {
-  color: #2f6b47;
+  color: var(--tint-green-fg);
 }
 
 .cw-fact-list-denied h3 {
-  color: #8a3b33;
+  color: var(--tint-rose-fg);
 }
 
 .cw-fact-list-denied li {
@@ -775,4 +775,9 @@
 
 .cw-new-results {
   margin: 0 0 1rem;
+}
+
+/* In dark mode the banner's dark panel needs an edge to stand off the page. */
+:root[data-theme='dark'] .cw-banner {
+  box-shadow: inset 0 0 0 1px var(--ws-line);
 }

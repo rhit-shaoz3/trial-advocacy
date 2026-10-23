@@ -102,11 +102,11 @@
 }
 
 a.case-row:hover {
-  border-color: #608cb3;
+  border-color: var(--focus);
 }
 
 .case-row:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -156,18 +156,18 @@ a.case-row:hover {
 
 /* Draft and active reuse the roster's Pending / Joined colors. */
 .badge-case-draft {
-  background: #f2e8d8;
-  color: #8b692f;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .badge-case-active {
-  background: #e1eee7;
-  color: #426d59;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
 }
 
 .badge-case-closed {
-  background: #e6e9ee;
-  color: #4f5b6b;
+  background: var(--tint-grey-bg);
+  color: var(--fg-soft);
 }
 
 .teams-actions {
@@ -198,9 +198,9 @@ a.case-row:hover {
 .unpaired-panel {
   margin-bottom: 1.25rem;
   padding: 1rem 1.2rem;
-  border: 1px dashed #c9b893;
+  border: 1px dashed var(--tint-amber-border);
   border-radius: 0.6rem;
-  background: #fbf7ef;
+  background: var(--tint-amber-bg);
 }
 
 .unpaired-header {
@@ -297,11 +297,11 @@ a.case-row:hover {
 
 .icon-button:hover:not(:disabled) {
   background: var(--subtle);
-  color: #a33b3b;
+  color: var(--tint-rose-fg);
 }
 
 .icon-button:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -310,7 +310,7 @@ a.case-row:hover {
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
-  background: #fff;
+  background: var(--surface);
   color: var(--muted);
   font: inherit;
   font-size: 0.85rem;
@@ -339,7 +339,7 @@ a.case-row:hover {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  color: #384454;
+  color: var(--fg-soft);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -350,7 +350,7 @@ a.case-row:hover {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
-  background: #fff;
+  background: var(--surface);
   color: var(--fg);
   font: inherit;
   font-size: 0.9rem;
@@ -394,19 +394,19 @@ a.case-row:hover {
 }
 
 .world-side-plaintiff {
-  background: #e8eff7;
+  background: var(--tint-blue-bg);
 }
 
 .world-side-plaintiff dt {
-  color: #2f5b86;
+  color: var(--tint-blue-fg);
 }
 
 .world-side-defense {
-  background: #f6ece6;
+  background: var(--tint-orange-bg);
 }
 
 .world-side-defense dt {
-  color: #8a4f2f;
+  color: var(--tint-orange-fg);
 }
 
 .my-case-assignment {
@@ -465,7 +465,7 @@ a.case-row:hover {
 }
 
 .case-tab:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -515,18 +515,18 @@ a.case-row:hover {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  color: #384454;
+  color: var(--fg-soft);
 }
 
 .launch-checks svg {
   flex: none;
   width: 1.05rem;
   height: 1.05rem;
-  color: #a7afb7;
+  color: var(--muted);
 }
 
 .launch-checks .launch-ok svg {
-  color: #4e8067;
+  color: var(--success);
 }
 
 .launch-button {
@@ -594,16 +594,16 @@ a.case-row:hover {
   place-items: center;
   width: 1.5rem;
   height: 1.5rem;
-  border: 1.5px solid #b8bfc6;
+  border: 1.5px solid var(--border-strong);
   border-radius: 50%;
   font-size: 0.75rem;
   font-weight: 700;
 }
 
 .phase-steps .phase-done .phase-step-number {
-  border-color: #4e8067;
-  background: #e1eee7;
-  color: #426d59;
+  border-color: var(--success);
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
 }
 
 .phase-steps .phase-current {
@@ -612,9 +612,9 @@ a.case-row:hover {
 }
 
 .phase-steps .phase-current .phase-step-number {
-  border-color: var(--ws-navy);
-  background: var(--ws-navy);
-  color: #fff;
+  border-color: var(--button);
+  background: var(--button);
+  color: var(--on-brand);
 }
 
 .phase-actions {
@@ -663,7 +663,7 @@ a.case-row:hover {
 
 .upload-drop-over {
   border-color: var(--ws-blue);
-  background: #eef3f8;
+  background: var(--tint-blue-bg);
 }
 
 .upload-drop-prompt {
@@ -727,7 +727,7 @@ a.case-row:hover {
   padding: 0.45rem 0.7rem;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
-  background: #fff;
+  background: var(--surface);
   font: inherit;
   font-size: 0.88rem;
 }
@@ -766,7 +766,7 @@ a.case-row:hover {
   padding: 0.25rem 0.4rem;
   border: 1px solid var(--border);
   border-radius: 0.35rem;
-  background: #fff;
+  background: var(--surface);
   color: var(--fg);
   font: inherit;
   font-size: 0.85rem;
@@ -798,7 +798,7 @@ a.case-row:hover {
 
 .content-item p {
   margin: 0.35rem 0 0;
-  color: #4d5866;
+  color: var(--fg-soft);
   font-size: 0.85rem;
   white-space: pre-line;
   overflow-wrap: anywhere;
@@ -816,28 +816,28 @@ a.case-row:hover {
 }
 
 .content-audience-all {
-  background: #eef0f1;
-  color: #5c6670;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
 }
 
 .content-audience-plaintiff {
-  background: #e8eff7;
-  color: #2f5b86;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
 }
 
 .content-audience-defense {
-  background: #f6ece6;
-  color: #8a4f2f;
+  background: var(--tint-orange-bg);
+  color: var(--tint-orange-fg);
 }
 
 .content-audience-instructor {
-  background: #f1ecf6;
-  color: #5d3f86;
+  background: var(--tint-purple-bg);
+  color: var(--tint-purple-fg);
 }
 
 .content-ai-witness {
-  background: #e7f3ec;
-  color: #2f6b47;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
 }
 
 /* The AI witness part of the witness form */
@@ -854,7 +854,7 @@ a.case-row:hover {
 
 .content-fieldset legend {
   padding: 0 0.35rem;
-  color: #384454;
+  color: var(--fg-soft);
   font-size: 0.85rem;
   font-weight: 700;
 }
@@ -878,7 +878,7 @@ a.case-row:hover {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  color: #384454;
+  color: var(--fg-soft);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -915,7 +915,7 @@ a.case-row:hover {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #384454;
+  color: var(--fg-soft);
   font-size: 0.85rem;
   font-weight: 700;
 }
@@ -925,7 +925,7 @@ a.case-row:hover {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
-  background: #fff;
+  background: var(--surface);
   color: var(--fg);
   font: inherit;
   font-weight: 400;
@@ -933,7 +933,7 @@ a.case-row:hover {
 
 .preview-frame {
   padding: 1.5rem;
-  border: 1px dashed #c3c9cf;
+  border: 1px dashed var(--border-strong);
   border-radius: 0.8rem;
   background: var(--ws-paper);
 }

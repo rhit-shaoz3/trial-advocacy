@@ -39,19 +39,19 @@
 }
 
 a.course-card:hover {
-  border-color: #c7ccd0;
+  border-color: var(--border-strong);
   border-top-color: var(--ws-blue);
   box-shadow: var(--ws-shadow);
   transform: translateY(-2px);
 }
 
 a.course-card:focus-visible {
-  outline: 2px solid #608cb3;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
 .course-code {
-  color: #7c8793;
+  color: var(--muted);
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.1em;

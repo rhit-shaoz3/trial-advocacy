@@ -358,11 +358,27 @@ export interface Investigation {
   seen: boolean
 }
 
+/** Why an exchange is struck out: it stated a denied fact, or its question built on one. */
+export interface StrikeReason {
+  kind: 'produced' | 'builtOn'
+  fact: string
+}
+
 export interface ReviewTurn {
+  position: number
   question: string
   objection: string | null
   answer: string
   askedBy: string | null
+  /** all: the question and answer rest on a denied fact; question: only the question does. */
+  struck?: 'all' | 'question' | null
+  reasons?: StrikeReason[]
+}
+
+/** The conversation behind a review; `marked` is false for reviews from before exchanges were linked to facts. */
+export interface ReviewTranscript {
+  turns: ReviewTurn[]
+  marked: boolean
 }
 
 /** A completed review as the team sees it: only whether each fact stands. */
@@ -552,5 +568,7 @@ export interface CourseService {
   decideDocument(courseId: string, reviewId: string, materialId: string, decision: DocumentDecision): Promise<InterviewReview>
   completeReview(courseId: string, reviewId: string): Promise<InterviewReview>
   retryReview(courseId: string, reviewId: string): Promise<InterviewReview>
-  getReviewTranscript(courseId: string, reviewId: string): Promise<ReviewTurn[]>
+  getReviewTranscript(courseId: string, reviewId: string): Promise<ReviewTranscript>
+  /** One of the student's team's completed reviews, with what rests on denied facts struck out. */
+  getMyReviewTranscript(courseId: string, caseId: string, reviewId: string): Promise<ReviewTranscript>
 }

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { MarkedTranscript } from '../components/MarkedTranscript'
 import { Link } from 'react-router'
 import {
   ArrowRight,
@@ -39,6 +40,7 @@ import {
   type Investigation,
   type MyTeamMember,
   type ReviewResult,
+  type ReviewTranscript,
   type Side,
 } from '../courses/types'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
@@ -75,6 +77,7 @@ export function CaseWorkspaceView({
   instructorAvatarUrl,
   reviews,
   onOpenReviews,
+  loadTranscript,
   investigations,
   onSendInvestigation,
   onOpenInvestigator,
@@ -92,6 +95,8 @@ export function CaseWorkspaceView({
   reviews?: ReviewResult[]
   /** Called when the student opens the Reviews tab, to mark the results read. */
   onOpenReviews?(): void
+  /** A reviewed interview's transcript, with what rests on denied facts struck out. */
+  loadTranscript?(reviewId: string): Promise<ReviewTranscript>
   /** The team's requests to the background investigator; leave out (the preview) to show him without them. */
   investigations?: Investigation[]
   /** Emails the investigator an assignment; leave out (the preview) to hide the email. */
@@ -359,7 +364,7 @@ export function CaseWorkspaceView({
           />
         )}
 
-        {tab === 'reviews' && reviews && <ReviewsPanel reviews={reviews} />}
+        {tab === 'reviews' && reviews && <ReviewsPanel reviews={reviews} loadTranscript={loadTranscript} />}
 
         {tab === 'tasks' && (
           <ListPanel title="Tasks" sub={`Everything assigned in ${c.title}.`} empty="No tasks have been assigned yet.">
@@ -374,14 +379,21 @@ export function CaseWorkspaceView({
 }
 
 /** The instructor's rulings on new facts from the team's interviews: what stands and what doesn't. */
-function ReviewsPanel({ reviews }: { reviews: ReviewResult[] }) {
+function ReviewsPanel({
+  reviews,
+  loadTranscript,
+}: {
+  reviews: ReviewResult[]
+  loadTranscript?(reviewId: string): Promise<ReviewTranscript>
+}) {
   return (
     <section className="cw-card" aria-labelledby="cw-reviews-title">
       <span className="ws-eyebrow">Case workspace</span>
       <h2 id="cw-reviews-title">Reviews</h2>
       <p className="cw-section-sub">
         When your team ends an interview, your instructor rules on any new facts the witness added. Rely on the
-        accepted facts; don&rsquo;t rely on the denied ones.
+        accepted facts; don&rsquo;t rely on the denied ones. In each transcript, what rests on a denied fact is struck
+        out in red.
       </p>
       {reviews.length === 0 ? (
         <p className="cw-empty">No reviewed interviews yet. End an interview to send it for review.</p>
@@ -402,11 +414,38 @@ function ReviewsPanel({ reviews }: { reviews: ReviewResult[] }) {
                   <FactList title="Denied" tone="denied" facts={r.denied} />
                 </div>
               )}
+              {loadTranscript && <TranscriptDetails load={() => loadTranscript(r.id)} />}
             </li>
           ))}
         </ul>
       )}
     </section>
+  )
+}
+
+/** A reviewed interview's transcript, loaded the first time it's opened. */
+function TranscriptDetails({ load }: { load(): Promise<ReviewTranscript> }) {
+  const [transcript, setTranscript] = useState<ReviewTranscript | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  function handleToggle(open: boolean) {
+    if (!open || transcript) return
+    load()
+      .then(setTranscript)
+      .catch((err: Error) => setError(err.message))
+  }
+
+  return (
+    <details className="cw-review-transcript" onToggle={(e) => handleToggle(e.currentTarget.open)}>
+      <summary>Read the transcript</summary>
+      {error ? (
+        <p className="form-error">{error}</p>
+      ) : !transcript ? (
+        <p className="cw-empty">Loading…</p>
+      ) : (
+        <MarkedTranscript transcript={transcript} />
+      )}
+    </details>
   )
 }
 

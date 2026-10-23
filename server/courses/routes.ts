@@ -16,13 +16,7 @@ import {
   type TaughtCourse,
 } from './courses.ts'
 import { askQuestion, endInterview, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
-import {
-  findTeamWorld,
-  markReviewsSeen,
-  openReviewCount,
-  teamReviewResults,
-  unseenReviewCount,
-} from '../reviews/reviews.ts'
+import { findTeamInterviewReview, findTeamWorld, markedTranscript, markReviewsSeen, openReviewCount, teamReviewResults, unseenReviewCount } from '../reviews/reviews.ts'
 import { reviewsRouter } from '../reviews/reviewRoutes.ts'
 import { findMaterialFile, findWitness, listStorageKeys, removeStoredFiles, setTaskDone } from './caseContent.ts'
 import { sendMaterialFile } from './caseContentRoutes.ts'
@@ -255,6 +249,16 @@ coursesRouter.get('/:courseId/my-cases/:caseId/reviews', async (req, res) => {
   await loadStudentWorkspace(courseId, caseId, req.user!.id)
   const teamId = await findStudentTeamId(caseId, req.user!.id)
   res.json({ reviews: teamId ? await teamReviewResults(caseId, teamId, req.user!.id) : [] })
+})
+
+/** The conversation behind one of the team's completed reviews, with what rests on denied facts struck out. */
+coursesRouter.get('/:courseId/my-cases/:caseId/reviews/:reviewId/transcript', async (req, res) => {
+  const { courseId, caseId, reviewId } = req.params
+  await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  const id = teamId && isUuid(reviewId) ? await findTeamInterviewReview(caseId, teamId, reviewId) : null
+  if (!id) throw new HttpError(404, 'Review not found.')
+  res.json(await markedTranscript(id))
 })
 
 /** Marks the team's review results as read by this student. */

@@ -176,8 +176,13 @@ async function summarize(id: string) {
     try {
       await client.query('BEGIN')
       await client.query('DELETE FROM review_facts WHERE review_id = $1', [id])
-      for (const [position, text] of facts.entries()) {
-        await client.query('INSERT INTO review_facts (review_id, position, text) VALUES ($1, $2, $3)', [id, position, text])
+      for (const [position, fact] of facts.entries()) {
+        await client.query('INSERT INTO review_facts (review_id, position, text, links) VALUES ($1, $2, $3, $4)', [
+          id,
+          position,
+          fact.text,
+          JSON.stringify({ producedBy: fact.producedBy, builtOn: fact.builtOn }),
+        ])
       }
       // Nothing new means nothing to rule on, so the review is done.
       await client.query(
@@ -321,18 +326,77 @@ export async function retryReview(courseId: string, reviewId: string) {
   return retried
 }
 
-/** The conversation behind a review, for the instructor to check how a fact came up. */
-export async function reviewTranscript(courseId: string, reviewId: string) {
-  await findReview(courseId, reviewId)
-  const { rows } = await pool.query<{ question: string; objection: string | null; answer: string; askedBy: string | null }>(
-    `SELECT t.question, t.objection, t.answer, u.name AS "askedBy"
+/** Why an exchange is struck out: it stated a denied fact, or its question built on one. */
+export interface StrikeReason {
+  kind: 'produced' | 'builtOn'
+  fact: string
+}
+
+// Shape sent to the client; matches `ReviewTurn` in src/courses/types.ts.
+export interface MarkedTurn {
+  position: number
+  question: string
+  objection: string | null
+  answer: string
+  askedBy: string | null
+  /** all: the question and answer rest on a denied fact; question: only the question does; null: it stands. */
+  struck: 'all' | 'question' | null
+  reasons: StrikeReason[]
+}
+
+interface FactLinks {
+  producedBy: number[]
+  builtOn: { turn: number; answer: boolean }[]
+}
+
+/**
+ * The conversation behind an interview review, with the exchanges tied to a
+ * denied fact struck out: the ones that stated it (question and answer), and
+ * later questions that built on it (their answers too, if they rely on it).
+ * `marked` is false for reviews from before facts were linked to exchanges.
+ */
+export async function markedTranscript(reviewId: string): Promise<{ turns: MarkedTurn[]; marked: boolean }> {
+  const { rows: turns } = await pool.query<Omit<MarkedTurn, 'struck' | 'reasons'>>(
+    `SELECT t.position, t.question, t.objection, t.answer, u.name AS "askedBy"
      FROM interview_turns t
      JOIN interview_reviews r ON r.interview_id = t.interview_id
      LEFT JOIN users u ON u.id = t.asked_by
      WHERE r.id = $1 ORDER BY t.position`,
     [reviewId],
   )
-  return rows
+  const { rows: facts } = await pool.query<{ text: string; decision: FactDecision | null; links: FactLinks | null }>(
+    'SELECT text, decision, links FROM review_facts WHERE review_id = $1 ORDER BY position',
+    [reviewId],
+  )
+  const marked = turns.map((t): MarkedTurn => ({ ...t, struck: null, reasons: [] }))
+  const at = (position: number) => marked.find((t) => t.position === position)
+  const strike = (turn: MarkedTurn | undefined, how: 'all' | 'question', reason: StrikeReason) => {
+    if (!turn) return
+    if (turn.struck !== 'all') turn.struck = how
+    if (!turn.reasons.some((r) => r.kind === reason.kind && r.fact === reason.fact)) turn.reasons.push(reason)
+  }
+  for (const fact of facts) {
+    if (!fact.decision?.startsWith('deny') || !fact.links) continue
+    for (const p of fact.links.producedBy) strike(at(p), 'all', { kind: 'produced', fact: fact.text })
+    for (const b of fact.links.builtOn) strike(at(b.turn), b.answer ? 'all' : 'question', { kind: 'builtOn', fact: fact.text })
+  }
+  return { turns: marked, marked: facts.length === 0 || facts.some((f) => f.links !== null) }
+}
+
+/** The conversation behind a review, for the instructor: marked as the rulings so far stand. */
+export async function reviewTranscript(courseId: string, reviewId: string) {
+  await findReview(courseId, reviewId)
+  return markedTranscript(reviewId)
+}
+
+/** A completed interview review of the student's team, or null (someone else's, still open, or an investigation). */
+export async function findTeamInterviewReview(caseId: string, teamId: string, reviewId: string) {
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM interview_reviews
+     WHERE id = $1 AND case_id = $2 AND team_id = $3 AND kind = 'interview' AND status = 'completed'`,
+    [reviewId, caseId, teamId],
+  )
+  return rows[0]?.id ?? null
 }
 
 /** How many reviews in the course still need the instructor. */

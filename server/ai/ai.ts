@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { askWitness, type WitnessReply } from '../witness/deposition.ts'
 import { finalizeReport, type FinalizeInput } from '../investigator/finalize.ts'
 import { investigate, type InvestigationInput } from '../investigator/investigate.ts'
-import { findNewFacts, type NewFactsInput } from '../witness/newFacts.ts'
+import { findNewFacts, type NewFact, type NewFactsInput } from '../witness/newFacts.ts'
 import { transcribeFile, type FileToTranscribe } from './transcribe.ts'
 
 /**
@@ -29,7 +29,7 @@ export const ai = {
   /** The AI witness's reply to the next deposition question. */
   askWitness: (options: Parameters<typeof askWitness>[1]): Promise<WitnessReply> => askWitness(anthropic(), options),
   /** The new facts a witness added in an ended interview, for the instructor to rule on. */
-  findNewFacts: (input: NewFactsInput): Promise<string[]> => findNewFacts(anthropic(), input),
+  findNewFacts: (input: NewFactsInput): Promise<NewFact[]> => findNewFacts(anthropic(), input),
   /** The background investigator's report on a team's assignment, review block and all. */
   investigate: (input: InvestigationInput): Promise<string> => investigate(anthropic(), input),
   /** The investigator's report as the team gets it, without whatever the instructor turned down. */

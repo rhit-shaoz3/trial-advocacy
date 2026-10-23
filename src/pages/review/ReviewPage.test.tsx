@@ -114,15 +114,21 @@ describe('ReviewPage', () => {
   })
 
   it('opens the conversation behind a review on request', async () => {
-    const getReviewTranscript = vi
-      .fn()
-      .mockResolvedValue([{ question: 'Where were you at 3?', objection: 'Ms. Park: Objection, form.', answer: 'On break.', askedBy: 'Ada Lawyer' }])
+    const getReviewTranscript = vi.fn().mockResolvedValue({
+      marked: true,
+      turns: [
+        { position: 0, question: 'Where were you at 3?', objection: 'Ms. Park: Objection, form.', answer: 'On break.', askedBy: 'Ada Lawyer', struck: 'all', reasons: [{ kind: 'produced', fact: 'Torres was on break at 3:00.' }] },
+      ],
+    })
     const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([review]), getReviewTranscript })
 
     await user.click(await screen.findByText('Show conversation'))
     expect(getReviewTranscript).toHaveBeenCalledWith('c1', 'r1')
     expect(await screen.findByText(/Where were you at 3\?/)).toBeInTheDocument()
     expect(screen.getByText('Ms. Park: Objection, form.')).toBeInTheDocument()
+    // A denied fact's exchange shows struck out, as the team will see it.
+    expect(screen.getByText(/Where were you at 3\?/).closest('p')).toHaveClass('transcript-strike')
+    expect(screen.getByText('Denied:')).toBeInTheDocument()
   })
 
   it("shows an investigator report with its assignment, and lets the instructor allow or refuse each file", async () => {

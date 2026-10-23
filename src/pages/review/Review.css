@@ -174,25 +174,6 @@
   cursor: pointer;
 }
 
-.review-transcript ol {
-  display: grid;
-  gap: 0.6rem;
-  max-height: 24rem;
-  margin: 0.6rem 0 0;
-  padding: 0.75rem 1rem;
-  overflow-y: auto;
-  border-left: 2px solid var(--ws-line);
-  list-style: none;
-}
-
-.review-transcript p {
-  margin: 0;
-}
-
-.review-objection {
-  color: var(--ws-muted);
-  font-style: italic;
-}
 
 /* Background investigator reports */
 

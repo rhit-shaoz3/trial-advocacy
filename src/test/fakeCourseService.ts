@@ -79,6 +79,7 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     completeReview: vi.fn(),
     retryReview: vi.fn(),
     getReviewTranscript: vi.fn().mockResolvedValue([]),
+    getMyReviewTranscript: vi.fn(),
     ...overrides,
   }
 }

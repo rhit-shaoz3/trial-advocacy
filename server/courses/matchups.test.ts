@@ -18,7 +18,7 @@ let caseId: string
 const email = (n: number) => `s${n}@example.com`
 
 async function newCase(title: string) {
-  const res = await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title })
+  const res = await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, summary: 'A test case.', title })
   return res.body.case.id as string
 }
 

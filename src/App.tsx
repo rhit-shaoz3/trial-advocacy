@@ -8,6 +8,7 @@ import { AuthPage } from './pages/AuthPage'
 import { CaseDetailPage } from './pages/cases/CaseDetailPage'
 import { CasesPage } from './pages/cases/CasesPage'
 import { MyCasesPage } from './pages/cases/MyCasesPage'
+import { NewCasePage } from './pages/cases/setup/NewCasePage'
 import { CoursePage } from './pages/CoursePage'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -44,6 +45,7 @@ function App() {
       <Route path="courses/:courseId" element={<WorkspaceLayout />}>
         <Route index element={<CourseDashboard />} />
         <Route path="cases" element={isInstructor ? <CasesPage /> : <MyCasesPage />} />
+        {isInstructor && <Route path="cases/new" element={<NewCasePage />} />}
         <Route
           path="cases/:caseId"
           element={isInstructor ? <CaseDetailPage /> : <StudentCasePage />}

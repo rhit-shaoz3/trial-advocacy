@@ -23,7 +23,7 @@ beforeEach(async () => {
   for (const n of [2, 3, 4]) await signedInAgent('student', email(n))
 
   // An active case: World A is Team 1 (plaintiff) v Team 2 (defense).
-  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera v. Thrill Park', importantFacts: sampleFacts })).body.case.id
+  caseId = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Rivera v. Thrill Park', importantFacts: sampleFacts, summary: 'A test case.' })).body.case.id
   const t1 = (await prof.post(`${caseUrl()}/teams`).send({ emails: [email(1), email(2)] })).body.teams[0].id
   const t2 = (await prof.post(`${caseUrl()}/teams`).send({ emails: [email(3), email(4)] })).body.teams[1].id
   await prof.post(`${caseUrl()}/matchups`).send({ plaintiffTeamId: t1, defenseTeamId: t2 })
@@ -57,7 +57,7 @@ beforeEach(async () => {
   }
 
   // A draft nobody is paired for yet, and a student added after launch who hasn't signed up.
-  draftId = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Practice case', importantFacts: sampleFacts })).body.case.id
+  draftId = (await prof.post(`/api/courses/${course.id}/cases`).send({ title: 'Practice case', importantFacts: sampleFacts, summary: 'A test case.' })).body.case.id
   await prof.post(`/api/courses/${course.id}/roster`).send({ emails: [email(5)] })
 })
 
@@ -86,7 +86,7 @@ describe("the instructor's dashboard", () => {
         status: 'draft',
         phase: 'subpoena',
         worldCount: 0,
-        launch: { ready: 0, total: 3, next: 'Pair students into teams.' },
+        launch: { ready: 1, total: 4, next: 'Pair students into teams.' },
         tasks: null,
       },
       {

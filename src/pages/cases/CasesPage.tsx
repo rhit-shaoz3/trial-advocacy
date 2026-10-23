@@ -4,7 +4,6 @@ import { useCourseService } from '../../courses/CourseServiceContext'
 import { caseOverview } from '../../courses/caseLabels'
 import type { CourseCase } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
-import { CaseForm } from './CaseForm'
 import { CaseStatusBadge } from './CaseStatusBadge'
 import '../CoursePage.css'
 import './Cases.css'
@@ -22,7 +21,6 @@ export function CasesPage() {
   const navigate = useNavigate()
   const [cases, setCases] = useState<CourseCase[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -49,25 +47,10 @@ export function CasesPage() {
             Each case is shared by the whole class. Students are paired into teams per case.
           </p>
         </div>
-        {!creating && (
-          <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
-            New case
-          </button>
-        )}
+        <button type="button" className="btn-primary" onClick={() => navigate(`/courses/${courseId}/cases/new${search}`)}>
+          New case
+        </button>
       </header>
-
-      {creating && (
-        <CaseForm
-          label="New case"
-          submitLabel="Create case"
-          submittingLabel="Creating…"
-          onSubmit={async (input) => {
-            const created = await service.createCase(courseId, input)
-            navigate(casePath(created.id))
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      )}
 
       {loadError ? (
         <p className="form-error" role="alert">
@@ -76,7 +59,7 @@ export function CasesPage() {
       ) : cases === null ? (
         <p className="muted">Loading cases…</p>
       ) : cases.length === 0 ? (
-        !creating && <p className="muted">No cases yet. Create one to start pairing students.</p>
+        <p className="muted">No cases yet. Create one to start pairing students.</p>
       ) : (
         <ul className="case-list" aria-label="Cases">
           {cases.map((c) => (
@@ -85,6 +68,7 @@ export function CasesPage() {
                 <div className="case-row-heading">
                   <h2>{c.title}</h2>
                   <CaseStatusBadge status={c.status} />
+                  {c.setupCompletedAt === null && <span className="badge badge-setup">Setup unfinished</span>}
                 </div>
                 {c.summary && <p className="case-row-summary">{caseOverview(c.summary)}</p>}
                 <small className="muted">Created {formatDate(c.createdAt)}</small>

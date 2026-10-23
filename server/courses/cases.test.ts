@@ -20,7 +20,7 @@ const baseUrl = () => `/api/courses/${course.id}/cases`
 const coaster = { title: 'Rivera v. Thrill Park', summary: 'A rollercoaster stops mid-loop.', importantFacts: sampleFacts }
 
 async function createCase(input: Record<string, unknown> = coaster) {
-  const res = await prof.post(baseUrl()).send({ importantFacts: sampleFacts, ...input })
+  const res = await prof.post(baseUrl()).send({ importantFacts: sampleFacts, summary: coaster.summary, ...input })
   if (res.status !== 201) throw new Error(`Create case failed: ${JSON.stringify(res.body)}`)
   return res.body.case as { id: string; status: string }
 }
@@ -44,6 +44,9 @@ describe('creating', () => {
       inWorldDate: null,
       disputedIssues: '',
       importantFacts: { plaintiff: ['The lap bar light was red.'], defense: ['It passed inspection.'] },
+      // A new case starts the guided setup.
+      setupStep: 'details',
+      setupCompletedAt: null,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     })
@@ -60,13 +63,19 @@ describe('creating', () => {
     expect(list.body.cases.map((c: { title: string }) => c.title)).toEqual(['First case', 'Second case'])
   })
 
-  it('allows an empty summary', async () => {
-    expect((await createCase({ title: 'No summary yet' })).status).toBe('draft')
+  it('needs a description, though older cases can still be saved without one', async () => {
+    const res = await prof.post(baseUrl()).send({ title: 'No summary yet', summary: '   ' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('Add a short description of the case.')
+
+    const { id } = await createCase()
+    const edited = await prof.patch(`${baseUrl()}/${id}`).send({ title: 'Rivera', summary: '', status: 'draft' })
+    expect(edited.body.case.summary).toBe('')
   })
 
   it('validates the fields', async () => {
     const error = async (body: Record<string, unknown>) =>
-      (await prof.post(baseUrl()).send({ importantFacts: sampleFacts, ...body })).body.error
+      (await prof.post(baseUrl()).send({ importantFacts: sampleFacts, summary: coaster.summary, ...body })).body.error
 
     expect(await error({ title: '   ' })).toBe('Case title is required.')
     expect(await error({ title: 'x'.repeat(121) })).toBe('Case title must be at most 120 characters.')
@@ -76,15 +85,18 @@ describe('creating', () => {
     expect(await error({ title: 'Ok', status: 'archived' })).toBe('Choose a valid status.')
   })
 
-  it('needs at least one important fact for each side', async () => {
-    const error = async (importantFacts: unknown) =>
-      (await prof.post(baseUrl()).send({ title: 'Ok', importantFacts })).body.error
+  it('can start without important facts, for the guided setup to add later', async () => {
+    const none = await prof.post(baseUrl()).send({ title: 'Ok', summary: coaster.summary })
+    expect(none.status).toBe(201)
+    expect(none.body.case.importantFacts).toEqual({ plaintiff: [], defense: [] })
+    const blank = await prof.post(baseUrl()).send({ title: 'Ok', summary: coaster.summary, importantFacts: { plaintiff: ['  '], defense: [] } })
+    expect(blank.body.case.importantFacts).toEqual({ plaintiff: [], defense: [] })
+  })
 
-    expect(await error(undefined)).toBe('List at least one important fact for the plaintiff.')
-    expect(await error({ plaintiff: ['  '], defense: ['A fact.'] })).toBe(
-      'List at least one important fact for the plaintiff.',
-    )
-    expect(await error({ plaintiff: ['A fact.'], defense: [] })).toBe('List at least one important fact for the defense.')
+  it('checks the important facts it is given', async () => {
+    const error = async (importantFacts: unknown) =>
+      (await prof.post(baseUrl()).send({ title: 'Ok', summary: coaster.summary, importantFacts })).body.error
+
     expect(await error({ plaintiff: 'A fact.', defense: ['A fact.'] })).toBe("List the plaintiff's important facts as text.")
     expect(await error({ plaintiff: ['A fact.'], defense: [3] })).toBe("List the defense's important facts as text.")
     expect(await error({ plaintiff: Array(21).fill('A fact.'), defense: ['A fact.'] })).toBe(
@@ -98,7 +110,7 @@ describe('creating', () => {
 })
 
 describe('important facts', () => {
-  it('can be changed when editing, and also have to be kept', async () => {
+  it('can be changed when editing, and are kept when an edit leaves them out', async () => {
     const { id } = await createCase()
     const edit = (importantFacts: unknown) =>
       prof.patch(`${baseUrl()}/${id}`).send({ ...coaster, status: 'draft', importantFacts })
@@ -108,10 +120,29 @@ describe('important facts', () => {
       plaintiff: ['The light was red.', 'Nobody checked the bar.'],
       defense: ['It passed inspection.'],
     })
-    expect((await edit({ plaintiff: ['The light was red.'] })).body.error).toBe(
-      'List at least one important fact for the defense.',
-    )
-    expect((await prof.get(`${baseUrl()}/${id}`)).body.case.importantFacts.plaintiff).toHaveLength(2)
+    const without = await edit(undefined)
+    expect(without.body.case.importantFacts.plaintiff).toHaveLength(2)
+    expect((await edit({ plaintiff: ['The light was red.'] })).body.case.importantFacts).toEqual({
+      plaintiff: ['The light was red.'],
+      defense: [],
+    })
+  })
+
+  it("can't all be removed from a launched case", async () => {
+    const { id } = await createCase()
+    const res = await prof.patch(`${baseUrl()}/${id}`).send({ ...coaster, status: 'active', importantFacts: { plaintiff: ['A fact.'], defense: [] } })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe('List at least one important fact for the defense.')
+  })
+
+  it('are needed for both sides before launch', async () => {
+    const { id } = await createCase({ title: 'No facts', importantFacts: undefined })
+    const { checks } = (await prof.get(`${baseUrl()}/${id}/launch`)).body
+    expect(checks[0]).toEqual({ key: 'importantFacts', ok: false, message: 'Add at least one important fact for each side.' })
+
+    await prof.patch(`${baseUrl()}/${id}`).send({ ...coaster, status: 'draft', importantFacts: sampleFacts })
+    const after = (await prof.get(`${baseUrl()}/${id}/launch`)).body.checks[0]
+    expect(after).toEqual({ key: 'importantFacts', ok: true, message: 'Important facts: 1 for the plaintiff, 1 for the defense.' })
   })
 
   it('survive launch and are never shown to students', async () => {
@@ -215,3 +246,33 @@ describe('access', () => {
     expect((await student.post(baseUrl()).send(coaster)).status).toBe(404)
   })
 })
+
+describe('the guided setup', () => {
+  it('remembers the furthest step reached, never going back', async () => {
+    const { id } = await createCase()
+    const reach = (step: string) => prof.put(`${baseUrl()}/${id}/setup`).send({ step })
+
+    expect((await reach('teams')).body.case.setupStep).toBe('teams')
+    expect((await reach('facts')).body.case.setupStep).toBe('teams')
+    expect((await reach('tasks')).body.case.setupStep).toBe('tasks')
+    expect((await reach('launch')).status).toBe(400)
+  })
+
+  it('finishes once', async () => {
+    const { id } = await createCase()
+
+    const done = await prof.post(`${baseUrl()}/${id}/setup/complete`)
+    expect(done.body.case.setupCompletedAt).toEqual(expect.any(String))
+    const again = await prof.post(`${baseUrl()}/${id}/setup/complete`)
+    expect(again.body.case.setupCompletedAt).toBe(done.body.case.setupCompletedAt)
+  })
+
+  it('is only for the case’s instructor', async () => {
+    const { id } = await createCase()
+    const other = (await signedInAgent('instructor', 'other@example.com')).agent
+
+    expect((await other.put(`${baseUrl()}/${id}/setup`).send({ step: 'facts' })).status).toBe(404)
+    expect((await other.post(`${baseUrl()}/${id}/setup/complete`)).status).toBe(404)
+  })
+})
+

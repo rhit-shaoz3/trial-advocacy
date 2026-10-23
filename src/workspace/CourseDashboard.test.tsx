@@ -77,7 +77,7 @@ describe('course workspace for the instructor', () => {
     studentCount: 0,
   }
 
-  it('shows the same dashboard with All cases and a Manage course tab', async () => {
+  it('shows the same dashboard with Cases and a Manage course tab', async () => {
     renderCourse(
       fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(emptyHome) }),
       '/courses/c1',
@@ -88,7 +88,7 @@ describe('course workspace for the instructor', () => {
     const nav = screen.getByRole('navigation', { name: 'Course' })
     expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual([
       'Dashboard',
-      'All cases',
+      'Cases',
       'Calendar',
       'Review',
       'Manage course',

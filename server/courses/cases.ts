@@ -7,6 +7,10 @@ export type CaseStatus = (typeof CASE_STATUSES)[number]
 export const CASE_PHASES = ['subpoena', 'investigate', 'deposition'] as const
 export type CasePhase = (typeof CASE_PHASES)[number]
 
+/** The guided setup's steps, in order; a case remembers the furthest one reached. */
+export const SETUP_STEPS = ['details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'tasks'] as const
+export type SetupStep = (typeof SETUP_STEPS)[number]
+
 /** The most important facts for each side; the AI witnesses never contradict them. */
 export interface ImportantFacts {
   plaintiff: string[]
@@ -29,22 +33,26 @@ export interface CourseCase {
   disputedIssues: string
   /** Instructors and AI witnesses only; never sent to students. */
   importantFacts: ImportantFacts
+  /** The furthest step of the guided setup the instructor has reached. */
+  setupStep: SetupStep
+  /** When the instructor finished the guided setup; null until then. */
+  setupCompletedAt: Date | null
   createdAt: Date
   updatedAt: Date
 }
 
-/** The editable fields, already validated. */
+/** The editable fields, already validated. Without `importantFacts`, an edit keeps the current ones. */
 export interface CaseFields {
   title: string
   summary: string
   status: CaseStatus
-  importantFacts: ImportantFacts
+  importantFacts?: ImportantFacts
 }
 
 const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "instructorNote",
   to_char(in_world_date, 'YYYY-MM-DD') AS "inWorldDate", disputed_issues AS "disputedIssues",
   json_build_object('plaintiff', plaintiff_key_facts, 'defense', defense_key_facts) AS "importantFacts",
-  created_at AS "createdAt", updated_at AS "updatedAt"`
+  setup_step AS "setupStep", setup_completed_at AS "setupCompletedAt", created_at AS "createdAt", updated_at AS "updatedAt"`
 
 /** Oldest first, so the term's first case stays on top. */
 export async function listCases(courseId: string) {
@@ -73,8 +81,8 @@ export async function createCase(courseId: string, fields: CaseFields) {
       fields.title,
       fields.summary,
       fields.status,
-      fields.importantFacts.plaintiff,
-      fields.importantFacts.defense,
+      fields.importantFacts?.plaintiff ?? [],
+      fields.importantFacts?.defense ?? [],
     ],
   )
   return rows[0]
@@ -83,8 +91,8 @@ export async function createCase(courseId: string, fields: CaseFields) {
 /** Returns null if there was no such case. */
 export async function updateCase(courseId: string, id: string, fields: CaseFields) {
   const { rows } = await pool.query<CourseCase>(
-    `UPDATE cases SET title = $3, summary = $4, status = $5, plaintiff_key_facts = $6,
-       defense_key_facts = $7, updated_at = now()
+    `UPDATE cases SET title = $3, summary = $4, status = $5, plaintiff_key_facts = coalesce($6, plaintiff_key_facts),
+       defense_key_facts = coalesce($7, defense_key_facts), updated_at = now()
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [
@@ -93,9 +101,32 @@ export async function updateCase(courseId: string, id: string, fields: CaseField
       fields.title,
       fields.summary,
       fields.status,
-      fields.importantFacts.plaintiff,
-      fields.importantFacts.defense,
+      fields.importantFacts?.plaintiff ?? null,
+      fields.importantFacts?.defense ?? null,
     ],
+  )
+  return rows[0] ?? null
+}
+
+/** Records that the guided setup reached `step`; it only ever moves forward. */
+export async function reachSetupStep(courseId: string, id: string, step: SetupStep) {
+  const { rows } = await pool.query<CourseCase>(
+    `UPDATE cases SET setup_step = CASE
+         WHEN array_position($4::text[], $3) > array_position($4::text[], setup_step) THEN $3 ELSE setup_step END
+     WHERE course_id = $1 AND id = $2
+     RETURNING ${CASE_COLUMNS}`,
+    [courseId, id, step, SETUP_STEPS],
+  )
+  return rows[0] ?? null
+}
+
+/** Finishes the guided setup (once; finishing again keeps the first time). */
+export async function completeSetup(courseId: string, id: string) {
+  const { rows } = await pool.query<CourseCase>(
+    `UPDATE cases SET setup_completed_at = coalesce(setup_completed_at, now())
+     WHERE course_id = $1 AND id = $2
+     RETURNING ${CASE_COLUMNS}`,
+    [courseId, id],
   )
   return rows[0] ?? null
 }

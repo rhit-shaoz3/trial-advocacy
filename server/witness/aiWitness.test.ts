@@ -199,7 +199,7 @@ describe('setting up an AI witness', () => {
   })
 
   it('rejects files from another case and bad sides', async () => {
-    const otherCase = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, title: 'Other' })).body.case.id
+    const otherCase = (await prof.post(`/api/courses/${course.id}/cases`).send({ importantFacts: sampleFacts, summary: 'A test case.', title: 'Other' })).body.case.id
     const res = await prof
       .post(`/api/courses/${course.id}/cases/${otherCase}/witnesses`)
       .send({ name: 'X', depositionMaterialId: files['Torres deposition.pdf'] })

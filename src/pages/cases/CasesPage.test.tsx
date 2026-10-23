@@ -7,6 +7,7 @@ import type { CourseCase, CourseService } from '../../courses/types'
 import { fakeCourseService } from '../../test/fakeCourseService'
 import { CaseDetailPage } from './CaseDetailPage'
 import { CasesPage } from './CasesPage'
+import { NewCasePage } from './setup/NewCasePage'
 
 const coaster: CourseCase = {
   id: 'k1',
@@ -30,6 +31,7 @@ function renderAt(path: string, overrides: Partial<CourseService> = {}) {
       <CourseServiceContext.Provider value={service}>
         <Routes>
           <Route path="courses/:courseId/cases" element={<CasesPage />} />
+          <Route path="courses/:courseId/cases/new" element={<NewCasePage />} />
           <Route path="courses/:courseId/cases/:caseId" element={<CaseDetailPage />} />
         </Routes>
       </CourseServiceContext.Provider>
@@ -62,82 +64,19 @@ describe('CasesPage', () => {
     expect(await screen.findByText(/No cases yet/)).toBeInTheDocument()
   })
 
-  it('creates a draft case and opens it', async () => {
-    const createCase = vi.fn().mockResolvedValue(coaster)
-    const { user } = renderAt('/courses/c1/cases', {
-      createCase,
-      getCase: vi.fn().mockResolvedValue(coaster),
-    })
+  it('starts a new case with the guided setup', async () => {
+    const { user } = renderAt('/courses/c1/cases')
 
     await user.click(await screen.findByRole('button', { name: 'New case' }))
-    const form = screen.getByRole('form', { name: 'New case' })
-    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument()
-    await user.type(screen.getByLabelText('Case title'), 'Rivera v. Thrill Park')
-    await user.type(screen.getByLabelText(/Summary/), 'A rollercoaster stalls mid-loop.')
-    await user.type(screen.getByLabelText('Plaintiff fact 1'), 'The lap bar light was red.')
-    await user.type(screen.getByLabelText('Defense fact 1'), 'The ride passed inspection.')
-    await user.click(screen.getByRole('button', { name: 'Create case' }))
 
-    expect(createCase).toHaveBeenCalledWith('c1', {
-      title: 'Rivera v. Thrill Park',
-      summary: 'A rollercoaster stalls mid-loop.',
-      importantFacts: { plaintiff: ['The lap bar light was red.'], defense: ['The ride passed inspection.'] },
-    })
-    expect(await screen.findByRole('heading', { name: 'Rivera v. Thrill Park' })).toBeInTheDocument()
-    expect(form).not.toBeInTheDocument()
+    expect(await screen.findByRole('form', { name: 'Case details' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Case name')).toHaveFocus()
   })
 
-  it('shows server errors in the form', async () => {
-    const { user } = renderAt('/courses/c1/cases', {
-      createCase: vi.fn().mockRejectedValue(new Error('Case title is required.')),
-    })
+  it('marks cases whose setup is unfinished', async () => {
+    renderAt('/courses/c1/cases', { listCases: vi.fn().mockResolvedValue([{ ...coaster, setupCompletedAt: null }]) })
 
-    await user.click(await screen.findByRole('button', { name: 'New case' }))
-    await user.type(screen.getByLabelText('Case title'), ' ')
-    await user.type(screen.getByLabelText('Plaintiff fact 1'), 'A fact.')
-    await user.type(screen.getByLabelText('Defense fact 1'), 'A fact.')
-    await user.click(screen.getByRole('button', { name: 'Create case' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Case title is required.')
-  })
-
-  it('needs at least one important fact for each side', async () => {
-    const createCase = vi.fn().mockResolvedValue(coaster)
-    const { user } = renderAt('/courses/c1/cases', { createCase })
-
-    await user.click(await screen.findByRole('button', { name: 'New case' }))
-    await user.type(screen.getByLabelText('Case title'), 'Rivera v. Thrill Park')
-    await user.type(screen.getByLabelText('Plaintiff fact 1'), '   ')
-    await user.click(screen.getByRole('button', { name: 'Create case' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('List at least one important fact for the plaintiff.')
-
-    await user.type(screen.getByLabelText('Plaintiff fact 1'), 'The light was red.')
-    await user.click(screen.getByRole('button', { name: 'Create case' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('List at least one important fact for the defense.')
-    expect(createCase).not.toHaveBeenCalled()
-  })
-
-  it('adds and removes fact rows, keeping at least one per side', async () => {
-    const createCase = vi.fn().mockResolvedValue(coaster)
-    const { user } = renderAt('/courses/c1/cases', { createCase, getCase: vi.fn().mockResolvedValue(coaster) })
-
-    await user.click(await screen.findByRole('button', { name: 'New case' }))
-    await user.type(screen.getByLabelText('Case title'), 'Rivera v. Thrill Park')
-    expect(screen.getByRole('button', { name: 'Remove plaintiff fact 1' })).toBeDisabled()
-    await user.type(screen.getByLabelText('Plaintiff fact 1'), 'First.')
-    await user.click(screen.getByRole('button', { name: 'Add plaintiff fact' }))
-    expect(screen.getByLabelText('Plaintiff fact 2')).toHaveFocus()
-    await user.keyboard('Second.')
-    await user.click(screen.getByRole('button', { name: 'Add plaintiff fact' }))
-    await user.keyboard('Third.')
-    await user.click(screen.getByRole('button', { name: 'Remove plaintiff fact 1' }))
-    expect(screen.getByLabelText('Plaintiff fact 1')).toHaveValue('Second.')
-    await user.type(screen.getByLabelText('Defense fact 1'), 'Inspected.')
-    await user.click(screen.getByRole('button', { name: 'Create case' }))
-
-    expect(createCase).toHaveBeenCalledWith('c1', expect.objectContaining({
-      importantFacts: { plaintiff: ['Second.', 'Third.'], defense: ['Inspected.'] },
-    }))
+    expect(await screen.findByRole('link', { name: /Rivera v. Thrill Park/ })).toHaveTextContent('Setup unfinished')
   })
 })
 

@@ -102,6 +102,15 @@ export const httpCourseService: CourseService = {
     await apiRequest(casePath(courseId, caseId), { method: 'DELETE' })
   },
 
+  async reachSetupStep(courseId, caseId, step) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/setup`, { method: 'PUT', body: JSON.stringify({ step }) })
+    return body.case
+  },
+
+  async completeSetup(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/setup/complete`, { method: 'POST' })).case
+  },
+
   async listTeams(courseId, caseId) {
     return apiRequest(teamsPath(courseId, caseId))
   },

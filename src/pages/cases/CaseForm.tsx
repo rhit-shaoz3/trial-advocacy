@@ -47,7 +47,8 @@ export function CaseForm({
     e.preventDefault()
     setError(null)
     const importantFacts = { plaintiff: cleanFacts(plaintiffFacts), defense: cleanFacts(defenseFacts) }
-    const missing = missingSide(importantFacts)
+    // A launched case's AI witnesses keep to these, so it can't lose a side's; a draft can add them later.
+    const missing = status !== 'draft' ? missingSide(importantFacts) : null
     if (missing) {
       setError(`List at least one important fact for the ${SIDE_FACT_LABEL[missing]}.`)
       return

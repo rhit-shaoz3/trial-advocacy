@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
-import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import type { CourseCase } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
@@ -14,6 +14,7 @@ import { StudentViewSection } from './content/StudentViewSection'
 import { TasksSection } from './content/TasksSection'
 import { WitnessesSection } from './content/WitnessesSection'
 import { PhasePanel } from './PhasePanel'
+import { CaseSetupFlow } from './setup/CaseSetupFlow'
 import { TeamsSection } from './TeamsSection'
 import '../CoursePage.css'
 import './Cases.css'
@@ -40,7 +41,12 @@ export function CaseDetailPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const tab: TabId = TABS.some((t) => t.id === params.get('tab')) ? (params.get('tab') as TabId) : 'teams'
-  const [courseCase, setCourseCase] = useState<CourseCase | null>(null)
+  // A case just created by the guided setup comes with the navigation, so there's no loading flash.
+  const handedOver = (useLocation().state as { courseCase?: CourseCase } | null)?.courseCase
+  const initialCase = handedOver?.id === caseId ? handedOver : null
+  const [courseCase, setCourseCase] = useState<CourseCase | null>(initialCase)
+  /** Showing the guided setup: while it's unfinished, and on through its congratulations. */
+  const [inSetup, setInSetup] = useState(initialCase?.setupCompletedAt === null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -49,16 +55,23 @@ export function CaseDetailPage() {
   const [checksKey, setChecksKey] = useState(0)
 
   useEffect(() => {
+    if (initialCase) return
     let cancelled = false
     setCourseCase(null)
     setLoadError(null)
     service
       .getCase(courseId, caseId)
-      .then((c) => !cancelled && setCourseCase(c))
+      .then((c) => {
+        if (cancelled) return
+        setCourseCase(c)
+        setInSetup(c.setupCompletedAt === null)
+      })
       .catch((err: Error) => !cancelled && setLoadError(err.message))
     return () => {
       cancelled = true
     }
+    // `initialCase` only matters for the first load of this case.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service, courseId, caseId])
 
   function selectTab(id: TabId) {
@@ -115,6 +128,17 @@ export function CaseDetailPage() {
         </p>
       ) : !courseCase ? (
         <p className="muted">Loading case…</p>
+      ) : inSetup ? (
+        <CaseSetupFlow
+          courseId={courseId}
+          courseCase={courseCase}
+          onCaseChange={setCourseCase}
+          onContentChange={contentChanged}
+          onExit={(to) => {
+            setInSetup(false)
+            selectTab(to === 'student-view' ? 'student-view' : 'teams')
+          }}
+        />
       ) : (
         <>
           {editing ? (
@@ -194,7 +218,8 @@ export function CaseDetailPage() {
           )}
 
           <div className="case-tabs" role="tablist" aria-label="Case setup">
-            {TABS.map((t) => (
+            {/* The student view comes once the guided setup is finished. */}
+            {TABS.filter((t) => t.id !== 'student-view' || courseCase.setupCompletedAt !== null).map((t) => (
               <button
                 key={t.id}
                 type="button"

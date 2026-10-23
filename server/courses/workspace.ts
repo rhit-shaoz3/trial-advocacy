@@ -172,7 +172,7 @@ export async function getPreviewWorkspace(
 }
 
 export interface LaunchCheck {
-  key: 'paired' | 'matched' | 'caseFile'
+  key: 'importantFacts' | 'paired' | 'matched' | 'caseFile'
   ok: boolean
   message: string
 }
@@ -191,8 +191,22 @@ export async function launchChecks(courseId: string, caseId: string): Promise<La
     [caseId],
   )
   const { n: files, initial } = rows[0]
+  const { plaintiff, defense } = (await pool.query<{ plaintiff: number; defense: number }>(
+    `SELECT cardinality(plaintiff_key_facts) AS plaintiff, cardinality(defense_key_facts) AS defense
+     FROM cases WHERE id = $1`,
+    [caseId],
+  )).rows[0]
 
   return [
+    {
+      // The AI witnesses keep to these, so both sides need theirs before students start.
+      key: 'importantFacts',
+      ok: plaintiff > 0 && defense > 0,
+      message:
+        plaintiff > 0 && defense > 0
+          ? `Important facts: ${plaintiff} for the plaintiff, ${defense} for the defense.`
+          : 'Add at least one important fact for each side.',
+    },
     {
       key: 'paired',
       ok: paired > 0 && unpaired.length === 0,

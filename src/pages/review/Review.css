@@ -47,6 +47,11 @@
   flex-wrap: wrap;
 }
 
+.review-card-title {
+  flex: 1;
+  min-width: 12rem;
+}
+
 .review-card h2 {
   margin: 0.2rem 0 0;
   color: var(--ws-navy);

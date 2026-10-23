@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { ai, AiNotConfiguredError } from '../ai/ai.ts'
+import { avatarUrlSql } from '../auth/users.ts'
 import type { Witness } from '../courses/caseContent.ts'
 import type { CourseCase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
@@ -37,8 +38,17 @@ export interface InterviewOwner {
 export interface Interview {
   id: string
   side: Side
-  witness: { id: string; name: string; role: string }
-  turns: { position: number; question: string; objection: string | null; answer: string; askedBy: string | null; createdAt: Date }[]
+  witness: { id: string; name: string; role: string; avatarUrl: string | null }
+  turns: {
+    position: number
+    question: string
+    objection: string | null
+    answer: string
+    askedBy: string | null
+    /** The asker's profile picture, or null for initials. */
+    askedByAvatarUrl: string | null
+    createdAt: Date
+  }[]
   maxTurns: number
   /** When a team's interview ends on its own: an hour after the first question. Null before that, and for instructor tests. */
   endsAt: Date | null
@@ -79,7 +89,8 @@ async function openInterview(witnessId: string, owner: InterviewOwner, userId: s
 
 async function listTurns(interviewId: string) {
   const { rows } = await pool.query<Interview['turns'][number] & { reply: string }>(
-    `SELECT t.position, t.question, t.reply, t.objection, t.answer, u.name AS "askedBy", t.created_at AS "createdAt"
+    `SELECT t.position, t.question, t.reply, t.objection, t.answer, u.name AS "askedBy",
+            ${avatarUrlSql('u')} AS "askedByAvatarUrl", t.created_at AS "createdAt"
      FROM interview_turns t LEFT JOIN users u ON u.id = t.asked_by
      WHERE t.interview_id = $1 ORDER BY t.position`,
     [interviewId],
@@ -131,7 +142,7 @@ async function view(witness: Witness, owner: InterviewOwner, interviewId: string
   return {
     id: interviewId,
     side: owner.side,
-    witness: { id: witness.id, name: witness.name, role: witness.role },
+    witness: { id: witness.id, name: witness.name, role: witness.role, avatarUrl: witness.avatarUrl },
     // The raw reply is for the model's transcript; clients get the objection and answer split out.
     turns: turns.map((t) => ({
       position: t.position,
@@ -139,6 +150,7 @@ async function view(witness: Witness, owner: InterviewOwner, interviewId: string
       objection: t.objection,
       answer: t.answer,
       askedBy: t.askedBy,
+      askedByAvatarUrl: t.askedByAvatarUrl,
       createdAt: t.createdAt,
     })),
     maxTurns: MAX_TURNS,

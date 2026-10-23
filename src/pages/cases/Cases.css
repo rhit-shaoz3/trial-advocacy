@@ -792,6 +792,10 @@ a.case-row:hover {
   font-size: 0.9rem;
 }
 
+.content-witness > div {
+  flex: 1;
+}
+
 .content-item > div {
   min-width: 0;
 }

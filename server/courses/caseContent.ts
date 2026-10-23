@@ -50,6 +50,10 @@ export interface Witness {
   knownMaterialIds: string[]
   /** The witness's lawyer, who may object when the other side is asking. */
   defendingCounsel: string
+  /** Which of the 12 picture designs the witness uses, or null. */
+  avatarPreset: number | null
+  /** The design or uploaded picture to show, or null for an icon. */
+  avatarUrl: string | null
 }
 
 export interface CaseTask {
@@ -178,9 +182,14 @@ export async function deleteMaterial(caseId: string, id: string) {
 export async function listStorageKeys(scope: { caseId: string } | { courseId: string }) {
   const { rows } = await pool.query<{ key: string }>(
     'caseId' in scope
-      ? 'SELECT storage_key AS key FROM case_materials WHERE case_id = $1 AND storage_key IS NOT NULL'
+      ? `SELECT storage_key AS key FROM case_materials WHERE case_id = $1 AND storage_key IS NOT NULL
+         UNION ALL
+         SELECT avatar_key FROM case_witnesses WHERE case_id = $1 AND avatar_key IS NOT NULL`
       : `SELECT m.storage_key AS key FROM case_materials m JOIN cases c ON c.id = m.case_id
-         WHERE c.course_id = $1 AND m.storage_key IS NOT NULL`,
+         WHERE c.course_id = $1 AND m.storage_key IS NOT NULL
+         UNION ALL
+         SELECT w.avatar_key FROM case_witnesses w JOIN cases c ON c.id = w.case_id
+         WHERE c.course_id = $1 AND w.avatar_key IS NOT NULL`,
     ['caseId' in scope ? scope.caseId : scope.courseId],
   )
   return rows.map((r) => r.key)
@@ -267,9 +276,24 @@ export async function listMaterialTexts(caseId: string) {
 
 // Witnesses
 
+/** How many picture designs there are (public/witness-avatars/01.svg to 12.svg). */
+export const WITNESS_AVATAR_PRESETS = 12
+
+/**
+ * The witness's `avatarUrl` in SQL: an uploaded picture (served by the API,
+ * versioned so it can be cached for good), else the chosen design, else null.
+ * `w` is the case_witnesses alias, or '' for none.
+ */
+export const witnessAvatarUrlSql = (w = '') => {
+  const c = w ? `${w}.` : ''
+  return `CASE WHEN ${c}avatar_key IS NOT NULL THEN '/api/witnesses/' || ${c}id || '/avatar?v=' || split_part(${c}avatar_key, '/', 3)
+    WHEN ${c}avatar_preset IS NOT NULL THEN '/witness-avatars/' || lpad(${c}avatar_preset::text, 2, '0') || '.svg' END`
+}
+
 const WITNESS_COLUMNS = `id, name, role, description, audience, aligned_side AS "alignedSide",
   persona_notes AS "personaNotes", deposition_material_id AS "depositionMaterialId",
-  known_material_ids AS "knownMaterialIds", defending_counsel AS "defendingCounsel"`
+  known_material_ids AS "knownMaterialIds", defending_counsel AS "defendingCounsel",
+  avatar_preset AS "avatarPreset", ${witnessAvatarUrlSql()} AS "avatarUrl"`
 
 export async function listWitnesses(caseId: string, audiences: readonly Audience[] = AUDIENCES) {
   const { rows } = await pool.query<Witness>(
@@ -281,7 +305,7 @@ export async function listWitnesses(caseId: string, audiences: readonly Audience
   return rows
 }
 
-export type WitnessFields = Omit<Witness, 'id'>
+export type WitnessFields = Omit<Witness, 'id' | 'avatarUrl'>
 
 const witnessValues = (f: WitnessFields) => [
   f.name,
@@ -293,28 +317,51 @@ const witnessValues = (f: WitnessFields) => [
   f.depositionMaterialId,
   f.knownMaterialIds,
   f.defendingCounsel,
+  f.avatarPreset,
 ]
 
 export async function createWitness(caseId: string, fields: WitnessFields) {
   const { rows } = await pool.query<Witness>(
     `INSERT INTO case_witnesses (case_id, name, role, description, audience, aligned_side, persona_notes,
-       deposition_material_id, known_material_ids, defending_counsel)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       deposition_material_id, known_material_ids, defending_counsel, avatar_preset)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING ${WITNESS_COLUMNS}`,
     [caseId, ...witnessValues(fields)],
   )
   return rows[0]
 }
 
+/**
+ * Saves the witness's details. Choosing a picture design replaces an uploaded
+ * picture, whose storage key comes back as `removedKey` to delete.
+ */
 export async function updateWitness(caseId: string, id: string, fields: WitnessFields) {
-  const { rows } = await pool.query<Witness>(
+  const { rows } = await pool.query<Witness & { removedKey: string | null }>(
     `UPDATE case_witnesses SET name = $3, role = $4, description = $5, audience = $6, aligned_side = $7,
-       persona_notes = $8, deposition_material_id = $9, known_material_ids = $10, defending_counsel = $11
+       persona_notes = $8, deposition_material_id = $9, known_material_ids = $10, defending_counsel = $11,
+       avatar_preset = $12, avatar_key = CASE WHEN $12::smallint IS NULL THEN avatar_key END
+     FROM (SELECT avatar_key AS old_key FROM case_witnesses WHERE case_id = $1 AND id = $2 FOR UPDATE) old
      WHERE case_id = $1 AND id = $2
-     RETURNING ${WITNESS_COLUMNS}`,
+     RETURNING ${WITNESS_COLUMNS}, CASE WHEN $12::smallint IS NOT NULL THEN old.old_key END AS "removedKey"`,
     [caseId, id, ...witnessValues(fields)],
   )
-  return rows[0] ?? null
+  if (!rows[0]) return null
+  const { removedKey, ...witness } = rows[0]
+  return { witness: witness as Witness, removedKey }
+}
+
+/** Sets (or, with null, removes) the witness's uploaded picture; returns the witness and the key it replaced. */
+export async function setWitnessAvatarKey(caseId: string, id: string, key: string | null) {
+  const { rows } = await pool.query<Witness & { oldKey: string | null }>(
+    `UPDATE case_witnesses SET avatar_key = $3, avatar_preset = CASE WHEN $3::text IS NULL THEN avatar_preset END
+     FROM (SELECT avatar_key AS old_key FROM case_witnesses WHERE case_id = $1 AND id = $2 FOR UPDATE) old
+     WHERE case_id = $1 AND id = $2
+     RETURNING ${WITNESS_COLUMNS}, old.old_key AS "oldKey"`,
+    [caseId, id, key],
+  )
+  if (!rows[0]) return null
+  const { oldKey, ...witness } = rows[0]
+  return { witness: witness as Witness, oldKey }
 }
 
 export async function findWitness(caseId: string, id: string) {
@@ -323,6 +370,20 @@ export async function findWitness(caseId: string, id: string) {
     [caseId, id],
   )
   return rows[0] ?? null
+}
+
+/** The witness's uploaded picture, if `userId` teaches or is enrolled in its course; else null. */
+export async function witnessAvatarKeyFor(witnessId: string, userId: string) {
+  const { rows } = await pool.query<{ key: string }>(
+    `SELECT w.avatar_key AS key
+     FROM case_witnesses w
+     JOIN cases c ON c.id = w.case_id
+     JOIN courses co ON co.id = c.course_id
+     WHERE w.id = $1 AND w.avatar_key IS NOT NULL
+       AND (co.instructor_id = $2 OR EXISTS (SELECT 1 FROM enrollments e WHERE e.course_id = co.id AND e.user_id = $2))`,
+    [witnessId, userId],
+  )
+  return rows[0]?.key ?? null
 }
 
 /** Which of `ids` are files in this case (to check a witness's deposition and known files). */
@@ -335,12 +396,13 @@ export async function existingMaterialIds(caseId: string, ids: string[]) {
   return new Set(rows.map((r) => r.id))
 }
 
+/** Deletes the witness; returns null if there was none, else its uploaded picture's key to delete. */
 export async function deleteWitness(caseId: string, id: string) {
-  const { rowCount } = await pool.query('DELETE FROM case_witnesses WHERE case_id = $1 AND id = $2', [
-    caseId,
-    id,
-  ])
-  return rowCount === 1
+  const { rows } = await pool.query<{ avatarKey: string | null }>(
+    'DELETE FROM case_witnesses WHERE case_id = $1 AND id = $2 RETURNING avatar_key AS "avatarKey"',
+    [caseId, id],
+  )
+  return rows[0] ?? null
 }
 
 // Tasks

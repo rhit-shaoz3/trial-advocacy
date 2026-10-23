@@ -256,6 +256,22 @@ export const httpCourseService: CourseService = {
     })
   },
 
+  async uploadWitnessAvatar(courseId, caseId, witnessId, image) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/witnesses/${encodeURIComponent(witnessId)}/avatar`, {
+      method: 'PUT',
+      body: image,
+      headers: { 'Content-Type': image.type },
+    })
+    return body.witness
+  },
+
+  async removeWitnessAvatar(courseId, caseId, witnessId) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/witnesses/${encodeURIComponent(witnessId)}/avatar`, {
+      method: 'DELETE',
+    })
+    return body.witness
+  },
+
   async listTasks(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/tasks`)).tasks
   },

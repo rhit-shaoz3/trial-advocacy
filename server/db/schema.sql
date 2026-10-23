@@ -245,6 +245,11 @@ ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS persona_notes text NOT NULL 
 ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS deposition_material_id uuid REFERENCES case_materials (id) ON DELETE SET NULL;
 ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS known_material_ids uuid[] NOT NULL DEFAULT '{}';
 ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS defending_counsel text NOT NULL DEFAULT '';
+-- The witness's picture: one of the designs in public/witness-avatars/
+-- (1-12), or an uploaded picture in file storage (witnesses/<id>/<uuid>).
+-- Choosing one clears the other; with neither, the witness shows an icon.
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS avatar_preset smallint CHECK (avatar_preset BETWEEN 1 AND 12);
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS avatar_key text;
 
 -- One interview of an AI witness, before any deposition: by a team (both
 -- partners share it, always as their team's side) or, with no team, an

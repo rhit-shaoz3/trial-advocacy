@@ -79,23 +79,28 @@ describe('pairing by hand', () => {
     expect((await prof.get(teamsUrl())).body.teams).toHaveLength(1)
   })
 
-  it('needs one to three students', async () => {
+  it('needs one to seven students', async () => {
     expect((await prof.post(teamsUrl()).send({ emails: [] })).body.error).toBe('Choose at least one student.')
-    expect((await prof.post(teamsUrl()).send({ emails: [ada, ben, cy, dee] })).body.error).toBe(
-      'A team can have at most 3 students.',
+    expect((await prof.post(teamsUrl()).send({ emails: [...STUDENTS, 'hal@example.com'] })).body.error).toBe(
+      'A team can have at most 7 students.',
     )
     expect((await prof.post(teamsUrl()).send({ emails: ada })).status).toBe(400)
   })
 
-  it('adds members up to three and removes them, deleting a team left empty', async () => {
-    const { id } = (await prof.post(teamsUrl()).send({ emails: [ada] })).body.teams[0]
+  it('adds members up to seven and removes them, deleting a team left empty', async () => {
+    await prof.post(`/api/courses/${course.id}/roster`).send({ emails: ['hal@example.com'] })
+    const { id } = (await prof.post(teamsUrl()).send({ emails: [ada, dee, eve, 'fay@example.com', 'gus@example.com'] }))
+      .body.teams[0]
 
     expect((await prof.post(`${teamsUrl()}/${id}/members`).send({ email: ben })).status).toBe(200)
-    const three = await prof.post(`${teamsUrl()}/${id}/members`).send({ email: cy })
-    expect(emailsOf(three.body.teams[0])).toEqual([ada, ben, cy])
-    const four = await prof.post(`${teamsUrl()}/${id}/members`).send({ email: dee })
-    expect(four.status).toBe(409)
-    expect(four.body.error).toBe('A team can have at most 3 students.')
+    const seven = await prof.post(`${teamsUrl()}/${id}/members`).send({ email: cy })
+    expect(seven.body.teams[0].members).toHaveLength(7)
+    const eight = await prof.post(`${teamsUrl()}/${id}/members`).send({ email: 'hal@example.com' })
+    expect(eight.status).toBe(409)
+    expect(eight.body.error).toBe('A team can have at most 7 students.')
+    for (const email of [dee, eve, 'fay@example.com', 'gus@example.com']) {
+      await prof.delete(`${teamsUrl()}/${id}/members/${encodeURIComponent(email)}`)
+    }
 
     const removed = await prof.delete(`${teamsUrl()}/${id}/members/${encodeURIComponent(cy)}`)
     expect(emailsOf(removed.body.teams[0])).toEqual([ada, ben])
@@ -135,19 +140,41 @@ describe('pairing by hand', () => {
 })
 
 describe('auto-pairing', () => {
-  it('pairs everyone unpaired, with one team of three for an odd class', async () => {
+  it('makes teams of two by default, leaving the odd student out for the instructor to place', async () => {
     await prof.post(teamsUrl()).send({ emails: [ada, ben] })
 
     const res = await prof.post(`${teamsUrl()}/auto`)
 
     expect(res.status).toBe(200)
-    expect(res.body.unpaired).toEqual([])
-    // 5 left over: two new teams, one of them three.
-    const sizes = (res.body as TeamsBody).teams.map((t) => t.members.length)
-    expect(sizes[0]).toBe(2)
-    expect(sizes.slice(1).sort()).toEqual([2, 3])
+    // 5 not on a team: two new pairs, and one student left to place by hand.
+    expect((res.body as TeamsBody).teams.map((t) => t.members.length)).toEqual([2, 2, 2])
     expect(res.body.teams.map((t: { number: number }) => t.number)).toEqual([1, 2, 3])
+    expect(res.body.unpaired).toHaveLength(1)
 
+    const tooFew = await prof.post(`${teamsUrl()}/auto`)
+    expect(tooFew.status).toBe(409)
+    expect(tooFew.body.error).toBe('Only 1 student is left, not enough for a team of 2. Add them to a team by hand.')
+  })
+
+  it('makes teams of the size the instructor chooses', async () => {
+    const res = await prof.post(`${teamsUrl()}/auto`).send({ teamSize: 3 })
+
+    // 7 students: two teams of three, one left over.
+    expect((res.body as TeamsBody).teams.map((t) => t.members.length)).toEqual([3, 3])
+    expect(res.body.unpaired).toHaveLength(1)
+
+    await prof.delete(teamsUrl())
+    expect(((await prof.post(`${teamsUrl()}/auto`).send({ teamSize: 6 })).body as TeamsBody).teams[0].members).toHaveLength(6)
+
+    for (const teamSize of [1, 7, 2.5, 'three']) {
+      const bad = await prof.post(`${teamsUrl()}/auto`).send({ teamSize })
+      expect(bad.status).toBe(400)
+      expect(bad.body.error).toBe('Choose 2 to 6 students per team.')
+    }
+  })
+
+  it('says when everyone is already on a team', async () => {
+    await prof.post(teamsUrl()).send({ emails: STUDENTS })
     const again = await prof.post(`${teamsUrl()}/auto`)
     expect(again.status).toBe(409)
     expect(again.body.error).toBe('Everyone is already on a team.')
@@ -223,23 +250,28 @@ describe('pairStudents', () => {
   const inOrder = () => 0 // makes the shuffle deterministic
 
   it('pairs an even class', () => {
-    const groups = pairStudents(['a', 'b', 'c', 'd'], new Set(), inOrder)
-    expect(groups.flat().sort()).toEqual(['a', 'b', 'c', 'd'])
-    expect(groups.map((g) => g.length)).toEqual([2, 2])
+    const { teams, leftover } = pairStudents(['a', 'b', 'c', 'd'], new Set(), inOrder)
+    expect(teams.flat().sort()).toEqual(['a', 'b', 'c', 'd'])
+    expect(teams.map((g) => g.length)).toEqual([2, 2])
+    expect(leftover).toEqual([])
   })
 
-  it('adds the odd student out to a pair, or leaves a lone student solo', () => {
-    expect(pairStudents(['a', 'b', 'c'], new Set(), inOrder).map((g) => g.length)).toEqual([3])
-    expect(pairStudents(['a'], new Set(), inOrder)).toEqual([['a']])
-    expect(pairStudents([], new Set(), inOrder)).toEqual([])
+  it('makes teams of exactly the chosen size, and returns the students left over', () => {
+    const seven = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    expect(pairStudents(seven, new Set(), inOrder, 3).teams.map((g) => g.length)).toEqual([3, 3])
+    expect(pairStudents(seven, new Set(), inOrder, 3).leftover).toHaveLength(1)
+    expect(pairStudents(['a', 'b', 'c'], new Set(), inOrder).teams.map((g) => g.length)).toEqual([2])
+    expect(pairStudents(['a', 'b', 'c'], new Set(), inOrder).leftover).toHaveLength(1)
+    expect(pairStudents(['a'], new Set(), inOrder)).toEqual({ teams: [], leftover: ['a'] })
+    expect(pairStudents([], new Set(), inOrder)).toEqual({ teams: [], leftover: [] })
   })
 
   it('prefers new partners, and repeats only when there is no other choice', () => {
     const past = new Set([partnerKey('a', 'b'), partnerKey('a', 'c')])
-    const groups = pairStudents(['a', 'b', 'c', 'd'], past, inOrder)
-    expect(groups.every((g) => !(g.includes('a') && (g.includes('b') || g.includes('c'))))).toBe(true)
+    const { teams } = pairStudents(['a', 'b', 'c', 'd'], past, inOrder)
+    expect(teams.every((g) => !(g.includes('a') && (g.includes('b') || g.includes('c'))))).toBe(true)
 
-    expect(pairStudents(['a', 'b'], new Set([partnerKey('a', 'b')]), inOrder)).toHaveLength(1)
+    expect(pairStudents(['a', 'b'], new Set([partnerKey('a', 'b')]), inOrder).teams).toHaveLength(1)
   })
 })
 

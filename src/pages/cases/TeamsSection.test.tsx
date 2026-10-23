@@ -42,7 +42,7 @@ describe('TeamsSection', () => {
     expect(screen.getByText('Pending')).toBeInTheDocument()
   })
 
-  it('auto-pairs everyone left and shows the teams', async () => {
+  it('asks how many students per team, then auto-pairs and shows the teams', async () => {
     const autoPair = vi.fn().mockResolvedValue({
       teams: [{ id: 't1', number: 1, members: [ada, ben, cy] }],
       unpaired: [], matchups: []
@@ -50,11 +50,38 @@ describe('TeamsSection', () => {
     const { user } = renderSection(unpairedOnly, { autoPair })
 
     await user.click(await screen.findByRole('button', { name: 'Auto-pair 3 students' }))
+    const dialog = screen.getByRole('dialog', { name: 'Auto-pair' })
+    const size = within(dialog).getByLabelText('How many students per team?')
+    expect(size).toHaveValue(2)
+    expect(dialog).toHaveTextContent('1 team of 2, 1 student left to place by hand.')
+    await user.clear(size)
+    await user.type(size, '3')
+    expect(dialog).toHaveTextContent('1 team of 3, everyone placed.')
+    await user.click(within(dialog).getByRole('button', { name: 'Make teams' }))
 
-    expect(autoPair).toHaveBeenCalledWith('c1', 'k1')
+    expect(autoPair).toHaveBeenCalledWith('c1', 'k1', 3)
     expect(within(team(1)).getByText('Ada Lawyer')).toBeInTheDocument()
     expect(screen.queryByText(/Not on a team \(/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Auto-pair' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Auto-pair/ })).not.toBeInTheDocument()
+  })
+
+  it("won't make teams bigger than the students left, or outside 2 to 6", async () => {
+    const { user, service } = renderSection(unpairedOnly)
+
+    await user.click(await screen.findByRole('button', { name: 'Auto-pair 3 students' }))
+    const dialog = screen.getByRole('dialog', { name: 'Auto-pair' })
+    const size = within(dialog).getByLabelText('How many students per team?')
+    await user.clear(size)
+    await user.type(size, '4')
+    expect(dialog).toHaveTextContent('Not enough students for a team of 4.')
+    expect(within(dialog).getByRole('button', { name: 'Make teams' })).toBeDisabled()
+    await user.clear(size)
+    await user.type(size, '9')
+    expect(dialog).toHaveTextContent('Choose 2 to 6 students per team.')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(service.autoPair).not.toHaveBeenCalled()
   })
 
   it('pairs the selected students', async () => {
@@ -90,8 +117,8 @@ describe('TeamsSection', () => {
     await user.selectOptions(await screen.findByLabelText('Add a student to Team 1'), 'Dee Judge')
     expect(addTeamMember).toHaveBeenCalledWith('c1', 'k1', 't1', 'dee@example.com')
     expect(await within(team(1)).findByText('Dee Judge')).toBeInTheDocument()
-    // A team of three is full.
-    expect(screen.queryByLabelText('Add a student to Team 1')).not.toBeInTheDocument()
+    // Teams hold up to seven, so there's still room.
+    expect(screen.getByLabelText('Add a student to Team 1')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Remove Ada Lawyer from Team 1' }))
     expect(removeTeamMember).toHaveBeenCalledWith('c1', 'k1', 't1', 'ada@example.com')
@@ -133,6 +160,7 @@ describe('TeamsSection', () => {
     })
 
     await user.click(await screen.findByRole('button', { name: 'Auto-pair 3 students' }))
+    await user.click(screen.getByRole('button', { name: 'Make teams' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Everyone is already on a team.')
   })

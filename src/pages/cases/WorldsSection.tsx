@@ -1,7 +1,13 @@
 import { useState, type FormEvent } from 'react'
+import { DndContext, type DragEndEvent } from '@dnd-kit/core'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import type { CaseTeams, Team } from '../../courses/types'
+import type { CaseTeams, Side, Team } from '../../courses/types'
 import { worldLabel } from '../../courses/worldLabel'
+import { Draggable, DropZone } from './dnd'
+import { useDragSensors } from './useDragSensors'
+
+/** Drop targets for the new world's two sides. */
+const SLOT: Record<Side, string> = { plaintiff: 'slot:plaintiff', defense: 'slot:defense' }
 
 /** "Team 3: Ava Thompson & Ben Okafor" */
 function teamSummary(team: Team) {
@@ -10,9 +16,11 @@ function teamSummary(team: Team) {
 }
 
 /**
- * The case worlds: matchups of two teams, one per side. Shares the pairing
- * state (and the request runner) with the Teams section above it, since
- * changing teams can remove a world.
+ * The case worlds: matchups of two teams, one per side. Drag waiting teams
+ * into the new world's Plaintiff and Defense slots (or choose them from the
+ * menus); once both are filled, the world is made. Shares the pairing state
+ * (and the request runner) with the Teams section above it, since changing
+ * teams can remove a world.
  */
 export function WorldsSection({
   courseId,
@@ -35,6 +43,7 @@ export function WorldsSection({
   const service = useCourseService()
   const [plaintiff, setPlaintiff] = useState('')
   const [defense, setDefense] = useState('')
+  const sensors = useDragSensors()
 
   const teamById = new Map(data.teams.map((t) => [t.id, t]))
   const matched = new Set(data.matchups.flatMap((m) => [m.plaintiffTeamId, m.defenseTeamId]))
@@ -43,13 +52,36 @@ export function WorldsSection({
   const plaintiffId = waiting.some((t) => t.id === plaintiff) ? plaintiff : ''
   const defenseId = waiting.some((t) => t.id === defense) ? defense : ''
 
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault()
-    const ok = await run(() => service.createMatchup(courseId, caseId, plaintiffId, defenseId))
+  async function create(plaintiffTeam: string, defenseTeam: string) {
+    const ok = await run(() => service.createMatchup(courseId, caseId, plaintiffTeam, defenseTeam))
     if (ok) {
       setPlaintiff('')
       setDefense('')
     }
+  }
+
+  function handleCreate(e: FormEvent) {
+    e.preventDefault()
+    void create(plaintiffId, defenseId)
+  }
+
+  /** Dropping a team into a side's slot picks it; filling both slots makes the world. */
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    if (!over || busy) return
+    const teamId = String(active.id)
+    const side = over.id === SLOT.plaintiff ? 'plaintiff' : over.id === SLOT.defense ? 'defense' : null
+    if (!side) return
+    const other = side === 'plaintiff' ? defenseId : plaintiffId
+    // The same team can't be on both sides.
+    const otherId = other === teamId ? '' : other
+    if (side === 'plaintiff') {
+      setPlaintiff(teamId)
+      if (other === teamId) setDefense('')
+    } else {
+      setDefense(teamId)
+      if (other === teamId) setPlaintiff('')
+    }
+    if (otherId) void create(side === 'plaintiff' ? teamId : otherId, side === 'plaintiff' ? otherId : teamId)
   }
 
   function handleClear() {
@@ -104,47 +136,70 @@ export function WorldsSection({
         <p className="muted">Pair students into teams first.</p>
       ) : (
         waiting.length > 0 && (
-          <div className="unpaired-panel">
-            <h3>Waiting for an opponent ({waiting.length})</h3>
-            <ul className="waiting-list">
-              {waiting.map((t) => (
-                <li key={t.id}>{teamSummary(t)}</li>
-              ))}
-            </ul>
-            {!closed && waiting.length >= 2 && (
-              <form className="world-form" onSubmit={handleCreate} aria-label="New case world">
-                <label>
-                  Plaintiff
-                  <select value={plaintiffId} onChange={(e) => setPlaintiff(e.target.value)} disabled={busy}>
-                    <option value="">Choose a team…</option>
-                    {waiting.map((t) => (
-                      <option key={t.id} value={t.id} disabled={t.id === defenseId}>
-                        Team {t.number}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Defense
-                  <select value={defenseId} onChange={(e) => setDefense(e.target.value)} disabled={busy}>
-                    <option value="">Choose a team…</option>
-                    {waiting.map((t) => (
-                      <option key={t.id} value={t.id} disabled={t.id === plaintiffId}>
-                        Team {t.number}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="submit"
-                  className="btn-secondary"
-                  disabled={busy || !plaintiffId || !defenseId}
-                >
-                  Create world
-                </button>
-              </form>
-            )}
-          </div>
+          <DndContext id="worlds-dnd" sensors={sensors} onDragEnd={handleDragEnd}>
+            <div className="unpaired-panel">
+              <h3>Waiting for an opponent ({waiting.length})</h3>
+              <ul className="waiting-list">
+                {waiting.map((t) => (
+                  <li key={t.id}>
+                    {closed ? (
+                      teamSummary(t)
+                    ) : (
+                      <Draggable
+                        id={t.id}
+                        label={`Drag Team ${t.number} into a side of the new world`}
+                        className="team-drag waiting-team"
+                        disabled={busy}
+                      >
+                        <span>{teamSummary(t)}</span>
+                      </Draggable>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {!closed && waiting.length >= 2 && (
+                <form className="world-form world-builder" onSubmit={handleCreate} aria-label="New case world">
+                  <h4>New world</h4>
+                  <p className="muted">Drag a team into each side, or choose them below.</p>
+                  <div className="world-slots">
+                    {(['plaintiff', 'defense'] as const).map((side) => {
+                      const value = side === 'plaintiff' ? plaintiffId : defenseId
+                      const taken = side === 'plaintiff' ? defenseId : plaintiffId
+                      const chosen = teamById.get(value)
+                      return (
+                        <DropZone
+                          key={side}
+                          id={SLOT[side]}
+                          className={`world-slot world-side-${side}`}
+                          label={`${side === 'plaintiff' ? 'Plaintiff' : 'Defense'} side of the new world`}
+                        >
+                          <label>
+                            {side === 'plaintiff' ? 'Plaintiff' : 'Defense'}
+                            <select
+                              value={value}
+                              onChange={(e) => (side === 'plaintiff' ? setPlaintiff : setDefense)(e.target.value)}
+                              disabled={busy}
+                            >
+                              <option value="">Choose a team…</option>
+                              {waiting.map((t) => (
+                                <option key={t.id} value={t.id} disabled={t.id === taken}>
+                                  Team {t.number}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <p className="world-slot-team">{chosen ? teamSummary(chosen) : 'Drop a team here'}</p>
+                        </DropZone>
+                      )
+                    })}
+                  </div>
+                  <button type="submit" className="btn-secondary" disabled={busy || !plaintiffId || !defenseId}>
+                    Create world
+                  </button>
+                </form>
+              )}
+            </div>
+          </DndContext>
         )
       )}
 

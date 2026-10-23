@@ -13,8 +13,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
 
 -- The colour theme the user picked on the account page (light/dark follows
 -- their computer and isn't stored).
-ALTER TABLE users ADD COLUMN IF NOT EXISTS theme text NOT NULL DEFAULT 'navy'
-  CHECK (theme IN ('navy', 'forest', 'lagoon', 'vivid', 'stone'));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS theme text NOT NULL DEFAULT 'navy';
+-- The theme list changed: Stone became Earth, and Vivid became High contrast.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_theme_check;
+UPDATE users SET theme = CASE theme WHEN 'stone' THEN 'earth' WHEN 'vivid' THEN 'contrast' ELSE theme END
+  WHERE theme IN ('stone', 'vivid');
+ALTER TABLE users ADD CONSTRAINT users_theme_check
+  CHECK (theme IN ('navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast'));
 
 -- The user's profile picture in file storage (avatars/<userId>/<uuid>), or
 -- null to show their initials.

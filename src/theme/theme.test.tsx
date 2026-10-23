@@ -74,7 +74,7 @@ describe('colour themes', () => {
 
   it("shows the signed-in user's theme", async () => {
     systemSetting(false)
-    const ada: User = { id: 'u1', name: 'Ada', email: 'ada@example.com', role: 'student', theme: 'stone', avatarUrl: null, createdAt: '2026-09-01T00:00:00.000Z' }
+    const ada: User = { id: 'u1', name: 'Ada', email: 'ada@example.com', role: 'student', theme: 'earth', avatarUrl: null, createdAt: '2026-09-01T00:00:00.000Z' }
     const service: AuthService = {
       getCurrentUser: vi.fn().mockResolvedValue(ada),
       signUp: vi.fn(),
@@ -90,6 +90,6 @@ describe('colour themes', () => {
       </AuthProvider>,
     )
     await screen.findByText('App')
-    await vi.waitFor(() => expect(document.documentElement.dataset.palette).toBe('stone'))
+    await vi.waitFor(() => expect(document.documentElement.dataset.palette).toBe('earth'))
   })
 })

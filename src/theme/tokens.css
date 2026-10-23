@@ -1,15 +1,21 @@
 /*
  * Every colour in the app, by what it's for. Pages use these names, never raw
- * colours, so a theme only has to redefine them here.
+ * colours, so a theme only has to redefine them here. This file is written
+ * from one table per palette; keep the palettes complete and alike.
  *
- * <html data-palette="navy|forest|lagoon|vivid|stone"> picks the theme (the
- * user's choice on the account page; navy and parchment by default), and
- * <html data-theme="light|dark"> picks light or dark (the system setting, or
- * the sidebar toggle for this visit). Both are set by index.html before the
- * page paints; see src/theme/theme.ts.
+ * <html data-palette="navy|slate|earth|vibrant|forest|lagoon|contrast"> picks
+ * the theme (the user's choice on the account page; navy and parchment by
+ * default), and <html data-theme="light|dark"> picks light or dark (the
+ * system setting, or the sidebar toggle for this visit). Both are set by
+ * index.html before the page paints; see src/theme/theme.ts.
+ *
+ * In dark mode the page and sidebar go dark, but cards stay light-toned (a
+ * dimmed version of the light theme's cards) so they stand out: each dark
+ * palette defines --card-* colours, and the rule at the end hands them to
+ * every card, so everything inside a card reads dark-on-light.
  */
 
-/* ---------- Navy & parchment, light (the default) ---------- */
+/* ---------- Navy & parchment (the default), light ---------- */
 :root {
   /* Ink */
   --ws-navy: #10233f; /* headings */
@@ -57,6 +63,7 @@
   --tint-grey-fg: #5c6670;
   --tint-purple-bg: #f1ecf6;
   --tint-purple-fg: #5d3f86;
+  /* Shadow */
   --ws-shadow: 0 12px 34px rgba(20, 35, 59, 0.08);
 
   /* Generic names used by the forms, tables, and cards. */
@@ -69,151 +76,343 @@
   color-scheme: light;
 }
 
-/* ---------- Forest: dark green and white ---------- */
+/* ---------- Pale sky: pale sky and blue slate on alabaster, with burnt peach and pearl beige ---------- */
+:root[data-palette='slate'] {
+  /* Ink */
+  --ws-navy: #2e4651;
+  --ws-text: #263238;
+  --fg-soft: #3e4f57;
+  --ws-muted: #66767d;
+  /* Surfaces */
+  --ws-paper: #eaeaea;
+  --surface: #ffffff;
+  --subtle: #e1ebef;
+  --surface-hover: #f5f8f9;
+  --surface-translucent: rgba(255, 255, 255, 0.55);
+  /* Lines */
+  --ws-line: #d3dade;
+  --ws-row-line: #e6eaec;
+  --border-strong: #b3c2c9;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #4f6d7a;
+  --brand-light: #5d7d8b;
+  --button: #4f6d7a;
+  --button-hover: #436170;
+  --on-brand: #ffffff;
+  --on-brand-muted: #c0d6df;
+  /* Accents */
+  --ws-blue: #3f6474;
+  --ws-red: #c25a30;
+  --ws-gold: #a8894a;
+  --accent: #4f6d7a;
+  --link: #3f6474;
+  --focus: #7fa7b8;
+  --success: #4f8a6a;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #dceaf0;
+  --tint-blue-fg: #3a5a68;
+  --tint-green-bg: #e1eee7;
+  --tint-green-fg: #426d59;
+  --tint-amber-bg: #f3ead2;
+  --tint-amber-fg: #7d6532;
+  --tint-amber-border: #e3d5ae;
+  --tint-rose-bg: #f8e1d7;
+  --tint-rose-fg: #a2461f;
+  --tint-orange-bg: #fae3d6;
+  --tint-orange-fg: #a64c26;
+  --tint-grey-bg: #e9edef;
+  --tint-grey-fg: #59666c;
+  --tint-purple-bg: #ece8f2;
+  --tint-purple-fg: #5b4a7a;
+  /* Shadow */
+  --ws-shadow: 0 12px 30px rgba(46, 70, 81, 0.09);
+}
+
+/* ---------- Earth: taupe and silver on parchment, with dusty rose and hunter green ---------- */
+:root[data-palette='earth'] {
+  /* Ink */
+  --ws-navy: #3e332d;
+  --ws-text: #3a302b;
+  --fg-soft: #54473f;
+  --ws-muted: #7c6f68;
+  /* Surfaces */
+  --ws-paper: #edeae8;
+  --surface: #fbfaf9;
+  --subtle: #e5dfdb;
+  --surface-hover: #f6f3f1;
+  --surface-translucent: rgba(251, 250, 249, 0.6);
+  /* Lines */
+  --ws-line: #dbd3ce;
+  --ws-row-line: #e9e4e1;
+  --border-strong: #c2b5ae;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #51443d;
+  --brand-light: #5f5048;
+  --button: #51443d;
+  --button-hover: #5f5048;
+  --on-brand: #ffffff;
+  --on-brand-muted: #c2b5ae;
+  /* Accents */
+  --ws-blue: #325d45;
+  --ws-red: #a5584d;
+  --ws-gold: #9c6f5f;
+  --accent: #51443d;
+  --link: #325d45;
+  --focus: #8aa897;
+  --success: #325d45;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #dfe9e2;
+  --tint-blue-fg: #325d45;
+  --tint-green-bg: #dfe9e2;
+  --tint-green-fg: #2c5340;
+  --tint-amber-bg: #efe5d8;
+  --tint-amber-fg: #7a5a3c;
+  --tint-amber-border: #e0d2bf;
+  --tint-rose-bg: #f3e1dd;
+  --tint-rose-fg: #934c42;
+  --tint-orange-bg: #f1e3d9;
+  --tint-orange-fg: #8a5236;
+  --tint-grey-bg: #ebe6e3;
+  --tint-grey-fg: #6a5d56;
+  --tint-purple-bg: #ece2e6;
+  --tint-purple-fg: #6e4a5a;
+  /* Shadow */
+  --ws-shadow: 0 10px 28px rgba(81, 68, 61, 0.09);
+}
+
+/* ---------- Vibrant: dark teal and pacific blue on cool steel, with banana cream and rosewood ---------- */
+:root[data-palette='vibrant'] {
+  /* Ink */
+  --ws-navy: #0b4450;
+  --ws-text: #16262b;
+  --fg-soft: #34474d;
+  --ws-muted: #5f6b78;
+  /* Surfaces */
+  --ws-paper: #eef1f4;
+  --surface: #ffffff;
+  --subtle: #e3f3f7;
+  --surface-hover: #f4fafc;
+  --surface-translucent: rgba(255, 255, 255, 0.55);
+  /* Lines */
+  --ws-line: #d4dbe2;
+  --ws-row-line: #e6ebef;
+  --border-strong: #8d98a7;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #0b5563;
+  --brand-light: #0f6676;
+  --button: #0b5563;
+  --button-hover: #0f6979;
+  --on-brand: #ffffff;
+  --on-brand-muted: #a6dbe7;
+  /* Accents */
+  --ws-blue: #1b7f97;
+  --ws-red: #b7245c;
+  --ws-gold: #a8850a;
+  --accent: #0b5563;
+  --link: #1b7f97;
+  --focus: #49bbd4;
+  --success: #1f8a5b;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #dbf1f7;
+  --tint-blue-fg: #0b5563;
+  --tint-green-bg: #dcf3e6;
+  --tint-green-fg: #17643f;
+  --tint-amber-bg: #fff6b8;
+  --tint-amber-fg: #6e5a00;
+  --tint-amber-border: #f3dc5c;
+  --tint-rose-bg: #f9dbe6;
+  --tint-rose-fg: #8f1c48;
+  --tint-orange-bg: #ffe6d1;
+  --tint-orange-fg: #93491c;
+  --tint-grey-bg: #e8ebef;
+  --tint-grey-fg: #4f5a66;
+  --tint-purple-bg: #efe1f3;
+  --tint-purple-fg: #6b2f7a;
+  /* Shadow */
+  --ws-shadow: 0 12px 30px rgba(11, 85, 99, 0.1);
+}
+
+/* ---------- Forest: deep forest and dark spruce on white, with dust grey and smoky rose ---------- */
 :root[data-palette='forest'] {
-  --ws-navy: #153526;
-  --ws-text: #1b2a22;
-  --fg-soft: #33463b;
-  --ws-muted: #66786d;
-  --ws-paper: #ffffff;
+  /* Ink */
+  --ws-navy: #143d22;
+  --ws-text: #1e2b22;
+  --fg-soft: #3a4a3f;
+  --ws-muted: #686e69;
+  /* Surfaces */
+  --ws-paper: #f6f3f3;
   --surface: #ffffff;
-  --subtle: #f0f5f1;
-  --surface-hover: #f6faf7;
-  --ws-line: #dbe4de;
-  --ws-row-line: #edf2ee;
-  --border-strong: #bccbc1;
-  --brand: #163a2b;
-  --brand-light: #1f4a37;
-  --button: #1d5a40;
-  --button-hover: #236b4c;
-  --on-brand-muted: #a6c2b2;
-  --ws-blue: #2f6f55;
-  --accent: #1d5a40;
-  --link: #2f6f55;
-  --focus: #4f9a78;
+  --subtle: #efeaea;
+  --surface-hover: #faf8f8;
+  --surface-translucent: rgba(255, 255, 255, 0.55);
+  /* Lines */
+  --ws-line: #e3dbda;
+  --ws-row-line: #efeaea;
+  --border-strong: #c4b8b7;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #143d22;
+  --brand-light: #1b512d;
+  --button: #1b512d;
+  --button-hover: #22633a;
+  --on-brand: #ffffff;
+  --on-brand-muted: #b4c7b9;
+  /* Accents */
+  --ws-blue: #1b6b3a;
+  --ws-red: #a5474c;
+  --ws-gold: #9b6a6c;
+  --accent: #1b512d;
+  --link: #1b6b3a;
+  --focus: #5f9a73;
+  --success: #2f7a4a;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #e3eee6;
+  --tint-blue-fg: #1b512d;
+  --tint-green-bg: #e3eee6;
+  --tint-green-fg: #1b512d;
+  --tint-amber-bg: #f1e9df;
+  --tint-amber-fg: #7a5d3a;
+  --tint-amber-border: #e2d6c6;
+  --tint-rose-bg: #f2e4e4;
+  --tint-rose-fg: #7f4a4d;
+  --tint-orange-bg: #f3e6dc;
+  --tint-orange-fg: #84502f;
+  --tint-grey-bg: #eeeaea;
+  --tint-grey-fg: #625b5a;
+  --tint-purple-bg: #efe5ec;
+  --tint-purple-fg: #6b4a62;
+  /* Shadow */
+  --ws-shadow: 0 12px 30px rgba(20, 61, 34, 0.08);
 }
 
-/* ---------- Lagoon: deep teal and white ---------- */
+/* ---------- Lagoon: deep ocean and turquoise on sand, with coral and saffron ---------- */
 :root[data-palette='lagoon'] {
-  --ws-navy: #0e3a40;
-  --ws-text: #17292c;
-  --fg-soft: #304649;
-  --ws-muted: #627779;
-  --ws-paper: #ffffff;
-  --surface: #ffffff;
-  --subtle: #edf5f5;
-  --surface-hover: #f5fafa;
-  --ws-line: #d6e4e5;
-  --ws-row-line: #eaf2f2;
-  --border-strong: #b5cacc;
-  --brand: #0f3d44;
-  --brand-light: #15505a;
-  --button: #126270;
-  --button-hover: #177585;
-  --on-brand-muted: #9cc3c8;
-  --ws-blue: #1d7584;
-  --accent: #126270;
-  --link: #1d7584;
-  --focus: #4fb0bd;
+  /* Ink */
+  --ws-navy: #12355b;
+  --ws-text: #1d2a38;
+  --fg-soft: #384a5c;
+  --ws-muted: #687684;
+  /* Surfaces */
+  --ws-paper: #f4efe6;
+  --surface: #fffdf9;
+  --subtle: #ebe4d7;
+  --surface-hover: #faf7f1;
+  --surface-translucent: rgba(255, 253, 249, 0.6);
+  /* Lines */
+  --ws-line: #e0d8ca;
+  --ws-row-line: #eee8de;
+  --border-strong: #c9bfae;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #12355b;
+  --brand-light: #1a4573;
+  --button: #1e7d72;
+  --button-hover: #238a7e;
+  --on-brand: #ffffff;
+  --on-brand-muted: #a9c3dc;
+  /* Accents */
+  --ws-blue: #1e7d72;
+  --ws-red: #c4502f;
+  --ws-gold: #b0820f;
+  --accent: #12355b;
+  --link: #1e7d72;
+  --focus: #2a9d8f;
+  --success: #2a8a6f;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #dff0ee;
+  --tint-blue-fg: #1a6b62;
+  --tint-green-bg: #e0f0e6;
+  --tint-green-fg: #2b6b47;
+  --tint-amber-bg: #f8edcf;
+  --tint-amber-fg: #7f5f12;
+  --tint-amber-border: #ecd9a2;
+  --tint-rose-bg: #fbe2da;
+  --tint-rose-fg: #a8401f;
+  --tint-orange-bg: #fbe6d9;
+  --tint-orange-fg: #a24a22;
+  --tint-grey-bg: #ece8e1;
+  --tint-grey-fg: #5f6a75;
+  --tint-purple-bg: #e9e6f3;
+  --tint-purple-fg: #4f4a86;
+  /* Shadow */
+  --ws-shadow: 0 12px 30px rgba(18, 53, 91, 0.08);
 }
 
-/* ---------- Vivid: high contrast and bright ---------- */
-:root[data-palette='vivid'] {
-  --ws-navy: #0b0b12;
-  --ws-text: #0b0b12;
+/* ---------- High contrast: black and electric blue on white, with vermilion and amber ---------- */
+:root[data-palette='contrast'] {
+  /* Ink */
+  --ws-navy: #000000;
+  --ws-text: #0b0b0f;
   --fg-soft: #1f2230;
-  --ws-muted: #474c5c;
+  --ws-muted: #3f4456;
+  /* Surfaces */
   --ws-paper: #ffffff;
   --surface: #ffffff;
-  --subtle: #f1f2f7;
-  --surface-hover: #f6f7fb;
-  --ws-line: #c4c7d2;
-  --ws-row-line: #dfe1e8;
-  --border-strong: #8a8fa1;
-  --brand: #0b0b12;
+  --subtle: #eef0f6;
+  --surface-hover: #f4f5fa;
+  --surface-translucent: rgba(255, 255, 255, 0.6);
+  /* Lines */
+  --ws-line: #9ea3b3;
+  --ws-row-line: #c4c7d2;
+  --border-strong: #4b5063;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #0b0b0f;
   --brand-light: #1d1d2b;
-  --button: #2346d8;
-  --button-hover: #1a37b5;
-  --on-brand-muted: #c3c6d6;
-  --ws-blue: #2346d8;
-  --ws-red: #d8412b;
-  --ws-gold: #e69a00;
-  --accent: #2346d8;
-  --link: #2346d8;
-  --focus: #2346d8;
+  --button: #1f44d6;
+  --button-hover: #1636b3;
+  --on-brand: #ffffff;
+  --on-brand-muted: #d0d3e0;
+  /* Accents */
+  --ws-blue: #1f44d6;
+  --ws-red: #c4321a;
+  --ws-gold: #8a6400;
+  --accent: #1f44d6;
+  --link: #1f44d6;
+  --focus: #1f44d6;
+  --success: #0d6b3d;
+  /* Tinted badges and panels: background, text */
   --tint-blue-bg: #dfe6ff;
-  --tint-blue-fg: #1b37ad;
+  --tint-blue-fg: #14309f;
   --tint-green-bg: #d6f5e4;
-  --tint-green-fg: #0d6b3d;
-  --tint-amber-bg: #ffefc7;
-  --tint-amber-fg: #8a5a00;
-  --tint-amber-border: #f2cf73;
+  --tint-green-fg: #0a5a33;
+  --tint-amber-bg: #ffefb8;
+  --tint-amber-fg: #6e4f00;
+  --tint-amber-border: #f2b705;
   --tint-rose-bg: #ffe0db;
-  --tint-rose-fg: #a3271a;
+  --tint-rose-fg: #8f2213;
   --tint-orange-bg: #ffe6d6;
-  --tint-orange-fg: #a3461a;
+  --tint-orange-fg: #8f3b13;
+  --tint-grey-bg: #e9ebf2;
+  --tint-grey-fg: #2f3446;
+  --tint-purple-bg: #ece4ff;
+  --tint-purple-fg: #4b2a9e;
+  /* Shadow */
+  --ws-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-/* ---------- Stone: muted, low contrast, warm browns and beiges ---------- */
-:root[data-palette='stone'] {
-  --ws-navy: #4a3d31;
-  --ws-text: #4a3f35;
-  --fg-soft: #5e5144;
-  --ws-muted: #8a7d6e;
-  --ws-paper: #efe8dd;
-  --surface: #f7f2ea;
-  --subtle: #e7ddcf;
-  --surface-hover: #f3ede3;
-  --surface-translucent: rgba(247, 242, 234, 0.6);
-  --ws-line: #dcd1c0;
-  --ws-row-line: #e8dfd2;
-  --border-strong: #c9bba6;
-  --brand: #5a4a3c;
-  --brand-light: #6a5848;
-  --button: #7a6450;
-  --button-hover: #8a735d;
-  --on-brand-muted: #d9cdbd;
-  --ws-blue: #8a6e52;
-  --ws-red: #a0614e;
-  --ws-gold: #b39358;
-  --accent: #7a6450;
-  --link: #8a6e52;
-  --focus: #b39a7c;
-  --success: #7b8a5e;
-  --tint-blue-bg: #e6e0d4;
-  --tint-blue-fg: #6b5a44;
-  --tint-green-bg: #e3e4d2;
-  --tint-green-fg: #5f6b43;
-  --tint-amber-bg: #efe2c8;
-  --tint-amber-fg: #85663a;
-  --tint-rose-bg: #efdcd3;
-  --tint-rose-fg: #8a4d3c;
-  --tint-orange-bg: #f0e0d3;
-  --tint-orange-fg: #8a5a3c;
-  --tint-grey-bg: #e8e1d6;
-  --tint-grey-fg: #6e6356;
-  --ws-shadow: 0 10px 28px rgba(74, 61, 49, 0.08);
-}
-
-/* ---------- Dark mode (navy, and the shared dark colours) ---------- */
+/* ---------- Navy & parchment (the default), dark ---------- */
 :root[data-theme='dark'] {
+  /* Ink */
   --ws-navy: #dce5f0;
   --ws-text: #e2e8ef;
   --fg-soft: #c3ccd8;
   --ws-muted: #9aa6b5;
+  /* Surfaces */
   --ws-paper: #0e1622;
   --surface: #152031;
   --subtle: #1c2a3d;
   --surface-hover: #1a2638;
   --surface-translucent: rgba(255, 255, 255, 0.025);
+  /* Lines */
   --ws-line: #283649;
   --ws-row-line: #1f2b3b;
   --border-strong: #3b4c62;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
   --brand: #0a1220;
   --brand-light: #142035;
   --button: #3d6b97;
   --button-hover: #4a7aa8;
+  --on-brand: #ffffff;
   --on-brand-muted: #8b9cb0;
+  /* Accents */
   --ws-blue: #86aed3;
   --ws-red: #e4948b;
   --ws-gold: #d9b26b;
@@ -221,6 +420,7 @@
   --link: #8fb7dc;
   --focus: #86aed3;
   --success: #5c9a7a;
+  /* Tinted badges and panels: background, text */
   --tint-blue-bg: #1d3550;
   --tint-blue-fg: #a9c8e6;
   --tint-green-bg: #1d3529;
@@ -236,125 +436,690 @@
   --tint-grey-fg: #b4bfcb;
   --tint-purple-bg: #2e2540;
   --tint-purple-fg: #c9b3e8;
+  /* Shadow */
   --ws-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+  /* Cards: the light theme, dimmed */
+  --card-ws-navy: #10233f;
+  --card-ws-text: #1c293a;
+  --card-fg-soft: #384454;
+  --card-ws-muted: #4f4c46;
+  --card-ws-paper: #bbb6ab;
+  --card-surface: #c3bfb5;
+  --card-subtle: #b8b2a6;
+  --card-surface-hover: #c9c5bd;
+  --card-surface-translucent: rgba(255, 255, 255, 0.3);
+  --card-ws-line: #a8a194;
+  --card-ws-row-line: #b5afa3;
+  --card-border-strong: #948d7f;
+  --card-brand: #10233f;
+  --card-brand-light: #193453;
+  --card-button: #10233f;
+  --card-button-hover: #193453;
+  --card-on-brand: #ffffff;
+  --card-on-brand-muted: #9babbc;
+  --card-ws-blue: #294f71;
+  --card-ws-red: #793530;
+  --card-ws-gold: #b98b42;
+  --card-accent: #10233f;
+  --card-link: #294f71;
+  --card-focus: #608cb3;
+  --card-success: #4e8067;
+  --card-tint-blue-bg: #ced5dd;
+  --card-tint-blue-fg: #2f5b86;
+  --card-tint-green-bg: #c8d4cf;
+  --card-tint-green-fg: #385c4b;
+  --card-tint-amber-bg: #d7cfc2;
+  --card-tint-amber-fg: #6d5225;
+  --card-tint-amber-border: #cac2b1;
+  --card-tint-rose-bg: #dacac9;
+  --card-tint-rose-fg: #8a3b33;
+  --card-tint-orange-bg: #dad2ce;
+  --card-tint-orange-fg: #7f492b;
+  --card-tint-grey-bg: #d3d6d8;
+  --card-tint-grey-fg: #555e67;
+  --card-tint-purple-bg: #d6d2dd;
+  --card-tint-purple-fg: #5d3f86;
+  --card-ws-shadow: 0 12px 34px rgba(20, 35, 59, 0.08);
   color-scheme: dark;
 }
 
+/* ---------- Pale sky, dark ---------- */
+:root[data-theme='dark'][data-palette='slate'] {
+  /* Ink */
+  --ws-navy: #dbe8ee;
+  --ws-text: #e2eaee;
+  --fg-soft: #c4d3da;
+  --ws-muted: #94a7b0;
+  /* Surfaces */
+  --ws-paper: #172126;
+  --surface: #1f2c33;
+  --subtle: #263740;
+  --surface-hover: #22313a;
+  --surface-translucent: rgba(255, 255, 255, 0.025);
+  /* Lines */
+  --ws-line: #2c3d46;
+  --ws-row-line: #23323a;
+  --border-strong: #415862;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #10191d;
+  --brand-light: #1a272d;
+  --button: #557a8a;
+  --button-hover: #608797;
+  --on-brand: #ffffff;
+  --on-brand-muted: #9fb8c3;
+  /* Accents */
+  --ws-blue: #a5c8d6;
+  --ws-red: #ec9a76;
+  --ws-gold: #e3cf98;
+  --accent: #a5c8d6;
+  --link: #b0d2df;
+  --focus: #a5c8d6;
+  --success: #79b494;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #22404d;
+  --tint-blue-fg: #b9d6e2;
+  --tint-green-bg: #1d3529;
+  --tint-green-fg: #9fd0b5;
+  --tint-amber-bg: #3d3524;
+  --tint-amber-fg: #e8d7a6;
+  --tint-amber-border: #5a4d32;
+  --tint-rose-bg: #44271b;
+  --tint-rose-fg: #f1b096;
+  --tint-orange-bg: #45291c;
+  --tint-orange-fg: #f0b896;
+  --tint-grey-bg: #26343b;
+  --tint-grey-fg: #b8c7cd;
+  --tint-purple-bg: #2e2a3d;
+  --tint-purple-fg: #c9bfe0;
+  /* Shadow */
+  --ws-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+  /* Cards: the light theme, dimmed */
+  --card-ws-navy: #2e4651;
+  --card-ws-text: #263238;
+  --card-fg-soft: #3e4f57;
+  --card-ws-muted: #415057;
+  --card-ws-paper: #b0bdc3;
+  --card-surface: #b9c5ca;
+  --card-subtle: #acb9c0;
+  --card-surface-hover: #bfcace;
+  --card-surface-translucent: rgba(255, 255, 255, 0.3);
+  --card-ws-line: #9cacb4;
+  --card-ws-row-line: #abb8be;
+  --card-border-strong: #8498a1;
+  --card-brand: #4f6d7a;
+  --card-brand-light: #5d7d8b;
+  --card-button: #4f6d7a;
+  --card-button-hover: #436170;
+  --card-on-brand: #ffffff;
+  --card-on-brand-muted: #c0d6df;
+  --card-ws-blue: #355562;
+  --card-ws-red: #803b1f;
+  --card-ws-gold: #a8894a;
+  --card-accent: #4f6d7a;
+  --card-link: #355562;
+  --card-focus: #7fa7b8;
+  --card-success: #4f8a6a;
+  --card-tint-blue-bg: #c4d2d8;
+  --card-tint-blue-fg: #3a5a68;
+  --card-tint-green-bg: #c9d5d0;
+  --card-tint-green-fg: #385c4b;
+  --card-tint-amber-bg: #d9d2bd;
+  --card-tint-amber-fg: #6a562a;
+  --card-tint-amber-border: #cbbf9e;
+  --card-tint-rose-bg: #ddcac2;
+  --card-tint-rose-fg: #893b1b;
+  --card-tint-orange-bg: #dfccc1;
+  --card-tint-orange-fg: #8d4020;
+  --card-tint-grey-bg: #d0d5d7;
+  --card-tint-grey-fg: #525e63;
+  --card-tint-purple-bg: #d2d0da;
+  --card-tint-purple-fg: #5b4a7a;
+  --card-ws-shadow: 0 12px 30px rgba(46, 70, 81, 0.09);
+}
+
+/* ---------- Earth, dark ---------- */
+:root[data-theme='dark'][data-palette='earth'] {
+  /* Ink */
+  --ws-navy: #ebe2dc;
+  --ws-text: #e6ddd7;
+  --fg-soft: #d0c4bd;
+  --ws-muted: #a49891;
+  /* Surfaces */
+  --ws-paper: #1f1a17;
+  --surface: #29231f;
+  --subtle: #312a25;
+  --surface-hover: #2d2622;
+  --surface-translucent: rgba(255, 255, 255, 0.025);
+  /* Lines */
+  --ws-line: #3e352f;
+  --ws-row-line: #332b26;
+  --border-strong: #574b43;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #161210;
+  --brand-light: #221c19;
+  --button: #7d6a5f;
+  --button-hover: #8d796d;
+  --on-brand: #ffffff;
+  --on-brand-muted: #b7aaa2;
+  /* Accents */
+  --ws-blue: #8fbea2;
+  --ws-red: #e0a198;
+  --ws-gold: #d9ad9c;
+  --accent: #c9b5aa;
+  --link: #9ccbb0;
+  --focus: #c2b5ae;
+  --success: #6fa585;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #22362b;
+  --tint-blue-fg: #a9d1b9;
+  --tint-green-bg: #22362b;
+  --tint-green-fg: #a9d1b9;
+  --tint-amber-bg: #3b3022;
+  --tint-amber-fg: #e2c59f;
+  --tint-amber-border: #57472f;
+  --tint-rose-bg: #422a26;
+  --tint-rose-fg: #ebb3aa;
+  --tint-orange-bg: #3e2c22;
+  --tint-orange-fg: #e5bb9f;
+  --tint-grey-bg: #342d29;
+  --tint-grey-fg: #c9bdb6;
+  --tint-purple-bg: #3a2a31;
+  --tint-purple-fg: #dcbccb;
+  /* Shadow */
+  --ws-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+  /* Cards: the light theme, dimmed */
+  --card-ws-navy: #3e332d;
+  --card-ws-text: #3a302b;
+  --card-fg-soft: #54473f;
+  --card-ws-muted: #534842;
+  --card-ws-paper: #bab1ac;
+  --card-surface: #c2bab5;
+  --card-subtle: #b6ada7;
+  --card-surface-hover: #c7c0bc;
+  --card-surface-translucent: rgba(255, 255, 255, 0.3);
+  --card-ws-line: #a99e97;
+  --card-ws-row-line: #b5aca6;
+  --card-border-strong: #93867f;
+  --card-brand: #51443d;
+  --card-brand-light: #5f5048;
+  --card-button: #51443d;
+  --card-button-hover: #5f5048;
+  --card-on-brand: #ffffff;
+  --card-on-brand-muted: #c2b5ae;
+  --card-ws-blue: #2a4f3a;
+  --card-ws-red: #6d3a33;
+  --card-ws-gold: #9c6f5f;
+  --card-accent: #51443d;
+  --card-link: #2a4f3a;
+  --card-focus: #8aa897;
+  --card-success: #325d45;
+  --card-tint-blue-bg: #c8d0ca;
+  --card-tint-blue-fg: #325d45;
+  --card-tint-green-bg: #c8d0ca;
+  --card-tint-green-fg: #2c5340;
+  --card-tint-amber-bg: #d6cdc1;
+  --card-tint-amber-fg: #674c33;
+  --card-tint-amber-border: #c9bcab;
+  --card-tint-rose-bg: #dac9c5;
+  --card-tint-rose-fg: #7c4038;
+  --card-tint-orange-bg: #d8cbc2;
+  --card-tint-orange-fg: #75452e;
+  --card-tint-grey-bg: #d3cecb;
+  --card-tint-grey-fg: #62564f;
+  --card-tint-purple-bg: #d3cacd;
+  --card-tint-purple-fg: #6e4a5a;
+  --card-ws-shadow: 0 10px 28px rgba(81, 68, 61, 0.09);
+}
+
+/* ---------- Vibrant, dark ---------- */
+:root[data-theme='dark'][data-palette='vibrant'] {
+  /* Ink */
+  --ws-navy: #e2f4f8;
+  --ws-text: #e6f1f4;
+  --fg-soft: #c3d8de;
+  --ws-muted: #9aa7b5;
+  /* Surfaces */
+  --ws-paper: #081d22;
+  --surface: #0e2a31;
+  --subtle: #12343c;
+  --surface-hover: #113037;
+  --surface-translucent: rgba(255, 255, 255, 0.025);
+  /* Lines */
+  --ws-line: #1d4149;
+  --ws-row-line: #15363e;
+  --border-strong: #2f5d68;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #05151a;
+  --brand-light: #0b2329;
+  --button: #16788f;
+  --button-hover: #1a8aa3;
+  --on-brand: #ffffff;
+  --on-brand-muted: #8fc9d6;
+  /* Accents */
+  --ws-blue: #7fd3e6;
+  --ws-red: #f0709e;
+  --ws-gold: #fee440;
+  --accent: #7fd3e6;
+  --link: #8edcee;
+  --focus: #49bbd4;
+  --success: #4cc38a;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #0f3d48;
+  --tint-blue-fg: #a9e5f2;
+  --tint-green-bg: #0f3a2a;
+  --tint-green-fg: #8fe0b5;
+  --tint-amber-bg: #3d3600;
+  --tint-amber-fg: #fee98a;
+  --tint-amber-border: #5e5300;
+  --tint-rose-bg: #4a1427;
+  --tint-rose-fg: #f8a9c6;
+  --tint-orange-bg: #45280f;
+  --tint-orange-fg: #ffc58f;
+  --tint-grey-bg: #1d2f35;
+  --tint-grey-fg: #b3c1cc;
+  --tint-purple-bg: #36203f;
+  --tint-purple-fg: #dcb2ea;
+  /* Shadow */
+  --ws-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
+  /* Cards: the light theme, dimmed */
+  --card-ws-navy: #0b4450;
+  --card-ws-text: #16262b;
+  --card-fg-soft: #34474d;
+  --card-ws-muted: #46525e;
+  --card-ws-paper: #afc0c7;
+  --card-surface: #b8c8ce;
+  --card-subtle: #abbdc4;
+  --card-surface-hover: #becdd2;
+  --card-surface-translucent: rgba(255, 255, 255, 0.3);
+  --card-ws-line: #98afb8;
+  --card-ws-row-line: #a7bbc1;
+  --card-border-strong: #7d8997;
+  --card-brand: #0b5563;
+  --card-brand-light: #0f6676;
+  --card-button: #0b5563;
+  --card-button-hover: #0f6979;
+  --card-on-brand: #ffffff;
+  --card-on-brand-muted: #a6dbe7;
+  --card-ws-blue: #115464;
+  --card-ws-red: #9b1e4e;
+  --card-ws-gold: #a8850a;
+  --card-accent: #0b5563;
+  --card-link: #115464;
+  --card-focus: #49bbd4;
+  --card-success: #1f8a5b;
+  --card-tint-blue-bg: #c2d8dd;
+  --card-tint-blue-fg: #0b5563;
+  --card-tint-green-bg: #c3d9ce;
+  --card-tint-green-fg: #17643f;
+  --card-tint-amber-bg: #e1dca6;
+  --card-tint-amber-fg: #6e5a00;
+  --card-tint-amber-border: #d7c555;
+  --card-tint-rose-bg: #dcc4ce;
+  --card-tint-rose-fg: #8f1c48;
+  --card-tint-orange-bg: #e1cebc;
+  --card-tint-orange-fg: #87431a;
+  --card-tint-grey-bg: #cdd2d6;
+  --card-tint-grey-fg: #4f5a66;
+  --card-tint-purple-bg: #d3c9da;
+  --card-tint-purple-fg: #6b2f7a;
+  --card-ws-shadow: 0 12px 30px rgba(11, 85, 99, 0.1);
+}
+
+/* ---------- Forest, dark ---------- */
 :root[data-theme='dark'][data-palette='forest'] {
-  --ws-navy: #d8ebe0;
-  --ws-text: #e1ece6;
-  --fg-soft: #c2d6ca;
-  --ws-muted: #93a99c;
-  --ws-paper: #0d1712;
-  --surface: #13221a;
-  --subtle: #1a2d23;
-  --surface-hover: #182a20;
-  --ws-line: #24392e;
-  --ws-row-line: #1b2e24;
-  --border-strong: #365243;
-  --brand: #08120d;
-  --brand-light: #102119;
-  --button: #2f7a57;
-  --button-hover: #3a8c66;
-  --on-brand-muted: #86a594;
-  --ws-blue: #7fc3a1;
-  --accent: #7fc3a1;
-  --link: #8fd0ae;
-  --focus: #7fc3a1;
+  /* Ink */
+  --ws-navy: #dcebe0;
+  --ws-text: #e1ebe4;
+  --fg-soft: #c2d3c7;
+  --ws-muted: #93a598;
+  /* Surfaces */
+  --ws-paper: #0b1a10;
+  --surface: #112417;
+  --subtle: #163020;
+  --surface-hover: #142b1c;
+  --surface-translucent: rgba(255, 255, 255, 0.025);
+  /* Lines */
+  --ws-line: #1f3a28;
+  --ws-row-line: #17301f;
+  --border-strong: #335240;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #07120b;
+  --brand-light: #0e2014;
+  --button: #2d7a47;
+  --button-hover: #378f55;
+  --on-brand: #ffffff;
+  --on-brand-muted: #8fae99;
+  /* Accents */
+  --ws-blue: #8fcca2;
+  --ws-red: #d9a1a3;
+  --ws-gold: #d7b2b3;
+  --accent: #8fcca2;
+  --link: #9dd8af;
+  --focus: #8fcca2;
+  --success: #6fbf8a;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #173823;
+  --tint-blue-fg: #a9dbb8;
+  --tint-green-bg: #173823;
+  --tint-green-fg: #a9dbb8;
+  --tint-amber-bg: #34301d;
+  --tint-amber-fg: #e2cfa0;
+  --tint-amber-border: #4f4730;
+  --tint-rose-bg: #3d2526;
+  --tint-rose-fg: #e8b9ba;
+  --tint-orange-bg: #3a2a1f;
+  --tint-orange-fg: #e6bf9f;
+  --tint-grey-bg: #1f2c23;
+  --tint-grey-fg: #bccabf;
+  --tint-purple-bg: #33253a;
+  --tint-purple-fg: #d7bde0;
+  /* Shadow */
+  --ws-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
+  /* Cards: the light theme, dimmed */
+  --card-ws-navy: #143d22;
+  --card-ws-text: #1e2b22;
+  --card-fg-soft: #3a4a3f;
+  --card-ws-muted: #504948;
+  --card-ws-paper: #b7b0ae;
+  --card-surface: #bfb9b7;
+  --card-subtle: #b2aba9;
+  --card-surface-hover: #c4bfbd;
+  --card-surface-translucent: rgba(255, 255, 255, 0.3);
+  --card-ws-line: #a39b99;
+  --card-ws-row-line: #b1aaa8;
+  --card-border-strong: #8e8480;
+  --card-brand: #143d22;
+  --card-brand-light: #1b512d;
+  --card-button: #1b512d;
+  --card-button-hover: #22633a;
+  --card-on-brand: #ffffff;
+  --card-on-brand-muted: #b4c7b9;
+  --card-ws-blue: #15532d;
+  --card-ws-red: #773336;
+  --card-ws-gold: #9b6a6c;
+  --card-accent: #1b512d;
+  --card-link: #15532d;
+  --card-focus: #5f9a73;
+  --card-success: #2f7a4a;
+  --card-tint-blue-bg: #c9d5cc;
+  --card-tint-blue-fg: #1b512d;
+  --card-tint-green-bg: #c9d5cc;
+  --card-tint-green-fg: #1b512d;
+  --card-tint-amber-bg: #d5d0c6;
+  --card-tint-amber-fg: #674f31;
+  --card-tint-amber-border: #c8bfb0;
+  --card-tint-rose-bg: #d6cccb;
+  --card-tint-rose-fg: #754447;
+  --card-tint-orange-bg: #d7cec4;
+  --card-tint-orange-fg: #794a2b;
+  --card-tint-grey-bg: #d3d1d0;
+  --card-tint-grey-fg: #5a5453;
+  --card-tint-purple-bg: #d4cdd2;
+  --card-tint-purple-fg: #6b4a62;
+  --card-ws-shadow: 0 12px 30px rgba(20, 61, 34, 0.08);
 }
 
+/* ---------- Lagoon, dark ---------- */
 :root[data-theme='dark'][data-palette='lagoon'] {
-  --ws-navy: #d4ecee;
-  --ws-text: #def0f1;
-  --fg-soft: #bed7d9;
-  --ws-muted: #8fabae;
-  --ws-paper: #0b1719;
-  --surface: #112326;
-  --subtle: #172e32;
-  --surface-hover: #152a2d;
-  --ws-line: #213b3f;
-  --ws-row-line: #19302f;
-  --border-strong: #335457;
-  --brand: #061214;
-  --brand-light: #0d2023;
-  --button: #1f7f8c;
-  --button-hover: #26919f;
-  --on-brand-muted: #82a7ab;
-  --ws-blue: #6fc6d1;
-  --accent: #6fc6d1;
-  --link: #7fd3dd;
-  --focus: #6fc6d1;
+  /* Ink */
+  --ws-navy: #dfeaf4;
+  --ws-text: #e4ecf2;
+  --fg-soft: #c3d2df;
+  --ws-muted: #94a6b7;
+  /* Surfaces */
+  --ws-paper: #0b1a2b;
+  --surface: #10233a;
+  --subtle: #152c47;
+  --surface-hover: #132841;
+  --surface-translucent: rgba(255, 255, 255, 0.025);
+  /* Lines */
+  --ws-line: #1f3a57;
+  --ws-row-line: #182f49;
+  --border-strong: #33557a;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #071221;
+  --brand-light: #0e1e33;
+  --button: #1e7d72;
+  --button-hover: #238a7e;
+  --on-brand: #ffffff;
+  --on-brand-muted: #8fa9c4;
+  /* Accents */
+  --ws-blue: #6fd1c4;
+  --ws-red: #f29a82;
+  --ws-gold: #f0d38c;
+  --accent: #6fd1c4;
+  --link: #7fdacd;
+  --focus: #6fd1c4;
+  --success: #5cc0a0;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #123b3b;
+  --tint-blue-fg: #9fe3d9;
+  --tint-green-bg: #143a2a;
+  --tint-green-fg: #9fdcb8;
+  --tint-amber-bg: #3d3218;
+  --tint-amber-fg: #f0d792;
+  --tint-amber-border: #5c4b22;
+  --tint-rose-bg: #47241b;
+  --tint-rose-fg: #f5b4a2;
+  --tint-orange-bg: #45291a;
+  --tint-orange-fg: #f3c09d;
+  --tint-grey-bg: #1b2b3c;
+  --tint-grey-fg: #b7c5d3;
+  --tint-purple-bg: #26254a;
+  --tint-purple-fg: #c6c2ef;
+  /* Shadow */
+  --ws-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
+  /* Cards: the light theme, dimmed */
+  --card-ws-navy: #12355b;
+  --card-ws-text: #1d2a38;
+  --card-fg-soft: #384a5c;
+  --card-ws-muted: #4f4c47;
+  --card-ws-paper: #bcb7ab;
+  --card-surface: #c4bfb3;
+  --card-subtle: #b7b1a4;
+  --card-surface-hover: #c9c5bb;
+  --card-surface-translucent: rgba(255, 255, 255, 0.3);
+  --card-ws-line: #a9a294;
+  --card-ws-row-line: #b6b0a3;
+  --card-border-strong: #938c7c;
+  --card-brand: #12355b;
+  --card-brand-light: #1a4573;
+  --card-button: #1e7d72;
+  --card-button-hover: #238a7e;
+  --card-on-brand: #ffffff;
+  --card-on-brand-muted: #a9c3dc;
+  --card-ws-blue: #14534b;
+  --card-ws-red: #82351f;
+  --card-ws-gold: #b0820f;
+  --card-accent: #12355b;
+  --card-link: #14534b;
+  --card-focus: #2a9d8f;
+  --card-success: #2a8a6f;
+  --card-tint-blue-bg: #c6d6d7;
+  --card-tint-blue-fg: #18625a;
+  --card-tint-green-bg: #c6d6d0;
+  --card-tint-green-fg: #286241;
+  --card-tint-amber-bg: #dcd4bb;
+  --card-tint-amber-fg: #755711;
+  --card-tint-amber-border: #d1c294;
+  --card-tint-rose-bg: #decac5;
+  --card-tint-rose-fg: #8f361b;
+  --card-tint-orange-bg: #decec4;
+  --card-tint-orange-fg: #893f1d;
+  --card-tint-grey-bg: #d1cfcb;
+  --card-tint-grey-fg: #505a63;
+  --card-tint-purple-bg: #cecedb;
+  --card-tint-purple-fg: #4f4a86;
+  --card-ws-shadow: 0 12px 30px rgba(18, 53, 91, 0.08);
 }
 
-:root[data-theme='dark'][data-palette='vivid'] {
+/* ---------- High contrast, dark ---------- */
+:root[data-theme='dark'][data-palette='contrast'] {
+  /* Ink */
   --ws-navy: #ffffff;
-  --ws-text: #f5f6fa;
-  --fg-soft: #e3e5ee;
-  --ws-muted: #b8bccb;
-  --ws-paper: #05050a;
-  --surface: #11121a;
-  --subtle: #1b1d29;
-  --surface-hover: #171925;
-  --ws-line: #3a3d4f;
-  --ws-row-line: #262838;
-  --border-strong: #6b7088;
+  --ws-text: #ffffff;
+  --fg-soft: #e6e8f0;
+  --ws-muted: #c3c7d4;
+  /* Surfaces */
+  --ws-paper: #000000;
+  --surface: #0d0d12;
+  --subtle: #1a1b24;
+  --surface-hover: #15161e;
+  --surface-translucent: rgba(255, 255, 255, 0.04);
+  /* Lines */
+  --ws-line: #5a5f75;
+  --ws-row-line: #33364a;
+  --border-strong: #8d92aa;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
   --brand: #000000;
   --brand-light: #14141e;
-  --button: #4f6bff;
-  --button-hover: #6b83ff;
-  --on-brand-muted: #b8bccb;
-  --ws-blue: #8fa2ff;
-  --ws-red: #ff7a63;
-  --ws-gold: #ffc23d;
-  --accent: #7d93ff;
-  --link: #8fa2ff;
-  --focus: #7d93ff;
+  --button: #3d5af1;
+  --button-hover: #4f6bff;
+  --on-brand: #ffffff;
+  --on-brand-muted: #c3c7d4;
+  /* Accents */
+  --ws-blue: #9aabff;
+  --ws-red: #ff8a73;
+  --ws-gold: #ffcf3d;
+  --accent: #9aabff;
+  --link: #a8b7ff;
+  --focus: #ffcf3d;
+  --success: #5fe0a0;
+  /* Tinted badges and panels: background, text */
   --tint-blue-bg: #1c2a6b;
-  --tint-blue-fg: #c9d3ff;
+  --tint-blue-fg: #d6ddff;
   --tint-green-bg: #0f3d26;
-  --tint-green-fg: #9ff0c4;
+  --tint-green-fg: #a8f5cc;
   --tint-amber-bg: #4a3500;
-  --tint-amber-fg: #ffd77a;
+  --tint-amber-fg: #ffdb80;
+  --tint-amber-border: #7a5a00;
   --tint-rose-bg: #571a12;
-  --tint-rose-fg: #ffb4a8;
+  --tint-rose-fg: #ffbdb2;
   --tint-orange-bg: #522510;
-  --tint-orange-fg: #ffc09b;
+  --tint-orange-fg: #ffc7a4;
+  --tint-grey-bg: #1e2030;
+  --tint-grey-fg: #d0d4e2;
+  --tint-purple-bg: #2e1f5c;
+  --tint-purple-fg: #d4c6ff;
+  /* Shadow */
+  --ws-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+  /* Cards: the light theme, dimmed */
+  --card-ws-navy: #000000;
+  --card-ws-text: #0b0b0f;
+  --card-fg-soft: #1f2230;
+  --card-ws-muted: #3f4456;
+  --card-ws-paper: #d8d8db;
+  --card-surface: #e2e2e2;
+  --card-subtle: #d4d5dc;
+  --card-surface-hover: #e6e6e8;
+  --card-surface-translucent: rgba(255, 255, 255, 0.4);
+  --card-ws-line: #9599a8;
+  --card-ws-row-line: #b8bbc5;
+  --card-border-strong: #464b5d;
+  --card-brand: #0b0b0f;
+  --card-brand-light: #1d1d2b;
+  --card-button: #1f44d6;
+  --card-button-hover: #1636b3;
+  --card-on-brand: #ffffff;
+  --card-on-brand-muted: #d0d3e0;
+  --card-ws-blue: #1f44d6;
+  --card-ws-red: #b42e18;
+  --card-ws-gold: #8a6400;
+  --card-accent: #1f44d6;
+  --card-link: #1f44d6;
+  --card-focus: #1f44d6;
+  --card-success: #0d6b3d;
+  --card-tint-blue-bg: #d2d8f0;
+  --card-tint-blue-fg: #14309f;
+  --card-tint-green-bg: #c9e6d6;
+  --card-tint-green-fg: #0a5a33;
+  --card-tint-amber-bg: #f0e1ad;
+  --card-tint-amber-fg: #6e4f00;
+  --card-tint-amber-border: #e3ac05;
+  --card-tint-rose-bg: #f0d3ce;
+  --card-tint-rose-fg: #8f2213;
+  --card-tint-orange-bg: #f0d8c9;
+  --card-tint-orange-fg: #8f3b13;
+  --card-tint-grey-bg: #dbdde3;
+  --card-tint-grey-fg: #2f3446;
+  --card-tint-purple-bg: #ded6f0;
+  --card-tint-purple-fg: #4b2a9e;
+  --card-ws-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-:root[data-theme='dark'][data-palette='stone'] {
-  --ws-navy: #e8dccb;
-  --ws-text: #e4d9c9;
-  --fg-soft: #d3c6b5;
-  --ws-muted: #a8998a;
-  --ws-paper: #1e1914;
-  --surface: #27211b;
-  --subtle: #2f2821;
-  --surface-hover: #2b241e;
-  --surface-translucent: rgba(255, 255, 255, 0.025);
-  --ws-line: #3d342b;
-  --ws-row-line: #322a23;
-  --border-strong: #574a3d;
-  --brand: #15110d;
-  --brand-light: #211b15;
-  --button: #8a735d;
-  --button-hover: #9a836c;
-  --on-brand-muted: #b3a493;
-  --ws-blue: #c9ad8c;
-  --ws-red: #d7957f;
-  --ws-gold: #d3b67e;
-  --accent: #c9ad8c;
-  --link: #d1b694;
-  --focus: #c9ad8c;
-  --tint-blue-bg: #3a3127;
-  --tint-blue-fg: #dcc9b0;
-  --tint-green-bg: #313324;
-  --tint-green-fg: #c5cca3;
-  --tint-amber-bg: #3d3020;
-  --tint-amber-fg: #e2c590;
-  --tint-rose-bg: #3d2922;
-  --tint-rose-fg: #e2b2a1;
-  --tint-orange-bg: #3d2d20;
-  --tint-orange-fg: #e2bb98;
-  --tint-grey-bg: #332b24;
-  --tint-grey-fg: #c4b6a5;
+/* ---------- Cards in dark mode: light-toned, with dark text ---------- */
+:root[data-theme='dark'] :is(
+    .ws-stat,
+    .ws-case,
+    .ws-panel,
+    .course-card,
+    .cw-card,
+    .cw-file,
+    .cw-workbench .cw-row,
+    .iv-transcript,
+    .panel-form,
+    .table-scroll,
+    .entry-code,
+    .case-row,
+    .content-item,
+    .launch-panel,
+    .phase-panel,
+    .team-card,
+    .waiting-team,
+    .team-drag.dragging,
+    .upload-queue,
+    .setup-body,
+    .setup-done,
+    .review-card,
+    .account-dialog
+) {
+  --ws-navy: var(--card-ws-navy);
+  --ws-text: var(--card-ws-text);
+  --fg-soft: var(--card-fg-soft);
+  --ws-muted: var(--card-ws-muted);
+  --ws-paper: var(--card-ws-paper);
+  --surface: var(--card-surface);
+  --subtle: var(--card-subtle);
+  --surface-hover: var(--card-surface-hover);
+  --surface-translucent: var(--card-surface-translucent);
+  --ws-line: var(--card-ws-line);
+  --ws-row-line: var(--card-ws-row-line);
+  --border-strong: var(--card-border-strong);
+  --brand: var(--card-brand);
+  --brand-light: var(--card-brand-light);
+  --button: var(--card-button);
+  --button-hover: var(--card-button-hover);
+  --on-brand: var(--card-on-brand);
+  --on-brand-muted: var(--card-on-brand-muted);
+  --ws-blue: var(--card-ws-blue);
+  --ws-red: var(--card-ws-red);
+  --ws-gold: var(--card-ws-gold);
+  --accent: var(--card-accent);
+  --link: var(--card-link);
+  --focus: var(--card-focus);
+  --success: var(--card-success);
+  --tint-blue-bg: var(--card-tint-blue-bg);
+  --tint-blue-fg: var(--card-tint-blue-fg);
+  --tint-green-bg: var(--card-tint-green-bg);
+  --tint-green-fg: var(--card-tint-green-fg);
+  --tint-amber-bg: var(--card-tint-amber-bg);
+  --tint-amber-fg: var(--card-tint-amber-fg);
+  --tint-amber-border: var(--card-tint-amber-border);
+  --tint-rose-bg: var(--card-tint-rose-bg);
+  --tint-rose-fg: var(--card-tint-rose-fg);
+  --tint-orange-bg: var(--card-tint-orange-bg);
+  --tint-orange-fg: var(--card-tint-orange-fg);
+  --tint-grey-bg: var(--card-tint-grey-bg);
+  --tint-grey-fg: var(--card-tint-grey-fg);
+  --tint-purple-bg: var(--card-tint-purple-bg);
+  --tint-purple-fg: var(--card-tint-purple-fg);
+  --ws-shadow: var(--card-ws-shadow);
+  --bg: var(--ws-paper);
+  --fg: var(--ws-text);
+  --border: var(--ws-line);
+  --muted: var(--ws-muted);
+  --error: var(--ws-red);
+  --error-bg: var(--tint-rose-bg);
+  color: var(--ws-text);
+  color-scheme: light;
 }

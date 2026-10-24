@@ -19,19 +19,21 @@ import { askQuestion, endInterview, getInterview, restartInterview, type Intervi
 import {
   findTeamWorld,
   markReviewsSeen,
+  newestUnseenResult,
   openReviewCount,
   teamReviewResults,
   unseenReviewCount,
 } from '../reviews/reviews.ts'
 import { reviewsRouter } from '../reviews/reviewRoutes.ts'
-import { findMaterialFile, findWitness, listStorageKeys, removeStoredFiles, setTaskDone, visibleTo } from './caseContent.ts'
+import { findMaterialFile, findWitness, listStorageKeys, removeStoredFiles, setTaskDone } from './caseContent.ts'
 import { sendMaterialFile } from './caseContentRoutes.ts'
 import { findCase } from './cases.ts'
 import { casesRouter } from './caseRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
 import { instructorHome } from './instructorHome.ts'
 import { homeCasesForInstructor, listMyCases, studentHome } from './myCases.ts'
-import { findStudentTeamId, getStudentWorkspace } from './workspace.ts'
+import { findStudentTeamId, getStudentWorkspace, studentViewer } from './workspace.ts'
+import { sendInvestigation, teamInvestigations, type InvestigationContext } from '../investigator/requests.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -155,6 +157,7 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
       : {
           ...(await studentHome(course.id, req.user!.id)),
           newReviewResults: await unseenReviewCount(course.id, req.user!.id),
+          newResultsAt: await newestUnseenResult(course.id, req.user!.id),
         }),
   })
 })
@@ -172,12 +175,13 @@ coursesRouter.get('/:courseId/my-cases/:caseId', async (req, res) => {
   res.json({ workspace: await loadStudentWorkspace(req.params.courseId, req.params.caseId, req.user!.id) })
 })
 
-/** Downloads a case file, if the student's side can see it. */
+/** Downloads a case file, if the student can see it (their side's, or shared with their team or world). */
 coursesRouter.get('/:courseId/my-cases/:caseId/materials/:materialId/file', async (req, res) => {
   const { courseId, caseId, materialId } = req.params
   const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
   if (!isUuid(materialId)) throw new HttpError(404, 'File not found.')
-  await sendMaterialFile(res, await findMaterialFile(caseId, materialId, visibleTo(workspace.side)))
+  const viewer = await studentViewer(caseId, req.user!.id, workspace.side)
+  await sendMaterialFile(res, await findMaterialFile(caseId, materialId, viewer))
 })
 
 /** Marks one of the case's tasks done (or not) for the student's whole team. */
@@ -261,6 +265,45 @@ coursesRouter.post('/:courseId/my-cases/:caseId/reviews/seen', async (req, res) 
   await loadStudentWorkspace(courseId, caseId, req.user!.id)
   const teamId = await findStudentTeamId(caseId, req.user!.id)
   if (teamId) await markReviewsSeen(caseId, teamId, req.user!.id)
+  res.status(204).end()
+})
+
+/**
+ * Who's asking the background investigator: the student's team, in its case
+ * world (the side comes from the world, never the request). 409 unless the
+ * case has an investigator, he's open in this phase, and the team is matched.
+ */
+async function teamInvestigation(req: Request, sending: boolean): Promise<InvestigationContext | null> {
+  const { courseId, caseId } = req.params as Record<string, string>
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  const world = teamId ? await findTeamWorld(teamId) : null
+  if (!sending) return teamId && world ? { caseId, teamId, ...world, userId: req.user!.id } : null
+  if (!workspace.investigator) throw new HttpError(409, 'This case has no background investigator.')
+  if (!workspace.investigatorAvailable) {
+    throw new HttpError(409, 'The background investigator becomes available in the investigate phase.')
+  }
+  if (workspace.case.status !== 'active') throw new HttpError(409, 'This case is closed, so the investigator has finished.')
+  if (!teamId || !world) throw new HttpError(409, 'Your team needs a case world before it can hire the investigator.')
+  return { caseId, teamId, ...world, userId: req.user!.id }
+}
+
+/** The team's requests to the background investigator, newest first, with the reports that are back. */
+coursesRouter.get('/:courseId/my-cases/:caseId/investigator', async (req, res) => {
+  const ctx = await teamInvestigation(req, false)
+  res.json({ investigations: ctx ? await teamInvestigations(ctx.caseId, ctx.teamId, ctx.userId) : [] })
+})
+
+/** Emails the investigator an assignment `{ assignment }`; his report reaches the team after the instructor's review. */
+coursesRouter.post('/:courseId/my-cases/:caseId/investigator/requests', async (req, res) => {
+  const ctx = (await teamInvestigation(req, true))!
+  res.status(201).json({ investigations: await sendInvestigation(ctx, req.body) })
+})
+
+/** Marks the team's investigator reports as read by this student. */
+coursesRouter.post('/:courseId/my-cases/:caseId/investigator/seen', async (req, res) => {
+  const ctx = await teamInvestigation(req, false)
+  if (ctx) await markReviewsSeen(ctx.caseId, ctx.teamId, ctx.userId, 'investigation')
   res.status(204).end()
 })
 

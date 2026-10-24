@@ -124,4 +124,77 @@ describe('ReviewPage', () => {
     expect(await screen.findByText(/Where were you at 3\?/)).toBeInTheDocument()
     expect(screen.getByText('Ms. Park: Objection, form.')).toBeInTheDocument()
   })
+
+  it("shows an investigator report with its assignment, and lets the instructor allow or refuse each file", async () => {
+    const investigation: InterviewReview = {
+      ...review,
+      id: 'r5',
+      kind: 'investigation',
+      witness: null,
+      assignment: 'Check the lift hill.',
+      askedBy: 'Ada Lawyer',
+      report: '1. I photographed the lift hill. [NEW FACT]',
+      finalReport: null,
+      recordsRequested: ["The park's maintenance records, by subpoena."],
+      facts: [{ id: 'f1', text: 'A camera points at the lift hill.', decision: 'accept_world' }],
+      documents: [{ materialId: 'm9', title: 'Inspection log', decision: null }],
+    }
+    const decideDocument = vi.fn().mockResolvedValue({ ...investigation, documents: [{ materialId: 'm9', title: 'Inspection log', decision: 'deny' }] })
+    const completeReview = vi.fn().mockResolvedValue({ ...investigation, status: 'finalizing' })
+    const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([investigation]), decideDocument, completeReview })
+
+    const card = await screen.findByRole('article', { name: 'Investigation for Team 3' })
+    expect(card).toHaveTextContent('Assignment from Ada Lawyer')
+    expect(card).toHaveTextContent('Check the lift hill.')
+    expect(card).toHaveTextContent('1. I photographed the lift hill.')
+    expect(card).toHaveTextContent("The park's maintenance records, by subpoena.")
+    expect(within(card).queryByText('Show conversation')).not.toBeInTheDocument()
+    const finish = within(card).getByRole('button', { name: 'Finish review' })
+    expect(finish).toBeDisabled()
+    expect(card).toHaveTextContent('1 of 1 ruled · 0 of 1 files decided')
+
+    const file = within(card).getByRole('radiogroup', { name: 'Allow Team 3 access to Inspection log' })
+    await user.click(within(file).getByRole('radio', { name: "Don't allow" }))
+    expect(decideDocument).toHaveBeenCalledWith('c1', 'r5', 'm9', 'deny')
+    await user.click(within(card).getByRole('button', { name: 'Finish review' }))
+
+    // It moves to Completed at once; the team's report is written there.
+    expect(completeReview).toHaveBeenCalledWith('c1', 'r5')
+    expect(screen.queryByRole('article', { name: 'Investigation for Team 3' })).not.toBeInTheDocument()
+    expect(await screen.findByText('Nothing to review.')).toBeInTheDocument()
+  })
+
+  it('moves a finished review out at once, and brings it back if finishing fails', async () => {
+    let fail!: (err: Error) => void
+    const completeReview = vi.fn(() => new Promise<InterviewReview>((_, reject) => (fail = reject)))
+    const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([{ ...review, facts: [] }]), completeReview })
+
+    const card = await screen.findByRole('article', { name: 'Interview of Elena Torres' })
+    await user.click(within(card).getByRole('button', { name: 'Finish review' }))
+    // Gone before the server answers.
+    expect(screen.queryByRole('article', { name: 'Interview of Elena Torres' })).not.toBeInTheDocument()
+
+    fail(new Error('The server is down.'))
+    expect(await screen.findByRole('article', { name: 'Interview of Elena Torres' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not finish the review for Team 3. The server is down.')
+  })
+
+  it("warns when the investigator didn't list his new facts or files", async () => {
+    const investigation: InterviewReview = {
+      ...review,
+      id: 'r6',
+      kind: 'investigation',
+      witness: null,
+      assignment: 'Watch the park gate.',
+      report: 'I watched the gate for an hour.',
+      facts: [],
+      documents: [],
+      reviewBlockMissing: true,
+    }
+    renderPage({ listReviews: vi.fn().mockResolvedValue([investigation]) })
+
+    const card = await screen.findByRole('article', { name: 'Investigation for Team 3' })
+    expect(within(card).getByRole('note')).toHaveTextContent("The investigator didn’t list his new facts or files.")
+    expect(within(card).getByRole('button', { name: 'Finish review' })).toBeEnabled()
+  })
 })

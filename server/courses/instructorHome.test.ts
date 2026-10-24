@@ -85,6 +85,7 @@ describe("the instructor's dashboard", () => {
         title: 'Practice case',
         status: 'draft',
         phase: 'subpoena',
+        investigatorEnabled: true,
         worldCount: 0,
         launch: { ready: 1, total: 4, next: 'Pair students into teams.' },
         tasks: null,
@@ -94,6 +95,7 @@ describe("the instructor's dashboard", () => {
         title: 'Rivera v. Thrill Park',
         status: 'active',
         phase: 'subpoena',
+        investigatorEnabled: true,
         worldCount: 1,
         launch: null,
         // One task is due so far, and only Team 1 has done it; each team has two tasks in all.

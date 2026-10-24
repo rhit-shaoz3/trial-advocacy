@@ -64,6 +64,7 @@ describe('case materials', () => {
       textStatus: 'pending',
       textError: null,
       initial: false,
+      shares: { matchupIds: [], teamIds: [] },
     })
     const photo = (await upload('scene.JPG', { audience: 'plaintiff' })).body.material
     expect(photo).toMatchObject({ audience: 'plaintiff', contentType: 'image/jpeg' })

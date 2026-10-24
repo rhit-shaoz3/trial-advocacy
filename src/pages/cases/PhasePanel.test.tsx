@@ -87,4 +87,16 @@ describe('PhasePanel', () => {
     expect(screen.queryByRole('heading', { name: 'Case phase' })).not.toBeInTheDocument()
     expect(screen.queryByRole('list', { name: 'Phases' })).not.toBeInTheDocument()
   })
+
+  it('goes straight from subpoena to deposition without an investigator', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { user, service } = renderPanel({ ...coaster, investigator: { enabled: false, name: 'John Hastings', instructions: '' } })
+
+    const steps = within(screen.getByRole('list', { name: 'Phases' })).getAllByRole('listitem')
+    expect(steps.map((s) => s.textContent)).toEqual(['1Subpoena', '2Deposition'])
+    expect(screen.getByText(/Teams see only their own side's witnesses\. Every case world/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Move to Deposition/ }))
+    expect(service.setCasePhase).toHaveBeenCalledWith('c1', 'k1', 'deposition')
+  })
 })
+

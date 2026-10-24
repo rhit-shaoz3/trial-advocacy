@@ -47,6 +47,7 @@ describe('creating', () => {
       // A new case starts the guided setup.
       setupStep: 'details',
       setupCompletedAt: null,
+      investigator: { enabled: true, name: 'John Hastings', instructions: '' },
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     })

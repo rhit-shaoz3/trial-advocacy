@@ -7,8 +7,23 @@ export type CaseStatus = (typeof CASE_STATUSES)[number]
 export const CASE_PHASES = ['subpoena', 'investigate', 'deposition'] as const
 export type CasePhase = (typeof CASE_PHASES)[number]
 
+/** A case's phases: without a background investigator there's no investigate phase. */
+export const casePhases = (investigatorEnabled: boolean): CasePhase[] =>
+  investigatorEnabled ? [...CASE_PHASES] : CASE_PHASES.filter((p) => p !== 'investigate')
+
+/** What every case's background investigator is called until the instructor renames him. */
+export const DEFAULT_INVESTIGATOR_NAME = 'John Hastings'
+
+/** The case's background investigator, the same for every team. */
+export interface InvestigatorSettings {
+  enabled: boolean
+  name: string
+  /** The instructor's extra instructions, added to his prompt. Instructors only. */
+  instructions: string
+}
+
 /** The guided setup's steps, in order; a case remembers the furthest one reached. */
-export const SETUP_STEPS = ['details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'tasks'] as const
+export const SETUP_STEPS = ['details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'investigator', 'tasks'] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
 /** The most important facts for each side; the AI witnesses never contradict them. */
@@ -37,6 +52,7 @@ export interface CourseCase {
   setupStep: SetupStep
   /** When the instructor finished the guided setup; null until then. */
   setupCompletedAt: Date | null
+  investigator: InvestigatorSettings
   createdAt: Date
   updatedAt: Date
 }
@@ -52,7 +68,10 @@ export interface CaseFields {
 const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "instructorNote",
   to_char(in_world_date, 'YYYY-MM-DD') AS "inWorldDate", disputed_issues AS "disputedIssues",
   json_build_object('plaintiff', plaintiff_key_facts, 'defense', defense_key_facts) AS "importantFacts",
-  setup_step AS "setupStep", setup_completed_at AS "setupCompletedAt", created_at AS "createdAt", updated_at AS "updatedAt"`
+  setup_step AS "setupStep", setup_completed_at AS "setupCompletedAt",
+  json_build_object('enabled', investigator_enabled, 'name', investigator_name,
+                    'instructions', investigator_instructions) AS investigator,
+  created_at AS "createdAt", updated_at AS "updatedAt"`
 
 /** Oldest first, so the term's first case stays on top. */
 export async function listCases(courseId: string) {
@@ -138,6 +157,18 @@ export async function setCasePhase(courseId: string, id: string, phase: CasePhas
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [courseId, id, phase],
+  )
+  return rows[0] ?? null
+}
+
+/** Saves the case's background investigator settings. Returns null if there was no such case. */
+export async function setInvestigator(courseId: string, id: string, settings: InvestigatorSettings) {
+  const { rows } = await pool.query<CourseCase>(
+    `UPDATE cases SET investigator_enabled = $3, investigator_name = $4, investigator_instructions = $5,
+       updated_at = now()
+     WHERE course_id = $1 AND id = $2
+     RETURNING ${CASE_COLUMNS}`,
+    [courseId, id, settings.enabled, settings.name, settings.instructions],
   )
   return rows[0] ?? null
 }

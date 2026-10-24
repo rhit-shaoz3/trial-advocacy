@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import { CASE_PHASES, type CasePhase, type CourseCase } from '../../courses/types'
-import { PHASE_CONFIRM, PHASE_HINT, PHASE_LABEL } from './casePhase'
+import { casePhases, investigatorOf, type CasePhase, type CourseCase } from '../../courses/types'
+import { PHASE_LABEL, phaseText } from './casePhase'
 
 /**
  * The case's phase, shared by all of its worlds: the three steps with the
@@ -22,15 +22,18 @@ export function PhasePanel({
   const service = useCourseService()
   const [error, setError] = useState<string | null>(null)
   const [moving, setMoving] = useState(false)
-  const current = CASE_PHASES.indexOf(courseCase.phase)
-  const previous: CasePhase | undefined = CASE_PHASES[current - 1]
-  const next: CasePhase | undefined = CASE_PHASES[current + 1]
+  // Without a background investigator there's no investigate phase.
+  const investigator = investigatorOf(courseCase).enabled
+  const phases = casePhases(investigator)
+  const current = phases.indexOf(courseCase.phase)
+  const previous: CasePhase | undefined = phases[current - 1]
+  const next: CasePhase | undefined = phases[current + 1]
   const closed = courseCase.status === 'closed'
 
   if (courseCase.status === 'draft') return null
 
   async function moveTo(phase: CasePhase) {
-    if (!window.confirm(PHASE_CONFIRM[phase])) return
+    if (!window.confirm(phaseText(phase, investigator).confirm)) return
     setError(null)
     setMoving(true)
     try {
@@ -47,7 +50,7 @@ export function PhasePanel({
       <div className="phase-panel-body">
         <h2 id="phase-heading">Case phase</h2>
         <ol className="phase-steps" aria-label="Phases">
-          {CASE_PHASES.map((phase, i) => (
+          {phases.map((phase, i) => (
             <li
               key={phase}
               className={i < current ? 'phase-done' : i === current ? 'phase-current' : undefined}
@@ -61,7 +64,7 @@ export function PhasePanel({
           ))}
         </ol>
         <p className="muted">
-          {PHASE_HINT[courseCase.phase]} Every case world is in the same phase.
+          {phaseText(courseCase.phase, investigator).hint} Every case world is in the same phase.
           {closed && ' The case is closed, so its phase can no longer change.'}
         </p>
         {error && (

@@ -49,11 +49,28 @@ export interface AddStudentsResult {
 /**
  * Every case world in a case moves through these together, in order, when the
  * instructor says so. Subpoena: each side sees only its own witnesses.
- * Investigate: the background investigator opens. Deposition: every witness is
- * revealed to both sides.
+ * Investigate: the background investigator opens (only cases with one have
+ * this phase). Deposition: every witness is revealed to both sides.
  */
 export const CASE_PHASES = ['subpoena', 'investigate', 'deposition'] as const
 export type CasePhase = (typeof CASE_PHASES)[number]
+
+/** A case's phases: without a background investigator there's no investigate phase. */
+export const casePhases = (investigatorEnabled = true): CasePhase[] =>
+  investigatorEnabled ? [...CASE_PHASES] : CASE_PHASES.filter((p) => p !== 'investigate')
+
+/** What every case's background investigator is called until the instructor renames him. */
+export const DEFAULT_INVESTIGATOR_NAME = 'John Hastings'
+/** His portrait, the same in every case. */
+export const INVESTIGATOR_AVATAR_URL = '/investigator.png'
+
+/** The case's background investigator, the same for every team. */
+export interface InvestigatorSettings {
+  enabled: boolean
+  name: string
+  /** The instructor's extra instructions, added to his prompt. */
+  instructions: string
+}
 
 export const COURSE_CASE_STATUSES = ['draft', 'active', 'closed'] as const
 /** Draft: hidden from students. Active: the case worlds have launched. Closed: finished. */
@@ -87,12 +104,18 @@ export interface CourseCase {
   setupStep?: SetupStep
   /** When the instructor finished the guided setup; null while it's unfinished. */
   setupCompletedAt?: string | null
+  /** The background investigator; cases without the field have one, as John Hastings. */
+  investigator?: InvestigatorSettings
   createdAt: string
   updatedAt: string
 }
 
+/** The case's investigator settings (cases from before the field have him, as John Hastings). */
+export const investigatorOf = (c: Pick<CourseCase, 'investigator'>): InvestigatorSettings =>
+  c.investigator ?? { enabled: true, name: DEFAULT_INVESTIGATOR_NAME, instructions: '' }
+
 /** The guided setup's steps, in order (matches SETUP_STEPS on the server). */
-export const SETUP_STEPS = ['details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'tasks'] as const
+export const SETUP_STEPS = ['details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'investigator', 'tasks'] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
 export interface WitnessSettingsInput {
@@ -181,6 +204,13 @@ export interface CaseMaterial {
   textError: string | null
   /** The file every team starts from, shown on their Overview; always shared with everyone. */
   initial: boolean
+  /** Case worlds and teams the file is shared with, on top of its audience. */
+  shares?: MaterialShares
+}
+
+export interface MaterialShares {
+  matchupIds: string[]
+  teamIds: string[]
 }
 
 export interface MaterialInput {
@@ -271,23 +301,63 @@ export interface Interview {
 export type FactDecision = 'accept_world' | 'deny_world' | 'accept_case' | 'deny_case'
 export const FACT_DECISIONS: FactDecision[] = ['accept_world', 'deny_world', 'accept_case', 'deny_case']
 
-/** A team's ended interview, sent to the instructor as the new facts the witness added. */
+export type DocumentDecision = 'allow' | 'deny'
+
+/**
+ * A team's ended interview, sent to the instructor as the new facts the
+ * witness added; or (kind 'investigation') a team's request to the background
+ * investigator, with his report, its new facts, and the case files he'd unlock.
+ */
 export interface InterviewReview {
   id: string
+  /** Leaving it out means an interview. */
+  kind?: 'interview' | 'investigation'
   caseId: string
   caseTitle: string
-  witness: { id: string; name: string; role: string; avatarUrl?: string | null }
+  /** The witness interviewed; null for an investigation. */
+  witness: { id: string; name: string; role: string; avatarUrl?: string | null } | null
   worldNumber: number
   teamNumber: number
   side: Side
   /** The team's members, by name. */
   team: string[]
-  /** Summarizing: the AI is still listing the new facts. Failed: try again. */
-  status: 'summarizing' | 'failed' | 'open' | 'completed'
+  /**
+   * Summarizing: the AI is still listing the new facts (or investigating).
+   * Failed: try again. Finalizing: the AI is writing the team's clean report.
+   */
+  status: 'summarizing' | 'failed' | 'open' | 'finalizing' | 'completed'
   error: string | null
   createdAt: string
   completedAt: string | null
   facts: { id: string; text: string; decision: FactDecision | null }[]
+  /** An investigation: what the team asked, and who sent it. */
+  assignment?: string | null
+  askedBy?: string | null
+  /** An investigation: the investigator's report, and what the team got. */
+  report?: string | null
+  finalReport?: string | null
+  /** Records the team asked for that need legal process. */
+  recordsRequested?: string[]
+  /** The investigator's report had no list of its new facts and files, so read it before finishing. */
+  reviewBlockMissing?: boolean
+  /** Case files the investigator would unlock for the team. */
+  documents?: { materialId: string; title: string; decision: DocumentDecision | null }[]
+}
+
+/** A team's request to the background investigator, as the team sees it: never the draft or the rulings. */
+export interface Investigation {
+  id: string
+  assignment: string
+  askedBy: string | null
+  sentAt: string
+  /** Working: with the investigator or the instructor. */
+  status: 'working' | 'completed'
+  completedAt: string | null
+  /** The report, once it's back. */
+  report: string | null
+  /** Case files the report unlocked for the team, attached to it. */
+  unlocked: { id: string; title: string; filename: string; contentType: string; sizeBytes: number }[]
+  seen: boolean
 }
 
 export interface ReviewTurn {
@@ -349,6 +419,8 @@ export interface CaseWorkspace {
   side: Side | null
   materials: CaseMaterial[]
   witnesses: WorkspaceWitness[]
+  /** The case's background investigator, or null if it has none. */
+  investigator?: { name: string; avatarUrl: string } | null
   /** Whether the background investigator is open yet (from the investigate phase on). */
   investigatorAvailable: boolean
   /** Soonest due first; completion is the team's. */
@@ -417,6 +489,8 @@ export interface CourseService {
   deleteMaterial(courseId: string, caseId: string, materialId: string): Promise<void>
   /** Makes the file the one every team starts from (null clears it); resolves with the whole case file. */
   setInitialMaterial(courseId: string, caseId: string, materialId: string | null): Promise<CaseMaterial[]>
+  /** Shares a file with particular case worlds and teams, on top of its audience. */
+  setMaterialShares(courseId: string, caseId: string, materialId: string, shares: MaterialShares): Promise<CaseMaterial>
   materialDownloadUrl(courseId: string, caseId: string, materialId: string): string
   /** The file's transcription (what the AI witnesses read), as plain text. */
   materialTextUrl(courseId: string, caseId: string, materialId: string): string
@@ -438,6 +512,7 @@ export interface CourseService {
   /** Moves every world in the case to `phase` (forward or back). */
   setCasePhase(courseId: string, caseId: string, phase: CasePhase): Promise<CourseCase>
   saveWitnessSettings(courseId: string, caseId: string, input: WitnessSettingsInput): Promise<CourseCase>
+  saveInvestigator(courseId: string, caseId: string, input: InvestigatorSettings): Promise<CourseCase>
   getLaunchChecks(courseId: string, caseId: string): Promise<LaunchCheck[]>
   /** Makes a ready draft case active, launching every case world. */
   launchCase(courseId: string, caseId: string): Promise<CourseCase>
@@ -467,9 +542,16 @@ export interface CourseService {
   /** The team's completed reviews in a case. */
   listMyReviews(courseId: string, caseId: string): Promise<ReviewResult[]>
   markReviewsSeen(courseId: string, caseId: string): Promise<void>
+  /** The student's team's requests to the background investigator, newest first. */
+  listMyInvestigations(courseId: string, caseId: string): Promise<Investigation[]>
+  /** Emails the investigator an assignment; returns the team's requests. */
+  sendInvestigation(courseId: string, caseId: string, assignment: string): Promise<Investigation[]>
+  markInvestigationsSeen(courseId: string, caseId: string): Promise<void>
   // The instructor's review panel.
   listReviews(courseId: string, status: 'open' | 'completed'): Promise<InterviewReview[]>
   decideFact(courseId: string, reviewId: string, factId: string, decision: FactDecision): Promise<InterviewReview>
+  /** Allows (or not) the team to have a case file the investigator found. */
+  decideDocument(courseId: string, reviewId: string, materialId: string, decision: DocumentDecision): Promise<InterviewReview>
   completeReview(courseId: string, reviewId: string): Promise<InterviewReview>
   retryReview(courseId: string, reviewId: string): Promise<InterviewReview>
   getReviewTranscript(courseId: string, reviewId: string): Promise<ReviewTurn[]>

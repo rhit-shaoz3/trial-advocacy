@@ -162,4 +162,16 @@ describe('the guided case setup', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Add a short description of the case.')
     expect(screen.getByRole('heading', { level: 2, name: 'Details' })).toBeInTheDocument()
   })
+
+  it('asks whether the case has a background investigator, before the tasks', async () => {
+    const service = setupService({ getCase: vi.fn().mockResolvedValue({ ...draft, setupStep: 'investigator' }) })
+    const user = renderAt('/courses/c1/cases/k1', service)
+
+    expect(await screen.findByRole('region', { name: 'Background investigator' })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Use a background investigator' })).toBeChecked()
+    expect(stepButtons().at(-1)).toBe('7Investigator')
+    await user.click(screen.getByRole('button', { name: 'Skip for now' }))
+    expect(service.reachSetupStep).toHaveBeenCalledWith('c1', 'k1', 'tasks')
+  })
 })
+

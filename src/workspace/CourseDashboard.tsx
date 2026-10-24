@@ -27,7 +27,7 @@ import {
 } from './format'
 import { InstructorDashboard } from './InstructorDashboard'
 import { StatCard } from './StatCard'
-import type { ActivityItem, CaseStatus, CaseSummary, UpcomingItem } from './types'
+import type { ActivityItem, CaseStatus, CaseSummary, CourseHome, UpcomingItem } from './types'
 import { useWorkspace } from './useWorkspace'
 import './workspace.css'
 
@@ -118,8 +118,8 @@ function StudentDashboard({ now }: { now: Date }) {
             <strong>You have new results from your instructor.</strong> Rulings on your interviews are in your
             case&rsquo;s Reviews tab, and investigator reports are in its Investigator tab and case file.
           </p>
-          <Link to={`${base}/cases${search}`} className="ws-btn ws-btn-primary">
-            Open my cases
+          <Link to={newResultsPath(base, search, home.newResultsAt)} className="ws-btn ws-btn-primary">
+            {!home.newResultsAt ? 'Open my cases' : home.newResultsAt.kind === 'investigation' ? 'Read report' : 'See results'}
           </Link>
         </div>
       ) : null}
@@ -364,4 +364,12 @@ function UpcomingRow({ item }: { item: UpcomingItem }) {
       </div>
     </li>
   )
+}
+
+/** Straight to the tab holding the student's newest unread result, or to My cases when we don't know which. */
+function newResultsPath(base: string, search: string, at: CourseHome['newResultsAt']) {
+  if (!at) return `${base}/cases${search}`
+  const params = new URLSearchParams(search)
+  params.set('tab', at.kind === 'investigation' ? 'investigator' : 'reviews')
+  return `${base}/cases/${at.caseId}?${params}`
 }

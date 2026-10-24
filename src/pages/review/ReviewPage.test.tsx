@@ -158,9 +158,25 @@ describe('ReviewPage', () => {
     expect(decideDocument).toHaveBeenCalledWith('c1', 'r5', 'm9', 'deny')
     await user.click(within(card).getByRole('button', { name: 'Finish review' }))
 
-    // It stays while the team's report is written.
+    // It moves to Completed at once; the team's report is written there.
     expect(completeReview).toHaveBeenCalledWith('c1', 'r5')
-    expect(await within(card).findByText(/Writing Team 3’s report/)).toBeInTheDocument()
+    expect(screen.queryByRole('article', { name: 'Investigation for Team 3' })).not.toBeInTheDocument()
+    expect(await screen.findByText('Nothing to review.')).toBeInTheDocument()
+  })
+
+  it('moves a finished review out at once, and brings it back if finishing fails', async () => {
+    let fail!: (err: Error) => void
+    const completeReview = vi.fn(() => new Promise<InterviewReview>((_, reject) => (fail = reject)))
+    const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([{ ...review, facts: [] }]), completeReview })
+
+    const card = await screen.findByRole('article', { name: 'Interview of Elena Torres' })
+    await user.click(within(card).getByRole('button', { name: 'Finish review' }))
+    // Gone before the server answers.
+    expect(screen.queryByRole('article', { name: 'Interview of Elena Torres' })).not.toBeInTheDocument()
+
+    fail(new Error('The server is down.'))
+    expect(await screen.findByRole('article', { name: 'Interview of Elena Torres' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not finish the review for Team 3. The server is down.')
   })
 
   it("warns when the investigator didn't list his new facts or files", async () => {

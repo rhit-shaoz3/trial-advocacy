@@ -8,7 +8,8 @@ import { modelFor } from '../ai/models.ts'
 // edits the report.
 
 /** The source tags the investigator puts on each finding (for the instructor's review). */
-const SOURCE_TAG = /\s*\[(?:CASE FILE|NEW ACCESS)\s*:[^\]]*\]|\s*\[(?:NEW|EXISTING) FACT\]/gi
+// The title is optional: he sometimes leaves it off.
+const SOURCE_TAG = /\s*\[(?:CASE FILE|NEW ACCESS)(?:\s*:[^\]]*)?\]|\s*\[(?:NEW|EXISTING) FACT\]/gi
 
 /** The report with its source tags removed. */
 export const stripTags = (body: string) =>

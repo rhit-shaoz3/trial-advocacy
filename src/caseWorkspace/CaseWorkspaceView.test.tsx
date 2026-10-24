@@ -402,5 +402,14 @@ describe('the background investigator', () => {
     await user.click(screen.getByRole('button', { name: 'Read report' }))
     expect(onOpenInvestigator).toHaveBeenCalled()
   })
+
+  it('opens on the tab a notice links to, and marks the report read', () => {
+    const onOpenInvestigator = vi.fn()
+    renderView({ workspace: open, investigations: [report({ seen: false })], onOpenInvestigator, initialTab: 'investigator' })
+
+    expect(screen.getByRole('tab', { name: /Investigator/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Report')
+    expect(onOpenInvestigator).toHaveBeenCalled()
+  })
 })
 

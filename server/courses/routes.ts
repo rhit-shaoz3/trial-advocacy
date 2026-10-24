@@ -19,6 +19,7 @@ import { askQuestion, endInterview, getInterview, restartInterview, type Intervi
 import {
   findTeamWorld,
   markReviewsSeen,
+  newestUnseenResult,
   openReviewCount,
   teamReviewResults,
   unseenReviewCount,
@@ -156,6 +157,7 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
       : {
           ...(await studentHome(course.id, req.user!.id)),
           newReviewResults: await unseenReviewCount(course.id, req.user!.id),
+          newResultsAt: await newestUnseenResult(course.id, req.user!.id),
         }),
   })
 })

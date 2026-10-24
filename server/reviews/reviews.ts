@@ -246,12 +246,16 @@ const REVIEW_SELECT = `
  */
 const forInstructor = (r: InterviewReview): InterviewReview => (r.report ? { ...r, report: stripTags(r.report) } : r)
 
-/** The course's reviews still to do (newest first), or the completed ones (most recently completed first). */
+/**
+ * The course's reviews still to do (newest first), or the completed ones (most
+ * recently completed first). A review the instructor has finished counts as
+ * completed while the team's report is still being written.
+ */
 export async function listReviews(courseId: string, which: 'open' | 'completed') {
   const { rows } = await pool.query<InterviewReview>(
     `${REVIEW_SELECT}
-     WHERE c.course_id = $1 AND (r.status = 'completed') = $2
-     ORDER BY ${which === 'completed' ? 'r.completed_at DESC' : 'r.created_at DESC'}`,
+     WHERE c.course_id = $1 AND (r.status IN ('completed', 'finalizing')) = $2
+     ORDER BY ${which === 'completed' ? 'r.completed_at DESC NULLS FIRST' : 'r.created_at DESC'}`,
     [courseId, which === 'completed'],
   )
   return rows.map(forInstructor)
@@ -350,7 +354,7 @@ export async function reviewTranscript(courseId: string, reviewId: string) {
 export async function openReviewCount(courseId: string) {
   const { rows } = await pool.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM interview_reviews r JOIN cases c ON c.id = r.case_id
-     WHERE c.course_id = $1 AND r.status <> 'completed'`,
+     WHERE c.course_id = $1 AND r.status NOT IN ('completed', 'finalizing')`,
     [courseId],
   )
   return rows[0].n
@@ -396,4 +400,21 @@ export async function unseenReviewCount(courseId: string, userId: string) {
     [courseId, userId],
   )
   return rows[0].n
+}
+
+/** Where the student's newest unread result is: its case, and whether it's an interview's rulings or an investigator report. */
+export async function newestUnseenResult(courseId: string, userId: string) {
+  const { rows } = await pool.query<{ caseId: string; kind: 'interview' | 'investigation' }>(
+    `SELECT r.case_id AS "caseId", r.kind
+     FROM interview_reviews r
+     JOIN cases c ON c.id = r.case_id
+     JOIN team_members m ON m.team_id = r.team_id
+     JOIN enrollments e ON e.course_id = m.course_id AND e.email = m.email
+     WHERE c.course_id = $1 AND e.user_id = $2 AND r.status = 'completed'
+       AND NOT EXISTS (SELECT 1 FROM review_seen s WHERE s.review_id = r.id AND s.user_id = $2)
+     ORDER BY r.completed_at DESC
+     LIMIT 1`,
+    [courseId, userId],
+  )
+  return rows[0] ?? null
 }

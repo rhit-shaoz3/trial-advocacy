@@ -225,6 +225,7 @@ describe('GET /api/courses/:courseId/home', () => {
       upcoming: [],
       stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
       newReviewResults: 0,
+      newResultsAt: null,
     })
   })
 

@@ -229,6 +229,11 @@ describe('asking the investigator', () => {
     await prof.put(`${reviewUrl}/documents/${dispatchLog}`).send({ decision: 'deny' })
     const finished = await prof.post(`${reviewUrl}/complete`)
     expect(finished.body.review.status).toBe('finalizing')
+    // Finished is finished for the instructor: it's in Completed and off the count while the team's report is written.
+    expect(await openReviews()).toEqual([])
+    const completed = (await prof.get(`/api/courses/${course.id}/reviews?status=completed`)).body.reviews
+    expect(completed.map((r: { id: string }) => r.id)).toEqual([review.id])
+    expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(0)
     await investigationsSettled()
 
     expect(edit).toMatchObject({ deniedFacts: ['The camera points south.'], deniedTitles: ['Dispatch log'] })
@@ -249,6 +254,8 @@ describe('asking the investigator', () => {
     // The student is told, until they read it.
     const home = async () => (await plaintiff.get(`/api/courses/${course.id}/home`)).body.newReviewResults
     expect(await home()).toBe(1)
+    // The notice links straight to the report.
+    expect((await plaintiff.get(`/api/courses/${course.id}/home`)).body.newResultsAt).toEqual({ caseId, kind: 'investigation' })
     await plaintiff.post(`${myCaseUrl()}/investigator/seen`)
     expect(await home()).toBe(0)
 

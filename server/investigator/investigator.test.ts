@@ -61,6 +61,11 @@ describe('the investigator prompt', () => {
     expect(prompt).toContain('This includes named witnesses and parties')
     expect(prompt).toContain('witness tampering (18 U.S.C. § 1512(d)')
     expect(prompt).toContain('# Be as helpful as you lawfully can')
+    // He watches when asked, doesn't stick to an old refusal, and never corrects himself on the page.
+    expect(prompt).toContain("When your team asks you to watch someone, do it and report what you saw.")
+    expect(prompt).toContain("Don't repeat a refusal just because you made it before")
+    expect(prompt).toContain('Your report must never contain corrections, withdrawals, second thoughts')
+    expect(prompt).toContain('report it as done on the next such day')
     // Records that need legal process get their own list in the review block.
     expect(prompt).toContain('RECORDS REQUESTED\n- One record per line')
   })
@@ -147,6 +152,8 @@ describe("the team's clean report", () => {
     expect(report).toBe(stripTags(parseReport(REPORT).body))
     expect(report).not.toMatch(/\[(NEW|CASE|EXISTING)/)
     expect(report).toContain('3. The city’s maintenance log'.replace('’', "'"))
+    // A tag he left the title off comes out too.
+    expect(stripTags('8. The state record is public. [NEW ACCESS]')).toBe('8. The state record is public.')
   })
 
   it('asks the AI to cut what was denied', async () => {

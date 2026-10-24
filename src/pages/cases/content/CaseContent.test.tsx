@@ -394,7 +394,8 @@ describe('WitnessesSection', () => {
     Object.defineProperties(preview, { naturalWidth: { value: 400 }, naturalHeight: { value: 400 } })
     fireEvent.load(preview)
     await user.click(within(form).getByRole('button', { name: 'Use this picture' }))
-    expect(within(form).getByRole('radio', { name: 'Uploaded picture' })).toBeChecked()
+    // Cropping is async, so wait for the picture to be picked.
+    expect(await within(form).findByRole('radio', { name: 'Uploaded picture' })).toBeChecked()
     await user.click(within(form).getByRole('button', { name: 'Save witness' }))
 
     expect(createWitness).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ avatarPreset: null }))

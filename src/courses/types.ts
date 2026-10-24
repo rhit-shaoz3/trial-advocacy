@@ -338,6 +338,8 @@ export interface InterviewReview {
   finalReport?: string | null
   /** Records the team asked for that need legal process. */
   recordsRequested?: string[]
+  /** The investigator's report had no list of its new facts and files, so read it before finishing. */
+  reviewBlockMissing?: boolean
   /** Case files the investigator would unlock for the team. */
   documents?: { materialId: string; title: string; decision: DocumentDecision | null }[]
 }
@@ -353,8 +355,8 @@ export interface Investigation {
   completedAt: string | null
   /** The report, once it's back. */
   report: string | null
-  /** Case files the report unlocked for the team. */
-  unlocked: { id: string; title: string }[]
+  /** Case files the report unlocked for the team, attached to it. */
+  unlocked: { id: string; title: string; filename: string; contentType: string; sizeBytes: number }[]
   seen: boolean
 }
 

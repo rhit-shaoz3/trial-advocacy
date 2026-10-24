@@ -156,9 +156,27 @@ describe('asking the investigator', () => {
       ['Maintenance log', false],
       ['Dispatch log', false],
     ])
-    // Nothing to rule on, so the report came straight back to the team.
+    // Even with nothing to rule on, the instructor sees it before the team does.
+    const [waiting] = (await plaintiff.get(`${myCaseUrl()}/investigator`)).body.investigations
+    expect(waiting).toMatchObject({ status: 'working', report: null })
+    const [review] = await openReviews()
+    expect(review).toMatchObject({ kind: 'investigation', status: 'open', facts: [], documents: [], reviewBlockMissing: false })
+    await prof.post(`/api/courses/${course.id}/reviews/${review.id}/complete`)
+    await investigationsSettled()
     const [done] = (await plaintiff.get(`${myCaseUrl()}/investigator`)).body.investigations
     expect(done).toMatchObject({ status: 'completed', report: 'Nothing more to report.', unlocked: [], seen: false })
+  })
+
+  it("flags a report without its review block, still proposing the files it cites", async () => {
+    await toInvestigate()
+    ai.investigate = async () => 'I found the brake records. [NEW ACCESS: Maintenance log]'
+    await sendAndWait(plaintiff, 'Check the brakes.')
+
+    const [review] = await openReviews()
+    expect(review).toMatchObject({ status: 'open', reviewBlockMissing: true, facts: [] })
+    // The file is offered to allow, and its name is out of the report text.
+    expect(review.documents).toEqual([{ materialId: maintenanceLog, title: 'Maintenance log', decision: null }])
+    expect(review.report).toBe('I found the brake records.')
   })
 
   it('goes to the instructor, who rules on facts and files; the team gets a clean report and the allowed file', async () => {
@@ -189,6 +207,9 @@ describe('asking the investigator', () => {
       recordsRequested: ["Northstar's dispatch audio, by subpoena."],
     })
     expect(review.report).not.toContain('<review>')
+    // File names stay out of the report the instructor reads; the files are listed below it.
+    expect(review.report).not.toContain('[NEW ACCESS')
+    expect(review.report).not.toContain('[NEW FACT]')
     expect(review.facts.map((f: { text: string }) => f.text)).toEqual([
       'A traffic camera is mounted on the northeast corner.',
       'The camera points south.',
@@ -215,7 +236,9 @@ describe('asking the investigator', () => {
     expect(done).toMatchObject({
       status: 'completed',
       report: '1. I photographed the corner.\n2. The maintenance log shows the brakes were serviced March 1.',
-      unlocked: [{ id: maintenanceLog, title: 'Maintenance log' }],
+      unlocked: [
+        { id: maintenanceLog, title: 'Maintenance log', filename: 'Maintenance log.pdf', contentType: 'application/pdf', sizeBytes: expect.any(Number) },
+      ],
       seen: false,
     })
     const materials = (await plaintiff.get(myCaseUrl())).body.workspace.materials.map((m: { id: string }) => m.id)

@@ -371,6 +371,8 @@ ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS asked_by uuid REFERENCES 
 ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS report text;
 ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS final_report text;
 ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS records_requested text[] NOT NULL DEFAULT '{}';
+-- The investigator left off his review block, so nothing was listed to rule on.
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS review_block_missing boolean NOT NULL DEFAULT false;
 ALTER TABLE interview_reviews DROP CONSTRAINT IF EXISTS interview_reviews_status_check;
 ALTER TABLE interview_reviews ADD CONSTRAINT interview_reviews_status_check
   CHECK (status IN ('summarizing', 'failed', 'open', 'finalizing', 'completed'));

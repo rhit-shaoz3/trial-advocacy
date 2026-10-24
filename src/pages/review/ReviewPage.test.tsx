@@ -162,4 +162,23 @@ describe('ReviewPage', () => {
     expect(completeReview).toHaveBeenCalledWith('c1', 'r5')
     expect(await within(card).findByText(/Writing Team 3’s report/)).toBeInTheDocument()
   })
+
+  it("warns when the investigator didn't list his new facts or files", async () => {
+    const investigation: InterviewReview = {
+      ...review,
+      id: 'r6',
+      kind: 'investigation',
+      witness: null,
+      assignment: 'Watch the park gate.',
+      report: 'I watched the gate for an hour.',
+      facts: [],
+      documents: [],
+      reviewBlockMissing: true,
+    }
+    renderPage({ listReviews: vi.fn().mockResolvedValue([investigation]) })
+
+    const card = await screen.findByRole('article', { name: 'Investigation for Team 3' })
+    expect(within(card).getByRole('note')).toHaveTextContent("The investigator didn’t list his new facts or files.")
+    expect(within(card).getByRole('button', { name: 'Finish review' })).toBeEnabled()
+  })
 })

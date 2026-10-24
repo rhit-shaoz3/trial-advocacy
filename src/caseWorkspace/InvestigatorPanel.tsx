@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { Clock, Download, Lock, Mail, Send } from 'lucide-react'
+import { Clock, Download, Lock, Mail, Paperclip, Send } from 'lucide-react'
 import { WitnessAvatar } from '../components/WitnessAvatar'
-import { shortDate } from '../courses/caseLabels'
+import { fileTypeLabel, formatSize, shortDate } from '../courses/caseLabels'
 import type { Investigation } from '../courses/types'
 
 /** The longest assignment a team can send (matches the server). */
@@ -11,7 +11,8 @@ const WHAT_HE_DOES = [
   'Search public records, news coverage, and public social media',
   'Find and interview people who aren’t witnesses yet: neighbors, bystanders, former employees',
   'Inspect, photograph, and measure the scene',
-  'Watch people from public places, and request public government records',
+  'Watch people, including named witnesses, from public places',
+  'Request public government records',
 ]
 
 /**
@@ -68,6 +69,7 @@ export function InvestigatorPanel({
           <ul>
             <li>Interview anyone already named as a witness, or contact the other side</li>
             <li>Get private records (phone, bank, medical) without a subpoena</li>
+            <li>Follow anyone into private places, or track them</li>
             <li>Lie about who he works for, or get into anyone&rsquo;s accounts</li>
           </ul>
         </div>
@@ -152,13 +154,19 @@ export function InvestigatorReport({
         <p className="cw-investigation-report">{r.report}</p>
         {r.unlocked.length > 0 && (
           <div className="cw-investigation-files">
-            <span>Added to your case file</span>
+            <span>
+              <Paperclip aria-hidden="true" />
+              {r.unlocked.length === 1 ? '1 attachment' : `${r.unlocked.length} attachments`}, also in your case file
+            </span>
             <ul>
               {r.unlocked.map((f) => (
                 <li key={f.id}>
-                  <a href={downloadUrl(f.id)}>
+                  <a href={downloadUrl(f.id)} download={f.filename} aria-label={`Download ${f.title}`}>
                     <Download aria-hidden="true" />
-                    {f.title}
+                    <span className="cw-attachment-name">{f.title}</span>
+                    <small>
+                      {fileTypeLabel(f.contentType)} · {formatSize(f.sizeBytes)}
+                    </small>
                   </a>
                 </li>
               ))}

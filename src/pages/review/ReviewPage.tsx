@@ -245,6 +245,11 @@ function ReviewCard({
         </div>
       )}
 
+      {investigation && r.status === 'open' && r.reviewBlockMissing && (
+        <p className="review-warning" role="note">
+          The investigator didn&rsquo;t list his new facts or files. Read the report before finishing.
+        </p>
+      )}
       {investigation && r.report && (
         <details className="review-report" open={r.status === 'open'}>
           <summary>The investigator&rsquo;s report</summary>

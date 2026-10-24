@@ -4,6 +4,7 @@ import { finishPendingTranscriptions } from '../courses/materialText.ts'
 import type { Side } from '../courses/matchups.ts'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
+import { stripTags } from '../investigator/finalize.ts'
 import type { SettledFacts } from '../witness/prompt.ts'
 
 // When a team ends an interview, the AI lists the new facts the witness added
@@ -55,6 +56,8 @@ export interface InterviewReview {
   finalReport: string | null
   /** Records the team asked for that need legal process, for the instructor's information. */
   recordsRequested: string[]
+  /** The investigator left off his review block, so his new facts and files weren't listed. */
+  reviewBlockMissing: boolean
   /** Case files the investigator would unlock for the team, and the instructor's call on each. */
   documents: { materialId: string; title: string; decision: DocumentDecision | null }[]
 }
@@ -226,6 +229,7 @@ const REVIEW_SELECT = `
                    FROM review_facts f WHERE f.review_id = r.id), '[]') AS facts,
          r.assignment, (SELECT u.name FROM users u WHERE u.id = r.asked_by) AS "askedBy",
          r.report, r.final_report AS "finalReport", r.records_requested AS "recordsRequested",
+         r.review_block_missing AS "reviewBlockMissing",
          coalesce((SELECT json_agg(json_build_object('materialId', d.material_id,
                                                      'title', coalesce(nullif(cm.description, ''), cm.filename),
                                                      'decision', d.decision) ORDER BY d.position)
@@ -235,6 +239,13 @@ const REVIEW_SELECT = `
   JOIN cases c ON c.id = r.case_id
   LEFT JOIN case_witnesses w ON w.id = r.witness_id`
 
+/**
+ * The investigator's report as the instructor reads it: without the source
+ * tags naming files (the files are listed to allow or not). The tagged
+ * original stays stored, for writing the team's report.
+ */
+const forInstructor = (r: InterviewReview): InterviewReview => (r.report ? { ...r, report: stripTags(r.report) } : r)
+
 /** The course's reviews still to do (newest first), or the completed ones (most recently completed first). */
 export async function listReviews(courseId: string, which: 'open' | 'completed') {
   const { rows } = await pool.query<InterviewReview>(
@@ -243,7 +254,7 @@ export async function listReviews(courseId: string, which: 'open' | 'completed')
      ORDER BY ${which === 'completed' ? 'r.completed_at DESC' : 'r.created_at DESC'}`,
     [courseId, which === 'completed'],
   )
-  return rows
+  return rows.map(forInstructor)
 }
 
 async function findReview(courseId: string, reviewId: string) {
@@ -252,7 +263,7 @@ async function findReview(courseId: string, reviewId: string) {
     reviewId,
   ])
   if (!rows[0]) throw new HttpError(404, 'Review not found.')
-  return rows[0]
+  return forInstructor(rows[0])
 }
 
 export async function getReview(courseId: string, reviewId: string) {

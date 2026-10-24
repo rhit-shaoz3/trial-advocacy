@@ -843,7 +843,7 @@
 }
 
 .cw-investigation-assignment span,
-.cw-investigation-files span {
+.cw-investigation-files > span {
   color: var(--ws-muted);
   font-size: 0.7rem;
   font-weight: 800;

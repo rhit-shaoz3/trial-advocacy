@@ -61,6 +61,8 @@ describe('the investigator prompt', () => {
     expect(prompt).toContain('This includes named witnesses and parties')
     expect(prompt).toContain('witness tampering (18 U.S.C. § 1512(d)')
     expect(prompt).toContain('# Be as helpful as you lawfully can')
+    // Records that need legal process get their own list in the review block.
+    expect(prompt).toContain('RECORDS REQUESTED\n- One record per line')
   })
 
   it("adds the instructor's own instructions at the end", () => {

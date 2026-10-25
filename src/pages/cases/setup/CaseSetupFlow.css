@@ -323,3 +323,7 @@
     flex: 1;
   }
 }
+
+.setup-done-note {
+  font-size: 0.82rem;
+}

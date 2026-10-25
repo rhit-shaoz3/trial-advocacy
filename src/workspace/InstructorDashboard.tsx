@@ -221,7 +221,7 @@ function CaseMonitorCard({ caseMonitor: c, href }: { caseMonitor: CaseMonitor; h
         </div>
       </div>
 
-      {c.status !== 'draft' && <PhaseSteps phase={c.phase} investigator={c.investigatorEnabled !== false} />}
+      {c.status !== 'draft' && <PhaseSteps phase={c.phase} investigator={c.investigatorEnabled !== false} exchange={c.exchangeReady ?? false} />}
 
       {c.launch && (
         <Meter
@@ -248,9 +248,12 @@ function CaseMonitorCard({ caseMonitor: c, href }: { caseMonitor: CaseMonitor; h
   )
 }
 
-/** Subpoena → Investigate → Deposition (no Investigate without an investigator), with the current phase marked. */
-function PhaseSteps({ phase, investigator }: { phase: CasePhase; investigator: boolean }) {
-  const PHASES = casePhases(investigator)
+/**
+ * Introduction → Information exchange → Investigate → Deposition (each middle
+ * phase only when the case has it), with the current phase marked.
+ */
+function PhaseSteps({ phase, investigator, exchange }: { phase: CasePhase; investigator: boolean; exchange: boolean }) {
+  const PHASES = casePhases(investigator, exchange)
   const current = PHASES.indexOf(phase)
   return (
     <ol className="ws-phases" aria-label={`Phase ${current + 1} of ${PHASES.length}: ${PHASE_LABEL[phase]}`}>

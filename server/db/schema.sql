@@ -404,6 +404,128 @@ CREATE TABLE IF NOT EXISTS material_shares (
 CREATE UNIQUE INDEX IF NOT EXISTS material_shares_matchup_idx ON material_shares (material_id, matchup_id) WHERE matchup_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS material_shares_team_idx ON material_shares (material_id, team_id) WHERE team_id IS NOT NULL;
 
+-- Information exchange -------------------------------------------------------
+
+-- The subpoena phase became two: introduction (teams get the case and a
+-- welcome email from their firm, and each student picks their initial
+-- disclosures) and information_exchange (the instructor's initial disclosures
+-- are shared, and teams send interrogatories and requests for admission).
+-- The information exchange phase only exists once its setup is finished.
+ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_phase_check;
+UPDATE cases SET phase = 'introduction' WHERE phase = 'subpoena';
+ALTER TABLE cases ALTER COLUMN phase SET DEFAULT 'introduction';
+ALTER TABLE cases ADD CONSTRAINT cases_phase_check
+  CHECK (phase IN ('introduction', 'information_exchange', 'investigate', 'deposition'));
+
+-- A case's information exchange settings, from its own guided setup: which
+-- parts are included, each team's limit and the days the other side has to
+-- respond, and the firm and senior partner who sign each side's welcome
+-- email. No row means it was never set up; students see none of it until
+-- `setup_completed_at` is set.
+CREATE TABLE IF NOT EXISTS information_exchange (
+  case_id                 uuid        PRIMARY KEY REFERENCES cases (id) ON DELETE CASCADE,
+  disclosures_enabled     boolean     NOT NULL DEFAULT true,
+  subpoenas_enabled       boolean     NOT NULL DEFAULT true,
+  subpoena_limit          integer     NOT NULL DEFAULT 3 CHECK (subpoena_limit BETWEEN 1 AND 100),
+  subpoena_days           integer     NOT NULL DEFAULT 14 CHECK (subpoena_days BETWEEN 1 AND 365),
+  interrogatories_enabled boolean     NOT NULL DEFAULT true,
+  interrogatory_limit     integer     NOT NULL DEFAULT 25 CHECK (interrogatory_limit BETWEEN 1 AND 100),
+  interrogatory_days      integer     NOT NULL DEFAULT 30 CHECK (interrogatory_days BETWEEN 1 AND 365),
+  rfas_enabled            boolean     NOT NULL DEFAULT true,
+  rfa_limit               integer     NOT NULL DEFAULT 25 CHECK (rfa_limit BETWEEN 1 AND 100),
+  rfa_days                integer     NOT NULL DEFAULT 30 CHECK (rfa_days BETWEEN 1 AND 365),
+  plaintiff_firm          text        NOT NULL DEFAULT '',
+  plaintiff_partner       text        NOT NULL DEFAULT '',
+  defense_firm            text        NOT NULL DEFAULT '',
+  defense_partner         text        NOT NULL DEFAULT '',
+  setup_completed_at      timestamptz,
+  updated_at              timestamptz NOT NULL DEFAULT now()
+);
+
+-- The instructor's initial disclosures: the witnesses and one-side case files
+-- each side must disclose. They're the answer key for the students' picks,
+-- and they're shared with both sides once the case leaves the introduction
+-- phase: a disclosed file's audience becomes 'all' (its own audience is kept
+-- in `original_audience` and comes back if the case returns to introduction).
+CREATE TABLE IF NOT EXISTS disclosure_items (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id           uuid NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  material_id       uuid REFERENCES case_materials (id) ON DELETE CASCADE,
+  witness_id        uuid REFERENCES case_witnesses (id) ON DELETE CASCADE,
+  original_audience text CHECK (original_audience IN ('plaintiff', 'defense')),
+  CHECK ((material_id IS NULL) <> (witness_id IS NULL))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS disclosure_items_material_idx ON disclosure_items (material_id) WHERE material_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS disclosure_items_witness_idx ON disclosure_items (witness_id) WHERE witness_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS disclosure_items_case_idx ON disclosure_items (case_id);
+
+-- Each student's own initial disclosure picks, submitted once. They're
+-- practice: they never change what the other side sees.
+CREATE TABLE IF NOT EXISTS disclosure_submissions (
+  id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id            uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  user_id            uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  side               text        NOT NULL CHECK (side IN ('plaintiff', 'defense')),
+  held_back_reason   text        NOT NULL DEFAULT '',
+  submitted_at       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (case_id, user_id)
+);
+
+-- What the student disclosed, and why.
+CREATE TABLE IF NOT EXISTS disclosure_picks (
+  submission_id uuid NOT NULL REFERENCES disclosure_submissions (id) ON DELETE CASCADE,
+  material_id   uuid REFERENCES case_materials (id) ON DELETE CASCADE,
+  witness_id    uuid REFERENCES case_witnesses (id) ON DELETE CASCADE,
+  reason        text NOT NULL,
+  CHECK ((material_id IS NULL) <> (witness_id IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS disclosure_picks_submission_idx ON disclosure_picks (submission_id);
+
+-- A set of interrogatories or requests for admission one team sends the
+-- other team in its case world. The other team has until `due_at` to respond.
+CREATE TABLE IF NOT EXISTS exchange_requests (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  kind         text        NOT NULL CHECK (kind IN ('interrogatories', 'rfas')),
+  from_team_id uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  to_team_id   uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  sent_by      uuid        REFERENCES users (id) ON DELETE SET NULL,
+  sent_at      timestamptz NOT NULL DEFAULT now(),
+  due_at       timestamptz NOT NULL,
+  responded_at timestamptz,
+  responded_by uuid        REFERENCES users (id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS exchange_requests_case_idx ON exchange_requests (case_id);
+
+-- One question or request in a set, one per line, and the response.
+-- `weight` is how many it counts toward the team's limit: each subpart of an
+-- interrogatory, like (a) and (b), counts as its own question.
+-- Interrogatories get an `answer` (or an objection); requests for admission
+-- get agree, disagree, or partial (with what's agreed and what isn't).
+CREATE TABLE IF NOT EXISTS exchange_items (
+  request_id   uuid    NOT NULL REFERENCES exchange_requests (id) ON DELETE CASCADE,
+  position     integer NOT NULL,
+  text         text    NOT NULL,
+  weight       integer NOT NULL DEFAULT 1 CHECK (weight > 0),
+  answer       text,
+  objection    boolean NOT NULL DEFAULT false,
+  admission    text    CHECK (admission IN ('agree', 'disagree', 'partial')),
+  agree_part   text,
+  disagree_part text,
+  PRIMARY KEY (request_id, position)
+);
+
+-- Which students have read the responses to their team's requests.
+CREATE TABLE IF NOT EXISTS exchange_seen (
+  request_id uuid        NOT NULL REFERENCES exchange_requests (id) ON DELETE CASCADE,
+  user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  seen_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (request_id, user_id)
+);
+
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (
   sid    varchar      PRIMARY KEY,

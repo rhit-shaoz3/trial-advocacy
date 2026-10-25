@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../courses/CourseServiceContext'
-import type { CaseWorkspace, Investigation, ReviewResult } from '../courses/types'
+import type {
+  CaseWorkspace,
+  DisclosurePick,
+  ExchangeKind,
+  Investigation,
+  ItemResponse,
+  ReviewResult,
+  StudentExchange,
+} from '../courses/types'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import { caseTab } from './caseTabs'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
@@ -22,6 +30,7 @@ export function StudentCasePage() {
   const [error, setError] = useState<string | null>(null)
   const [reviews, setReviews] = useState<ReviewResult[] | undefined>(undefined)
   const [investigations, setInvestigations] = useState<Investigation[] | undefined>(undefined)
+  const [exchange, setExchange] = useState<StudentExchange | null>(null)
   const myCasesPath = `/courses/${courseId}/cases${workspace?.search ?? ''}`
 
   useEffect(() => {
@@ -40,10 +49,49 @@ export function StudentCasePage() {
       .listMyInvestigations(courseId, caseId)
       .then((i) => !cancelled && setInvestigations(i))
       .catch(() => {}) // nor its investigator reports
+    setExchange(null)
+    service
+      .getMyExchange(courseId, caseId)
+      .then((e) => !cancelled && setExchange(e))
+      .catch(() => {}) // nor its information exchange
     return () => {
       cancelled = true
     }
   }, [service, courseId, caseId])
+
+  /** The exchange's own tasks (initial disclosures, responding) complete with it, so the dashboard reloads too. */
+  async function afterExchange(next: StudentExchange) {
+    setExchange(next)
+    service.getMyCaseWorkspace(courseId, caseId).then(setData, () => {})
+    workspace?.reloadHome()
+  }
+
+  async function submitDisclosures(picks: DisclosurePick[], heldBackReason: string) {
+    await afterExchange(await service.submitDisclosures(courseId, caseId, picks, heldBackReason))
+  }
+
+  async function sendRequest(kind: ExchangeKind, items: string[]) {
+    setExchange(await service.sendExchangeRequest(courseId, caseId, kind, items))
+  }
+
+  async function respondToRequest(requestId: string, responses: ItemResponse[]) {
+    await afterExchange(await service.respondToExchangeRequest(courseId, caseId, requestId, responses))
+  }
+
+  /** Opening the Information exchange tab marks the other team's responses read. */
+  function openExchange() {
+    setExchange((prev) =>
+      prev && {
+        ...prev,
+        interrogatories: prev.interrogatories && {
+          ...prev.interrogatories,
+          requests: prev.interrogatories.requests.map((r) => ({ ...r, seen: true })),
+        },
+        rfas: prev.rfas && { ...prev.rfas, requests: prev.rfas.requests.map((r) => ({ ...r, seen: true })) },
+      },
+    )
+    service.markExchangeSeen(courseId, caseId).catch(() => {})
+  }
 
   // While a request is with the investigator or the instructor, check back for the report.
   const waiting = investigations?.some((i) => i.status === 'working') ?? false
@@ -137,6 +185,11 @@ export function StudentCasePage() {
             investigations={investigations ?? []}
             onSendInvestigation={sendInvestigation}
             onOpenInvestigator={openInvestigator}
+            exchange={exchange}
+            onSubmitDisclosures={submitDisclosures}
+            onSendRequest={sendRequest}
+            onRespondToRequest={respondToRequest}
+            onOpenExchange={openExchange}
             initialTab={initialTab}
           />
         </>

@@ -11,7 +11,7 @@ const coaster: CourseCase = {
   title: 'Rivera v. Thrill Park',
   summary: '',
   status: 'active',
-  phase: 'subpoena',
+  phase: 'introduction',
   instructorNote: '',
   inWorldDate: null,
   disputedIssues: '',
@@ -43,8 +43,8 @@ describe('PhasePanel', () => {
     const { user, service, onChanged } = renderPanel(coaster, { setCasePhase: vi.fn().mockResolvedValue(moved) })
 
     const steps = screen.getByRole('list', { name: 'Phases' })
-    expect(within(steps).getByText('Subpoena').closest('li')).toHaveAttribute('aria-current', 'step')
-    expect(screen.getByText(/Teams see only their own side's witnesses/)).toBeInTheDocument()
+    expect(within(steps).getByText('Introduction').closest('li')).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByText(/Teams have the case and their side's witnesses/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Move to Investigate' }))
@@ -62,8 +62,8 @@ describe('PhasePanel', () => {
     expect(service.setCasePhase).not.toHaveBeenCalled()
 
     confirm.mockReturnValue(true)
-    await user.click(screen.getByRole('button', { name: 'Back to Subpoena' }))
-    expect(service.setCasePhase).toHaveBeenCalledWith('c1', 'k1', 'subpoena')
+    await user.click(screen.getByRole('button', { name: 'Back to Introduction' }))
+    expect(service.setCasePhase).toHaveBeenCalledWith('c1', 'k1', 'introduction')
   })
 
   it('shows errors, and is read-only once the case is closed', async () => {
@@ -88,13 +88,42 @@ describe('PhasePanel', () => {
     expect(screen.queryByRole('list', { name: 'Phases' })).not.toBeInTheDocument()
   })
 
-  it('goes straight from subpoena to deposition without an investigator', async () => {
+  it('asks in a dialog before sharing the initial disclosures', async () => {
+    const confirm = vi.spyOn(window, 'confirm')
+    const moved = { ...coaster, exchangeReady: true, phase: 'information_exchange' as const }
+    const { user, service, onChanged } = renderPanel(
+      { ...coaster, exchangeReady: true },
+      {
+        setCasePhase: vi.fn().mockResolvedValue(moved),
+        getExchangeOverview: vi.fn().mockResolvedValue({
+          submissions: { submitted: 3, total: 4, byWorld: [] },
+          activity: {},
+          disclosed: { materials: ['Medical records', 'Incident report'], witnesses: ['Tom Becker'] },
+        }),
+      },
+    )
+    expect(within(screen.getByRole('list', { name: 'Phases' })).getAllByRole('listitem')).toHaveLength(4)
+
+    await user.click(screen.getByRole('button', { name: 'Move to Information exchange' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Move to information exchange?' })
+    expect(dialog).toHaveTextContent('2 case files become visible to everyone')
+    expect(dialog).toHaveTextContent('Medical records and Incident report')
+    expect(dialog).toHaveTextContent('1 witness appears on both sides')
+    expect(dialog).toHaveTextContent("1 student hasn't submitted their initial disclosures")
+    expect(confirm).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Move to information exchange' }))
+    expect(service.setCasePhase).toHaveBeenCalledWith('c1', 'k1', 'information_exchange')
+    expect(onChanged).toHaveBeenCalledWith(moved)
+  })
+
+  it('goes straight from introduction to deposition without an investigator', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { user, service } = renderPanel({ ...coaster, investigator: { enabled: false, name: 'John Hastings', instructions: '' } })
 
     const steps = within(screen.getByRole('list', { name: 'Phases' })).getAllByRole('listitem')
-    expect(steps.map((s) => s.textContent)).toEqual(['1Subpoena', '2Deposition'])
-    expect(screen.getByText(/Teams see only their own side's witnesses\. Every case world/)).toBeInTheDocument()
+    expect(steps.map((s) => s.textContent)).toEqual(['1Introduction', '2Deposition'])
+    expect(screen.getByText(/initial disclosures\. Every case world/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Move to Deposition/ }))
     expect(service.setCasePhase).toHaveBeenCalledWith('c1', 'k1', 'deposition')
   })

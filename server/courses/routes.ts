@@ -34,6 +34,7 @@ import { instructorHome } from './instructorHome.ts'
 import { homeCasesForInstructor, listMyCases, studentHome } from './myCases.ts'
 import { findStudentTeamId, getStudentWorkspace, studentViewer } from './workspace.ts'
 import { sendInvestigation, teamInvestigations, type InvestigationContext } from '../investigator/requests.ts'
+import { myExchangeRouter } from '../exchange/exchangeRoutes.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -190,7 +191,9 @@ coursesRouter.put('/:courseId/my-cases/:caseId/tasks/:taskId', async (req, res) 
   const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
   const done = (req.body as Record<string, unknown> | undefined)?.done
   if (typeof done !== 'boolean') throw new HttpError(400, 'Say whether the task is done.')
-  if (!workspace.tasks.some((t) => t.id === taskId)) throw new HttpError(404, 'Task not found.')
+  const task = workspace.tasks.find((t) => t.id === taskId)
+  if (!task) throw new HttpError(404, 'Task not found.')
+  if (task.auto) throw new HttpError(409, 'This task completes on its own when your team does it.')
   if (workspace.case.status !== 'active') {
     throw new HttpError(409, 'This case is closed, so its tasks can no longer change.')
   }
@@ -209,9 +212,10 @@ coursesRouter.put('/:courseId/my-cases/:caseId/tasks/:taskId', async (req, res) 
 async function teamInterview(req: Request): Promise<InterviewContext> {
   const { courseId, caseId, witnessId } = req.params as Record<string, string>
   const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
-  if (!isUuid(witnessId) || !workspace.witnesses.some((w) => w.id === witnessId)) {
-    throw new HttpError(404, 'Witness not found.')
-  }
+  const seen = isUuid(witnessId) ? workspace.witnesses.find((w) => w.id === witnessId) : undefined
+  if (!seen) throw new HttpError(404, 'Witness not found.')
+  // The other side's disclosed witnesses show by name, but only deposition opens them.
+  if (seen.disclosed) throw new HttpError(409, "You can depose the other side's witnesses in the deposition phase.")
   const teamId = await findStudentTeamId(caseId, req.user!.id)
   if (!teamId || !workspace.side) throw new HttpError(409, 'Your team needs a case world before it can interview witnesses.')
   const [courseCase, witness, world] = await Promise.all([
@@ -306,6 +310,8 @@ coursesRouter.post('/:courseId/my-cases/:caseId/investigator/seen', async (req, 
   if (ctx) await markReviewsSeen(ctx.caseId, ctx.teamId, ctx.userId, 'investigation')
   res.status(204).end()
 })
+
+coursesRouter.use('/:courseId/my-cases/:caseId/exchange', myExchangeRouter)
 
 // Everything below manages one course and is only for the instructor who teaches it.
 const courseRouter = Router({ mergeParams: true })

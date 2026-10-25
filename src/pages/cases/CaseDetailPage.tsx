@@ -16,6 +16,9 @@ import { InvestigatorSection } from './content/InvestigatorSection'
 import { WitnessesSection } from './content/WitnessesSection'
 import { PhasePanel } from './PhasePanel'
 import { CaseSetupFlow } from './setup/CaseSetupFlow'
+import { ExchangeCard } from './exchange/ExchangeCard'
+import { ExchangeSetupFlow, type ExchangeStep } from './exchange/ExchangeSetupFlow'
+import { ExchangeTab } from './exchange/ExchangeTab'
 import { TeamsSection } from './TeamsSection'
 import '../CoursePage.css'
 import './Cases.css'
@@ -25,15 +28,17 @@ const TABS = [
   { id: 'materials', label: 'Case file' },
   { id: 'witnesses', label: 'Witnesses' },
   { id: 'investigator', label: 'Investigator' },
+  { id: 'exchange', label: 'Information exchange' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'student-view', label: 'Student view' },
 ] as const
 type TabId = (typeof TABS)[number]['id']
 
 /**
- * One case, as its instructor manages it: details, launching the case worlds,
- * and tabs for teams and worlds, materials, witnesses, tasks, and a preview of
- * what students see. The tab is kept in the URL (?tab=materials).
+ * One case, as its instructor manages it: details, its information exchange,
+ * launching the case worlds, and tabs for teams and worlds, materials,
+ * witnesses, the investigator, the information exchange, tasks, and a preview
+ * of what students see. The tab is kept in the URL (?tab=materials).
  */
 export function CaseDetailPage() {
   const { courseId = '', caseId = '' } = useParams()
@@ -49,6 +54,8 @@ export function CaseDetailPage() {
   const [courseCase, setCourseCase] = useState<CourseCase | null>(initialCase)
   /** Showing the guided setup: while it's unfinished, and on through its congratulations. */
   const [inSetup, setInSetup] = useState(initialCase?.setupCompletedAt === null)
+  /** The information exchange setup, open at this step, or null when it isn't showing. */
+  const [exchangeStep, setExchangeStep] = useState<ExchangeStep | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -119,10 +126,12 @@ export function CaseDetailPage() {
 
   return (
     <main className="page">
-      <Link to={allCasesPath} className="case-back">
-        <ChevronLeft aria-hidden="true" />
-        All cases
-      </Link>
+      {exchangeStep === null && (
+        <Link to={allCasesPath} className="case-back">
+          <ChevronLeft aria-hidden="true" />
+          All cases
+        </Link>
+      )}
 
       {loadError ? (
         <p className="form-error" role="alert">
@@ -130,6 +139,17 @@ export function CaseDetailPage() {
         </p>
       ) : !courseCase ? (
         <p className="muted">Loading case…</p>
+      ) : exchangeStep !== null ? (
+        <ExchangeSetupFlow
+          courseId={courseId}
+          courseCase={courseCase}
+          initialStep={exchangeStep}
+          onCaseChange={(updated) => {
+            setCourseCase(updated)
+            workspace?.reloadHome()
+          }}
+          onExit={() => setExchangeStep(null)}
+        />
       ) : inSetup ? (
         <CaseSetupFlow
           courseId={courseId}
@@ -138,7 +158,8 @@ export function CaseDetailPage() {
           onContentChange={contentChanged}
           onExit={(to) => {
             setInSetup(false)
-            selectTab(to === 'student-view' ? 'student-view' : 'teams')
+            selectTab('teams')
+            if (to === 'exchange') setExchangeStep('disclosures')
           }}
         />
       ) : (
@@ -205,6 +226,13 @@ export function CaseDetailPage() {
             </header>
           )}
 
+          <ExchangeCard
+            courseId={courseId}
+            courseCase={courseCase}
+            onSetUp={() => setExchangeStep('disclosures')}
+            onOpenExchanges={() => selectTab('exchange')}
+          />
+
           <PhasePanel courseId={courseId} courseCase={courseCase} onChanged={setCourseCase} />
 
           {courseCase.status === 'draft' && (
@@ -221,7 +249,11 @@ export function CaseDetailPage() {
 
           <div className="case-tabs" role="tablist" aria-label="Case setup">
             {/* The student view comes once the guided setup is finished. */}
-            {TABS.filter((t) => t.id !== 'student-view' || courseCase.setupCompletedAt !== null).map((t) => (
+            {TABS.filter(
+              (t) =>
+                (t.id !== 'student-view' || courseCase.setupCompletedAt !== null) &&
+                (t.id !== 'exchange' || courseCase.exchangeReady),
+            ).map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -254,6 +286,9 @@ export function CaseDetailPage() {
             )}
             {tab === 'investigator' && (
               <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={setCourseCase} />
+            )}
+            {tab === 'exchange' && courseCase.exchangeReady && (
+              <ExchangeTab courseId={courseId} courseCase={courseCase} onEdit={setExchangeStep} />
             )}
             {tab === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
             {tab === 'student-view' && (

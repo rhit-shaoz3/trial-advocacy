@@ -1,0 +1,137 @@
+/* The senior partner's welcome email (WelcomeEmail). Theme tokens fall back to the navy defaults. */
+
+.welcome-email {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--surface);
+  box-shadow: var(--ws-shadow);
+}
+
+.welcome-email-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.25rem;
+  background: var(--subtle);
+  color: var(--fg-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.welcome-email-bar svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.welcome-email-head {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.1rem 1.5rem 0.9rem;
+  border-bottom: 1px solid var(--ws-row-line, var(--border));
+}
+
+.welcome-email-head h3 {
+  margin: 0;
+  color: var(--ws-navy);
+  font: 400 1.35rem/1.25 var(--ws-serif);
+}
+
+.welcome-email-from {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.welcome-email-from > span:last-child {
+  display: grid;
+}
+
+.welcome-email-from strong {
+  color: var(--ws-navy);
+  font-size: 0.85rem;
+}
+
+.welcome-email-from small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.welcome-email-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--on-brand);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.welcome-email-body {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.1rem 1.5rem 1.4rem;
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+
+.welcome-email-body p {
+  margin: 0;
+}
+
+.welcome-email-body ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0 0 0 0.25rem;
+  list-style: none;
+}
+
+.welcome-email-body li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.welcome-email-body li svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: var(--ws-blue);
+}
+
+.welcome-email-first {
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+  font-weight: 600;
+}
+
+.welcome-email-marked {
+  outline: 1.5px dashed var(--tint-blue-fg);
+  outline-offset: 2px;
+}
+
+.welcome-email-signature {
+  display: grid;
+  gap: 0.1rem;
+  padding-top: 0.25rem;
+}
+
+.welcome-email-sign {
+  color: var(--ws-navy);
+  font: italic 400 1.6rem/1.2 var(--ws-serif);
+}
+
+.welcome-email-signature strong {
+  color: var(--fg-soft);
+  font-size: 0.85rem;
+}
+
+.welcome-email-signature small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}

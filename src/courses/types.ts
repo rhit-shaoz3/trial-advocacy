@@ -48,16 +48,24 @@ export interface AddStudentsResult {
 
 /**
  * Every case world in a case moves through these together, in order, when the
- * instructor says so. Subpoena: each side sees only its own witnesses.
- * Investigate: the background investigator opens (only cases with one have
- * this phase). Deposition: every witness is revealed to both sides.
+ * instructor says so. Introduction: teams get the case and a welcome email,
+ * and each student picks their initial disclosures. Information exchange: the
+ * instructor's initial disclosures are shared, and teams send interrogatories
+ * and requests for admission (only once it's set up). Investigate: the
+ * background investigator opens (only cases with one). Deposition: every
+ * witness is revealed to both sides.
  */
-export const CASE_PHASES = ['subpoena', 'investigate', 'deposition'] as const
+export const CASE_PHASES = ['introduction', 'information_exchange', 'investigate', 'deposition'] as const
 export type CasePhase = (typeof CASE_PHASES)[number]
 
-/** A case's phases: without a background investigator there's no investigate phase. */
-export const casePhases = (investigatorEnabled = true): CasePhase[] =>
-  investigatorEnabled ? [...CASE_PHASES] : CASE_PHASES.filter((p) => p !== 'investigate')
+/**
+ * A case's phases: no information exchange phase until it's set up, and no
+ * investigate phase without a background investigator.
+ */
+export const casePhases = (investigatorEnabled = true, exchangeReady = false): CasePhase[] =>
+  CASE_PHASES.filter(
+    (p) => (p !== 'investigate' || investigatorEnabled) && (p !== 'information_exchange' || exchangeReady),
+  )
 
 /** What every case's background investigator is called until the instructor renames him. */
 export const DEFAULT_INVESTIGATOR_NAME = 'John Hastings'
@@ -106,6 +114,8 @@ export interface CourseCase {
   setupCompletedAt?: string | null
   /** The background investigator; cases without the field have one, as John Hastings. */
   investigator?: InvestigatorSettings
+  /** Whether the information exchange setup is finished (students see it, and the case has its phase). */
+  exchangeReady?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -262,6 +272,8 @@ export interface WorkspaceWitness {
   side: Side | null
   /** An AI witness the team can interview. */
   canInterview: boolean
+  /** The other side's witness, shown because the instructor disclosed them; not to be interviewed yet. */
+  disclosed?: boolean
   /** The witness's picture, or null for an icon. */
   avatarUrl?: string | null
 }
@@ -423,10 +435,170 @@ export interface CaseWorkspace {
   investigator?: { name: string; avatarUrl: string } | null
   /** Whether the background investigator is open yet (from the investigate phase on). */
   investigatorAvailable: boolean
-  /** Soonest due first; completion is the team's. */
-  tasks: (CaseTask & { completedAt: string | null; completedBy: string | null })[]
+  /** Whether the information exchange is set up, so the team has its tab. */
+  exchangeReady?: boolean
+  /**
+   * Soonest due first; completion is the team's. `auto` tasks come from the
+   * information exchange (initial disclosures, responding to a set) and
+   * complete themselves.
+   */
+  tasks: (CaseTask & { completedAt: string | null; completedBy: string | null; auto?: boolean })[]
   /** The instructor viewing it as a team would; nothing can be changed. */
   preview: boolean
+}
+
+// Information exchange --------------------------------------------------------
+
+/** Interrogatories, or requests for admission (RFAs). */
+export type ExchangeKind = 'interrogatories' | 'rfas'
+
+/** One part of the exchange: whether it's included, each team's limit, and the days the other side has to respond. */
+export interface PartSettings {
+  enabled: boolean
+  limit: number
+  days: number
+}
+
+/** The firm a side's teams work for, and the senior partner who signs their welcome email. */
+export interface Firm {
+  firm: string
+  partner: string
+}
+
+export interface ExchangeSettings {
+  /** Null until the instructor finishes the setup; students see nothing until then. */
+  setupCompletedAt: string | null
+  disclosures: { enabled: boolean; materialIds: string[]; witnessIds: string[] }
+  subpoenas: PartSettings
+  interrogatories: PartSettings
+  rfas: PartSettings
+  firms: Record<Side, Firm>
+}
+
+export type ExchangeSettingsInput = Omit<ExchangeSettings, 'setupCompletedAt' | 'disclosures'> & {
+  disclosures: { enabled: boolean }
+}
+
+/** The federal rules students are taught: 25 interrogatories (FRCP 33), 30 days to respond (FRCP 33 and 36). */
+export const FEDERAL = { interrogatoryLimit: 25, responseDays: 30 }
+
+/** A witness or one-side case file a side could disclose. */
+export interface DisclosureOption {
+  kind: 'witness' | 'material'
+  id: string
+  side: Side
+  name: string
+  detail: string
+  avatarUrl: string | null
+}
+
+/** A disclosed witness or file, with the student's reason when it's their pick. */
+export type DisclosureItem = Omit<DisclosureOption, 'side'> & { reason: string | null }
+
+export interface DisclosureSubmission {
+  submittedAt: string
+  heldBackReason: string
+  items: DisclosureItem[]
+}
+
+/** How a student's picks compare with the instructor's for their side. */
+export interface DisclosureReview {
+  matched: DisclosureItem[]
+  extra: DisclosureItem[]
+  missing: DisclosureItem[]
+}
+
+export interface DisclosurePick {
+  kind: 'witness' | 'material'
+  id: string
+  reason: string
+}
+
+/** One question or request in a set, and the response once it's in. */
+export interface ExchangeItem {
+  position: number
+  text: string
+  /** How many it counts toward the limit: each lettered subpart of an interrogatory counts. */
+  weight: number
+  answer: string | null
+  objection: boolean
+  admission: 'agree' | 'disagree' | 'partial' | null
+  agreePart: string | null
+  disagreePart: string | null
+}
+
+export interface ExchangeRequest {
+  id: string
+  kind: ExchangeKind
+  fromTeam: { id: string; number: number; side: Side }
+  toTeam: { id: string; number: number; side: Side }
+  worldNumber: number
+  sentBy: string | null
+  sentAt: string
+  dueAt: string
+  respondedAt: string | null
+  respondedBy: string | null
+  items: ExchangeItem[]
+}
+
+export interface ItemResponse {
+  position: number
+  answer: string
+  objection: boolean
+  admission: 'agree' | 'disagree' | 'partial' | null
+  agreePart: string
+  disagreePart: string
+}
+
+/** One part of the exchange as a team sees it. */
+export interface StudentPart {
+  limit: number
+  days: number
+  used: number
+  remaining: number
+  /** `seen`: whether this student has read the response (for answered sets the team sent). */
+  requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
+}
+
+/** A team's information exchange. */
+export interface StudentExchange {
+  phase: CasePhase
+  /** Whether teams can send and respond (after the introduction phase). */
+  requestsOpen: boolean
+  side: Side
+  teamNumber: number
+  opponentNumber: number
+  firm: Firm
+  disclosures: {
+    /** Whether the student can still submit (the introduction phase). */
+    open: boolean
+    options: DisclosureOption[]
+    submission: DisclosureSubmission | null
+    review: DisclosureReview | null
+  } | null
+  interrogatories: StudentPart | null
+  rfas: StudentPart | null
+}
+
+export interface ExchangeOverview {
+  /** Students who have submitted initial disclosures, of the students in case worlds. */
+  submissions: { submitted: number; total: number; byWorld: { number: number; submitted: number; total: number }[] }
+  activity: {
+    interrogatoriesSent: number
+    rfasSent: number
+    teams: number
+    teamsSentInterrogatories: number
+    teamsSentRfas: number
+    waiting: number
+    overdue: number
+  }
+  /** What moving to information exchange shares, by name. */
+  disclosed: { materials: string[]; witnesses: string[] }
+}
+
+/** How many questions an interrogatory counts as: one, or one per lettered subpart like "(a)". */
+export function questionWeight(text: string) {
+  return Math.max(1, (text.match(/\([a-z]\)/gi) ?? []).length)
 }
 
 /** Everything the UI needs from the courses backend. See `httpCourseService`. */
@@ -547,6 +719,27 @@ export interface CourseService {
   /** Emails the investigator an assignment; returns the team's requests. */
   sendInvestigation(courseId: string, caseId: string, assignment: string): Promise<Investigation[]>
   markInvestigationsSeen(courseId: string, caseId: string): Promise<void>
+  // Information exchange: the instructor's setup and views.
+  /** The settings (federal defaults until saved), and what each side could disclose. */
+  getExchange(courseId: string, caseId: string): Promise<{ settings: ExchangeSettings; options: DisclosureOption[] }>
+  saveExchangeSettings(courseId: string, caseId: string, input: ExchangeSettingsInput): Promise<ExchangeSettings>
+  /** The instructor's initial disclosures: the answer key, shared once the case leaves the introduction phase. */
+  saveDisclosures(courseId: string, caseId: string, ids: { materialIds: string[]; witnessIds: string[] }): Promise<ExchangeSettings>
+  /** Finishes the setup: students see it, and the case gains its phase. */
+  completeExchangeSetup(courseId: string, caseId: string): Promise<{ settings: ExchangeSettings; case: CourseCase }>
+  getExchangeOverview(courseId: string, caseId: string): Promise<ExchangeOverview>
+  /** Every set teams have sent each other, newest first: the instructor's read-only view. */
+  listExchangeRequests(courseId: string, caseId: string): Promise<ExchangeRequest[]>
+  // Information exchange: the student's team.
+  /** Null when there's nothing for the team yet (not set up, or not in a case world). */
+  getMyExchange(courseId: string, caseId: string): Promise<StudentExchange | null>
+  /** The student's own initial disclosures, once. */
+  submitDisclosures(courseId: string, caseId: string, picks: DisclosurePick[], heldBackReason: string): Promise<StudentExchange>
+  /** Sends a set to the other team, one question or request per item. */
+  sendExchangeRequest(courseId: string, caseId: string, kind: ExchangeKind, items: string[]): Promise<StudentExchange>
+  respondToExchangeRequest(courseId: string, caseId: string, requestId: string, responses: ItemResponse[]): Promise<StudentExchange>
+  /** Marks the responses to the team's sets as read. */
+  markExchangeSeen(courseId: string, caseId: string): Promise<void>
   // The instructor's review panel.
   listReviews(courseId: string, status: 'open' | 'completed'): Promise<InterviewReview[]>
   decideFact(courseId: string, reviewId: string, factId: string, decision: FactDecision): Promise<InterviewReview>

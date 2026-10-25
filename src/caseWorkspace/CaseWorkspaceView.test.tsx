@@ -20,7 +20,7 @@ const sampleWorkspace: CaseWorkspace = {
     title: 'Rivera v. Thrill Park',
     summary: 'A rollercoaster stalls at the top of its lift hill.',
     status: 'active',
-    phase: 'subpoena',
+    phase: 'introduction',
     instructorNote: 'Mind the timeline.',
   },
   team: { number: 7, members: [member('Ada Lawyer', true), member('Ben Partner')] },
@@ -276,9 +276,9 @@ describe('CaseWorkspaceView phases', () => {
   const elena = { ...sampleWorkspace.witnesses[0], side: 'defense' as const, canInterview: true }
   const rider = { id: 'w2', name: 'Riley Rivera', role: 'Rider', description: '', audience: 'all' as const, side: 'plaintiff' as const, canInterview: true }
 
-  it('shows the phase and keeps the investigator locked in subpoena', async () => {
+  it('shows the phase and keeps the investigator locked in introduction', async () => {
     const { user } = renderView()
-    expect(screen.getByText('Subpoena phase')).toBeInTheDocument()
+    expect(screen.getByText('Introduction phase')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Investigator' }))
     const panel = screen.getByRole('tabpanel')

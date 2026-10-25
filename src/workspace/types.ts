@@ -83,6 +83,8 @@ export interface CaseMonitor {
   phase: CasePhase
   /** Whether the case has a background investigator (and so an investigate phase). */
   investigatorEnabled?: boolean
+  /** Whether the information exchange is set up (and so the case has that phase). */
+  exchangeReady?: boolean
   worldCount: number
   /** Drafts: launch checklist items met, of the total, and the first one still missing. */
   launch: { ready: number; total: number; next: string | null } | null

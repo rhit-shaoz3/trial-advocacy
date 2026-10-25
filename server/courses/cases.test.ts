@@ -39,7 +39,7 @@ describe('creating', () => {
       title: 'Rivera v. Thrill Park',
       summary: coaster.summary,
       status: 'draft',
-      phase: 'subpoena',
+      phase: 'introduction',
       instructorNote: '',
       inWorldDate: null,
       disputedIssues: '',
@@ -48,6 +48,7 @@ describe('creating', () => {
       setupStep: 'details',
       setupCompletedAt: null,
       investigator: { enabled: true, name: 'John Hastings', instructions: '' },
+      exchangeReady: false,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     })

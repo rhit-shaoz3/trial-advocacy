@@ -1083,3 +1083,51 @@
 :root[data-theme='dark'] .cw-banner {
   box-shadow: inset 0 0 0 1px var(--ws-line);
 }
+
+/* The senior partner's welcome email on the Overview */
+.cw-welcome {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.cw .cw-welcome-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--ws-navy);
+  font: 700 0.9rem var(--ws-sans);
+}
+
+.cw-welcome-title svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--ws-red);
+}
+
+.cw-welcome-later {
+  border: 1px solid var(--ws-line);
+  border-radius: 0.7rem;
+  background: var(--surface);
+}
+
+.cw-welcome-later summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.1rem;
+  color: var(--ws-navy);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cw-welcome-later summary svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.cw-welcome-later .welcome-email {
+  margin: 0 0.75rem 0.75rem;
+  box-shadow: none;
+}

@@ -418,6 +418,64 @@ export const httpCourseService: CourseService = {
     await apiRequest(`${myCasePath(courseId, caseId)}/investigator/seen`, { method: 'POST' })
   },
 
+  async getExchange(courseId, caseId) {
+    return apiRequest(`${casePath(courseId, caseId)}/exchange`)
+  },
+
+  async saveExchangeSettings(courseId, caseId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/exchange`, { method: 'PUT', body: JSON.stringify(input) })
+    return body.settings
+  },
+
+  async saveDisclosures(courseId, caseId, ids) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/exchange/disclosures`, {
+      method: 'PUT',
+      body: JSON.stringify(ids),
+    })
+    return body.settings
+  },
+
+  async completeExchangeSetup(courseId, caseId) {
+    return apiRequest(`${casePath(courseId, caseId)}/exchange/complete`, { method: 'POST' })
+  },
+
+  async getExchangeOverview(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/exchange/overview`)).overview
+  },
+
+  async listExchangeRequests(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/exchange/requests`)).requests
+  },
+
+  async getMyExchange(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/exchange`)).exchange
+  },
+
+  async submitDisclosures(courseId, caseId, picks, heldBackReason) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/disclosures`, {
+      method: 'POST',
+      body: JSON.stringify({ picks, heldBackReason }),
+    })
+    return body.exchange
+  },
+
+  async sendExchangeRequest(courseId, caseId, kind, items) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/requests`, {
+      method: 'POST',
+      body: JSON.stringify({ kind, items }),
+    })
+    return body.exchange
+  },
+
+  async respondToExchangeRequest(courseId, caseId, requestId, responses) {
+    const path = `${myCasePath(courseId, caseId)}/exchange/requests/${encodeURIComponent(requestId)}/responses`
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ responses }) })).exchange
+  },
+
+  async markExchangeSeen(courseId, caseId) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/exchange/seen`, { method: 'POST' })
+  },
+
   async listReviews(courseId, status) {
     return (await apiRequest(`${reviewsPath(courseId)}?status=${status}`)).reviews
   },

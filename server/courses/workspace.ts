@@ -11,6 +11,13 @@ import {
   type Witness,
 } from './caseContent.ts'
 import type { CasePhase } from './cases.ts'
+import {
+  disclosedWitnessIds,
+  findSubmission,
+  getSettings,
+  requestsOpen,
+  type ExchangeKind,
+} from '../exchange/exchange.ts'
 import type { Side } from './matchups.ts'
 import { listMyCases, type MyCase } from './myCases.ts'
 import { listTeams } from './teams.ts'
@@ -22,23 +29,36 @@ export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'descripti
   side: Side | null
   /** Whether the witness is an AI witness the team can interview. */
   canInterview: boolean
+  /** The other side's witness, shown because the instructor disclosed them; not to be interviewed yet. */
+  disclosed: boolean
 }
 
 /**
- * The witnesses a team on `side` can see (and interview) in `phase`. Until the
- * deposition phase, a witness for one side is hidden from the other, and the
- * rest follow their audience; in deposition, every witness is revealed to
- * both sides. With no side yet, only shared witnesses with no side show.
+ * The witnesses a team on `side` can see in `phase`. Until the deposition
+ * phase, a witness for one side is hidden from the other, and the rest follow
+ * their audience, except that after the introduction phase the witnesses in
+ * the instructor's initial disclosures show to both sides. In deposition,
+ * every witness is revealed to both sides. With no side yet, only shared
+ * witnesses with no side show.
  */
-export function visibleWitnesses<W extends Pick<Witness, 'audience' | 'alignedSide'>>(
+export function visibleWitnesses<W extends Pick<Witness, 'id' | 'audience' | 'alignedSide'>>(
   witnesses: W[],
   side: Side | null,
   phase: CasePhase,
+  disclosed: ReadonlySet<string> = new Set(),
 ) {
   if (phase === 'deposition') return witnesses
   const audiences: string[] = visibleTo(side)
-  return witnesses.filter((w) => audiences.includes(w.audience) && (w.alignedSide === null || w.alignedSide === side))
+  return witnesses.filter(
+    (w) =>
+      (audiences.includes(w.audience) && (w.alignedSide === null || w.alignedSide === side)) ||
+      (side !== null && requestsOpen(phase) && disclosed.has(w.id)),
+  )
 }
+
+/** Whether a team on `side` can interview a witness it can see: the other side's only in deposition. */
+export const interviewable = (w: Pick<Witness, 'alignedSide' | 'audience'>, side: Side | null, phase: CasePhase) =>
+  phase === 'deposition' || !side || (w.alignedSide ?? (w.audience === 'all' ? side : w.audience)) === side
 
 // Shape sent to the client; matches `CaseWorkspace` in src/courses/types.ts.
 export interface CaseWorkspace {
@@ -60,7 +80,14 @@ export interface CaseWorkspace {
   investigator: { name: string; avatarUrl: string } | null
   /** Whether the background investigator is open yet (from the investigate phase on). */
   investigatorAvailable: boolean
-  tasks: (CaseTask & { completedAt: Date | null; completedBy: string | null })[]
+  /** Whether the information exchange is set up, so the team has its tab. */
+  exchangeReady: boolean
+  /**
+   * The instructor's tasks, plus the information exchange's own (`auto`):
+   * choosing initial disclosures, and responding to each set the other team
+   * sends. Those complete themselves.
+   */
+  tasks: (CaseTask & { completedAt: Date | null; completedBy: string | null; auto?: boolean })[]
   /** True when the instructor is looking at it as a team would; nothing can be changed. */
   preview: boolean
 }
@@ -68,12 +95,14 @@ export interface CaseWorkspace {
 /** The background investigator's portrait, the same in every case (public/investigator.png). */
 export const INVESTIGATOR_AVATAR_URL = '/investigator.png'
 
-type CaseRow = CaseWorkspace['case'] & { investigatorEnabled: boolean; investigatorName: string }
+type CaseRow = CaseWorkspace['case'] & { investigatorEnabled: boolean; investigatorName: string; exchangeReady: boolean }
 
 async function findCaseRow(courseId: string, caseId: string) {
   const { rows } = await pool.query<CaseRow>(
     `SELECT id, title, summary, status, phase, instructor_note AS "instructorNote",
-            investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName"
+            investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName",
+            EXISTS (SELECT 1 FROM information_exchange ie
+                    WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"
      FROM cases WHERE course_id = $1 AND id = $2`,
     [courseId, caseId],
   )
@@ -95,20 +124,87 @@ export async function studentViewer(caseId: string, userId: string, side: Side |
   return { side, teamId, matchupId: teamId ? await teamMatchupId(teamId) : null }
 }
 
+type WorkspaceTask = CaseWorkspace['tasks'][number]
+
+const KIND_TASK: Record<ExchangeKind, string> = {
+  interrogatories: 'interrogatories',
+  rfas: 'requests for admission',
+}
+
+/**
+ * The information exchange's tasks for a student: choosing their initial
+ * disclosures (while that's open, or once done), and responding to each set
+ * the other team sent.
+ */
+async function exchangeTasks(caseId: string, phase: CasePhase, teamId: string, side: Side, userId: string | null) {
+  const settings = await getSettings(caseId)
+  const tasks: WorkspaceTask[] = []
+  if (settings.disclosures.enabled && userId) {
+    const submission = await findSubmission(caseId, userId)
+    if (submission || phase === 'introduction') {
+      tasks.push({
+        id: 'exchange:disclosures',
+        title: 'Choose your initial disclosures',
+        description: "Pick the witnesses and documents you'd disclose to opposing counsel, and say why.",
+        dueAt: null,
+        audience: side,
+        completedAt: submission?.submittedAt ?? null,
+        completedBy: submission ? 'you' : null,
+        auto: true,
+      })
+    }
+  }
+  const { rows } = await pool.query<{
+    id: string
+    kind: ExchangeKind
+    from: number
+    dueAt: Date
+    respondedAt: Date | null
+    respondedBy: string | null
+  }>(
+    `SELECT r.id, r.kind, t.number AS "from", r.due_at AS "dueAt", r.responded_at AS "respondedAt", u.name AS "respondedBy"
+     FROM exchange_requests r JOIN teams t ON t.id = r.from_team_id LEFT JOIN users u ON u.id = r.responded_by
+     WHERE r.case_id = $1 AND r.to_team_id = $2 ORDER BY r.sent_at`,
+    [caseId, teamId],
+  )
+  for (const r of rows) {
+    tasks.push({
+      id: `exchange:${r.id}`,
+      title: `Respond to ${KIND_TASK[r.kind]} from Team ${r.from}`,
+      description: 'Open the Information exchange tab to respond.',
+      dueAt: r.dueAt,
+      audience: side,
+      completedAt: r.respondedAt,
+      completedBy: r.respondedBy,
+      auto: true,
+    })
+  }
+  return tasks
+}
+
+/** Soonest due first; tasks with no due date last. */
+const byDue = (a: WorkspaceTask, b: WorkspaceTask) =>
+  (a.dueAt ? new Date(a.dueAt).getTime() : Infinity) - (b.dueAt ? new Date(b.dueAt).getTime() : Infinity)
+
 async function assemble(
-  { investigatorEnabled, investigatorName, ...caseRow }: CaseRow,
+  { investigatorEnabled, investigatorName, exchangeReady, ...caseRow }: CaseRow,
   team: MyCase['team'],
   world: MyCase['world'],
   viewer: MaterialViewer,
   preview: boolean,
+  userId: string | null = null,
 ): Promise<CaseWorkspace> {
   const { side, teamId } = viewer
   const audiences = visibleTo(side)
-  const [materials, witnesses, tasks, completions] = await Promise.all([
+  const [materials, witnesses, tasks, completions, disclosed, autoTasks] = await Promise.all([
     listMaterialsFor(caseRow.id, viewer),
     listWitnesses(caseRow.id),
     listTasks(caseRow.id, audiences),
     teamId ? listCompletions(caseRow.id, teamId) : Promise.resolve([]),
+    disclosedWitnessIds(caseRow.id),
+    exchangeReady && teamId && side && !preview
+      ? exchangeTasks(caseRow.id, caseRow.phase, teamId, side, userId)
+      : Promise.resolve([]),
   ])
   const doneBy = new Map(completions.map((c) => [c.taskId, c]))
   return {
@@ -117,23 +213,31 @@ async function assemble(
     world,
     side,
     materials,
-    witnesses: visibleWitnesses(witnesses, side, caseRow.phase).map((w) => ({
-      id: w.id,
-      name: w.name,
-      role: w.role,
-      description: w.description,
-      audience: w.audience,
-      side: w.alignedSide,
-      canInterview: isAiWitness(w),
-      avatarUrl: w.avatarUrl,
-    })),
+    witnesses: visibleWitnesses(witnesses, side, caseRow.phase, disclosed).map((w) => {
+      const canAsk = interviewable(w, side, caseRow.phase)
+      return {
+        id: w.id,
+        name: w.name,
+        role: w.role,
+        description: w.description,
+        audience: w.audience,
+        side: w.alignedSide,
+        canInterview: isAiWitness(w) && canAsk,
+        disclosed: !canAsk,
+        avatarUrl: w.avatarUrl,
+      }
+    }),
     investigator: investigatorEnabled ? { name: investigatorName, avatarUrl: INVESTIGATOR_AVATAR_URL } : null,
-    investigatorAvailable: investigatorEnabled && caseRow.phase !== 'subpoena',
-    tasks: tasks.map((t) => ({
-      ...t,
-      completedAt: doneBy.get(t.id)?.completedAt ?? null,
-      completedBy: doneBy.get(t.id)?.completedBy ?? null,
-    })),
+    investigatorAvailable: investigatorEnabled && (caseRow.phase === 'investigate' || caseRow.phase === 'deposition'),
+    exchangeReady,
+    tasks: [
+      ...tasks.map((t) => ({
+        ...t,
+        completedAt: doneBy.get(t.id)?.completedAt ?? null,
+        completedBy: doneBy.get(t.id)?.completedBy ?? null,
+      })),
+      ...autoTasks,
+    ].sort(byDue),
     preview,
   }
 }
@@ -160,7 +264,7 @@ export async function getStudentWorkspace(courseId: string, caseId: string, user
   if (!myCase) return null
   const caseRow = (await findCaseRow(courseId, caseId))!
   const viewer = await studentViewer(caseId, userId, myCase.world?.side ?? null)
-  return assemble(caseRow, myCase.team, myCase.world, viewer, false)
+  return assemble(caseRow, myCase.team, myCase.world, viewer, false, userId)
 }
 
 /**

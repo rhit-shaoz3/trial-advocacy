@@ -224,8 +224,8 @@ describe('setting up an AI witness', () => {
     // Elena testifies for the defense, so (before the deposition phase) only the defense team sees her.
     const { witnesses } = (await cy.get(myCaseUrl())).body.workspace
     expect(witnesses).toEqual([
-      { id: expect.any(String), name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls.', audience: 'all', side: 'defense', canInterview: true, avatarUrl: null },
-      { id: expect.any(String), name: 'Bystander', role: '', description: '', audience: 'all', side: null, canInterview: false, avatarUrl: null },
+      { id: expect.any(String), name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls.', audience: 'all', side: 'defense', canInterview: true, disclosed: false, avatarUrl: null },
+      { id: expect.any(String), name: 'Bystander', role: '', description: '', audience: 'all', side: null, canInterview: false, disclosed: false, avatarUrl: null },
     ])
   })
 })
@@ -376,7 +376,7 @@ describe('witnesses by phase', () => {
   })
 
   it("keeps a side's witness from the other side until the deposition phase", async () => {
-    for (const phase of ['subpoena', 'investigate']) {
+    for (const phase of ['introduction', 'investigate']) {
       await setPhase(phase)
       expect(await names(ada)).toEqual([])
       expect(await names(cy)).toEqual(['Elena Torres'])

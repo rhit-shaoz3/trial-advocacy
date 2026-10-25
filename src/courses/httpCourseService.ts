@@ -218,6 +218,14 @@ export const httpCourseService: CourseService = {
     return body.materials
   },
 
+  async setMaterialShares(courseId, caseId, materialId, shares) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/shares`, {
+      method: 'PUT',
+      body: JSON.stringify(shares),
+    })
+    return body.material
+  },
+
   async deleteMaterial(courseId, caseId, materialId) {
     await apiRequest(`${casePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}`, {
       method: 'DELETE',
@@ -329,6 +337,14 @@ export const httpCourseService: CourseService = {
     return body.case
   },
 
+  async saveInvestigator(courseId, caseId, input) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/investigator`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.case
+  },
+
   async getLaunchChecks(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/launch`)).checks
   },
@@ -386,12 +402,33 @@ export const httpCourseService: CourseService = {
     await apiRequest(`${myCasePath(courseId, caseId)}/reviews/seen`, { method: 'POST' })
   },
 
+  async listMyInvestigations(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/investigator`)).investigations
+  },
+
+  async sendInvestigation(courseId, caseId, assignment) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/investigator/requests`, {
+      method: 'POST',
+      body: JSON.stringify({ assignment }),
+    })
+    return body.investigations
+  },
+
+  async markInvestigationsSeen(courseId, caseId) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/investigator/seen`, { method: 'POST' })
+  },
+
   async listReviews(courseId, status) {
     return (await apiRequest(`${reviewsPath(courseId)}?status=${status}`)).reviews
   },
 
   async decideFact(courseId, reviewId, factId, decision) {
     const path = `${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/facts/${encodeURIComponent(factId)}`
+    return (await apiRequest(path, { method: 'PUT', body: JSON.stringify({ decision }) })).review
+  },
+
+  async decideDocument(courseId, reviewId, materialId, decision) {
+    const path = `${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/documents/${encodeURIComponent(materialId)}`
     return (await apiRequest(path, { method: 'PUT', body: JSON.stringify({ decision }) })).review
   },
 

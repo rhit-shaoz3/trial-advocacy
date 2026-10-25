@@ -17,6 +17,8 @@ export interface CaseMonitor {
   title: string
   status: 'draft' | 'active' | 'closed'
   phase: CasePhase
+  /** Whether the case has a background investigator (and so an investigate phase). */
+  investigatorEnabled: boolean
   worldCount: number
   /** Drafts: launch checklist items met, of the total, and the first one still missing. */
   launch: { ready: number; total: number; next: string | null } | null
@@ -115,6 +117,7 @@ async function caseMonitors(courseId: string, now: Date): Promise<CaseMonitor[]>
     title: string
     status: CaseMonitor['status']
     phase: CasePhase
+    investigatorEnabled: boolean
     worldCount: number
     due: number
     teamsDoneDue: number
@@ -133,7 +136,7 @@ async function caseMonitors(courseId: string, now: Date): Promise<CaseMonitor[]>
        LEFT JOIN task_completions tc ON tc.task_id = k.id AND tc.team_id = mt.team_id
        GROUP BY mt.case_id, mt.team_id
      )
-     SELECT c.id, c.title, c.status, c.phase,
+     SELECT c.id, c.title, c.status, c.phase, c.investigator_enabled AS "investigatorEnabled",
             (SELECT count(*)::int FROM matchups mu WHERE mu.case_id = c.id) AS "worldCount",
             coalesce(max(tt.due), 0)::int AS due,
             count(tt.team_id) FILTER (WHERE tt.done_due = tt.due)::int AS "teamsDoneDue",
@@ -149,7 +152,14 @@ async function caseMonitors(courseId: string, now: Date): Promise<CaseMonitor[]>
   )
   return Promise.all(
     rows.map(async (r): Promise<CaseMonitor> => {
-      const base = { id: r.id, title: r.title, status: r.status, phase: r.phase, worldCount: r.worldCount }
+      const base = {
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        phase: r.phase,
+        investigatorEnabled: r.investigatorEnabled,
+        worldCount: r.worldCount,
+      }
       if (r.status === 'draft') {
         const checks = await launchChecks(courseId, r.id)
         const ready = checks.filter((c) => c.ok).length
@@ -192,7 +202,7 @@ function attentionItems(
     items.push({
       id: 'reviews',
       kind: 'reviews',
-      text: `${plural(stats.reviewsWaiting, 'interview is', 'interviews are')} waiting for your review.`,
+      text: `${plural(stats.reviewsWaiting, 'review is', 'reviews are')} waiting for you: interviews and investigator reports.`,
       target: { page: 'review' },
     })
   }
@@ -279,8 +289,10 @@ async function recentActivity(courseId: string): Promise<InstructorActivity[]> {
       ORDER BY tc.completed_at DESC LIMIT ${MAX_ACTIVITY})
      UNION ALL
      (SELECT 'review-' || r.id, 'review', NULL,
-             'You ruled on Team ' || r.team_number || '''s interview of ' || w.name, c.title, r.completed_at
-      FROM interview_reviews r JOIN case_witnesses w ON w.id = r.witness_id JOIN cases c ON c.id = r.case_id
+             CASE WHEN r.kind = 'investigation' THEN 'You reviewed Team ' || r.team_number || '''s investigator report'
+                  ELSE 'You ruled on Team ' || r.team_number || '''s interview of ' || w.name END,
+             c.title, r.completed_at
+      FROM interview_reviews r LEFT JOIN case_witnesses w ON w.id = r.witness_id JOIN cases c ON c.id = r.case_id
       WHERE c.course_id = $1 AND r.status = 'completed'
       ORDER BY r.completed_at DESC LIMIT ${MAX_ACTIVITY})
      UNION ALL

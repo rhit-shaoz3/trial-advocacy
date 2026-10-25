@@ -1224,3 +1224,92 @@ a.case-row:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Background investigator settings (InvestigatorSection) */
+
+.investigator-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 46rem;
+}
+
+.investigator-form > label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.investigator-profile {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.panel-form .investigator-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--ws-navy);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.panel-form .investigator-toggle input {
+  width: 1.15rem;
+  min-height: 0;
+  height: 1.15rem;
+  padding: 0;
+  accent-color: var(--button);
+}
+
+.field-hint {
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+/* Sharing a case file with particular worlds and teams (SharePicker) */
+
+.share-chips {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--tint-blue-fg);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.share-row td {
+  background: var(--subtle);
+}
+
+.share-picker {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+}
+
+.share-picker-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.share-picker-lists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.share-picker fieldset {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.share-picker legend {
+  margin-bottom: 0.35rem;
+  color: var(--ws-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

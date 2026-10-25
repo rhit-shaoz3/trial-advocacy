@@ -47,12 +47,14 @@ export function WorkspaceLayout() {
   }, [service, courseId, sample])
 
   // Unlike the initial load, keeps the current page on screen while it fetches.
-  const reloadHome = useCallback(() => {
-    service
-      .getCourseHome(courseId)
-      .then((h) => setHome(sample ? withSampleData(h) : h))
-      .catch(() => {}) // keep showing what we have
-  }, [service, courseId, sample])
+  const reloadHome = useCallback(
+    () =>
+      service
+        .getCourseHome(courseId)
+        .then((h) => setHome(sample ? withSampleData(h) : h))
+        .catch(() => {}), // keep showing what we have
+    [service, courseId, sample],
+  )
 
   const base = `/courses/${courseId}`
   const search = sample ? '?sample' : ''

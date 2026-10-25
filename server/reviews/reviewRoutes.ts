@@ -1,13 +1,17 @@
 import { Router } from 'express'
 import { HttpError } from '../httpError.ts'
 import { isUuid, readString } from '../validation.ts'
+import { queueInvestigation } from '../investigator/requests.ts'
 import {
   completeReview,
+  decideDocument,
   decideFact,
+  DOCUMENT_DECISIONS,
   FACT_DECISIONS,
   listReviews,
   retryReview,
   reviewTranscript,
+  type DocumentDecision,
   type FactDecision,
 } from './reviews.ts'
 
@@ -34,14 +38,28 @@ reviewsRouter.put('/:reviewId/facts/:factId', async (req, res) => {
   res.json({ review: await decideFact(req.course!.id, reviewId, factId, decision as FactDecision) })
 })
 
+/** An investigation's case file: `{ decision }`, allow (share it with the team) or deny. */
+reviewsRouter.put('/:reviewId/documents/:materialId', async (req, res) => {
+  const reviewId = readId(req.params.reviewId, 'Review not found.')
+  const materialId = readId(req.params.materialId, 'File not found.')
+  const decision = readString(req.body, 'decision')
+  if (!DOCUMENT_DECISIONS.includes(decision as DocumentDecision)) throw new HttpError(400, 'Choose allow or deny for this file.')
+  res.json({ review: await decideDocument(req.course!.id, reviewId, materialId, decision as DocumentDecision) })
+})
+
+/** Finishes the review; for an investigation, the team's report is then written in the background. */
 reviewsRouter.post('/:reviewId/complete', async (req, res) => {
   const reviewId = readId(req.params.reviewId, 'Review not found.')
-  res.json({ review: await completeReview(req.course!.id, reviewId, req.user!.id) })
+  const review = await completeReview(req.course!.id, reviewId, req.user!.id)
+  if (review.kind === 'investigation') queueInvestigation(review.id)
+  res.json({ review })
 })
 
 reviewsRouter.post('/:reviewId/retry', async (req, res) => {
   const reviewId = readId(req.params.reviewId, 'Review not found.')
-  res.json({ review: await retryReview(req.course!.id, reviewId) })
+  const review = await retryReview(req.course!.id, reviewId)
+  if (review.kind === 'investigation') queueInvestigation(review.id)
+  res.json({ review })
 })
 
 reviewsRouter.get('/:reviewId/transcript', async (req, res) => {

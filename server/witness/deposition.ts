@@ -11,7 +11,7 @@ import { buildSystemPrompt, type DepositionSettings, type WitnessProfile } from 
 export const WITNESS_EFFORT = 'high'
 
 /** Haiku has no server-side fallback: the parameter would do nothing, or fail with a model list. */
-const hasServerFallback = (model: string) => !model.startsWith('claude-haiku')
+export const hasServerFallback = (model: string) => !model.startsWith('claude-haiku')
 
 /** One question and the witness's reply, exactly as the model gave it (objection included). */
 export interface TranscriptTurn {

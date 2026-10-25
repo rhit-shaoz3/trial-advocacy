@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import { FACT_DECISIONS, type FactDecision, type InterviewReview, type ReviewTurn } from '../../courses/types'
+import {
+  FACT_DECISIONS,
+  INVESTIGATOR_AVATAR_URL,
+  type DocumentDecision,
+  type FactDecision,
+  type InterviewReview,
+  type ReviewTurn,
+} from '../../courses/types'
 import { ROLE_LABEL, worldLabel } from '../../courses/worldLabel'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import './Review.css'
@@ -16,7 +23,9 @@ const DECISION_LABEL: Record<FactDecision, string> = {
   deny_case: 'Deny for all worlds',
 }
 
-/** How often the list refreshes while a conversation's facts are still being listed. */
+const DOCUMENT_LABEL: Record<DocumentDecision, string> = { allow: 'Allow', deny: "Don't allow" }
+
+/** How often the list refreshes while the AI is still working on a review. */
 const POLL_MS = 5000
 
 const dateTime = (iso: string) =>
@@ -24,9 +33,10 @@ const dateTime = (iso: string) =>
 
 /**
  * The instructor's review panel: each conversation a team ended, as the new
- * facts the AI witness added. The instructor rules on each fact, for the
- * team's world or the whole case, then finishes the review, which binds later
- * interviews and tells the team what stands.
+ * facts the AI witness added, and each background investigator report, with
+ * its new facts and the case files he'd unlock for the team. The instructor
+ * rules on each fact, for the team's world or the whole case, then finishes
+ * the review, which binds later interviews and tells the team what stands.
  */
 export function ReviewPage() {
   const { courseId = '' } = useParams()
@@ -36,11 +46,15 @@ export function ReviewPage() {
   const tab: Tab = params.get('tab') === 'completed' ? 'completed' : 'open'
   const [reviews, setReviews] = useState<InterviewReview[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Reviews finished here whose new count isn't back from the server yet. */
+  const [finishing, setFinishing] = useState<string[]>([])
+  const [finishError, setFinishError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     setReviews(null)
     setError(null)
+    setFinishError(null)
     service
       .listReviews(courseId, tab)
       .then((list) => !cancelled && setReviews(list))
@@ -50,18 +64,26 @@ export function ReviewPage() {
     }
   }, [service, courseId, tab])
 
-  // The AI lists a conversation's facts in the background; check back until it's done.
-  const summarizing = reviews?.some((r) => r.status === 'summarizing') ?? false
+  // The AI lists a conversation's facts (or investigates, or writes a team's
+  // report) in the background; check back until it's done.
+  const working = reviews?.some((r) => r.status === 'summarizing' || r.status === 'finalizing') ?? false
+  const reloadHome = workspace?.reloadHome
   useEffect(() => {
-    if (!summarizing) return
+    if (!working) return
     const timer = setInterval(() => {
       service
-        .listReviews(courseId, 'open')
-        .then(setReviews)
+        .listReviews(courseId, tab)
+        .then((list) => {
+          setReviews((prev) => {
+            // A team's report that couldn't be written goes back to To review, so the waiting count changes.
+            if (prev?.some((r) => r.status === 'finalizing' && !list.some((n) => n.id === r.id))) void reloadHome?.()
+            return list
+          })
+        })
         .catch(() => {}) // keep the current list; the next tick tries again
     }, POLL_MS)
     return () => clearInterval(timer)
-  }, [service, courseId, summarizing])
+  }, [service, courseId, tab, working, reloadHome])
 
   function selectTab(next: Tab) {
     setParams((prev) => {
@@ -76,12 +98,33 @@ export function ReviewPage() {
     setReviews((prev) => prev?.map((r) => (r.id === updated.id ? updated : r)) ?? null)
   }
 
-  function completed(done: InterviewReview) {
-    setReviews((prev) => prev?.filter((r) => r.id !== done.id) ?? null)
-    workspace?.reloadHome()
+  /**
+   * Finishing moves the review to Completed at once, before the server answers
+   * (an investigation's team report is written there). If it fails, the review
+   * comes back to the list.
+   */
+  async function finish(review: InterviewReview) {
+    setFinishError(null)
+    setFinishing((prev) => [...prev, review.id])
+    setReviews((prev) => prev?.filter((r) => r.id !== review.id) ?? null)
+    try {
+      await service.completeReview(courseId, review.id)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong.'
+      setFinishError(`Could not finish the review for Team ${review.teamNumber}. ${message}`)
+      setReviews((prev) =>
+        prev && !prev.some((r) => r.id === review.id)
+          ? [...prev, review].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          : prev,
+      )
+    } finally {
+      await reloadHome?.()
+      setFinishing((prev) => prev.filter((id) => id !== review.id))
+    }
   }
 
-  const waiting = workspace?.home.reviewCount
+  // The count drops as soon as a review is finished, without waiting for the server.
+  const waiting = workspace ? Math.max(0, (workspace.home.reviewCount ?? 0) - finishing.length) : undefined
 
   return (
     <main className="ws-page review-page">
@@ -90,8 +133,9 @@ export function ReviewPage() {
           <span className="ws-eyebrow">Instructor</span>
           <h1 className="ws-title">Review</h1>
           <p className="ws-subtle">
-            When a team ends an interview, the new facts the AI witness added come here. Rule on each one
-            as the judge: it stands or it doesn&rsquo;t, for that team&rsquo;s case world or for every world.
+            When a team ends an interview, the new facts the AI witness added come here, and so does every
+            background investigator report before the team sees it. Rule on each fact as the judge: it stands or
+            it doesn&rsquo;t, for that team&rsquo;s case world or for every world.
           </p>
         </div>
       </div>
@@ -111,6 +155,11 @@ export function ReviewPage() {
         </button>
       </div>
 
+      {finishError && (
+        <p className="form-error" role="alert">
+          {finishError}
+        </p>
+      )}
       {error ? (
         <p className="form-error" role="alert">
           Could not load the reviews. {error}
@@ -122,7 +171,7 @@ export function ReviewPage() {
           <p className="case-empty-title">{tab === 'open' ? 'Nothing to review.' : 'No completed reviews yet.'}</p>
           <p className="ws-subtle">
             {tab === 'open'
-              ? 'Conversations show up here when a team ends an interview with an AI witness.'
+              ? 'Conversations show up here when a team ends an interview with an AI witness, and reports when the investigator answers a team.'
               : 'Reviews you finish are kept here with your rulings.'}
           </p>
         </div>
@@ -130,7 +179,7 @@ export function ReviewPage() {
         <ul className="review-list" aria-label={tab === 'open' ? 'To review' : 'Completed reviews'}>
           {reviews.map((r) => (
             <li key={r.id}>
-              <ReviewCard courseId={courseId} review={r} onChange={replace} onCompleted={completed} />
+              <ReviewCard courseId={courseId} review={r} onChange={replace} onFinish={finish} />
             </li>
           ))}
         </ul>
@@ -143,18 +192,24 @@ function ReviewCard({
   courseId,
   review: r,
   onChange,
-  onCompleted,
+  onFinish,
 }: {
   courseId: string
   review: InterviewReview
   onChange(updated: InterviewReview): void
-  onCompleted(done: InterviewReview): void
+  /** Finishes the review; the page moves it to Completed. */
+  onFinish(review: InterviewReview): void
 }) {
   const service = useCourseService()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const done = r.status === 'completed'
+  // Finished by the instructor, even while the team's report is still being written.
+  const done = r.status === 'completed' || r.status === 'finalizing'
+  const investigation = r.kind === 'investigation'
+  const documents = r.documents ?? []
   const ruled = r.facts.filter((f) => f.decision).length
+  const decided = documents.filter((d) => d.decision).length
+  const team = `Team ${r.teamNumber}`
 
   async function run(action: () => Promise<InterviewReview>, after?: (updated: InterviewReview) => void) {
     setError(null)
@@ -172,21 +227,39 @@ function ReviewCard({
   return (
     <article className="review-card" aria-labelledby={`review-${r.id}`}>
       <header className="review-card-header">
-        <WitnessAvatar src={r.witness.avatarUrl} size="lg" />
+        <WitnessAvatar src={investigation ? INVESTIGATOR_AVATAR_URL : r.witness?.avatarUrl} size="lg" />
         <div className="review-card-title">
           <span className="ws-eyebrow">{r.caseTitle}</span>
-          <h2 id={`review-${r.id}`}>Interview of {r.witness.name}</h2>
+          <h2 id={`review-${r.id}`}>{investigation ? `Investigation for ${team}` : `Interview of ${r.witness?.name}`}</h2>
           <p className="review-meta">
             World {worldLabel(r.worldNumber)} · {ROLE_LABEL[r.side]} · Team {r.teamNumber}
             {r.team.length > 0 && ` (${r.team.join(', ')})`}
           </p>
         </div>
         <small className="muted">
-          {done && r.completedAt ? `Completed ${dateTime(r.completedAt)}` : `Ended ${dateTime(r.createdAt)}`}
+          {done && r.completedAt
+            ? `Completed ${dateTime(r.completedAt)}`
+            : `${investigation ? 'Sent' : 'Ended'} ${dateTime(r.createdAt)}`}
         </small>
       </header>
 
-      {r.status === 'summarizing' && <p className="review-note" role="status">Listing the new facts in this conversation…</p>}
+      {investigation && r.assignment && (
+        <div className="review-assignment">
+          <span className="review-label">Assignment{r.askedBy ? ` from ${r.askedBy}` : ''}</span>
+          <p>{r.assignment}</p>
+        </div>
+      )}
+
+      {r.status === 'summarizing' && (
+        <p className="review-note" role="status">
+          {investigation ? `The investigator is working on ${team}'s assignment…` : 'Listing the new facts in this conversation…'}
+        </p>
+      )}
+      {r.status === 'finalizing' && (
+        <p className="review-note" role="status">
+          Writing {team}&rsquo;s report without what you turned down…
+        </p>
+      )}
 
       {r.status === 'failed' && (
         <div className="review-note">
@@ -202,9 +275,29 @@ function ReviewCard({
         </div>
       )}
 
+      {investigation && r.status === 'open' && r.reviewBlockMissing && (
+        <p className="review-warning" role="note">
+          The investigator didn&rsquo;t list his new facts or files. Read the report before finishing.
+        </p>
+      )}
+      {investigation && r.report && (
+        <details className="review-report" open={r.status === 'open'}>
+          <summary>The investigator&rsquo;s report</summary>
+          <p>{r.report}</p>
+        </details>
+      )}
+      {investigation && done && r.finalReport && (
+        <details className="review-report">
+          <summary>What {team} got</summary>
+          <p>{r.finalReport}</p>
+        </details>
+      )}
+
       {(r.status === 'open' || done) &&
         (r.facts.length === 0 ? (
-          <p className="review-note">No new facts: the witness kept to the record.</p>
+          <p className="review-note">
+            {investigation ? 'No new facts in this report.' : 'No new facts: the witness kept to the record.'}
+          </p>
         ) : (
           <ol className="review-facts" aria-label="New facts">
             {r.facts.map((f, i) => (
@@ -236,6 +329,61 @@ function ReviewCard({
           </ol>
         ))}
 
+      {investigation && (r.status === 'open' || done) && documents.length > 0 && (
+        <section className="review-documents" aria-label="Case files">
+          <h3>Case files</h3>
+          <p className="muted">
+            The investigator could get these for {team}. If you don&rsquo;t allow one, everything from it comes out of
+            the report.
+          </p>
+          <ol className="review-facts review-doc-list">
+            {documents.map((d) => (
+              <li key={d.materialId}>
+                <p className="review-fact-text">
+                  Allow {team} access to <em>{d.title}</em>
+                </p>
+                {done ? (
+                  <span className={`badge review-document-${d.decision}`}>
+                    {d.decision ? DOCUMENT_LABEL[d.decision] : 'No decision'}
+                  </span>
+                ) : (
+                  <div className="review-choices" role="radiogroup" aria-label={`Allow ${team} access to ${d.title}`}>
+                    {(['allow', 'deny'] as const).map((choice) => (
+                      <label key={choice} className={`review-choice review-choice-${choice}`}>
+                        <input
+                          type="radio"
+                          name={`document-${r.id}-${d.materialId}`}
+                          value={choice}
+                          checked={d.decision === choice}
+                          onChange={() => run(() => service.decideDocument(courseId, r.id, d.materialId, choice))}
+                          disabled={busy}
+                        />
+                        {DOCUMENT_LABEL[choice]}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {investigation && (r.recordsRequested?.length ?? 0) > 0 && (
+        <section className="review-records" aria-label="Records requested">
+          <h3>Records requested</h3>
+          <p className="muted">
+            The team asked for these, but they need legal process or aren&rsquo;t in the case file. Upload or share one
+            from the case file if you want them to have it.
+          </p>
+          <ul>
+            {r.recordsRequested!.map((record) => (
+              <li key={record}>{record}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -243,17 +391,18 @@ function ReviewCard({
       )}
 
       <footer className="review-card-footer">
-        <Transcript courseId={courseId} reviewId={r.id} />
+        {!investigation && <Transcript courseId={courseId} reviewId={r.id} />}
         {r.status === 'open' && (
           <div className="review-finish">
             <span className="muted">
               {ruled} of {r.facts.length} ruled
+              {documents.length > 0 && ` · ${decided} of ${documents.length} files decided`}
             </span>
             <button
               type="button"
               className="btn-primary"
-              onClick={() => run(() => service.completeReview(courseId, r.id), onCompleted)}
-              disabled={busy || ruled < r.facts.length}
+              onClick={() => onFinish(r)}
+              disabled={busy || ruled < r.facts.length || decided < documents.length}
             >
               Finish review
             </button>

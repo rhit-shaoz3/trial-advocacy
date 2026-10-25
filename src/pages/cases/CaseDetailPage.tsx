@@ -12,6 +12,7 @@ import { LaunchPanel } from './content/LaunchPanel'
 import { MaterialsSection } from './content/MaterialsSection'
 import { StudentViewSection } from './content/StudentViewSection'
 import { TasksSection } from './content/TasksSection'
+import { InvestigatorSection } from './content/InvestigatorSection'
 import { WitnessesSection } from './content/WitnessesSection'
 import { PhasePanel } from './PhasePanel'
 import { CaseSetupFlow } from './setup/CaseSetupFlow'
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'teams', label: 'Teams & worlds' },
   { id: 'materials', label: 'Case file' },
   { id: 'witnesses', label: 'Witnesses' },
+  { id: 'investigator', label: 'Investigator' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'student-view', label: 'Student view' },
 ] as const
@@ -249,6 +251,9 @@ export function CaseDetailPage() {
             )}
             {tab === 'witnesses' && (
               <WitnessesSection courseId={courseId} courseCase={courseCase} onCaseChange={setCourseCase} />
+            )}
+            {tab === 'investigator' && (
+              <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={setCourseCase} />
             )}
             {tab === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
             {tab === 'student-view' && (

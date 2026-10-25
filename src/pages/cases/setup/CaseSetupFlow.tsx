@@ -5,6 +5,7 @@ import { useCourseService } from '../../../courses/CourseServiceContext'
 import { SETUP_STEPS, type CourseCase, type SetupStep } from '../../../courses/types'
 import { MaterialsSection } from '../content/MaterialsSection'
 import { TasksSection } from '../content/TasksSection'
+import { InvestigatorSection } from '../content/InvestigatorSection'
 import { WitnessesSection } from '../content/WitnessesSection'
 import { cleanFacts, toRows } from '../factRows'
 import { ImportantFactsField } from '../ImportantFactsField'
@@ -18,6 +19,7 @@ const STEP_LABEL: Record<SetupStep, string> = {
   teams: 'Teams',
   worlds: 'Case worlds',
   witnesses: 'Witnesses',
+  investigator: 'Investigator',
   tasks: 'Tasks',
 }
 
@@ -30,6 +32,8 @@ const STEP_HINT: Record<SetupStep, string> = {
   teams: 'Put students into teams for this case. Drag them in, or make teams automatically.',
   worlds: 'Set teams against each other in case worlds: one team for the plaintiff, one for the defense.',
   witnesses: 'Add the people in the case. With a side and a deposition file, a witness becomes an AI witness teams can interview.',
+  investigator:
+    'Decide whether teams get a background investigator to email in the investigate phase. He starts as John Hastings; rename him and add instructions if you like. Skip for now to keep him as he is.',
   tasks: 'Assign the work each team does, with due dates.',
 }
 
@@ -188,6 +192,9 @@ export function CaseSetupFlow({
             )}
             {step === 'witnesses' && (
               <WitnessesSection courseId={courseId} courseCase={courseCase} onCaseChange={onCaseChange} />
+            )}
+            {step === 'investigator' && (
+              <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={onCaseChange} />
             )}
             {step === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
             <SetupFooter error={error}>

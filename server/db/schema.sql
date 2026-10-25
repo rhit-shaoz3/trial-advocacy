@@ -244,8 +244,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS case_materials_initial_idx ON case_materials (
 -- in, then new cases start unfinished.
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS setup_completed_at timestamptz DEFAULT now();
 ALTER TABLE cases ALTER COLUMN setup_completed_at DROP DEFAULT;
-ALTER TABLE cases ADD COLUMN IF NOT EXISTS setup_step text NOT NULL DEFAULT 'details'
-  CHECK (setup_step IN ('details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'tasks'));
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS setup_step text NOT NULL DEFAULT 'details';
+-- The setup gained the investigator step.
+ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_setup_step_check;
+ALTER TABLE cases ADD CONSTRAINT cases_setup_step_check
+  CHECK (setup_step IN ('details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'investigator', 'tasks'));
 
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS phase text NOT NULL DEFAULT 'subpoena'
   CHECK (phase IN ('subpoena', 'investigate', 'deposition'));
@@ -345,6 +348,61 @@ CREATE TABLE IF NOT EXISTS review_seen (
   seen_at   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (review_id, user_id)
 );
+
+-- Background investigator ----------------------------------------------------
+
+-- Whether the case has a background investigator (and so an investigate
+-- phase), what he's called, and the instructor's extra instructions for him.
+-- Cases made before the investigator keep him.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_enabled boolean NOT NULL DEFAULT true;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_name text NOT NULL DEFAULT 'John Hastings';
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_instructions text NOT NULL DEFAULT '';
+
+-- Reviews also cover a team's investigator requests (kind 'investigation'):
+-- the assignment the team emailed, the investigator's report, and the clean
+-- report the team gets once the instructor has ruled. 'finalizing' is the AI
+-- writing that clean report.
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'interview'
+  CHECK (kind IN ('interview', 'investigation'));
+ALTER TABLE interview_reviews ALTER COLUMN interview_id DROP NOT NULL;
+ALTER TABLE interview_reviews ALTER COLUMN witness_id DROP NOT NULL;
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS assignment text;
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS asked_by uuid REFERENCES users (id) ON DELETE SET NULL;
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS report text;
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS final_report text;
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS records_requested text[] NOT NULL DEFAULT '{}';
+-- The investigator left off his review block, so nothing was listed to rule on.
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS review_block_missing boolean NOT NULL DEFAULT false;
+ALTER TABLE interview_reviews DROP CONSTRAINT IF EXISTS interview_reviews_status_check;
+ALTER TABLE interview_reviews ADD CONSTRAINT interview_reviews_status_check
+  CHECK (status IN ('summarizing', 'failed', 'open', 'finalizing', 'completed'));
+
+-- A team has one investigator request going at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS interview_reviews_one_investigation_idx ON interview_reviews (team_id)
+  WHERE kind = 'investigation' AND status <> 'completed';
+
+-- Case files the investigator says the team could get, and the instructor's
+-- call on each: allow (the file is shared with the team) or deny.
+CREATE TABLE IF NOT EXISTS review_documents (
+  review_id   uuid NOT NULL REFERENCES interview_reviews (id) ON DELETE CASCADE,
+  material_id uuid NOT NULL REFERENCES case_materials (id) ON DELETE CASCADE,
+  position    integer NOT NULL DEFAULT 0,
+  decision    text CHECK (decision IN ('allow', 'deny')),
+  PRIMARY KEY (review_id, material_id)
+);
+
+-- Case files shared with particular case worlds or teams, on top of the
+-- file's audience (everyone, a side, or instructors only).
+CREATE TABLE IF NOT EXISTS material_shares (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  material_id uuid NOT NULL REFERENCES case_materials (id) ON DELETE CASCADE,
+  matchup_id  uuid REFERENCES matchups (id) ON DELETE CASCADE,
+  team_id     uuid REFERENCES teams (id) ON DELETE CASCADE,
+  CHECK ((matchup_id IS NULL) <> (team_id IS NULL))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS material_shares_matchup_idx ON material_shares (material_id, matchup_id) WHERE matchup_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS material_shares_team_idx ON material_shares (material_id, team_id) WHERE team_id IS NOT NULL;
 
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (

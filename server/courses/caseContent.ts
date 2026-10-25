@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg'
 import { pool } from '../db/pool.ts'
 import { storage } from '../storage/storage.ts'
 import type { Side } from './matchups.ts'
@@ -6,7 +7,8 @@ import type { Side } from './matchups.ts'
 // fact pattern: documents, images, audio, video), witnesses, tasks, and a note.
 // Each item has an `audience`: everyone in the case, or only the teams on one
 // side. Case files can also be for instructors only, such as a witness's
-// deposition that trains an AI witness.
+// deposition that trains an AI witness, and shared on top of that with
+// particular case worlds or teams (material_shares).
 
 export const AUDIENCES = ['all', 'plaintiff', 'defense'] as const
 export type Audience = (typeof AUDIENCES)[number]
@@ -19,6 +21,19 @@ export type TextStatus = 'pending' | 'ready' | 'failed' | 'none'
 
 /** The audiences someone on `side` can see; with no side yet, only shared items. */
 export const visibleTo = (side: Side | null): Audience[] => (side ? ['all', side] : ['all'])
+
+/** Who's looking at the case file: a team (with its side and world), or nobody in particular. */
+export interface MaterialViewer {
+  side: Side | null
+  teamId: string | null
+  matchupId: string | null
+}
+
+/** Worlds and teams a file is shared with, beyond its audience. */
+export interface MaterialShares {
+  matchupIds: string[]
+  teamIds: string[]
+}
 
 // Shapes sent to the client; match `CaseMaterial`, `Witness`, and `CaseTask` in src/courses/types.ts.
 export interface CaseMaterial {
@@ -33,6 +48,7 @@ export interface CaseMaterial {
   textError: string | null
   /** The file every team starts from; always shared with everyone. */
   initial: boolean
+  shares: MaterialShares
 }
 
 export interface Witness {
@@ -68,7 +84,23 @@ export interface CaseTask {
 
 const MATERIAL_COLUMNS = `id, audience, filename, description, content_type AS "contentType",
   size_bytes AS "sizeBytes", uploaded_at AS "uploadedAt", text_status AS "textStatus", text_error AS "textError",
-  initial`
+  initial,
+  json_build_object(
+    'matchupIds', coalesce((SELECT json_agg(s.matchup_id) FROM material_shares s
+                            WHERE s.material_id = case_materials.id AND s.matchup_id IS NOT NULL), '[]'),
+    'teamIds', coalesce((SELECT json_agg(s.team_id) FROM material_shares s
+                         WHERE s.material_id = case_materials.id AND s.team_id IS NOT NULL), '[]')) AS shares`
+
+/**
+ * SQL for "this viewer can see the file": its audience is theirs, or it's
+ * shared with their team or world. Uses parameters $n (audiences), $n+1
+ * (team) and $n+2 (matchup).
+ */
+const visibleToViewer = (n: number) => `(audience = ANY($${n}) OR EXISTS (
+  SELECT 1 FROM material_shares s
+  WHERE s.material_id = case_materials.id AND (s.team_id = $${n + 1}::uuid OR s.matchup_id = $${n + 2}::uuid)))`
+
+const viewerParams = (viewer: MaterialViewer) => [visibleTo(viewer.side), viewer.teamId, viewer.matchupId]
 
 /** The initial file first, then in upload order. */
 export async function listMaterials(caseId: string, audiences: readonly MaterialAudience[] = MATERIAL_AUDIENCES) {
@@ -79,6 +111,60 @@ export async function listMaterials(caseId: string, audiences: readonly Material
     [caseId, audiences],
   )
   return rows
+}
+
+/** The files a team (or, with no team, anyone on `side`) can see, in the same order. */
+export async function listMaterialsFor(caseId: string, viewer: MaterialViewer) {
+  const { rows } = await pool.query<CaseMaterial>(
+    `SELECT ${MATERIAL_COLUMNS} FROM case_materials
+     WHERE case_id = $1 AND ${visibleToViewer(2)}
+     ORDER BY initial DESC, uploaded_at, filename`,
+    [caseId, ...viewerParams(viewer)],
+  )
+  return rows
+}
+
+/** Replaces the worlds and teams a file is shared with. Returns null if there's no such file. */
+export async function setMaterialShares(caseId: string, id: string, shares: MaterialShares) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rowCount } = await client.query('SELECT 1 FROM case_materials WHERE case_id = $1 AND id = $2 FOR UPDATE', [
+      caseId,
+      id,
+    ])
+    if (!rowCount) {
+      await client.query('ROLLBACK')
+      return null
+    }
+    await client.query('DELETE FROM material_shares WHERE material_id = $1', [id])
+    await client.query(
+      `INSERT INTO material_shares (material_id, matchup_id)
+       SELECT $1, unnest($2::uuid[])`,
+      [id, shares.matchupIds],
+    )
+    await client.query(
+      `INSERT INTO material_shares (material_id, team_id)
+       SELECT $1, unnest($2::uuid[])`,
+      [id, shares.teamIds],
+    )
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+  return (await listMaterials(caseId)).find((m) => m.id === id) ?? null
+}
+
+/** Shares one file with a team (when the instructor lets the investigator unlock it). */
+export async function shareMaterialWithTeam(materialId: string, teamId: string, db: Pick<PoolClient, 'query'> = pool) {
+  await db.query(
+    `INSERT INTO material_shares (material_id, team_id) VALUES ($1, $2)
+     ON CONFLICT (material_id, team_id) WHERE team_id IS NOT NULL DO NOTHING`,
+    [materialId, teamId],
+  )
 }
 
 /** Records a file already in storage under `storageKey`; `id` is chosen by the caller (it's in the key). */
@@ -197,13 +283,9 @@ export async function listStorageKeys(scope: { caseId: string } | { courseId: st
 
 /**
  * Where a file is stored (or, for a file uploaded before object storage, its
- * contents); null unless the material exists and is visible to `audiences`.
+ * contents); null unless the material exists and, given a viewer, they can see it.
  */
-export async function findMaterialFile(
-  caseId: string,
-  id: string,
-  audiences: readonly MaterialAudience[] = MATERIAL_AUDIENCES,
-) {
+export async function findMaterialFile(caseId: string, id: string, viewer?: MaterialViewer) {
   const { rows } = await pool.query<{
     filename: string
     contentType: string
@@ -213,8 +295,8 @@ export async function findMaterialFile(
     `SELECT filename, content_type AS "contentType", storage_key AS "storageKey",
             CASE WHEN storage_key IS NULL THEN data END AS data
      FROM case_materials
-     WHERE case_id = $1 AND id = $2 AND audience = ANY($3)`,
-    [caseId, id, audiences],
+     WHERE case_id = $1 AND id = $2 ${viewer ? `AND ${visibleToViewer(3)}` : ''}`,
+    viewer ? [caseId, id, ...viewerParams(viewer)] : [caseId, id],
   )
   return rows[0] ?? null
 }

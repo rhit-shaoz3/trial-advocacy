@@ -4,6 +4,8 @@ import { isUuid, readString } from '../validation.ts'
 import {
   CASE_PHASES,
   CASE_STATUSES,
+  casePhases,
+  DEFAULT_INVESTIGATOR_NAME,
   completeSetup,
   createCase,
   deleteCase,
@@ -11,6 +13,7 @@ import {
   listCases,
   reachSetupStep,
   setCasePhase,
+  setInvestigator,
   SETUP_STEPS,
   updateCase,
   type CaseFields,
@@ -174,10 +177,33 @@ caseRouter.put('/witness-settings', async (req, res) => {
   res.json({ case: await findCase(req.course!.id, req.courseCase!.id) })
 })
 
-/** Moves every world in the case to `{ phase }`: subpoena, investigate, or deposition. */
+/**
+ * The case's background investigator: `{ enabled, name, instructions }`.
+ * Without him the case has no investigate phase, so he can't be turned off
+ * while the case is in it.
+ */
+caseRouter.put('/investigator', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  if (typeof body.enabled !== 'boolean') throw new HttpError(400, 'Say whether the case has a background investigator.')
+  const name = readString(req.body, 'name').trim() || DEFAULT_INVESTIGATOR_NAME
+  if (name.length > MAX_TITLE_LENGTH) throw new HttpError(400, `The name must be at most ${MAX_TITLE_LENGTH} characters.`)
+  const instructions = readString(req.body, 'instructions').trim()
+  if (instructions.length > MAX_NOTE_LENGTH) {
+    throw new HttpError(400, `The instructions must be at most ${MAX_NOTE_LENGTH} characters.`)
+  }
+  if (!body.enabled && req.courseCase!.phase === 'investigate') {
+    throw new HttpError(409, 'Move the case out of the investigate phase before turning off the investigator.')
+  }
+  res.json({ case: await setInvestigator(req.course!.id, req.courseCase!.id, { enabled: body.enabled, name, instructions }) })
+})
+
+/** Moves every world in the case to `{ phase }`: subpoena, investigate (with an investigator), or deposition. */
 caseRouter.put('/phase', async (req, res) => {
   const phase = readString(req.body, 'phase')
   if (!CASE_PHASES.includes(phase as CasePhase)) throw new HttpError(400, 'Choose a valid phase.')
+  if (!casePhases(req.courseCase!.investigator.enabled).includes(phase as CasePhase)) {
+    throw new HttpError(409, 'This case has no background investigator, so it has no investigate phase.')
+  }
   if (req.courseCase!.status === 'closed') {
     throw new HttpError(409, 'This case is closed, so its phase can no longer change.')
   }

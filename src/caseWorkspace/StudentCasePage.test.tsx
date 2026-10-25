@@ -120,4 +120,48 @@ describe('StudentCasePage: review results', () => {
     expect(screen.getByText('No new facts: the witness kept to the record.')).toBeInTheDocument()
     expect(service.markReviewsSeen).not.toHaveBeenCalled()
   })
+
+  it('shows the transcript with what rests on a denied fact struck out', async () => {
+    const getMyReviewTranscript = vi.fn().mockResolvedValue({
+      marked: true,
+      turns: [
+        { position: 0, question: 'Did you smell anything?', objection: null, answer: 'Smoke, near the booth.', askedBy: 'Ada Lawyer', struck: 'all', reasons: [{ kind: 'produced', fact: 'Torres smelled smoke.' }] },
+        { position: 1, question: 'Where was the smoke coming from?', objection: null, answer: 'I never said there was smoke.', askedBy: 'Bo Partner', struck: 'question', reasons: [{ kind: 'builtOn', fact: 'Torres smelled smoke.' }] },
+        { position: 2, question: 'Where were you at 3?', objection: null, answer: 'On break.', askedBy: 'Ada Lawyer', struck: null, reasons: [] },
+      ],
+    })
+    const { user } = renderPage({
+      getMyCaseWorkspace: vi.fn().mockResolvedValue(workspace),
+      listMyReviews: vi.fn().mockResolvedValue([{ ...result, seen: true }]),
+      getMyReviewTranscript,
+    })
+    await user.click(await screen.findByRole('tab', { name: 'Reviews' }))
+    await user.click(screen.getByText('Read the transcript'))
+
+    expect(getMyReviewTranscript).toHaveBeenCalledWith('c1', 'k1', result.id)
+    const smell = (await screen.findByText(/Did you smell anything\?/)).closest('p')!
+    expect(smell).toHaveClass('transcript-strike')
+    expect(screen.getByText(/Smoke, near the booth\./).closest('p')).toHaveClass('transcript-strike')
+    expect(screen.getByText(/Don’t rely on this answer\./)).toBeInTheDocument()
+    // Built on it: the question is struck, the answer that stands on its own isn't.
+    expect(screen.getByText(/Where was the smoke coming from\?/).closest('p')).toHaveClass('transcript-strike')
+    expect(screen.getByText(/I never said there was smoke\./).closest('p')).not.toHaveClass('transcript-strike')
+    expect(screen.getByText('Built on a denied fact:')).toBeInTheDocument()
+    expect(screen.getByText(/Where were you at 3\?/).closest('p')).not.toHaveClass('transcript-strike')
+  })
+
+  it('says when an older transcript has no marks', async () => {
+    const { user } = renderPage({
+      getMyCaseWorkspace: vi.fn().mockResolvedValue(workspace),
+      listMyReviews: vi.fn().mockResolvedValue([{ ...result, seen: true }]),
+      getMyReviewTranscript: vi.fn().mockResolvedValue({
+        marked: false,
+        turns: [{ position: 0, question: 'Hi?', objection: null, answer: 'Hello.', askedBy: null, struck: null, reasons: [] }],
+      }),
+    })
+    await user.click(await screen.findByRole('tab', { name: 'Reviews' }))
+    await user.click(screen.getByText('Read the transcript'))
+    expect(await screen.findByText(/reviewed before transcripts were marked/)).toBeInTheDocument()
+  })
 })
+

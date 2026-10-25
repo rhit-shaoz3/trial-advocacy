@@ -64,5 +64,5 @@ reviewsRouter.post('/:reviewId/retry', async (req, res) => {
 
 reviewsRouter.get('/:reviewId/transcript', async (req, res) => {
   const reviewId = readId(req.params.reviewId, 'Review not found.')
-  res.json({ turns: await reviewTranscript(req.course!.id, reviewId) })
+  res.json(await reviewTranscript(req.course!.id, reviewId))
 })

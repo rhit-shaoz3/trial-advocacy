@@ -8,6 +8,7 @@ import type { NewFactsInput } from '../witness/newFacts.ts'
 import type { WitnessProfile } from '../witness/prompt.ts'
 import { endExpiredInterviews } from '../witness/interviews.ts'
 import { reviewsSettled } from './reviews.ts'
+import type { NewFact } from '../witness/newFacts.ts'
 
 // A team ends an interview; the AI (faked) lists the new facts the witness
 // added; the instructor rules on each; the rulings bind later interviews in
@@ -30,7 +31,7 @@ const interview = () => `${myCaseUrl()}/witnesses/${witnessId}/interview`
 /** What the fake AI was asked, and what it answers next. */
 let profiles: WitnessProfile[]
 let factInputs: NewFactsInput[]
-let nextFacts: string[] | Error
+let nextFacts: (string | NewFact)[] | Error
 
 beforeEach(async () => {
   await resetDatabase()
@@ -78,7 +79,8 @@ beforeEach(async () => {
   ai.findNewFacts = async (input) => {
     factInputs.push(structuredClone(input))
     if (nextFacts instanceof Error) throw nextFacts
-    return nextFacts
+    // A bare sentence came from the first question, and nothing built on it.
+    return nextFacts.map((f) => (typeof f === 'string' ? { text: f, producedBy: [0], builtOn: [] } : f))
   }
 })
 
@@ -87,7 +89,7 @@ afterAll(async () => {
 })
 
 /** Ada's team asks one question and ends the interview; resolves once the facts are listed. */
-async function interviewAndEnd(agent = ada, facts: string[] | Error = ['Torres was on break at 3:00.']) {
+async function interviewAndEnd(agent = ada, facts: (string | NewFact)[] | Error = ['Torres was on break at 3:00.']) {
   nextFacts = facts
   await agent.post(`${interview()}/questions`).send({ question: 'Where were you at 3?' })
   const ended = await agent.post(`${interview()}/end`)
@@ -195,7 +197,9 @@ describe('ruling on the facts', () => {
     await interviewAndEnd()
     const [review] = await openReviews()
     const { turns } = (await prof.get(`${reviewsUrl()}/${review.id}/transcript`)).body
-    expect(turns).toEqual([{ question: 'Where were you at 3?', objection: null, answer: 'I was on break.', askedBy: 'Ada Lawyer' }])
+    expect(turns).toEqual([
+      { position: 0, question: 'Where were you at 3?', objection: null, answer: 'I was on break.', askedBy: 'Ada Lawyer', struck: null, reasons: [] },
+    ])
   })
 
   it("is only for the course's instructor", async () => {
@@ -332,6 +336,82 @@ describe('the one-hour limit', () => {
     expect(await openReviews()).toHaveLength(2)
     expect((await prof.get(`${test}?side=plaintiff`)).body.interview.turns).toHaveLength(1)
     expect(await endExpiredInterviews()).toBe(0)
+  })
+})
+
+describe("the team's transcript", () => {
+  const transcriptUrl = (reviewId: string) => `/api/courses/${course.id}/my-cases/${caseId}/reviews/${reviewId}/transcript`
+
+  /** Three questions; the second states a detail, the third and fourth build on it. */
+  async function linkedInterview() {
+    nextFacts = [
+      { text: 'Torres was on break at 3:00.', producedBy: [1], builtOn: [{ turn: 2, answer: true }, { turn: 3, answer: false }] },
+      { text: 'Torres smelled smoke.', producedBy: [0], builtOn: [{ turn: 2, answer: false }] },
+    ]
+    for (const question of ['Did you smell anything?', 'Where were you at 3?', 'Who covered your break?', 'Did you see the ride stop?']) {
+      await ada.post(`${interview()}/questions`).send({ question })
+    }
+    await ada.post(`${interview()}/end`)
+    await reviewsSettled()
+    const [review] = await openReviews()
+    return review
+  }
+
+  it('strikes out what rests on a denied fact, once the review is done', async () => {
+    const review = await linkedInterview()
+    expect((await ada.get(transcriptUrl(review.id))).status).toBe(404) // still open
+    await decide(review.id, review.facts[0].id, 'deny_world')
+    await decide(review.id, review.facts[1].id, 'accept_case')
+    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
+
+    const res = await ada.get(transcriptUrl(review.id))
+    expect(res.status).toBe(200)
+    expect(res.body.marked).toBe(true)
+    const denied = { fact: 'Torres was on break at 3:00.' }
+    expect(res.body.turns.map((t: { struck: string | null; reasons: unknown[] }) => [t.struck, t.reasons])).toEqual([
+      // Where the accepted fact came from stands.
+      [null, []],
+      // Stated the denied fact: question and answer.
+      ['all', [{ kind: 'produced', ...denied }]],
+      // Built on it, and the answer relies on it too.
+      ['all', [{ kind: 'builtOn', ...denied }]],
+      // Built on it, but the answer stands on its own.
+      ['question', [{ kind: 'builtOn', ...denied }]],
+    ])
+  })
+
+  it('keeps the strongest mark and every reason when two denied facts meet', async () => {
+    const review = await linkedInterview()
+    await decide(review.id, review.facts[0].id, 'deny_case')
+    await decide(review.id, review.facts[1].id, 'deny_world')
+    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
+
+    const { turns } = (await ada.get(transcriptUrl(review.id))).body
+    expect(turns[2].struck).toBe('all')
+    expect(turns[2].reasons.map((r: { fact: string }) => r.fact)).toEqual(['Torres was on break at 3:00.', 'Torres smelled smoke.'])
+  })
+
+  it('is for any of the team, and only for its own completed interviews', async () => {
+    const review = await linkedInterview()
+    await decide(review.id, review.facts[0].id, 'accept_world')
+    await decide(review.id, review.facts[1].id, 'accept_world')
+    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
+
+    expect((await bo.get(transcriptUrl(review.id))).status).toBe(200)
+    expect((await eve.get(transcriptUrl(review.id))).status).toBe(404)
+    expect((await ada.get(transcriptUrl('not-a-review'))).status).toBe(404)
+  })
+
+  it('says when a review is from before transcripts were marked', async () => {
+    const review = await linkedInterview()
+    await pool.query('UPDATE review_facts SET links = NULL WHERE review_id = $1', [review.id])
+    await decide(review.id, review.facts[0].id, 'deny_world')
+    await decide(review.id, review.facts[1].id, 'deny_world')
+    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
+
+    const res = (await ada.get(transcriptUrl(review.id))).body
+    expect(res.marked).toBe(false)
+    expect(res.turns.every((t: { struck: unknown }) => t.struck === null)).toBe(true)
   })
 })
 

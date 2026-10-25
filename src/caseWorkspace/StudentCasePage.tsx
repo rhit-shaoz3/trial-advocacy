@@ -134,6 +134,7 @@ export function StudentCasePage() {
             instructorAvatarUrl={workspace?.home.course.instructorAvatarUrl}
             reviews={reviews ?? []}
             onOpenReviews={openReviews}
+            loadTranscript={(reviewId) => service.getMyReviewTranscript(courseId, caseId, reviewId)}
             investigations={investigations ?? []}
             onSendInvestigation={sendInvestigation}
             onOpenInvestigator={openInvestigator}

@@ -158,6 +158,28 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
     ])
   })
 
+  it('opens straight to a response when a notice links to it', () => {
+    const answered = {
+      ...set,
+      id: 'r7',
+      kind: 'rfas' as const,
+      direction: 'sent' as const,
+      respondedAt: '2026-10-31T12:00:00Z',
+      respondedBy: 'Dee Fence',
+      fromTeam: { id: 't1', number: 1, side: 'plaintiff' as const },
+      toTeam: { id: 't2', number: 2, side: 'defense' as const },
+      items: [
+        { position: 1, text: 'Admit the lift chain jerked.', weight: 1, answer: null, objection: false, admission: 'agree' as const, agreePart: null, disagreePart: null },
+      ],
+    }
+    renderPanel({ ...open, rfas: part({ requests: [answered] }) }, { focus: { kind: 'rfas', id: 'r7' } })
+
+    // The set itself, with its answer, not the list of sets.
+    expect(screen.getByText('Admit the lift chain jerked.')).toBeInTheDocument()
+    expect(screen.getByText(/responded Oct 31/)).toBeInTheDocument()
+    expect(screen.queryByText(/You have/)).not.toBeInTheDocument()
+  })
+
   it('teaches the rule and says how the case differs', async () => {
     const user = renderPanel(open)
     await user.click(screen.getByRole('button', { name: /^Interrogatories/ }))

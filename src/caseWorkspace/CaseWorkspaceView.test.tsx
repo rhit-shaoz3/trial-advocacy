@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
-import type { CaseWorkspace, Investigation } from '../courses/types'
+import type { CaseWorkspace, Investigation, StudentExchange } from '../courses/types'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
 
 const NOW = new Date('2026-10-15T09:00:00')
@@ -413,3 +413,42 @@ describe('the background investigator', () => {
   })
 })
 
+describe('CaseWorkspaceView: information exchange', () => {
+  const answered = {
+    id: 'r7',
+    kind: 'rfas' as const,
+    direction: 'sent' as const,
+    worldNumber: 1,
+    sentBy: 'Cy Counsel',
+    sentAt: '2026-10-28T12:00:00Z',
+    dueAt: '2026-11-11T12:00:00Z',
+    respondedAt: '2026-10-31T12:00:00Z',
+    respondedBy: 'Dee Fence',
+    seen: false,
+    fromTeam: { id: 't1', number: 1, side: 'plaintiff' as const },
+    toTeam: { id: 't2', number: 2, side: 'defense' as const },
+    items: [
+      { position: 1, text: 'Admit the lift chain jerked.', weight: 1, answer: null, objection: false, admission: 'agree' as const, agreePart: null, disagreePart: null },
+    ],
+  }
+  const exchange: StudentExchange = {
+    phase: 'information_exchange',
+    requestsOpen: true,
+    side: 'plaintiff',
+    teamNumber: 1,
+    opponentNumber: 2,
+    firm: { firm: 'Hale & Whitford LLP', partner: 'Margaret Hale' },
+    disclosures: null,
+    interrogatories: { limit: 15, days: 30, used: 0, remaining: 15, requests: [] },
+    rfas: { limit: 3, days: 14, used: 1, remaining: 2, requests: [answered] },
+  }
+
+  it('opens the new response itself from the notice', async () => {
+    const { user } = renderView({ exchange, onOpenExchange: vi.fn() })
+
+    await user.click(screen.getByRole('button', { name: 'See responses' }))
+    const panel = screen.getByRole('tabpanel')
+    expect(panel).toHaveTextContent('Admit the lift chain jerked.')
+    expect(panel).not.toHaveTextContent(/You have \d/)
+  })
+})

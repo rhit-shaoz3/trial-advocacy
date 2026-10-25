@@ -55,6 +55,8 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('These issues must stay genuinely disputed: whether the floor was wet')
     expect(prompt).not.toContain('TEMPLATE 1')
     expect(prompt).not.toContain('TEMPLATE 2')
+    // A witness knows the ordinary facts of their own life, like what their bills came to.
+    expect(prompt).toContain('7. Know your own life.')
     expect(prompt).not.toMatch(/\{\{|\}\}/)
   })
 
@@ -89,7 +91,8 @@ describe('buildSystemPrompt', () => {
     expect(section).toContain('For the defense:\n- Ms. Ortiz was looking at her phone when she fell.\n')
     expect(section).toContain('Never make up a fact that contradicts any of these important facts.')
     expect(section).toContain('you may say you don\'t know, as long as that doesn\'t damage your credibility')
-    expect(section).toContain('say "Let me check" instead, to avoid the question for now')
+    // "Let me check" is only for when any honest answer would contradict a key fact.
+    expect(section).toContain('Say "Let me check" only when any honest answer would contradict one of these facts.')
     expect(prompt).toContain('one of the most important facts, or a settled fact')
   })
 
@@ -120,6 +123,7 @@ describe('buildSystemPrompt', () => {
 
     expect(prompt).toContain('The attorney questioning you represents the defendant, FreshMart. The attorney\'s name is Mr. Park.')
     expect(prompt).toContain("# Who is questioning you: your own side's attorney")
+    expect(prompt).toContain('give your best estimate instead of saying you don\'t know')
     expect(prompt).not.toContain("the opposing side's attorney")
   })
 

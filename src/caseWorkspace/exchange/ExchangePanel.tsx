@@ -20,6 +20,7 @@ export function ExchangePanel({
   onSubmitDisclosures,
   onSend,
   onRespond,
+  focus,
   now = new Date(),
 }: {
   exchange: StudentExchange
@@ -27,6 +28,8 @@ export function ExchangePanel({
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
   onSend?(kind: ExchangeKind, items: string[]): Promise<void>
   onRespond?(requestId: string, responses: ItemResponse[]): Promise<void>
+  /** A request to open on, as when a notice links to its response. */
+  focus?: { kind: ExchangeKind; id: string } | null
   now?: Date
 }) {
   const parts: { id: Section; label: string; icon: typeof Users; locked: boolean; badge: string | null }[] = []
@@ -57,7 +60,10 @@ export function ExchangePanel({
   }
   const firstToDo = parts.find((p) => p.badge?.includes('to respond') || p.badge === 'To do')
   const [section, setSection] = useState<Section | undefined>(
-    firstToDo?.id ?? parts.find((p) => !p.locked)?.id ?? parts[0]?.id,
+    (focus && parts.some((p) => p.id === focus.kind) ? focus.kind : undefined) ??
+      firstToDo?.id ??
+      parts.find((p) => !p.locked)?.id ??
+      parts[0]?.id,
   )
   const [teach, setTeach] = useState<TeachTopic | null>(null)
 
@@ -114,6 +120,7 @@ export function ExchangePanel({
             onSend={onSend && ((items) => onSend(section, items))}
             onRespond={onRespond}
             onTeach={() => setTeach(section)}
+            initialRequestId={focus?.kind === section ? focus.id : undefined}
             now={now}
           />
         )}

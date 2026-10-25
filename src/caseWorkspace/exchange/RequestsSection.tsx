@@ -74,6 +74,7 @@ export function RequestsSection({
   onSend,
   onRespond,
   onTeach,
+  initialRequestId,
   now = new Date(),
 }: {
   kind: ExchangeKind
@@ -86,9 +87,15 @@ export function RequestsSection({
   onSend?(items: string[]): Promise<void>
   onRespond?(requestId: string, responses: ItemResponse[]): Promise<void>
   onTeach(): void
+  /** A request to open on (read), as when a notice links to its response. */
+  initialRequestId?: string
   now?: Date
 }) {
-  const [view, setView] = useState<View>({ mode: 'hub' })
+  const [view, setView] = useState<View>(
+    initialRequestId && part.requests.some((r) => r.id === initialRequestId)
+      ? { mode: 'read', id: initialRequestId }
+      : { mode: 'hub' },
+  )
   const request = view.mode === 'respond' || view.mode === 'read' ? part.requests.find((r) => r.id === view.id) : undefined
   const copy = COPY[kind]
   const back = () => setView({ mode: 'hub' })

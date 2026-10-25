@@ -127,6 +127,11 @@ export function CaseWorkspaceView({
   now?: Date
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
+  /** The response "See responses" opens straight to; cleared on leaving the tab. */
+  const [exchangeFocus, setExchangeFocus] = useState<{ kind: ExchangeKind; id: string } | null>(null)
+  useEffect(() => {
+    if (tab !== 'exchange') setExchangeFocus(null)
+  }, [tab])
   const unseen = reviews?.filter((r) => !r.seen).length ?? 0
   const reports = investigations?.filter((i) => i.status === 'completed') ?? []
   const unseenReports = reports.filter((r) => !r.seen).length
@@ -189,7 +194,16 @@ export function CaseWorkspaceView({
         <NewReportBanner name={investigator.name} onOpen={() => setTab('investigator')} />
       )}
       {newResponses.length > 0 && tab !== 'exchange' && (
-        <NewResponsesBanner from={newResponses[0].toTeam.number} kinds={newResponses.map((r) => r.kind)} onOpen={() => setTab('exchange')} />
+        <NewResponsesBanner
+          from={newResponses[0].toTeam.number}
+          kinds={newResponses.map((r) => r.kind)}
+          onOpen={() => {
+            // Open the newest response itself, not just the tab.
+            const newest = [...newResponses].sort((a, b) => (b.respondedAt ?? '').localeCompare(a.respondedAt ?? ''))[0]
+            setExchangeFocus({ kind: newest.kind, id: newest.id })
+            setTab('exchange')
+          }}
+        />
       )}
 
       <div className="cw-tabs" role="tablist" aria-label="Case sections">
@@ -450,6 +464,7 @@ export function CaseWorkspaceView({
             onSubmitDisclosures={c.status === 'active' ? onSubmitDisclosures : undefined}
             onSend={c.status === 'active' ? onSendRequest : undefined}
             onRespond={c.status === 'active' ? onRespondToRequest : undefined}
+            focus={exchangeFocus}
             now={now}
           />
         )}

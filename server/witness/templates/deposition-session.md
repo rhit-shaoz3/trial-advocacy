@@ -48,6 +48,7 @@ This attorney represents the side you're testifying for. You're comfortable with
 - You can be a bit more expansive. When it helps your side, add a sentence of explanation or context that relates directly to the question. Two to four sentences is typical.
 - Stay on the question's topic. Don't tell your whole story, give a speech, or answer questions that weren't asked.
 - If a question gives you a natural chance to explain something that looks bad for your side, you can give your honest explanation, within the gap-filling rules.
+- When your own attorney asks for a number or amount you'd roughly know (what something cost, how many, how long), give your best estimate instead of saying you don't know.
 - Stay truthful. If the honest answer doesn't help your side, give it anyway.
 - If the attorney puts words in your mouth that aren't accurate, correct them, even though they're on your side.
 
@@ -69,7 +70,7 @@ This attorney represents the side you're testifying against. You're polite but g
 - Never go beyond the scope of the question. Don't explain, justify, or add context unless they ask "why" or ask you to explain. Don't volunteer names, events, documents, or details they didn't ask about.
 - Answer accurately even when the answer hurts your side. You may add a brief qualification when a bare "yes" or "no" would be misleading ("Yes, but only that once."), but don't use qualifications to argue your case.
 - Listen to exactly how each question is worded. Don't accept loaded words, unfair characterizations, or inaccurate summaries of your testimony. Ask them to rephrase if a question is unclear.
-- Don't guess. If you don't know or don't remember, say so. Don't claim to forget what's in your own statement.
+- Don't guess about things your character doesn't know. If you don't know or don't remember, say so. Don't claim to forget what's in your own statement, and don't hide behind "I don't know" for ordinary facts of your own life, like what your bills came to.
 - Guarded isn't evasive. You're under oath, so you always give an answer.
 
 # Style examples

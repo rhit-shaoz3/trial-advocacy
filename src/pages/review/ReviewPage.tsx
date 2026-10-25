@@ -47,11 +47,15 @@ export function ReviewPage() {
   const tab: Tab = params.get('tab') === 'completed' ? 'completed' : 'open'
   const [reviews, setReviews] = useState<InterviewReview[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Reviews finished here whose new count isn't back from the server yet. */
+  const [finishing, setFinishing] = useState<string[]>([])
+  const [finishError, setFinishError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     setReviews(null)
     setError(null)
+    setFinishError(null)
     service
       .listReviews(courseId, tab)
       .then((list) => !cancelled && setReviews(list))
@@ -69,18 +73,18 @@ export function ReviewPage() {
     if (!working) return
     const timer = setInterval(() => {
       service
-        .listReviews(courseId, 'open')
+        .listReviews(courseId, tab)
         .then((list) => {
           setReviews((prev) => {
-            // A report that came back to its team leaves the list, so the waiting count changes.
-            if (prev?.some((r) => r.status === 'finalizing' && !list.some((n) => n.id === r.id))) reloadHome?.()
+            // A team's report that couldn't be written goes back to To review, so the waiting count changes.
+            if (prev?.some((r) => r.status === 'finalizing' && !list.some((n) => n.id === r.id))) void reloadHome?.()
             return list
           })
         })
         .catch(() => {}) // keep the current list; the next tick tries again
     }, POLL_MS)
     return () => clearInterval(timer)
-  }, [service, courseId, working, reloadHome])
+  }, [service, courseId, tab, working, reloadHome])
 
   function selectTab(next: Tab) {
     setParams((prev) => {
@@ -95,14 +99,33 @@ export function ReviewPage() {
     setReviews((prev) => prev?.map((r) => (r.id === updated.id ? updated : r)) ?? null)
   }
 
-  function completed(done: InterviewReview) {
-    // An investigation stays until the team's report is written.
-    if (done.status === 'finalizing') replace(done)
-    else setReviews((prev) => prev?.filter((r) => r.id !== done.id) ?? null)
-    workspace?.reloadHome()
+  /**
+   * Finishing moves the review to Completed at once, before the server answers
+   * (an investigation's team report is written there). If it fails, the review
+   * comes back to the list.
+   */
+  async function finish(review: InterviewReview) {
+    setFinishError(null)
+    setFinishing((prev) => [...prev, review.id])
+    setReviews((prev) => prev?.filter((r) => r.id !== review.id) ?? null)
+    try {
+      await service.completeReview(courseId, review.id)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong.'
+      setFinishError(`Could not finish the review for Team ${review.teamNumber}. ${message}`)
+      setReviews((prev) =>
+        prev && !prev.some((r) => r.id === review.id)
+          ? [...prev, review].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          : prev,
+      )
+    } finally {
+      await reloadHome?.()
+      setFinishing((prev) => prev.filter((id) => id !== review.id))
+    }
   }
 
-  const waiting = workspace?.home.reviewCount
+  // The count drops as soon as a review is finished, without waiting for the server.
+  const waiting = workspace ? Math.max(0, (workspace.home.reviewCount ?? 0) - finishing.length) : undefined
 
   return (
     <main className="ws-page review-page">
@@ -133,6 +156,11 @@ export function ReviewPage() {
         </button>
       </div>
 
+      {finishError && (
+        <p className="form-error" role="alert">
+          {finishError}
+        </p>
+      )}
       {error ? (
         <p className="form-error" role="alert">
           Could not load the reviews. {error}
@@ -152,7 +180,7 @@ export function ReviewPage() {
         <ul className="review-list" aria-label={tab === 'open' ? 'To review' : 'Completed reviews'}>
           {reviews.map((r) => (
             <li key={r.id}>
-              <ReviewCard courseId={courseId} review={r} onChange={replace} onCompleted={completed} />
+              <ReviewCard courseId={courseId} review={r} onChange={replace} onFinish={finish} />
             </li>
           ))}
         </ul>
@@ -165,17 +193,19 @@ function ReviewCard({
   courseId,
   review: r,
   onChange,
-  onCompleted,
+  onFinish,
 }: {
   courseId: string
   review: InterviewReview
   onChange(updated: InterviewReview): void
-  onCompleted(done: InterviewReview): void
+  /** Finishes the review; the page moves it to Completed. */
+  onFinish(review: InterviewReview): void
 }) {
   const service = useCourseService()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const done = r.status === 'completed'
+  // Finished by the instructor, even while the team's report is still being written.
+  const done = r.status === 'completed' || r.status === 'finalizing'
   const investigation = r.kind === 'investigation'
   const documents = r.documents ?? []
   const ruled = r.facts.filter((f) => f.decision).length
@@ -246,6 +276,11 @@ function ReviewCard({
         </div>
       )}
 
+      {investigation && r.status === 'open' && r.reviewBlockMissing && (
+        <p className="review-warning" role="note">
+          The investigator didn&rsquo;t list his new facts or files. Read the report before finishing.
+        </p>
+      )}
       {investigation && r.report && (
         <details className="review-report" open={r.status === 'open'}>
           <summary>The investigator&rsquo;s report</summary>
@@ -367,7 +402,7 @@ function ReviewCard({
             <button
               type="button"
               className="btn-primary"
-              onClick={() => run(() => service.completeReview(courseId, r.id), onCompleted)}
+              onClick={() => onFinish(r)}
               disabled={busy || ruled < r.facts.length || decided < documents.length}
             >
               Finish review

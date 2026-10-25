@@ -4,6 +4,7 @@ import { finishPendingTranscriptions } from '../courses/materialText.ts'
 import type { Side } from '../courses/matchups.ts'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
+import { stripTags } from '../investigator/finalize.ts'
 import type { SettledFacts } from '../witness/prompt.ts'
 
 // When a team ends an interview, the AI lists the new facts the witness added
@@ -55,6 +56,8 @@ export interface InterviewReview {
   finalReport: string | null
   /** Records the team asked for that need legal process, for the instructor's information. */
   recordsRequested: string[]
+  /** The investigator left off his review block, so his new facts and files weren't listed. */
+  reviewBlockMissing: boolean
   /** Case files the investigator would unlock for the team, and the instructor's call on each. */
   documents: { materialId: string; title: string; decision: DocumentDecision | null }[]
 }
@@ -231,6 +234,7 @@ const REVIEW_SELECT = `
                    FROM review_facts f WHERE f.review_id = r.id), '[]') AS facts,
          r.assignment, (SELECT u.name FROM users u WHERE u.id = r.asked_by) AS "askedBy",
          r.report, r.final_report AS "finalReport", r.records_requested AS "recordsRequested",
+         r.review_block_missing AS "reviewBlockMissing",
          coalesce((SELECT json_agg(json_build_object('materialId', d.material_id,
                                                      'title', coalesce(nullif(cm.description, ''), cm.filename),
                                                      'decision', d.decision) ORDER BY d.position)
@@ -240,15 +244,26 @@ const REVIEW_SELECT = `
   JOIN cases c ON c.id = r.case_id
   LEFT JOIN case_witnesses w ON w.id = r.witness_id`
 
-/** The course's reviews still to do (newest first), or the completed ones (most recently completed first). */
+/**
+ * The investigator's report as the instructor reads it: without the source
+ * tags naming files (the files are listed to allow or not). The tagged
+ * original stays stored, for writing the team's report.
+ */
+const forInstructor = (r: InterviewReview): InterviewReview => (r.report ? { ...r, report: stripTags(r.report) } : r)
+
+/**
+ * The course's reviews still to do (newest first), or the completed ones (most
+ * recently completed first). A review the instructor has finished counts as
+ * completed while the team's report is still being written.
+ */
 export async function listReviews(courseId: string, which: 'open' | 'completed') {
   const { rows } = await pool.query<InterviewReview>(
     `${REVIEW_SELECT}
-     WHERE c.course_id = $1 AND (r.status = 'completed') = $2
-     ORDER BY ${which === 'completed' ? 'r.completed_at DESC' : 'r.created_at DESC'}`,
+     WHERE c.course_id = $1 AND (r.status IN ('completed', 'finalizing')) = $2
+     ORDER BY ${which === 'completed' ? 'r.completed_at DESC NULLS FIRST' : 'r.created_at DESC'}`,
     [courseId, which === 'completed'],
   )
-  return rows
+  return rows.map(forInstructor)
 }
 
 async function findReview(courseId: string, reviewId: string) {
@@ -257,7 +272,7 @@ async function findReview(courseId: string, reviewId: string) {
     reviewId,
   ])
   if (!rows[0]) throw new HttpError(404, 'Review not found.')
-  return rows[0]
+  return forInstructor(rows[0])
 }
 
 export async function getReview(courseId: string, reviewId: string) {
@@ -403,7 +418,7 @@ export async function findTeamInterviewReview(caseId: string, teamId: string, re
 export async function openReviewCount(courseId: string) {
   const { rows } = await pool.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM interview_reviews r JOIN cases c ON c.id = r.case_id
-     WHERE c.course_id = $1 AND r.status <> 'completed'`,
+     WHERE c.course_id = $1 AND r.status NOT IN ('completed', 'finalizing')`,
     [courseId],
   )
   return rows[0].n
@@ -449,4 +464,21 @@ export async function unseenReviewCount(courseId: string, userId: string) {
     [courseId, userId],
   )
   return rows[0].n
+}
+
+/** Where the student's newest unread result is: its case, and whether it's an interview's rulings or an investigator report. */
+export async function newestUnseenResult(courseId: string, userId: string) {
+  const { rows } = await pool.query<{ caseId: string; kind: 'interview' | 'investigation' }>(
+    `SELECT r.case_id AS "caseId", r.kind
+     FROM interview_reviews r
+     JOIN cases c ON c.id = r.case_id
+     JOIN team_members m ON m.team_id = r.team_id
+     JOIN enrollments e ON e.course_id = m.course_id AND e.email = m.email
+     WHERE c.course_id = $1 AND e.user_id = $2 AND r.status = 'completed'
+       AND NOT EXISTS (SELECT 1 FROM review_seen s WHERE s.review_id = r.id AND s.user_id = $2)
+     ORDER BY r.completed_at DESC
+     LIMIT 1`,
+    [courseId, userId],
+  )
+  return rows[0] ?? null
 }

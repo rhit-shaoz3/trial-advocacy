@@ -6,7 +6,8 @@ export interface WorkspaceContext {
   /** Appended to in-workspace links so `?sample` survives navigation. */
   search: string
   /** Re-fetches the course home in place, e.g. after the instructor renames the course. */
-  reloadHome(): void
+  /** Fetches the course home again; resolves once it's on screen (never rejects). */
+  reloadHome(): Promise<void>
 }
 
 /** The course data loaded by the surrounding WorkspaceLayout. */

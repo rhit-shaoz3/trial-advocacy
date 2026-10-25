@@ -431,6 +431,13 @@ describe('reviews on the dashboard', () => {
     expect(within(nav).getByRole('link', { name: 'Resource library' })).toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: /Review/ })).not.toBeInTheDocument()
   })
+
+  it("links a student's notice straight to a new investigator report", async () => {
+    const home = { ...emptyHome, newReviewResults: 1, newResultsAt: { caseId: 'k1', kind: 'investigation' as const } }
+    renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(home) }))
+
+    expect(await screen.findByRole('link', { name: 'Read report' })).toHaveAttribute('href', '/courses/c1/cases/k1?tab=investigator')
+  })
 })
 
 describe("the instructor's own dashboard", () => {

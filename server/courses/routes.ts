@@ -16,7 +16,16 @@ import {
   type TaughtCourse,
 } from './courses.ts'
 import { askQuestion, endInterview, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
-import { findTeamInterviewReview, findTeamWorld, markedTranscript, markReviewsSeen, openReviewCount, teamReviewResults, unseenReviewCount } from '../reviews/reviews.ts'
+import {
+  findTeamInterviewReview,
+  findTeamWorld,
+  markedTranscript,
+  markReviewsSeen,
+  newestUnseenResult,
+  openReviewCount,
+  teamReviewResults,
+  unseenReviewCount,
+} from '../reviews/reviews.ts'
 import { reviewsRouter } from '../reviews/reviewRoutes.ts'
 import { findMaterialFile, findWitness, listStorageKeys, removeStoredFiles, setTaskDone } from './caseContent.ts'
 import { sendMaterialFile } from './caseContentRoutes.ts'
@@ -150,6 +159,7 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
       : {
           ...(await studentHome(course.id, req.user!.id)),
           newReviewResults: await unseenReviewCount(course.id, req.user!.id),
+          newResultsAt: await newestUnseenResult(course.id, req.user!.id),
         }),
   })
 })

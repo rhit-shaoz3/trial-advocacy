@@ -57,6 +57,17 @@ describe('the investigator prompt', () => {
     expect(prompt).not.toContain('This is a criminal case')
     expect(prompt).not.toContain('{{')
     expect(prompt).not.toContain('Notes from the instructor')
+    // He may watch named witnesses in public, within the limits, and tries to help.
+    expect(prompt).toContain('This includes named witnesses and parties')
+    expect(prompt).toContain('witness tampering (18 U.S.C. § 1512(d)')
+    expect(prompt).toContain('# Be as helpful as you lawfully can')
+    // He watches when asked, doesn't stick to an old refusal, and never corrects himself on the page.
+    expect(prompt).toContain("When your team asks you to watch someone, do it and report what you saw.")
+    expect(prompt).toContain("Don't repeat a refusal just because you made it before")
+    expect(prompt).toContain('Your report must never contain corrections, withdrawals, second thoughts')
+    expect(prompt).toContain('report it as done on the next such day')
+    // Records that need legal process get their own list in the review block.
+    expect(prompt).toContain('RECORDS REQUESTED\n- One record per line')
   })
 
   it("adds the instructor's own instructions at the end", () => {
@@ -82,7 +93,8 @@ describe('an investigation request', () => {
     expect(request.messages).toEqual([
       { role: 'user', content: 'Find witnesses.' },
       { role: 'assistant', content: 'I found Ann Lee.' },
-      { role: 'user', content: 'Talk to Ann Lee again.' },
+      // The new assignment carries a reminder to end with the review block.
+      { role: 'user', content: 'Assignment from Team 3:\n\nTalk to Ann Lee again.\n\nReport back, ending with your <review> block.' },
     ])
     const system = request.system as Anthropic.Beta.Messages.BetaTextBlockParam[]
     expect(system[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })
@@ -99,18 +111,26 @@ describe('reading a report', () => {
       'A traffic camera is mounted on the northeast corner of 5th and Main.',
       'The camera points south, away from the crosswalk.',
     ])
-    expect(parsed.accessTitles).toEqual(['Maintenance log', "A report that isn't in the file"])
+    // Files cited in the report itself count too.
+    expect(parsed.accessTitles).toEqual(['Maintenance log', "A report that isn't in the file", 'Fact pattern'])
+    expect(parsed.hasReviewBlock).toBe(true)
     expect(parsed.records).toEqual(["Northstar's dispatch audio, by subpoena."])
   })
 
   it('treats "none" as nothing, and a report without a block as all report', () => {
     expect(parseReport('Done.\n<review>\nNEW FACTS\nnone\nNEW ACCESS\nnone\nRECORDS REQUESTED\nnone\n</review>')).toEqual({
       body: 'Done.',
+      hasReviewBlock: true,
       facts: [],
       accessTitles: [],
       records: [],
     })
-    expect(parseReport('Just a report.')).toEqual({ body: 'Just a report.', facts: [], accessTitles: [], records: [] })
+    expect(parseReport('Just a report.')).toEqual({ body: 'Just a report.', hasReviewBlock: false, facts: [], accessTitles: [], records: [] })
+  })
+
+  it('reads headings in bold or with a colon', () => {
+    const parsed = parseReport('Report.\n<review>\n**NEW FACTS**\n- A fact.\nNEW ACCESS:\n- A file\n**RECORDS REQUESTED:**\n- A record\n</review>')
+    expect(parsed).toMatchObject({ facts: ['A fact.'], accessTitles: ['A file'], records: ['A record'] })
   })
 
   it('matches the files he names to the case file, ignoring case and quotes', () => {
@@ -132,6 +152,8 @@ describe("the team's clean report", () => {
     expect(report).toBe(stripTags(parseReport(REPORT).body))
     expect(report).not.toMatch(/\[(NEW|CASE|EXISTING)/)
     expect(report).toContain('3. The city’s maintenance log'.replace('’', "'"))
+    // A tag he left the title off comes out too.
+    expect(stripTags('8. The state record is public. [NEW ACCESS]')).toBe('8. The state record is public.')
   })
 
   it('asks the AI to cut what was denied', async () => {

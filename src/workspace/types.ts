@@ -68,6 +68,8 @@ export interface CourseHome {
   reviewCount?: number
   /** Student: completed reviews of their interviews they haven't opened yet. */
   newReviewResults?: number
+  /** Student: the case of their newest unread result, and whether it's interview rulings or an investigator report. */
+  newResultsAt?: { caseId: string; kind: 'interview' | 'investigation' } | null
   /** Instructor: their own dashboard. */
   instructor?: InstructorHome
 }

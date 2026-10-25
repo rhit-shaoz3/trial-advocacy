@@ -38,8 +38,8 @@ export interface Investigation {
   completedAt: Date | null
   /** The clean report, once completed. */
   report: string | null
-  /** Files this report unlocked for the team. */
-  unlocked: { id: string; title: string }[]
+  /** Files this report unlocked for the team (attached to it, and in the case file). */
+  unlocked: { id: string; title: string; filename: string; contentType: string; sizeBytes: number }[]
   /** Whether this student has read the report. */
   seen: boolean
 }
@@ -53,7 +53,9 @@ export async function teamInvestigations(caseId: string, teamId: string, userId:
             r.completed_at AS "completedAt",
             CASE WHEN r.status = 'completed' THEN r.final_report END AS report,
             CASE WHEN r.status = 'completed' THEN coalesce((
-              SELECT json_agg(json_build_object('id', m.id, 'title', coalesce(nullif(m.description, ''), m.filename))
+              SELECT json_agg(json_build_object('id', m.id, 'title', coalesce(nullif(m.description, ''), m.filename),
+                                                'filename', m.filename, 'contentType', m.content_type,
+                                                'sizeBytes', m.size_bytes)
                               ORDER BY d.position)
               FROM review_documents d JOIN case_materials m ON m.id = d.material_id
               WHERE d.review_id = r.id AND d.decision = 'allow'), '[]') ELSE '[]' END AS unlocked,
@@ -217,7 +219,6 @@ async function investigateRequest(id: string) {
     const parsed = parseReport(text)
     // Only files the team doesn't have yet are his to unlock.
     const unlock = matchTitles(parsed.accessTitles, context.documents.filter((d) => !d.teamHasAccess))
-    const nothingToRule = parsed.facts.length === 0 && unlock.length === 0
 
     const client = await pool.connect()
     try {
@@ -234,9 +235,12 @@ async function investigateRequest(id: string) {
           position,
         ])
       }
+      // Every report waits for the instructor, even with nothing to rule on.
       await client.query(
-        `UPDATE interview_reviews SET report = $2, records_requested = $3, error = NULL, status = $4 WHERE id = $1`,
-        [id, parsed.body, parsed.records, nothingToRule ? 'finalizing' : 'open'],
+        `UPDATE interview_reviews
+         SET report = $2, records_requested = $3, review_block_missing = $4, error = NULL, status = 'open'
+         WHERE id = $1`,
+        [id, parsed.body, parsed.records, !parsed.hasReviewBlock],
       )
       await client.query('COMMIT')
     } catch (err) {
@@ -245,8 +249,6 @@ async function investigateRequest(id: string) {
     } finally {
       client.release()
     }
-    // Nothing for the instructor to rule on, so the report goes straight back.
-    if (nothingToRule) await finalizeRequest(id)
   } catch (err) {
     await fail(id, err, 'get the investigator’s report')
   }

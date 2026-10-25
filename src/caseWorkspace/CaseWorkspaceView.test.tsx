@@ -332,7 +332,7 @@ describe('the background investigator', () => {
     status: 'completed',
     completedAt: '2026-10-11T15:00:00.000Z',
     report: '1. I photographed the lift hill from the parking lot.',
-    unlocked: [{ id: 'm9', title: 'Inspection log' }],
+    unlocked: [{ id: 'm9', title: 'Inspection log', filename: 'inspection.pdf', contentType: 'application/pdf', sizeBytes: 2048 }],
     seen: true,
     ...over,
   })
@@ -378,7 +378,12 @@ describe('the background investigator', () => {
     const panel = screen.getByRole('tabpanel')
     expect(panel).toHaveTextContent('1. Two operators declined to talk.')
     expect(within(panel).getByRole('heading', { name: 'Earlier reports' })).toBeInTheDocument()
-    expect(within(panel).getAllByRole('link', { name: 'Inspection log' })[0]).toHaveAttribute('href', '/files/m9')
+    // The files come attached to the report, like an email.
+    const attachment = within(panel).getAllByRole('link', { name: 'Download Inspection log' })[0]
+    expect(attachment).toHaveAttribute('href', '/files/m9')
+    expect(attachment).toHaveTextContent('PDF · 2 KB')
+    expect(panel).toHaveTextContent('1 attachment, also in your case file')
+    expect(panel).toHaveTextContent('Watch people, including named witnesses, from public places')
     // The newest report comes before the next email.
     const latest = within(panel).getByText('1. Two operators declined to talk.')
     const email = within(panel).getByRole('form', { name: 'Email Nora Vance' })
@@ -395,6 +400,15 @@ describe('the background investigator', () => {
     expect(screen.getByRole('heading', { name: 'Investigator reports 1' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Read report' }))
+    expect(onOpenInvestigator).toHaveBeenCalled()
+  })
+
+  it('opens on the tab a notice links to, and marks the report read', () => {
+    const onOpenInvestigator = vi.fn()
+    renderView({ workspace: open, investigations: [report({ seen: false })], onOpenInvestigator, initialTab: 'investigator' })
+
+    expect(screen.getByRole('tab', { name: /Investigator/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Report')
     expect(onOpenInvestigator).toHaveBeenCalled()
   })
 })

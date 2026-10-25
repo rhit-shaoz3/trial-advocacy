@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -124,7 +124,8 @@ describe('the account dialog', () => {
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Use this picture' }))
 
-    expect(service.uploadAvatar).toHaveBeenCalledWith(expect.any(Blob))
+    // Cropping is async, so wait for the upload.
+    await waitFor(() => expect(service.uploadAvatar).toHaveBeenCalledWith(expect.any(Blob)))
     expect(await within(dialog).findByText('Change picture')).toBeInTheDocument()
     const sidebarButton = screen.getByRole('button', { name: /Ada Lawyer/ })
     expect(sidebarButton.querySelector('img')).toHaveAttribute('src', '/api/users/u1/avatar?v=1')

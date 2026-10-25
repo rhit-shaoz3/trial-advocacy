@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { MarkedTranscript } from '../components/MarkedTranscript'
+import type { CaseTab } from './caseTabs'
 import { Link } from 'react-router'
 import {
   ArrowRight,
@@ -48,7 +49,7 @@ import { caseInitials } from '../workspace/format'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import './caseWorkspace.css'
 
-type Tab = 'overview' | 'case-file' | 'witnesses' | 'investigator' | 'tasks' | 'reviews'
+type Tab = CaseTab
 type WorkspaceTask = CaseWorkspace['tasks'][number]
 
 const CATEGORY_ICON: Record<FileCategory, typeof FileText> = {
@@ -81,6 +82,7 @@ export function CaseWorkspaceView({
   investigations,
   onSendInvestigation,
   onOpenInvestigator,
+  initialTab = 'overview',
   now = new Date(),
 }: {
   workspace: CaseWorkspace
@@ -103,9 +105,11 @@ export function CaseWorkspaceView({
   onSendInvestigation?(assignment: string): Promise<void>
   /** Called when the student opens the investigator or a report, to mark the reports read. */
   onOpenInvestigator?(): void
+  /** The tab to open on, as when a notice links straight to a report. */
+  initialTab?: CaseTab
   now?: Date
 }) {
-  const [tab, setTabState] = useState<Tab>('overview')
+  const [tab, setTab] = useState<Tab>(initialTab)
   const unseen = reviews?.filter((r) => !r.seen).length ?? 0
   const reports = investigations?.filter((i) => i.status === 'completed') ?? []
   const unseenReports = reports.filter((r) => !r.seen).length
@@ -114,11 +118,11 @@ export function CaseWorkspaceView({
     workspace.investigator === undefined
       ? { name: DEFAULT_INVESTIGATOR_NAME, avatarUrl: INVESTIGATOR_AVATAR_URL }
       : workspace.investigator
-  function setTab(next: Tab) {
-    setTabState(next)
-    if (next === 'reviews') onOpenReviews?.()
-    if (next === 'investigator') onOpenInvestigator?.()
-  }
+  // Being on the Reviews or Investigator tab marks what's there read, however the student got there.
+  useEffect(() => {
+    if (tab === 'reviews' && unseen > 0) onOpenReviews?.()
+    if (tab === 'investigator' && unseenReports > 0) onOpenInvestigator?.()
+  }, [tab, unseen, unseenReports, onOpenReviews, onOpenInvestigator])
   const { case: c, team, world, materials, witnesses, tasks } = workspace
   const initialFile = materials.find((m) => m.initial)
   const byCategory = FILE_CATEGORIES.map((category) => ({

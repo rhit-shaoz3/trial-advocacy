@@ -48,7 +48,11 @@ export function buildInvestigationRequest(
         { role: 'user', content: turn.assignment },
         { role: 'assistant', content: turn.report },
       ]),
-      { role: 'user', content: input.assignment },
+      // A reminder right where he answers: without the review block, nothing gets ruled on.
+      {
+        role: 'user',
+        content: `Assignment from Team ${input.context.teamNumber}:\n\n${input.assignment}\n\nReport back, ending with your <review> block.`,
+      },
     ],
   }
 }
@@ -70,6 +74,8 @@ export async function investigate(client: ReportClient, input: InvestigationInpu
 export interface ParsedReport {
   /** The report without its review block. */
   body: string
+  /** Whether he ended with a review block at all (if not, the instructor is warned). */
+  hasReviewBlock: boolean
   facts: string[]
   /** Titles of case files he says the team could get. */
   accessTitles: string[]
@@ -82,12 +88,13 @@ const HEADINGS = { 'NEW FACTS': 'facts', 'NEW ACCESS': 'accessTitles', 'RECORDS 
 export function parseReport(text: string): ParsedReport {
   const match = text.match(/<review>([\s\S]*?)(<\/review>|$)/i)
   const body = (match ? text.slice(0, match.index) : text).trim()
-  const lists: Omit<ParsedReport, 'body'> = { facts: [], accessTitles: [], records: [] }
+  const lists: Omit<ParsedReport, 'body' | 'hasReviewBlock'> = { facts: [], accessTitles: [], records: [] }
   let current: keyof typeof lists | null = null
   for (const raw of (match?.[1] ?? '').split('\n')) {
     const line = raw.trim()
     if (!line) continue
-    const heading = line.replace(/:$/, '').toUpperCase() as keyof typeof HEADINGS
+    // "NEW FACTS", "NEW FACTS:", or in bold.
+    const heading = line.replace(/[*_#]/g, '').trim().replace(/:$/, '').toUpperCase() as keyof typeof HEADINGS
     if (heading in HEADINGS) {
       current = HEADINGS[heading]
       continue
@@ -96,7 +103,12 @@ export function parseReport(text: string): ParsedReport {
     if (!current || !item || /^none\.?$/i.test(item)) continue
     lists[current].push(item)
   }
-  return { body, ...lists }
+  // Files he cites in the report itself count too, so none slips past the instructor.
+  for (const tag of body.matchAll(/\[(?:CASE FILE|NEW ACCESS)\s*:\s*([^\]]+)\]/gi)) {
+    const title = tag[1].trim()
+    if (!lists.accessTitles.some((t) => t.toLowerCase() === title.toLowerCase())) lists.accessTitles.push(title)
+  }
+  return { body, hasReviewBlock: Boolean(match), ...lists }
 }
 
 /** Matches the titles he named to case files ("Title" is a file's label, else its filename). */

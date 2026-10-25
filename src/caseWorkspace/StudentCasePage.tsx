@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Link, useOutletContext, useParams } from 'react-router'
+import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { CaseWorkspace, Investigation, ReviewResult } from '../courses/types'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
+import { caseTab } from './caseTabs'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
 
 /** How often the page checks for an investigator report while one is on its way. */
@@ -14,6 +15,9 @@ export function StudentCasePage() {
   const { courseId = '', caseId = '' } = useParams()
   const service = useCourseService()
   const workspace = useOutletContext<WorkspaceContext | undefined>()
+  // A notice can link straight to a tab: ?tab=investigator.
+  const [params] = useSearchParams()
+  const initialTab = caseTab(params.get('tab'))
   const [data, setData] = useState<CaseWorkspace | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reviews, setReviews] = useState<ReviewResult[] | undefined>(undefined)
@@ -134,6 +138,7 @@ export function StudentCasePage() {
             investigations={investigations ?? []}
             onSendInvestigation={sendInvestigation}
             onOpenInvestigator={openInvestigator}
+            initialTab={initialTab}
           />
         </>
       )}

@@ -3,7 +3,7 @@
  * colours, so a theme only has to redefine them here. This file is written
  * from one table per palette; keep the palettes complete and alike.
  *
- * <html data-palette="navy|slate|earth|vibrant|forest|lagoon|contrast"> picks
+ * <html data-palette="navy|slate|earth|vibrant|forest|lagoon|contrast|radioactive"> picks
  * the theme (the user's choice on the account page; navy and parchment by
  * default), and <html data-theme="light|dark"> picks light or dark (the
  * system setting, or the sidebar toggle for this visit). Both are set by
@@ -386,6 +386,58 @@
   --tint-purple-fg: #4b2a9e;
   /* Shadow */
   --ws-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- Radioactive: office green and lime on a chartreuse glow, with hot pink and electric cyan ---------- */
+:root[data-palette='radioactive'] {
+  /* Ink */
+  --ws-navy: #0f3d07;
+  --ws-text: #142b10;
+  --fg-soft: #2a4524;
+  --ws-muted: #4f6b47;
+  /* Surfaces */
+  --ws-paper: #f2ffbf;
+  --surface: #ffffff;
+  --subtle: #ebffa8;
+  --surface-hover: #f9ffe3;
+  --surface-translucent: rgba(255, 255, 255, 0.55);
+  /* Lines */
+  --ws-line: #cfe98a;
+  --ws-row-line: #e3f5b5;
+  --border-strong: #9fc94a;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #196a0b;
+  --brand-light: #1f800e;
+  --button: #196a0b;
+  --button-hover: #1f800e;
+  --on-brand: #ffffff;
+  --on-brand-muted: #ccff00;
+  /* Accents */
+  --ws-blue: #7a12d6;
+  --ws-red: #d4006a;
+  --ws-gold: #ccff00;
+  --accent: #196a0b;
+  --link: #7a12d6;
+  --focus: #b026ff;
+  --success: #1f800e;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #d6fbff;
+  --tint-blue-fg: #006b78;
+  --tint-green-bg: #e1ffb3;
+  --tint-green-fg: #2b6b0b;
+  --tint-amber-bg: #f7fab0;
+  --tint-amber-fg: #646300;
+  --tint-amber-border: #e7ee4f;
+  --tint-rose-bg: #ffe0f0;
+  --tint-rose-fg: #b0005c;
+  --tint-orange-bg: #ffe5d1;
+  --tint-orange-fg: #a83d00;
+  --tint-grey-bg: #eef3e6;
+  --tint-grey-fg: #4f5c48;
+  --tint-purple-bg: #f1e0ff;
+  --tint-purple-fg: #6a12b8;
+  /* Shadow */
+  --ws-shadow: 0 10px 28px rgba(25, 106, 11, 0.14);
 }
 
 /* ---------- Navy & parchment (the default), dark ---------- */
@@ -1045,6 +1097,100 @@
   --card-tint-purple-bg: #ded6f0;
   --card-tint-purple-fg: #4b2a9e;
   --card-ws-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- Radioactive, dark ---------- */
+:root[data-theme='dark'][data-palette='radioactive'] {
+  /* Ink */
+  --ws-navy: #e9ffb0;
+  --ws-text: #e8f5dc;
+  --fg-soft: #cfe3c0;
+  --ws-muted: #9ab88c;
+  /* Surfaces */
+  --ws-paper: #050c03;
+  --surface: #0c1808;
+  --subtle: #12230c;
+  --surface-hover: #0f1d0a;
+  --surface-translucent: rgba(204, 255, 0, 0.03);
+  /* Lines */
+  --ws-line: #1f3a14;
+  --ws-row-line: #162b0f;
+  --border-strong: #2f5a1c;
+  /* Brand: dark panels (sidebar, case banner) and the main buttons */
+  --brand: #030702;
+  --brand-light: #0a1406;
+  --button: #1f8f0e;
+  --button-hover: #27a812;
+  --on-brand: #ffffff;
+  --on-brand-muted: #a6e05c;
+  /* Accents */
+  --ws-blue: #00e5ff;
+  --ws-red: #ff4fa3;
+  --ws-gold: #ccff00;
+  --accent: #39ff14;
+  --link: #ccff00;
+  --focus: #39ff14;
+  --success: #39ff14;
+  /* Tinted badges and panels: background, text */
+  --tint-blue-bg: #00363d;
+  --tint-blue-fg: #7ff3ff;
+  --tint-green-bg: #123a06;
+  --tint-green-fg: #99ff33;
+  --tint-amber-bg: #33350a;
+  --tint-amber-fg: #e7ee4f;
+  --tint-amber-border: #5a5d12;
+  --tint-rose-bg: #40102a;
+  --tint-rose-fg: #ff8fc8;
+  --tint-orange-bg: #40200a;
+  --tint-orange-fg: #ffab70;
+  --tint-grey-bg: #1a2416;
+  --tint-grey-fg: #c2d4b8;
+  --tint-purple-bg: #2c1245;
+  --tint-purple-fg: #d9a6ff;
+  /* Shadow */
+  --ws-shadow: 0 0 26px rgba(57, 255, 20, 0.1);
+  /* Cards: the light theme, dimmed */
+  --card-ws-navy: #0f3d07;
+  --card-ws-text: #142b10;
+  --card-fg-soft: #2a4524;
+  --card-ws-muted: #4a5f40;
+  --card-ws-paper: #bdce94;
+  --card-surface: #c7d6a2;
+  --card-subtle: #b9cc8d;
+  --card-surface-hover: #cdd9ad;
+  --card-surface-translucent: rgba(255, 255, 255, 0.3);
+  --card-ws-line: #a6bc7a;
+  --card-ws-row-line: #b5c68b;
+  --card-border-strong: #8fa85f;
+  --card-brand: #196a0b;
+  --card-brand-light: #1f800e;
+  --card-button: #196a0b;
+  --card-button-hover: #1f800e;
+  --card-on-brand: #ffffff;
+  --card-on-brand-muted: #ccff00;
+  --card-ws-blue: #7a12d6;
+  --card-ws-red: #a50053;
+  --card-ws-gold: #ccff00;
+  --card-accent: #196a0b;
+  --card-link: #7a12d6;
+  --card-focus: #b026ff;
+  --card-success: #1f800e;
+  --card-tint-blue-bg: #bddee1;
+  --card-tint-blue-fg: #00626e;
+  --card-tint-green-bg: #c7e29e;
+  --card-tint-green-fg: #2b6b0b;
+  --card-tint-amber-bg: #dadd9b;
+  --card-tint-amber-fg: #5c5b00;
+  --card-tint-amber-border: #ccd346;
+  --card-tint-rose-bg: #e1c7d4;
+  --card-tint-rose-fg: #a20055;
+  --card-tint-orange-bg: #e1cbb8;
+  --card-tint-orange-fg: #9b3800;
+  --card-tint-grey-bg: #d2d7cb;
+  --card-tint-grey-fg: #4f5c48;
+  --card-tint-purple-bg: #d5c7e1;
+  --card-tint-purple-fg: #6a12b8;
+  --card-ws-shadow: 0 10px 28px rgba(25, 106, 11, 0.14);
 }
 
 /* ---------- Cards in dark mode: light-toned, with dark text ---------- */

@@ -19,7 +19,7 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_theme_check;
 UPDATE users SET theme = CASE theme WHEN 'stone' THEN 'earth' WHEN 'vivid' THEN 'contrast' ELSE theme END
   WHERE theme IN ('stone', 'vivid');
 ALTER TABLE users ADD CONSTRAINT users_theme_check
-  CHECK (theme IN ('navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast'));
+  CHECK (theme IN ('navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast', 'radioactive'));
 
 -- The user's profile picture in file storage (avatars/<userId>/<uuid>), or
 -- null to show their initials.

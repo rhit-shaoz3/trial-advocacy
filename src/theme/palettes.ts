@@ -61,4 +61,11 @@ export const PALETTE_INFO: Record<
     dark: { sidebar: '#000000', page: '#000000', card: '#e2e2e2', button: '#1f44d6' },
     accents: ['#c4321a', '#f2b705'],
   },
+  radioactive: {
+    label: 'Radioactive',
+    description: 'Office green and lime on a chartreuse glow, with hot pink and electric cyan',
+    light: { sidebar: '#196a0b', page: '#f2ffbf', card: '#ffffff', button: '#196a0b' },
+    dark: { sidebar: '#030702', page: '#050c03', card: '#c7d6a2', button: '#196a0b' },
+    accents: ['#ff2e93', '#00e5ff'],
+  },
 }

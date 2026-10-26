@@ -624,42 +624,6 @@ export interface MaterialTextResult {
   text: string | null
 }
 
-/** A case on the main dashboard; matches `ActiveCase` in server/home/home.ts. */
-export interface ActiveCase {
-  id: string
-  title: string
-  courseId: string
-  courseCode: string
-  phase: CasePhase
-  phases: CasePhase[]
-  /** Instructor: how many case worlds and teams. */
-  worldCount?: number
-  teamCount?: number
-  /** Student: their side and team. */
-  side?: Side | null
-  teamNumber?: number
-}
-
-/** Something to do, on the main dashboard; matches `HomeTodo` in server/home/home.ts. */
-export interface HomeTodo {
-  id: string
-  /** A review for the instructor; a task, a set to answer, or new answers for a student. */
-  kind: 'review' | 'task' | 'respond' | 'response'
-  title: string
-  /** "LAW 540 · Rivera v. Thrill Park" */
-  detail: string
-  courseId: string
-  caseId: string
-  /** When it's due (tasks, sets to answer), or when it came in (reviews, answers). */
-  at: string | null
-}
-
-/** The main dashboard: active cases across courses, and the newest few things to do. */
-export interface HomeOverview {
-  activeCases: ActiveCase[]
-  todos: { count: number; latest: HomeTodo[] }
-}
-
 /** What's on a course calendar: a task's due date, or an event. */
 export type CalendarKind = 'task' | 'case' | 'personal' | 'team'
 
@@ -729,8 +693,6 @@ export interface CourseService {
   // Instructors
   /** Courses the current instructor teaches, newest term first. */
   listTaughtCourses(): Promise<TaughtCourse[]>
-  /** The main dashboard, across every course. */
-  getHomeOverview(): Promise<HomeOverview>
   createCourse(input: NewCourseInput): Promise<TaughtCourse>
   getCourse(courseId: string): Promise<TaughtCourse>
   updateCourse(courseId: string, input: NewCourseInput): Promise<TaughtCourse>

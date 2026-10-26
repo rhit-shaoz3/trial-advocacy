@@ -41,10 +41,8 @@ describe('StudentDashboard', () => {
       fakeCourseService({ listMyCourses: vi.fn().mockResolvedValue([trial, pretrial, evidence]) }),
     )
 
-    // Term sections, after the to-dos and active cases at the top.
-    await screen.findByRole('region', { name: 'Fall 2026' })
-    const terms = screen.getAllByRole('region').filter((r) => /\d{4}$/.test(within(r).getAllByRole('heading')[0].textContent ?? ''))
-    expect(terms.map((t) => within(t).getAllByRole('heading')[0].textContent)).toEqual([
+    const terms = await screen.findAllByRole('region')
+    expect(terms.map((t) => within(t).getByRole('heading').textContent)).toEqual([
       'Fall 2026',
       'Spring 2026',
     ])

@@ -540,3 +540,24 @@ CREATE TABLE IF NOT EXISTS session (
 );
 
 CREATE INDEX IF NOT EXISTS session_expire_idx ON session (expire);
+
+-- The course calendar's own events (tasks show up on their due dates too).
+-- case: a date the instructor marks for a case, for everyone in it.
+-- personal: one user's own reminder. team: shared with one team's members.
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id  uuid        NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+  kind       text        NOT NULL CHECK (kind IN ('case', 'personal', 'team')),
+  case_id    uuid        REFERENCES cases (id) ON DELETE CASCADE,
+  team_id    uuid        REFERENCES teams (id) ON DELETE CASCADE,
+  title      text        NOT NULL,
+  notes      text        NOT NULL DEFAULT '',
+  on_date    date        NOT NULL,
+  created_by uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (kind <> 'case' OR (case_id IS NOT NULL AND team_id IS NULL)),
+  CHECK (kind <> 'team' OR team_id IS NOT NULL),
+  CHECK (kind <> 'personal' OR (case_id IS NULL AND team_id IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS calendar_events_course_idx ON calendar_events (course_id, on_date);

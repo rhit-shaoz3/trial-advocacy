@@ -26,6 +26,7 @@ import {
   teamReviewResults,
   unseenReviewCount,
 } from '../reviews/reviews.ts'
+import { calendarRouter } from '../calendar/calendarRoutes.ts'
 import { reviewsRouter } from '../reviews/reviewRoutes.ts'
 import { findMaterialFile, findMaterialText, findWitness, listStorageKeys, removeStoredFiles, setTaskDone } from './caseContent.ts'
 import { sendMaterialFile, sendMaterialText } from './caseContentRoutes.ts'
@@ -333,6 +334,7 @@ coursesRouter.post('/:courseId/my-cases/:caseId/investigator/seen', async (req, 
 })
 
 coursesRouter.use('/:courseId/my-cases/:caseId/exchange', myExchangeRouter)
+coursesRouter.use('/:courseId/calendar', calendarRouter)
 
 // Everything below manages one course and is only for the instructor who teaches it.
 const courseRouter = Router({ mergeParams: true })

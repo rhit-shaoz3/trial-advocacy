@@ -1,0 +1,348 @@
+/* The course calendar (CalendarPage). Each kind has its own colour. */
+
+.cal-kind-task {
+  --cal-bg: var(--tint-blue-bg);
+  --cal-fg: var(--tint-blue-fg);
+}
+
+.cal-kind-case {
+  --cal-bg: var(--tint-rose-bg);
+  --cal-fg: var(--tint-rose-fg);
+}
+
+.cal-kind-personal {
+  --cal-bg: var(--tint-green-bg);
+  --cal-fg: var(--tint-green-fg);
+}
+
+.cal-kind-team {
+  --cal-bg: var(--tint-purple-bg);
+  --cal-fg: var(--tint-purple-fg);
+}
+
+.cal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem 1.2rem;
+  margin: 1.2rem 0 1rem;
+}
+
+.cal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.cal-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ws-muted);
+  font: 600 0.82rem var(--ws-sans);
+  cursor: pointer;
+}
+
+.cal-filter i {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  border: 2px solid var(--cal-fg);
+}
+
+.cal-filter[aria-pressed='true'] {
+  border-color: var(--cal-fg);
+  background: var(--cal-bg);
+  color: var(--cal-fg);
+}
+
+.cal-filter[aria-pressed='true'] i {
+  background: var(--cal-fg);
+}
+
+.cal-filter:focus-visible,
+.cal-item:focus-visible,
+.cal-day-number:focus-visible,
+.cal-agenda-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cal-nav .ws-btn {
+  min-height: 2.3rem;
+}
+
+.cal-nav-btn {
+  width: 2.3rem;
+  padding: 0;
+}
+
+.cal .cal-month,
+.cal-month {
+  min-width: 10rem;
+  margin: 0;
+  color: var(--ws-navy);
+  font: 400 1.35rem var(--ws-serif);
+  text-align: center;
+}
+
+.cal-grid {
+  overflow: hidden;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.cal-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.cal-row + .cal-row {
+  border-top: 1px solid var(--ws-row-line);
+}
+
+.cal-weekdays span {
+  padding: 0.5rem 0.6rem;
+  color: var(--ws-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cal-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-height: 6.4rem;
+  min-width: 0;
+  padding: 0.35rem;
+}
+
+.cal-day + .cal-day {
+  border-left: 1px solid var(--ws-row-line);
+}
+
+.cal-day-out {
+  background: var(--subtle);
+}
+
+.cal-day-out .cal-day-number {
+  color: var(--muted);
+}
+
+.cal-day-number {
+  align-self: flex-start;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.3rem;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--ws-text);
+  font: 600 0.82rem var(--ws-sans);
+  cursor: pointer;
+}
+
+.cal-day-number:hover {
+  background: var(--surface-hover);
+}
+
+.cal-today .cal-day-number {
+  background: var(--ws-blue);
+  color: var(--on-brand);
+}
+
+.cal-item {
+  overflow: hidden;
+  padding: 0.15rem 0.4rem;
+  border: none;
+  border-left: 3px solid var(--cal-fg);
+  border-radius: 0.25rem;
+  background: var(--cal-bg);
+  color: var(--cal-fg);
+  font: 600 0.74rem/1.3 var(--ws-sans);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cal-item-done {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.cal-more {
+  padding-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.cal-agenda {
+  margin-top: 1.6rem;
+}
+
+.cal-agenda h2 {
+  margin: 0 0 0.6rem;
+  color: var(--ws-navy);
+  font: 400 1.3rem var(--ws-serif);
+}
+
+.cal-agenda ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cal-agenda-item {
+  display: grid;
+  grid-template-columns: auto 7rem 1fr;
+  align-items: baseline;
+  gap: 0.2rem 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cal-agenda-item:hover {
+  border-color: var(--border-strong);
+}
+
+.cal-agenda-item i {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--cal-fg);
+}
+
+.cal-agenda-date {
+  color: var(--ws-muted);
+  font-size: 0.82rem;
+}
+
+.cal-agenda-item small {
+  grid-column: 3;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.cal-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.cal-form label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--ws-text);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.cal-form input:not([type='radio']),
+.cal-form select,
+.cal-form textarea {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.cal-kinds {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.cal-kinds legend {
+  margin-bottom: 0.3rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.cal-kinds label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 400;
+}
+
+.cal-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cal-details {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.cal-details-date {
+  margin: 0;
+  color: var(--ws-text);
+  font-weight: 600;
+}
+
+.cal-details-notes {
+  margin: 0;
+  color: var(--ws-text);
+  white-space: pre-line;
+}
+
+/* On a phone the month grid is too tight for titles: show dots, and lean on the agenda. */
+@media (max-width: 640px) {
+  .cal-day {
+    min-height: 3.4rem;
+    padding: 0.2rem;
+  }
+
+  .cal-item {
+    height: 0.4rem;
+    padding: 0;
+    border-left: none;
+    background: var(--cal-fg);
+    color: transparent;
+  }
+
+  .cal-more,
+  .cal-weekdays span {
+    font-size: 0.62rem;
+  }
+
+  .cal-agenda-item {
+    grid-template-columns: auto 1fr;
+  }
+
+  .cal-agenda-item strong,
+  .cal-agenda-item small {
+    grid-column: 2;
+  }
+}

@@ -660,6 +660,39 @@ export interface HomeOverview {
   todos: { count: number; latest: HomeTodo[] }
 }
 
+/** What's on a course calendar: a task's due date, or an event. */
+export type CalendarKind = 'task' | 'case' | 'personal' | 'team'
+
+/** One thing on the calendar; matches `CalendarItem` in server/calendar/calendar.ts. */
+export interface CalendarItem {
+  id: string
+  kind: CalendarKind
+  title: string
+  notes: string
+  /** YYYY-MM-DD: the event's day, or the day a task is due. */
+  date: string
+  /** A task's exact due time. */
+  dueAt: string | null
+  caseId: string | null
+  caseTitle: string | null
+  /** A team event's team. */
+  teamNumber: number | null
+  /** A student's task: whether their team has done it. */
+  done: boolean | null
+  /** Whether this user made it (and so can change it). */
+  mine: boolean
+}
+
+/** A new calendar event: a case date (instructor), a personal reminder, or one shared with the team. */
+export interface CalendarEventInput {
+  kind: 'case' | 'personal' | 'team'
+  title: string
+  notes: string
+  date: string
+  /** The case date's case, or the case whose team to share with. */
+  caseId?: string | null
+}
+
 export interface CourseService {
   // Students
   /** The current user's courses, newest term first. */
@@ -754,6 +787,13 @@ export interface CourseService {
   // Students
   /** The current student's non-draft cases and their team in each. */
   listMyCases(courseId: string): Promise<MyCase[]>
+
+  // The course calendar: tasks on their due dates, and events.
+  getCalendar(courseId: string): Promise<CalendarItem[]>
+  /** Each of these returns the whole calendar again. */
+  createCalendarEvent(courseId: string, input: CalendarEventInput): Promise<CalendarItem[]>
+  updateCalendarEvent(courseId: string, eventId: string, input: Pick<CalendarEventInput, 'title' | 'notes' | 'date'>): Promise<CalendarItem[]>
+  deleteCalendarEvent(courseId: string, eventId: string): Promise<CalendarItem[]>
   /** The student's dashboard for one launched case. */
   getMyCaseWorkspace(courseId: string, caseId: string): Promise<CaseWorkspace>
   /** Marks a task done (or not) for the student's whole team. */

@@ -366,6 +366,28 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${coursePath(courseId)}/my-cases`)).cases
   },
 
+  async getCalendar(courseId) {
+    return (await apiRequest(`${coursePath(courseId)}/calendar`)).items
+  },
+
+  async createCalendarEvent(courseId, input) {
+    const body = await apiRequest(`${coursePath(courseId)}/calendar/events`, { method: 'POST', body: JSON.stringify(input) })
+    return body.items
+  },
+
+  async updateCalendarEvent(courseId, eventId, input) {
+    const body = await apiRequest(`${coursePath(courseId)}/calendar/events/${encodeURIComponent(eventId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.items
+  },
+
+  async deleteCalendarEvent(courseId, eventId) {
+    const body = await apiRequest(`${coursePath(courseId)}/calendar/events/${encodeURIComponent(eventId)}`, { method: 'DELETE' })
+    return body.items
+  },
+
   async getMyCaseWorkspace(courseId, caseId) {
     return (await apiRequest(myCasePath(courseId, caseId))).workspace
   },

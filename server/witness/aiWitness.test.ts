@@ -256,7 +256,8 @@ describe('interviewing an AI witness', () => {
       alignedPartyName: 'Thrill Park',
       plaintiffName: 'Rivera',
       caseSummary: 'A rider fell.',
-      inWorldDate: 'October 1, 2024',
+      // A saved case date is ignored: the case runs on the real date.
+      inWorldDate: formatCaseDate(new Date().toISOString().slice(0, 10)),
       keyDisputedIssues: 'Where she stood.',
       personaNotes: 'Proud of her work.',
       importantFacts: sampleFacts,

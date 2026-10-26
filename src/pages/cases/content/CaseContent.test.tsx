@@ -461,17 +461,17 @@ describe('WitnessesSection', () => {
     expect(within(item).getByRole('link', { name: 'Test as defense' })).toHaveAttribute('href', '/courses/c1/cases/k1/witnesses/w1?side=defense')
   })
 
-  it('saves the case date and disputed issues', async () => {
-    const saved = { ...coaster, inWorldDate: '2024-10-01', disputedIssues: 'Where she stood.' }
+  it('saves the disputed issues, with no case date to set', async () => {
+    const saved = { ...coaster, disputedIssues: 'Where she stood.' }
     const saveWitnessSettings = vi.fn().mockResolvedValue(saved)
     const onCaseChange = vi.fn()
     const { user } = renderSection({ saveWitnessSettings }, onCaseChange)
 
     const form = await screen.findByRole('form', { name: 'AI witness settings' })
-    fireEvent.change(within(form).getByLabelText(/Today.s date in the case/), { target: { value: '2024-10-01' } })
+    expect(within(form).queryByLabelText(/date in the case/)).not.toBeInTheDocument()
     await user.type(within(form).getByLabelText(/Issues the witnesses/), 'Where she stood.')
     await user.click(within(form).getByRole('button', { name: 'Save settings' }))
-    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', { inWorldDate: '2024-10-01', disputedIssues: 'Where she stood.' })
+    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', { inWorldDate: null, disputedIssues: 'Where she stood.' })
     expect(onCaseChange).toHaveBeenCalledWith(saved)
   })
 })

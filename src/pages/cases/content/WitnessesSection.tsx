@@ -225,11 +225,10 @@ function WitnessSettings({
   onSaved(updated: CourseCase): void
 }) {
   const service = useCourseService()
-  const [date, setDate] = useState(courseCase.inWorldDate ?? '')
   const [issues, setIssues] = useState(courseCase.disputedIssues)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null)
-  const changed = date !== (courseCase.inWorldDate ?? '') || issues.trim() !== courseCase.disputedIssues
+  const changed = issues.trim() !== courseCase.disputedIssues
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -237,7 +236,8 @@ function WitnessSettings({
     setMessage(null)
     try {
       const saved = await service.saveWitnessSettings(courseId, courseCase.id, {
-        inWorldDate: date || null,
+        // The witnesses always use the real date now.
+        inWorldDate: null,
         disputedIssues: issues,
       })
       onSaved(saved)
@@ -252,10 +252,6 @@ function WitnessSettings({
 
   return (
     <form className="panel-form content-form" onSubmit={handleSubmit} aria-label="AI witness settings">
-      <label>
-        Today&rsquo;s date in the case
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      </label>
       <label className="content-form-full">
         Issues the witnesses must leave disputed (optional)
         <textarea
@@ -270,7 +266,6 @@ function WitnessSettings({
         <button type="submit" className="btn-secondary" disabled={saving || !changed}>
           {saving ? 'Saving…' : 'Save settings'}
         </button>
-        <small className="muted">Without a date, the witnesses use the real date.</small>
         {message && (
           <span className={message.error ? 'form-error' : 'muted'} role={message.error ? 'alert' : 'status'}>
             {message.text}

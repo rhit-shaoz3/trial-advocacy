@@ -95,7 +95,8 @@ export function buildProfile(
     plaintiffName: names.plaintiff,
     defendantName: names.defendant,
     caseSummary: courseCase.summary,
-    inWorldDate: formatCaseDate(courseCase.inWorldDate ?? today.toISOString().slice(0, 10)),
+    // The case runs on the real date.
+    inWorldDate: formatCaseDate(today.toISOString().slice(0, 10)),
     keyDisputedIssues: courseCase.disputedIssues || undefined,
     importantFacts: courseCase.importantFacts,
     documents: witnessDocuments(witness, materials, otherDepositionIds),

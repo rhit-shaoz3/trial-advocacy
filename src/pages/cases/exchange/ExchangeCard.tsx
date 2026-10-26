@@ -26,11 +26,14 @@ export function ExchangeCard({
   courseId,
   courseCase,
   onSetUp,
+  inTab = false,
 }: {
   courseId: string
   courseCase: CourseCase
   /** Opens the setup flow (to edit, once it's set up). */
   onSetUp(): void
+  /** On its tab (after its phase): styled like the tab's other cards. */
+  inTab?: boolean
 }) {
   const service = useCourseService()
   const ready = courseCase.exchangeReady ?? false
@@ -49,7 +52,7 @@ export function ExchangeCard({
 
   if (!ready) {
     return (
-      <section className="exchange-card" aria-labelledby="exchange-card-title">
+      <section className={inTab ? 'exchange-card exchange-card-in-tab' : 'exchange-card'} aria-labelledby="exchange-card-title">
         <div className="exchange-card-head">
           <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
             <Share2 />
@@ -98,7 +101,7 @@ export function ExchangeCard({
         : { label: `${courseCase.phase === 'information_exchange' ? 'Information exchange' : 'Requests'} open`, tone: 'exchange-phase-open' }
 
   return (
-    <section className="exchange-card" aria-labelledby="exchange-card-title">
+    <section className={inTab ? 'exchange-card exchange-card-in-tab' : 'exchange-card'} aria-labelledby="exchange-card-title">
       <div className="exchange-card-head">
         <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
           <Share2 />

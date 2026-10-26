@@ -157,8 +157,8 @@
 }
 
 .exchange-side-defense {
-  background: var(--tint-rose-bg);
-  color: var(--tint-rose-fg);
+  background: var(--tint-orange-bg);
+  color: var(--tint-orange-fg);
 }
 
 .exchange-pick {
@@ -475,6 +475,17 @@
   border-left: 3px solid var(--ws-blue);
   border-radius: 0.6rem;
   background: var(--surface);
+}
+
+/* On its tab, after its phase: a plain card like the tab's others. */
+.exchange-card-in-tab {
+  border-left-width: 1px;
+  border-left-color: var(--border);
+}
+
+/* As wide as the investigator settings card below it. */
+.investigator-card-in-tab {
+  max-width: 46rem;
 }
 
 .exchange-card-head {

@@ -39,7 +39,16 @@ function Count({ label, value, note }: { label: string; value: number; note: str
 }
 
 /** How teams have used the background investigator. */
-export function InvestigatorCard({ courseId, courseCase }: { courseId: string; courseCase: CourseCase }) {
+export function InvestigatorCard({
+  courseId,
+  courseCase,
+  inTab = false,
+}: {
+  courseId: string
+  courseCase: CourseCase
+  /** On the Investigator tab (after its phase): styled like the tab's settings card, and as wide. */
+  inTab?: boolean
+}) {
   const service = useCourseService()
   const [overview, setOverview] = useState<InvestigatorOverview | null>(null)
   const current = courseCase.phase === 'investigate'
@@ -53,7 +62,10 @@ export function InvestigatorCard({ courseId, courseCase }: { courseId: string; c
   }, [service, courseId, courseCase.id, courseCase.phase])
 
   return (
-    <section className="exchange-card" aria-labelledby="investigator-card-title">
+    <section
+      className={inTab ? 'exchange-card exchange-card-in-tab investigator-card-in-tab' : 'exchange-card'}
+      aria-labelledby="investigator-card-title"
+    >
       <div className="exchange-card-head">
         <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
           <Search />

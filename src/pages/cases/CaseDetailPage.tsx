@@ -129,8 +129,8 @@ export function CaseDetailPage() {
   /** Past the information exchange (its card moves to its tab), and past investigating (likewise). */
   const pastExchange = launched && (courseCase.phase === 'investigate' || courseCase.phase === 'deposition')
   const pastInvestigate = launched && courseCase.phase === 'deposition'
-  const exchangeCard = (c: CourseCase) => (
-    <ExchangeCard courseId={courseId} courseCase={c} onSetUp={() => setExchangeStep('disclosures')} />
+  const exchangeCard = (c: CourseCase, inTab = false) => (
+    <ExchangeCard courseId={courseId} courseCase={c} onSetUp={() => setExchangeStep('disclosures')} inTab={inTab} />
   )
 
   return (
@@ -298,14 +298,14 @@ export function CaseDetailPage() {
             {tab === 'investigator' && (
               <>
                 {pastInvestigate && investigatorOf(courseCase).enabled && (
-                  <InvestigatorCard courseId={courseId} courseCase={courseCase} />
+                  <InvestigatorCard courseId={courseId} courseCase={courseCase} inTab />
                 )}
                 <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={setCourseCase} />
               </>
             )}
             {tab === 'exchange' && courseCase.exchangeReady && (
               <>
-                {pastExchange && exchangeCard(courseCase)}
+                {pastExchange && exchangeCard(courseCase, true)}
                 <ExchangeTab courseId={courseId} courseCase={courseCase} onEdit={setExchangeStep} />
               </>
             )}

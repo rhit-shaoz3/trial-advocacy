@@ -28,6 +28,8 @@ export interface InvestigatorContext {
   /** The instructor's extra instructions for the case; blank for none. */
   instructions: string
   caseTitle: string
+  /** The parties as the instructor named them (else they come from the title). */
+  parties?: { plaintiff: string; defendant: string }
   caseSummary: string
   /** "Today" in the case (YYYY-MM-DD); null means the real date. */
   inWorldDate: string | null
@@ -57,7 +59,7 @@ const tidy = (text: string) => text.replace(/\n{3,}/g, '\n\n').trim()
 const asList = (facts: string[]) => facts.map((fact) => ({ fact }))
 
 export function buildInvestigatorPrompt(ctx: InvestigatorContext, today = new Date()) {
-  const names = partyNames(ctx.caseTitle)
+  const names = partyNames(ctx.caseTitle, ctx.parties)
   const role = partyRole(ctx.side)
   const own = role === 'plaintiff' ? names.plaintiff : names.defendant
   const opposing = role === 'plaintiff' ? names.defendant : names.plaintiff

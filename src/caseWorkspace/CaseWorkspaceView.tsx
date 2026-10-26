@@ -54,7 +54,7 @@ import {
   type Side,
   type StudentExchange,
 } from '../courses/types'
-import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
+import { sideLabel, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
 import { FileViewer, type ViewableFile } from '../components/FileViewer'
 import { PhaseSteps } from '../components/PhaseSteps'
@@ -658,8 +658,8 @@ function caseFileSummary(groups: { category: FileCategory; files: unknown[] }[])
 }
 
 /** "Role: Defendant · Team 2", or where the student is in getting assigned. */
-function assignmentLine({ team, world, side, preview }: CaseWorkspace) {
-  if (world) return `Role: ${ROLE_LABEL[world.side]} · Team ${team!.number}`
+function assignmentLine({ team, world, side, preview, case: c }: CaseWorkspace) {
+  if (world) return `Role: ${sideLabel(world.side, c.parties)} · Team ${team!.number}`
   if (team) return `Team ${team.number} · Case world not assigned yet`
   if (preview && side) return `Previewing as any ${side} team`
   return 'Not on a team yet'
@@ -929,7 +929,7 @@ function NextTask({
 }
 
 /** The student's own team and side, and (once matched) the opposing team in their case world. */
-function CaseTeam({ workspace: { team, world } }: { workspace: CaseWorkspace }) {
+function CaseTeam({ workspace: { team, world, case: c } }: { workspace: CaseWorkspace }) {
   return (
     <section className="cw-card" aria-labelledby="cw-team">
       <h2 id="cw-team" className="cw-card-title">
@@ -939,7 +939,7 @@ function CaseTeam({ workspace: { team, world } }: { workspace: CaseWorkspace }) 
         {!team
           ? 'Not on a team yet.'
           : world
-            ? `${ROLE_LABEL[world.side]} · Team ${team.number}`
+            ? `${sideLabel(world.side, c.parties)} · Team ${team.number}`
             : `Team ${team.number} · Waiting for a case world`}
       </p>
       {team && <People members={team.members} role={world ? COUNSEL[world.side] : 'Teammate'} />}
@@ -952,7 +952,7 @@ function CaseTeam({ workspace: { team, world } }: { workspace: CaseWorkspace }) 
           {world ? (
             <>
               <p className="cw-section-sub">
-                {ROLE_LABEL[other(world.side)]} · Team {world.opponents.number}
+                {sideLabel(other(world.side), c.parties)} · Team {world.opponents.number}
               </p>
               <People members={world.opponents.members} role={COUNSEL[other(world.side)]} />
             </>

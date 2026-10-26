@@ -133,6 +133,7 @@ interface RequestRow {
   teamNumber: number
   assignment: string
   caseTitle: string
+  parties: { plaintiff: string; defendant: string }
   summary: string
   disputedIssues: string
   importantFacts: ImportantFacts
@@ -145,6 +146,7 @@ async function loadRequest(id: string) {
     `SELECT r.case_id AS "caseId", r.team_id AS "teamId", r.matchup_id AS "matchupId", r.side,
             r.team_number AS "teamNumber", r.assignment,
             c.title AS "caseTitle", c.summary,
+            json_build_object('plaintiff', c.plaintiff_name, 'defendant', c.defendant_name) AS parties,
             c.disputed_issues AS "disputedIssues",
             json_build_object('plaintiff', c.plaintiff_key_facts, 'defense', c.defense_key_facts) AS "importantFacts",
             c.investigator_name AS "investigatorName", c.investigator_instructions AS instructions
@@ -172,6 +174,7 @@ async function investigatorContext(request: RequestRow): Promise<InvestigatorCon
     investigatorName: request.investigatorName,
     instructions: request.instructions,
     caseTitle: request.caseTitle,
+    parties: request.parties,
     caseSummary: request.summary,
     // The case runs on the real date.
     inWorldDate: null,

@@ -131,6 +131,14 @@ function renderView(props: Partial<Parameters<typeof CaseWorkspaceView>[0]> = {}
 }
 
 describe('CaseWorkspaceView', () => {
+  it("shows the student's side by the party's name, once the instructor names them", () => {
+    renderView({ workspace: { ...sampleWorkspace, case: { ...sampleWorkspace.case, parties: { plaintiff: 'Ana Rivera', defendant: 'Thrill Park LLC' } } } })
+
+    expect(screen.getByText('Role: Thrill Park LLC (Defendant) · Team 7')).toBeInTheDocument()
+    const team = screen.getByRole('region', { name: 'Your team' })
+    expect(team).toHaveTextContent('Ana Rivera (Plaintiff) · Team 3')
+  })
+
   it('shows the case, the world and role, and an overview', () => {
     renderView()
 

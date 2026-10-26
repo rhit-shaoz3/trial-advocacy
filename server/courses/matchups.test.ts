@@ -233,6 +233,7 @@ describe('the course home cases', () => {
       {
         id: caseId,
         title: 'Rivera v. Thrill Park',
+        parties: { plaintiff: 'Rivera', defendant: 'Thrill Park' },
         summary: 'Coaster.',
         status: 'active',
         world: { number: 1, side: 'plaintiff' },

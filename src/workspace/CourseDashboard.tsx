@@ -16,7 +16,7 @@ import { Avatar } from '../components/Avatar'
 import { PhaseSteps } from '../components/PhaseSteps'
 import { Toast, Toasts } from '../components/Toasts'
 import { PHASE_LABEL, caseOverview, shortDate } from '../courses/caseLabels'
-import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
+import { sideLabel, worldLabel } from '../courses/worldLabel'
 import {
   calendarDaysUntil,
   caseInitials,
@@ -231,7 +231,7 @@ function caseLabel(c: CaseSummary) {
 
 /** Under the title: the student's role, or the sample data's case type. */
 function caseSubtitle(c: CaseSummary) {
-  if (c.world) return `Role: ${ROLE_LABEL[c.world.side]}`
+  if (c.world) return `Role: ${sideLabel(c.world.side, c.parties)}`
   if (c.caseType) return c.caseType
   if (c.worldCount == null) return 'Awaiting opposition'
   return null

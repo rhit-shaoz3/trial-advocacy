@@ -265,6 +265,7 @@ describe("a student's case dashboard", () => {
     expect(workspace.case).toEqual({
       id: caseId,
       title: 'Rivera v. Thrill Park',
+      parties: { plaintiff: 'Rivera', defendant: 'Thrill Park' },
       summary: 'A test case.',
       status: 'active',
       phase: 'introduction',

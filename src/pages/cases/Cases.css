@@ -1406,3 +1406,22 @@ a.case-row:hover {
   width: 0.9rem;
   height: 0.9rem;
 }
+
+/* The parties' names, side by side (CaseForm, setup Details). */
+.case-parties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.case-parties label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .case-parties {
+    grid-template-columns: 1fr;
+  }
+}

@@ -3,7 +3,7 @@ import { Link, useOutletContext, useParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import { caseOverview } from '../../courses/caseLabels'
 import type { MyCase, MyTeamMember } from '../../courses/types'
-import { ROLE_LABEL, worldLabel } from '../../courses/worldLabel'
+import { sideLabel, worldLabel } from '../../courses/worldLabel'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { CaseStatusBadge } from './CaseStatusBadge'
 import '../CoursePage.css'
@@ -12,13 +12,13 @@ import './Cases.css'
 const names = (members: MyTeamMember[]) => members.map((m) => m.name ?? m.email).join(' and ')
 
 /** The student's pairing, role, case world, and opposition in one case. */
-function Assignment({ team, world }: Pick<MyCase, 'team' | 'world'>) {
+function Assignment({ team, world, parties }: Pick<MyCase, 'team' | 'world' | 'parties'>) {
   const rows: [string, string][] = !team
     ? [['Pairing', 'Not assigned yet']]
     : world
       ? [
           ['Pairing', names(team.members)],
-          ['Role', ROLE_LABEL[world.side]],
+          ['Role', sideLabel(world.side, parties)],
           ['Case world', worldLabel(world.number)],
           ['Opposition', names(world.opponents.members)],
         ]
@@ -92,7 +92,7 @@ export function MyCasesPage() {
                   <CaseStatusBadge status={c.status} />
                 </div>
                 {c.summary && <p className="case-row-summary">{caseOverview(c.summary)}</p>}
-                <Assignment team={c.team} world={c.world} />
+                <Assignment team={c.team} world={c.world} parties={c.parties} />
               </Link>
             </li>
           ))}

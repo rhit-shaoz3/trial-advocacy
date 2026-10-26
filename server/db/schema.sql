@@ -364,6 +364,15 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_enabled boolean NOT NULL
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_name text NOT NULL DEFAULT 'John Hastings';
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_instructions text NOT NULL DEFAULT '';
 
+-- The parties, as the instructor names them ("Paige Winston", "Thrillville Parks"); students see
+-- their side as "Paige Winston (Plaintiff)". Cases from before are named from an "X v. Y" title.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS plaintiff_name text NOT NULL DEFAULT '';
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS defendant_name text NOT NULL DEFAULT '';
+UPDATE cases
+   SET plaintiff_name = trim(substring(title from '^(.*?)\s+[vV]\.?\s+')),
+       defendant_name = trim(regexp_replace(title, '^.*?\s+[vV]\.?\s+', ''))
+ WHERE plaintiff_name = '' AND defendant_name = '' AND title ~ '\s[vV]\.?\s';
+
 -- Reviews also cover a team's investigator requests (kind 'investigation'):
 -- the assignment the team emailed, the investigator's report, and the clean
 -- report the team gets once the instructor has ruled. 'finalizing' is the AI

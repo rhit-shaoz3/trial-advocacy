@@ -91,7 +91,23 @@ function readCaseFields(body: unknown, defaultStatus?: CaseStatus, creating = fa
   }
   if (!CASE_STATUSES.includes(status as CaseStatus)) throw new HttpError(400, 'Choose a valid status.')
 
-  return { title, summary, status: status as CaseStatus, importantFacts: readImportantFacts(body) }
+  return { title, summary, status: status as CaseStatus, importantFacts: readImportantFacts(body), parties: readParties(body) }
+}
+
+const MAX_PARTY_LENGTH = 200
+
+/** `{ plaintiffName, defendantName }`, or undefined to leave them as they are (or name them from the title). */
+function readParties(body: unknown) {
+  const fields = body as Record<string, unknown> | undefined
+  if (fields?.plaintiffName === undefined && fields?.defendantName === undefined) return undefined
+  const plaintiff = readString(body, 'plaintiffName').trim()
+  const defendant = readString(body, 'defendantName').trim()
+  if (!plaintiff) throw new HttpError(400, 'Name the plaintiff.')
+  if (!defendant) throw new HttpError(400, 'Name the defendant.')
+  if (plaintiff.length > MAX_PARTY_LENGTH || defendant.length > MAX_PARTY_LENGTH) {
+    throw new HttpError(400, `Party names must be at most ${MAX_PARTY_LENGTH} characters.`)
+  }
+  return { plaintiff, defendant }
 }
 
 /** Mounted under /api/courses/:courseId/cases, after the course is loaded. */

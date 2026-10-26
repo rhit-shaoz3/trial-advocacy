@@ -26,6 +26,22 @@ async function createCase(input: Record<string, unknown> = coaster) {
 }
 
 describe('creating', () => {
+  it('names the parties, which an edit keeps unless it renames them', async () => {
+    const res = await prof.post(baseUrl()).send({
+      title: 'Winston v. Thrillville',
+      summary: 'A rider was hurt.',
+      plaintiffName: ' Paige Winston ',
+      defendantName: 'Thrillville Parks LLC',
+    })
+    expect(res.body.case.parties).toEqual({ plaintiff: 'Paige Winston', defendant: 'Thrillville Parks LLC' })
+    const url = `${baseUrl()}/${res.body.case.id}`
+    const edited = await prof.patch(url).send({ title: 'Winston v. Thrillville Parks', summary: 'x', status: 'draft' })
+    expect(edited.body.case.parties).toEqual({ plaintiff: 'Paige Winston', defendant: 'Thrillville Parks LLC' })
+    const missing = await prof.post(baseUrl()).send({ title: 'X', summary: 'y', plaintiffName: 'Ann', defendantName: ' ' })
+    expect(missing.status).toBe(400)
+    expect(missing.body.error).toBe('Name the defendant.')
+  })
+
   it('starts the case as a draft and lists it', async () => {
     const res = await prof.post(baseUrl()).send({
       title: '  Rivera v. Thrill Park ',
@@ -43,6 +59,8 @@ describe('creating', () => {
       instructorNote: '',
       inWorldDate: null,
       disputedIssues: '',
+      // Not named, so they come from the "X v. Y" title.
+      parties: { plaintiff: 'Rivera', defendant: 'Thrill Park' },
       importantFacts: { plaintiff: ['The lap bar light was red.'], defense: ['It passed inspection.'] },
       // A new case starts the guided setup.
       setupStep: 'details',

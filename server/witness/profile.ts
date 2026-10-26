@@ -19,7 +19,9 @@ export const isAiWitness = (w: Pick<Witness, 'alignedSide' | 'depositionMaterial
 export const partyRole = (side: Side): PartyRole => (side === 'defense' ? 'defendant' : 'plaintiff')
 
 /** "Rivera v. Thrill Park" → both party names; anything else falls back to generic names. */
-export function partyNames(caseTitle: string) {
+export function partyNames(caseTitle: string, parties?: { plaintiff: string; defendant: string }) {
+  // The names the instructor gave, else the ones in an "X v. Y" title.
+  if (parties?.plaintiff && parties.defendant) return { plaintiff: parties.plaintiff, defendant: parties.defendant }
   const [plaintiff, defendant] = caseTitle.split(/\s+v\.?\s+/i)
   if (!plaintiff?.trim() || !defendant?.trim()) return { plaintiff: 'the plaintiff', defendant: 'the defendant' }
   return { plaintiff: plaintiff.trim(), defendant: defendant.trim() }
@@ -73,7 +75,9 @@ export function witnessDocuments(
 }
 
 export function buildProfile(
-  courseCase: Pick<CourseCase, 'title' | 'summary' | 'inWorldDate' | 'disputedIssues' | 'importantFacts'>,
+  courseCase: Pick<CourseCase, 'title' | 'summary' | 'inWorldDate' | 'disputedIssues' | 'importantFacts'> & {
+    parties?: CourseCase['parties']
+  },
   witness: Witness,
   materials: MaterialText[],
   today = new Date(),
@@ -82,7 +86,7 @@ export function buildProfile(
   otherDepositionIds: ReadonlySet<string> = new Set(),
 ): WitnessProfile {
   if (!witness.alignedSide) throw new WitnessNotReadyError(`Choose which side ${witness.name} is a witness for.`)
-  const names = partyNames(courseCase.title)
+  const names = partyNames(courseCase.title, courseCase.parties)
   const role = partyRole(witness.alignedSide)
   return {
     name: witness.name,

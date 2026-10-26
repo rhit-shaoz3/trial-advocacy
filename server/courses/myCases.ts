@@ -12,6 +12,8 @@ export interface MyCase {
   title: string
   summary: string
   status: 'active' | 'closed'
+  /** The parties' names; empty when the instructor hasn't named them. */
+  parties: { plaintiff: string; defendant: string }
   /** Null until the instructor pairs this student for the case. */
   team: { number: number; members: Member[] } | null
   /** The student's case world; null until their team is matched. `number` 1 is World A. */
@@ -28,6 +30,7 @@ export async function listMyCases(courseId: string, userId: string): Promise<MyC
     title: string
     summary: string
     status: MyCase['status']
+    parties: MyCase['parties']
     teamId: string | null
     teamNumber: number | null
     worldNumber: number | null
@@ -36,6 +39,7 @@ export async function listMyCases(courseId: string, userId: string): Promise<MyC
     opponentNumber: number | null
   }>(
     `SELECT c.id, c.title, c.summary, c.status,
+            json_build_object('plaintiff', c.plaintiff_name, 'defendant', c.defendant_name) AS parties,
             mine.team_id AS "teamId", t.number AS "teamNumber",
             mu.number AS "worldNumber", mt.side,
             opp.team_id AS "opponentTeamId", ot.number AS "opponentNumber"
@@ -76,6 +80,7 @@ export async function listMyCases(courseId: string, userId: string): Promise<MyC
     title: r.title,
     summary: r.summary,
     status: r.status,
+    parties: r.parties,
     team: r.teamId ? { number: r.teamNumber!, members: membersOf(r.teamId) } : null,
     world:
       r.worldNumber && r.opponentTeamId
@@ -96,6 +101,8 @@ export interface CaseSummary {
   status: 'active' | 'closed'
   /** The student's case world and role in it, once their team is matched. */
   world: { number: number; side: Side } | null
+  /** The parties' names, for the student's role ("Paige Winston (Plaintiff)"); empty for the instructor. */
+  parties?: { plaintiff: string; defendant: string }
   /** How many case worlds the case has (the instructor's view). */
   worldCount: number | null
   /** Percent of the team's tasks done; null for the instructor or when there are no tasks. */
@@ -176,6 +183,7 @@ export async function studentHome(courseId: string, userId: string, now = new Da
       summary: c.summary,
       status: c.status,
       world: c.world && { number: c.world.number, side: c.world.side },
+      parties: c.parties,
       worldCount: null,
       progress: tasks[i].length === 0 ? null : Math.round((done / tasks[i].length) * 100),
       ...phases.get(c.id)!,

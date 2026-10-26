@@ -8,6 +8,7 @@ import {
 import { STATUS_HINT, STATUS_LABEL } from './caseStatus'
 import { ImportantFactsField } from './ImportantFactsField'
 import { cleanFacts, missingSide, SIDE_FACT_LABEL, toRows } from './factRows'
+import { titleParties } from '../../courses/worldLabel'
 import { DictationTextarea } from '../../components/Dictation'
 
 /**
@@ -37,6 +38,9 @@ export function CaseForm({
 }) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [summary, setSummary] = useState(initial?.summary ?? '')
+  // Unnamed parties start from an "X v. Y" title.
+  const [plaintiffName, setPlaintiffName] = useState(initial?.parties?.plaintiff || titleParties(initial?.title).plaintiff)
+  const [defendantName, setDefendantName] = useState(initial?.parties?.defendant || titleParties(initial?.title).defendant)
   const [status, setStatus] = useState<CourseCaseStatus>(initial?.status ?? 'draft')
   const [note, setNote] = useState(initial?.instructorNote ?? '')
   const [plaintiffFacts, setPlaintiffFacts] = useState(() => toRows(initial?.importantFacts.plaintiff ?? []))
@@ -57,7 +61,9 @@ export function CaseForm({
     setSubmitting(true)
     try {
       await onSubmit(
-        initial ? { title, summary, status, importantFacts } : { title, summary, importantFacts },
+        initial
+          ? { title, summary, status, importantFacts, plaintiffName, defendantName }
+          : { title, summary, importantFacts, plaintiffName, defendantName },
         note,
       )
     } catch (err) {
@@ -80,6 +86,12 @@ export function CaseForm({
           autoFocus
         />
       </label>
+      <PartyFields
+        plaintiff={plaintiffName}
+        defendant={defendantName}
+        onPlaintiff={setPlaintiffName}
+        onDefendant={setDefendantName}
+      />
       {initial && (
         <label>
           Status
@@ -142,5 +154,45 @@ export function CaseForm({
         </p>
       )}
     </form>
+  )
+}
+
+/** The parties' names, which students see their sides by ("Paige Winston (Plaintiff)"). */
+export function PartyFields({
+  plaintiff,
+  defendant,
+  onPlaintiff,
+  onDefendant,
+}: {
+  plaintiff: string
+  defendant: string
+  onPlaintiff(value: string): void
+  onDefendant(value: string): void
+}) {
+  return (
+    <div className="case-parties">
+      <label>
+        Plaintiff
+        <input
+          type="text"
+          value={plaintiff}
+          onChange={(e) => onPlaintiff(e.target.value)}
+          placeholder="Paige Winston"
+          maxLength={200}
+          required
+        />
+      </label>
+      <label>
+        Defendant
+        <input
+          type="text"
+          value={defendant}
+          onChange={(e) => onDefendant(e.target.value)}
+          placeholder="Thrillville Parks"
+          maxLength={200}
+          required
+        />
+      </label>
+    </div>
   )
 }

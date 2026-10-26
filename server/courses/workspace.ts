@@ -69,6 +69,8 @@ export interface CaseWorkspace {
     status: 'draft' | 'active' | 'closed'
     phase: CasePhase
     instructorNote: string
+    /** The parties' names; empty when the instructor hasn't named them. */
+    parties: { plaintiff: string; defendant: string }
   }
   team: MyCase['team']
   world: MyCase['world']
@@ -100,6 +102,7 @@ type CaseRow = CaseWorkspace['case'] & { investigatorEnabled: boolean; investiga
 async function findCaseRow(courseId: string, caseId: string) {
   const { rows } = await pool.query<CaseRow>(
     `SELECT id, title, summary, status, phase, instructor_note AS "instructorNote",
+            json_build_object('plaintiff', plaintiff_name, 'defendant', defendant_name) AS parties,
             investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName",
             EXISTS (SELECT 1 FROM information_exchange ie
                     WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"

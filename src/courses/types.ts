@@ -94,10 +94,17 @@ export interface ImportantFacts {
   defense: string[]
 }
 
+/** The parties as the instructor named them; empty when they haven't been named. */
+export interface CaseParties {
+  plaintiff: string
+  defendant: string
+}
+
 export interface CourseCase {
   id: string
   title: string
   summary: string
+  parties?: CaseParties
   status: CourseCaseStatus
   phase: CasePhase
   /** Shown on every student's case dashboard. */
@@ -140,6 +147,9 @@ export interface CaseInput {
   status?: CourseCaseStatus
   /** Launching needs at least one per side. Left out of an edit, they stay as they are. */
   importantFacts?: ImportantFacts
+  /** The parties' names; left out of an edit, they stay as they are. */
+  plaintiffName?: string
+  defendantName?: string
 }
 
 /** Students paired for one case: usually two, three for the odd one out. */
@@ -181,6 +191,7 @@ export interface MyCase {
   title: string
   summary: string
   status: Exclude<CourseCaseStatus, 'draft'>
+  parties?: CaseParties
   /** Null until the instructor pairs this student for the case. */
   team: { number: number; members: MyTeamMember[] } | null
   /** Null until their team is matched. `number` 1 is World A. */
@@ -440,6 +451,7 @@ export interface CaseWorkspace {
     status: CourseCaseStatus
     phase: CasePhase
     instructorNote: string
+    parties?: CaseParties
   }
   team: MyCase['team']
   world: MyCase['world']

@@ -24,6 +24,8 @@ export interface CaseSummary {
   status: CaseStatus
   /** A student's case world and their role in it, once their team is matched. */
   world?: { number: number; side: Side } | null
+  /** The parties' names, for the student's role. */
+  parties?: { plaintiff: string; defendant: string }
   /** How many case worlds the case has; set for the instructor. */
   worldCount?: number | null
   /** 0–100, or null while progress isn't tracked. */

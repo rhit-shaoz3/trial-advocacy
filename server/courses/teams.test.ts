@@ -297,6 +297,7 @@ describe("a student's cases", () => {
         title: 'Rivera v. Thrill Park',
         summary: '',
         status: 'active',
+        parties: { plaintiff: 'Rivera', defendant: 'Thrill Park' },
         team: {
           number: 1,
           members: [
@@ -307,7 +308,7 @@ describe("a student's cases", () => {
         },
         world: null,
       },
-      { id: second, title: 'State v. Hale', summary: '', status: 'active', team: null, world: null },
+      { id: second, title: 'State v. Hale', summary: '', status: 'active', parties: { plaintiff: 'State', defendant: 'Hale' }, team: null, world: null },
     ])
   })
 

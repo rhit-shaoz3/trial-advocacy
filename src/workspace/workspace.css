@@ -9,6 +9,12 @@
   gap: 2rem;
 }
 
+.ws-welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .ws-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -499,6 +499,8 @@ describe("the instructor's own dashboard", () => {
     expect(screen.getByText(/3 things need your attention/)).toBeInTheDocument()
     expect(screen.queryByText('Tasks completed')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Your cases' })).not.toBeInTheDocument()
+    // A case can be added straight from here.
+    expect(screen.getByRole('link', { name: 'Add case' })).toHaveAttribute('href', '/courses/c1/cases/new')
   })
 
   it("links each thing that needs the instructor to where it's fixed", async () => {

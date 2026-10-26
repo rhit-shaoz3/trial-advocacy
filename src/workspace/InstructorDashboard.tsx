@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   Gavel,
   MessageSquare,
+  Plus,
   SquareDashed,
   UserPlus,
   Users,
@@ -74,10 +75,16 @@ export function InstructorDashboard({ now = new Date() }: { now?: Date }) {
               : `${plural(attention.length, 'thing needs', 'things need')} your attention. Here’s how ${home.course.title} is doing.`}
           </p>
         </div>
-        <Link to={`${base}/calendar${search}`} className="ws-btn ws-btn-secondary">
-          <CalendarDays aria-hidden="true" />
-          View schedule
-        </Link>
+        <div className="ws-welcome-actions">
+          <Link to={`${base}/calendar${search}`} className="ws-btn ws-btn-secondary">
+            <CalendarDays aria-hidden="true" />
+            View schedule
+          </Link>
+          <Link to={`${base}/cases/new${search}`} className="ws-btn ws-btn-primary">
+            <Plus aria-hidden="true" />
+            Add case
+          </Link>
+        </div>
       </div>
 
       <section className="ws-stats ws-stats-4" aria-label="Course summary">
@@ -139,6 +146,10 @@ export function InstructorDashboard({ now = new Date() }: { now?: Date }) {
           <div className="ws-empty">
             <p>No cases yet.</p>
             <p className="ws-subtle">Create a case and pair your students into teams to get started.</p>
+            <Link to={`${base}/cases/new${search}`} className="ws-btn ws-btn-primary">
+              <Plus aria-hidden="true" />
+              Add your first case
+            </Link>
           </div>
         ) : (
           <ul className="ws-cases">

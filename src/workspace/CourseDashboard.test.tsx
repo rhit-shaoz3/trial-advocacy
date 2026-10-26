@@ -494,7 +494,7 @@ describe("the instructor's own dashboard", () => {
     const summary = await screen.findByRole('region', { name: 'Course summary' })
     expect(summary).toHaveTextContent('30/32Students signed up2 pending')
     expect(summary).toHaveTextContent('1Active case+1 draft')
-    expect(summary).toHaveTextContent('214Witness questions this week')
+    expect(summary).not.toHaveTextContent('Witness questions this week')
     expect(summary).toHaveTextContent('2Reviews waitingNeeds your ruling')
     expect(screen.getByText(/3 things need your attention/)).toBeInTheDocument()
     expect(screen.queryByText('Tasks completed')).not.toBeInTheDocument()

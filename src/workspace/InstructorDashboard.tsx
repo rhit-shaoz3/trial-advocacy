@@ -40,7 +40,7 @@ const ATTENTION_ACTION = {
 }
 
 const ACTIVITY_ICON = { interview: MessageSquare, task: ClipboardCheck, review: BadgeCheck, join: UserPlus }
-const ACTIVITY_TONE = { interview: 'blue', task: 'amber', review: 'green', join: 'rose' }
+const ACTIVITY_TONE = { interview: 'blue', task: 'amber', review: 'purple', join: 'orange' }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
@@ -87,7 +87,7 @@ export function InstructorDashboard({ now = new Date() }: { now?: Date }) {
         </div>
       </div>
 
-      <section className="ws-stats ws-stats-4" aria-label="Course summary">
+      <section className="ws-stats" aria-label="Course summary">
         <StatCard
           icon={<Users />}
           tone="blue"
@@ -103,14 +103,8 @@ export function InstructorDashboard({ now = new Date() }: { now?: Date }) {
           note={stats.draftCases > 0 ? `+${plural(stats.draftCases, 'draft')}` : undefined}
         />
         <StatCard
-          icon={<MessageSquare />}
-          tone="green"
-          value={stats.questionsThisWeek}
-          label="Witness questions this week"
-        />
-        <StatCard
           icon={<Gavel />}
-          tone="rose"
+          tone="purple"
           value={stats.reviewsWaiting}
           label={stats.reviewsWaiting === 1 ? 'Review waiting' : 'Reviews waiting'}
           urgent={stats.reviewsWaiting > 0}

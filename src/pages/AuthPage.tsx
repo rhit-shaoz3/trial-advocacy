@@ -78,7 +78,7 @@ export function AuthPage() {
             <Scale aria-hidden="true" />
           </span>
           <span>
-            <strong>Trial Advocacy</strong>
+            <strong>Getting to Trial</strong>
             <small>Pre-trial litigation simulator</small>
           </span>
         </div>
@@ -107,7 +107,7 @@ export function AuthPage() {
           </figure>
         </div>
 
-        <p className="auth-footer">© 2026 Trial Advocacy · Learning through practice</p>
+        <p className="auth-footer">© 2026 Getting to Trial · Learning through practice</p>
       </aside>
 
       <main className="auth-main">
@@ -116,7 +116,7 @@ export function AuthPage() {
         </div>
 
         <div className="auth-form-wrap">
-          <p className="auth-eyebrow">Welcome to Trial Advocacy</p>
+          <p className="auth-eyebrow">Welcome to Getting to Trial</p>
           <h1 className="auth-title">{isSignUp ? 'Create your account.' : 'Welcome back.'}</h1>
           <p className="auth-subtitle">
             {isSignUp

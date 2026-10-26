@@ -59,7 +59,7 @@ export function AppShell({
             <Scale aria-hidden="true" />
           </span>
           <span>
-            <strong>Trial Advocacy</strong>
+            <strong>Getting to Trial</strong>
             <small>{subtitle}</small>
           </span>
         </Link>

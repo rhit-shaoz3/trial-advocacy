@@ -8,6 +8,7 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     joinCourse: vi.fn(),
     getCourseHome: vi.fn(),
     listTaughtCourses: vi.fn().mockResolvedValue([]),
+    getHomeOverview: vi.fn().mockResolvedValue({ activeCases: [], todos: { count: 0, latest: [] } }),
     createCourse: vi.fn(),
     getCourse: vi.fn(),
     updateCourse: vi.fn(),

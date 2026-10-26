@@ -5,6 +5,7 @@ import { useCourseService } from '../courses/CourseServiceContext'
 import type { TaughtCourse } from '../courses/types'
 import { longDate } from '../workspace/format'
 import { CourseForm } from './course/CourseForm'
+import { HomeOverview } from './HomeOverview'
 import './Dashboard.css'
 
 function pluralize(count: number, noun: string) {
@@ -57,6 +58,8 @@ export function InstructorDashboard() {
           onCancel={() => setCreateOpen(false)}
         />
       )}
+
+      <HomeOverview role="instructor" />
 
       {loadError ? (
         <p className="form-error" role="alert">

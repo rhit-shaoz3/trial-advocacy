@@ -4,6 +4,7 @@ import { CourseGrid } from '../components/CourseGrid'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { Course } from '../courses/types'
 import { longDate } from '../workspace/format'
+import { HomeOverview } from './HomeOverview'
 import './Dashboard.css'
 
 export function StudentDashboard() {
@@ -45,6 +46,8 @@ export function StudentDashboard() {
       </div>
 
       {joinOpen && <JoinCourseForm onJoined={handleJoined} onCancel={() => setJoinOpen(false)} />}
+
+      <HomeOverview role="student" />
 
       {loadError ? (
         <p className="form-error" role="alert">

@@ -37,6 +37,10 @@ export const httpCourseService: CourseService = {
     return (await apiRequest('/courses/teaching')).courses
   },
 
+  async getHomeOverview() {
+    return apiRequest('/home')
+  },
+
   async createCourse(input) {
     return (await apiRequest('/courses', { method: 'POST', body: JSON.stringify(input) })).course
   },

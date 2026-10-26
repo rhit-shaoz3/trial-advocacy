@@ -226,14 +226,14 @@ export function CaseDetailPage() {
             </header>
           )}
 
+          <PhasePanel courseId={courseId} courseCase={courseCase} onChanged={setCourseCase} />
+
           <ExchangeCard
             courseId={courseId}
             courseCase={courseCase}
             onSetUp={() => setExchangeStep('disclosures')}
             onOpenExchanges={() => selectTab('exchange')}
           />
-
-          <PhasePanel courseId={courseId} courseCase={courseCase} onChanged={setCourseCase} />
 
           {courseCase.status === 'draft' && (
             <LaunchPanel

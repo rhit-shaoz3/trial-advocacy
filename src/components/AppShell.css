@@ -118,7 +118,7 @@
 }
 
 .ws-sidebar nav a.active {
-  box-shadow: inset 2px 0 var(--ws-red);
+  box-shadow: inset 2px 0 var(--ws-gold);
 }
 
 .ws-nav-badge {
@@ -129,8 +129,8 @@
   margin-left: auto;
   padding: 0 0.35rem;
   border-radius: 999px;
-  background: var(--ws-red);
-  color: var(--on-brand);
+  background: var(--ws-gold);
+  color: var(--brand);
   font-size: 0.7rem;
   font-weight: 800;
 }
@@ -463,14 +463,14 @@
   color: var(--tint-amber-fg);
 }
 
-.ws-avatar-green {
-  background: var(--tint-green-bg);
-  color: var(--tint-green-fg);
+.ws-avatar-purple {
+  background: var(--tint-purple-bg);
+  color: var(--tint-purple-fg);
 }
 
-.ws-avatar-rose {
-  background: var(--tint-rose-bg);
-  color: var(--tint-rose-fg);
+.ws-avatar-orange {
+  background: var(--tint-orange-bg);
+  color: var(--tint-orange-fg);
 }
 
 .ws-avatar-stack {

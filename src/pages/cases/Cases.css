@@ -470,7 +470,7 @@ a.case-row:hover {
 }
 
 .case-tab[aria-selected='true'] {
-  border-bottom-color: var(--ws-red);
+  border-bottom-color: var(--ws-blue);
   color: var(--ws-navy);
 }
 
@@ -847,8 +847,8 @@ a.case-row:hover {
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 0.4rem;
-  background: var(--tint-green-bg);
-  color: var(--tint-green-fg);
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
 }
 
 .phase-change-icon svg {
@@ -1080,8 +1080,8 @@ a.case-row:hover {
 }
 
 .content-ai-witness {
-  background: var(--tint-green-bg);
-  color: var(--tint-green-fg);
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
 }
 
 /* The AI witness part of the witness form */

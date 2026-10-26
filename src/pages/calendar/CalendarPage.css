@@ -1,4 +1,4 @@
-/* The course calendar (CalendarPage). Each kind has its own colour. */
+/* The course calendar (CalendarPage). Each kind has its own colour, none of them red or green (those mean good or bad). */
 
 .cal-kind-task {
   --cal-bg: var(--tint-blue-bg);
@@ -6,13 +6,13 @@
 }
 
 .cal-kind-case {
-  --cal-bg: var(--tint-rose-bg);
-  --cal-fg: var(--tint-rose-fg);
+  --cal-bg: var(--tint-amber-bg);
+  --cal-fg: var(--tint-amber-fg);
 }
 
 .cal-kind-personal {
-  --cal-bg: var(--tint-green-bg);
-  --cal-fg: var(--tint-green-fg);
+  --cal-bg: var(--tint-orange-bg);
+  --cal-fg: var(--tint-orange-fg);
 }
 
 .cal-kind-team {

@@ -17,7 +17,7 @@ const ROLE_OPTIONS: { role: Role; title: string; desc: string; Icon: typeof User
 
 const HIGHLIGHTS = [
   { Icon: MessagesSquare, tone: 'blue', text: 'Interview AI witnesses who answer like real ones' },
-  { Icon: Users, tone: 'green', text: 'Prepare with your team, against another' },
+  { Icon: Users, tone: 'purple', text: 'Prepare with your team, against another' },
   { Icon: Gavel, tone: 'amber', text: 'Instructors rule on every new fact' },
 ] as const
 

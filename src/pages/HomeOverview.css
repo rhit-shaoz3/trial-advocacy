@@ -32,8 +32,8 @@
   height: 1.6rem;
   padding: 0 0.45rem;
   border-radius: 999px;
-  background: var(--ws-red);
-  color: #fff;
+  background: var(--button);
+  color: var(--on-brand);
   font-size: 0.8rem;
   font-weight: 800;
 }
@@ -97,7 +97,7 @@
 }
 
 .home-todo-response > svg:first-child {
-  color: var(--ws-red);
+  color: var(--tint-amber-fg);
 }
 
 .home-uptodate {

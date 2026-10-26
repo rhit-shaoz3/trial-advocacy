@@ -300,7 +300,7 @@ export function CaseWorkspaceView({
                   {exchange && (
                     <WorkbenchRow
                       icon={<Share2 />}
-                      tone="green"
+                      tone="purple"
                       title="Information exchange"
                       detail={
                         toRespond > 0
@@ -314,7 +314,7 @@ export function CaseWorkspaceView({
                   )}
                   <WorkbenchRow
                     icon={<ClipboardList />}
-                    tone="rose"
+                    tone="orange"
                     title="Tasks"
                     detail={tasks.length === 0 ? 'None yet' : `${openTasks.length} of ${tasks.length} open`}
                     onOpen={() => setTab('tasks')}

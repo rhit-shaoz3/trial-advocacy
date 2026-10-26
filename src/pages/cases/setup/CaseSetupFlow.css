@@ -55,8 +55,8 @@
   width: 1.35rem;
   height: 1.35rem;
   border-radius: 50%;
-  background: var(--tint-green-bg, #e3efe7);
-  color: var(--tint-green-fg, #2f6b4b);
+  background: var(--tint-blue-bg, #e8eff7);
+  color: var(--tint-blue-fg, #2f5b86);
   font-size: 0.72rem;
   font-weight: 800;
 }
@@ -264,7 +264,7 @@
 }
 
 .setup-done h1 em {
-  color: var(--ws-red);
+  color: var(--ws-blue);
 }
 
 .setup-done p {

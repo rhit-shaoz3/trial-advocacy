@@ -141,10 +141,10 @@
   gap: 0.4rem;
   max-width: 90%;
   padding: 0.3rem 0.8rem;
-  border: 1px solid color-mix(in srgb, var(--ws-red) 35%, transparent);
+  border: 1px solid var(--tint-amber-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ws-red) 8%, var(--surface));
-  color: var(--ws-red);
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
   font-size: 0.82rem;
   font-style: italic;
 }

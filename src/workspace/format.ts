@@ -70,7 +70,8 @@ export function caseInitials(title: string) {
   return initials(title)
 }
 
-const AVATAR_TONES = ['blue', 'sand', 'green', 'rose'] as const
+// No green or rose: a person's colour shouldn't read as good or bad.
+const AVATAR_TONES = ['blue', 'sand', 'purple', 'orange'] as const
 
 /** A stable color for a person, so they look the same everywhere. */
 export function avatarTone(name: string) {

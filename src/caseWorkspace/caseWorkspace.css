@@ -85,7 +85,7 @@
 }
 
 .cw-tab[aria-selected='true'] {
-  border-bottom-color: var(--ws-red);
+  border-bottom-color: var(--ws-blue);
   color: var(--ws-navy);
 }
 
@@ -455,7 +455,7 @@
 /* Next task */
 
 .cw-next {
-  border-top: 3px solid var(--ws-red);
+  border-top: 3px solid var(--ws-blue);
 }
 
 .cw .cw-next h3 {
@@ -1167,7 +1167,7 @@
 .cw-welcome-title svg {
   width: 1rem;
   height: 1rem;
-  color: var(--ws-red);
+  color: var(--ws-blue);
 }
 
 .cw-welcome-later {

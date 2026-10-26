@@ -146,7 +146,7 @@ function StudentDashboard({ now }: { now: Date }) {
         />
         <StatCard
           icon={<Clock />}
-          tone="rose"
+          tone="purple"
           value={deadlines.length}
           label="Upcoming deadlines"
           note={daysToDeadline === null ? undefined : `Next ${inDays(daysToDeadline)}`}

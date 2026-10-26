@@ -96,6 +96,22 @@
   color: var(--tint-green-fg);
 }
 
+/* Neutral tones, for categories that aren't good or bad (green and rose mean that). */
+.ws-tone-purple {
+  background: var(--tint-purple-bg);
+  color: var(--tint-purple-fg);
+}
+
+.ws-tone-grey {
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
+}
+
+.ws-tone-orange {
+  background: var(--tint-orange-bg);
+  color: var(--tint-orange-fg);
+}
+
 /* Case cards */
 
 .ws-cases {
@@ -381,8 +397,8 @@
 }
 
 .ws-date-deadline {
-  background: var(--tint-rose-bg);
-  color: var(--ws-red);
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
 }
 
 .ws-date-event {
@@ -458,10 +474,6 @@
 }
 
 /* The instructor's dashboard (InstructorDashboard) */
-
-.ws-stats-4 {
-  grid-template-columns: repeat(4, 1fr);
-}
 
 .ws-attention {
   margin-bottom: 2.2rem;
@@ -558,17 +570,7 @@
   font: 600 0.62rem var(--ws-sans, inherit);
 }
 
-@media (max-width: 1000px) {
-  .ws-stats-4 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 760px) {
-  .ws-stats-4 {
-    grid-template-columns: 1fr;
-  }
-
   .ws-attention-row {
     flex-wrap: wrap;
   }

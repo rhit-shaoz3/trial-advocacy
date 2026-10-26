@@ -8,13 +8,14 @@
 
 .dictate-field .dictate-input {
   width: 100%;
-  padding-right: 2.6rem;
+  padding-right: 3.6rem;
   box-sizing: border-box;
 }
 
+/* Left of the corner, clear of the resize handle. */
 .dictate-button {
   position: absolute;
-  right: 0.45rem;
+  right: 1.45rem;
   bottom: 0.5rem;
   display: grid;
   place-items: center;

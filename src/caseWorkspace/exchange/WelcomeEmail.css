@@ -102,7 +102,7 @@
   color: var(--ws-blue);
 }
 
-/* A document the team has: its name opens it in the viewer, as does the Open button. */
+/* A document the team has: its name opens it in the viewer. */
 .welcome-email-file {
   padding: 0;
   border: none;
@@ -120,23 +120,9 @@
   text-decoration-color: currentColor;
 }
 
-.welcome-email-open {
-  margin-left: auto;
-  padding: 0.15rem 0.6rem;
-  border: 1px solid var(--ws-line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--ws-navy);
-  font: 700 0.75rem var(--ws-sans);
-  cursor: pointer;
-}
 
-.welcome-email-open:hover {
-  border-color: var(--border-strong);
-}
 
-.welcome-email-file:focus-visible,
-.welcome-email-open:focus-visible {
+.welcome-email-file:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }

@@ -80,24 +80,14 @@ export function WelcomeEmail({
               <li key={d.id ?? d.title}>
                 <FileText aria-hidden="true" />
                 {d.id && onOpenDocument ? (
-                  <>
-                    <button
-                      type="button"
-                      className="welcome-email-file"
-                      title={`Open ${d.title} in the viewer`}
-                      onClick={() => onOpenDocument(d.id!)}
-                    >
-                      {d.title}
-                    </button>
-                    <button
-                      type="button"
-                      className="welcome-email-open"
-                      aria-label={`Open ${d.title}`}
-                      onClick={() => onOpenDocument(d.id!)}
-                    >
-                      Open
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="welcome-email-file"
+                    title={`Open ${d.title} in the viewer`}
+                    onClick={() => onOpenDocument(d.id!)}
+                  >
+                    {d.title}
+                  </button>
                 ) : (
                   d.title
                 )}

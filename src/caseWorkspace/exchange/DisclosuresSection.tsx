@@ -3,6 +3,7 @@ import { BookOpen, Check, FileText, Info, Minus, PartyPopper, Plus, Send } from 
 import { WitnessAvatar } from '../../components/WitnessAvatar'
 import { shortDate } from '../../courses/caseLabels'
 import type { DisclosureItem, DisclosureOption, DisclosurePick, StudentExchange } from '../../courses/types'
+import { DictationTextarea } from '../../components/Dictation'
 
 type Disclosures = NonNullable<StudentExchange['disclosures']>
 
@@ -114,7 +115,7 @@ function DisclosureForm({
               {on && (
                 <label className="ex-reason">
                   Why disclose this?
-                  <textarea
+                  <DictationTextarea
                     value={reasons[key(o)]}
                     onChange={(e) => setReasons((r) => ({ ...r, [key(o)]: e.target.value }))}
                     placeholder="Write a sentence or two…"
@@ -146,7 +147,7 @@ function DisclosureForm({
       {holdsBack && (
         <label className="ex-reason ex-reason-wide">
           Why are you holding back the rest?
-          <textarea value={heldBack} onChange={(e) => setHeldBack(e.target.value)} rows={2} maxLength={1000} />
+          <DictationTextarea value={heldBack} onChange={(e) => setHeldBack(e.target.value)} rows={2} maxLength={1000} />
         </label>
       )}
       <div className="ex-footer">

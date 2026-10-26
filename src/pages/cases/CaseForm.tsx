@@ -8,6 +8,7 @@ import {
 import { STATUS_HINT, STATUS_LABEL } from './caseStatus'
 import { ImportantFactsField } from './ImportantFactsField'
 import { cleanFacts, missingSide, SIDE_FACT_LABEL, toRows } from './factRows'
+import { DictationTextarea } from '../../components/Dictation'
 
 /**
  * The case title/summary form, with the most important facts for each side.
@@ -93,7 +94,7 @@ export function CaseForm({
       )}
       <label className="case-summary-field">
         Summary (optional)
-        <textarea
+        <DictationTextarea
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
           placeholder="A rollercoaster stalls mid-loop and a rider is injured during the evacuation."
@@ -112,7 +113,7 @@ export function CaseForm({
       {initial && (
         <label className="case-summary-field">
           Note to students (optional)
-          <textarea
+          <DictationTextarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Focus on what the inspection log reveals about notice."

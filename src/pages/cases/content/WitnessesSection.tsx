@@ -15,6 +15,7 @@ import { ROLE_LABEL } from '../../../courses/worldLabel'
 import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { initialPicture, type PictureChoice } from './witnessPicture'
 import { WitnessPicturePicker } from './WitnessPicturePicker'
+import { DictationTextarea } from '../../../components/Dictation'
 
 const BLANK: WitnessInput = {
   name: '',
@@ -254,7 +255,7 @@ function WitnessSettings({
     <form className="panel-form content-form" onSubmit={handleSubmit} aria-label="AI witness settings">
       <label className="content-form-full">
         Issues the witnesses must leave disputed (optional)
-        <textarea
+        <DictationTextarea
           value={issues}
           onChange={(e) => setIssues(e.target.value)}
           placeholder="Whether the operator was at the controls when the train stopped; whether the lap bar was locked"
@@ -374,7 +375,7 @@ function WitnessForm({
       </label>
       <label className="content-form-full">
         About this witness (optional)
-        <textarea
+        <DictationTextarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Was at the ride controls when the train stopped."
@@ -449,7 +450,7 @@ function WitnessForm({
         )}
         <label className="content-form-full">
           Background and demeanor (optional)
-          <textarea
+          <DictationTextarea
             value={personaNotes}
             onChange={(e) => setPersonaNotes(e.target.value)}
             placeholder="Has run rides for five years. Plain-spoken, loyal to the park, defensive about the ride's safety."

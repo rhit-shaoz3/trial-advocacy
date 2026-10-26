@@ -11,6 +11,7 @@ import { cleanFacts, toRows } from '../factRows'
 import { ImportantFactsField } from '../ImportantFactsField'
 import { TeamsSection } from '../TeamsSection'
 import './CaseSetupFlow.css'
+import { DictationTextarea } from '../../../components/Dictation'
 
 const STEP_LABEL: Record<SetupStep, string> = {
   details: 'Details',
@@ -262,7 +263,7 @@ function DetailsStep({
       </label>
       <label>
         Description
-        <textarea
+        <DictationTextarea
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
           placeholder="A rollercoaster stopped mid-loop and a rider was hurt. Was the park negligent?"

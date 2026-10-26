@@ -1,0 +1,80 @@
+/* A textarea with a microphone button (DictationTextarea). */
+
+.dictate-field {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.dictate-field .dictate-input {
+  width: 100%;
+  padding-right: 2.6rem;
+  box-sizing: border-box;
+}
+
+.dictate-button {
+  position: absolute;
+  right: 0.45rem;
+  bottom: 0.5rem;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid var(--ws-line, var(--border));
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ws-muted, var(--muted));
+  cursor: pointer;
+}
+
+.dictate-button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--ws-navy, var(--text));
+}
+
+.dictate-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dictate-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.dictate-button svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* Listening: red, with a soft pulse. */
+.dictate-listening {
+  border-color: var(--ws-red, #b42318);
+  background: var(--ws-red, #b42318);
+  color: #fff;
+  animation: dictate-pulse 1.4s ease-out infinite;
+}
+
+@keyframes dictate-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ws-red, #b42318) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0.6rem transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dictate-listening {
+    animation: none;
+  }
+}
+
+.dictate-interim {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--ws-muted, var(--muted));
+  font-size: 0.8rem;
+  font-style: italic;
+}

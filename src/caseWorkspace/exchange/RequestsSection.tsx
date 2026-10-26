@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { dueLabel, shortDate } from '../../courses/caseLabels'
 import { questionWeight, type ExchangeKind, type ExchangeRequest, type ItemResponse, type StudentPart } from '../../courses/types'
+import { DictationTextarea } from '../../components/Dictation'
 
 type TeamRequest = StudentPart['requests'][number]
 
@@ -416,7 +417,7 @@ function Compose({
             <li key={i} className={focus === i ? 'ex-line ex-line-focus' : 'ex-line'}>
               <span className="ex-line-number">{i + 1}.</span>
               <div>
-                <textarea
+                <DictationTextarea
                   ref={(el) => {
                     refs.current[i] = el
                   }}
@@ -566,7 +567,7 @@ function Respond({
                 <>
                   <label className="ex-reason">
                     {d.objection ? 'Your objection' : 'Your answer'}
-                    <textarea
+                    <DictationTextarea
                       value={d.answer}
                       rows={2}
                       maxLength={4000}
@@ -605,11 +606,11 @@ function Respond({
                     <div className="ex-partial">
                       <label className="ex-reason ex-reason-agree">
                         What you agree with
-                        <textarea value={d.agreePart} rows={2} maxLength={4000} onChange={(e) => set(i, { agreePart: e.target.value })} />
+                        <DictationTextarea value={d.agreePart} rows={2} maxLength={4000} onChange={(e) => set(i, { agreePart: e.target.value })} />
                       </label>
                       <label className="ex-reason ex-reason-disagree">
                         What you disagree with
-                        <textarea
+                        <DictationTextarea
                           value={d.disagreePart}
                           rows={2}
                           maxLength={4000}
@@ -621,7 +622,7 @@ function Respond({
                   {d.admission === 'disagree' && (
                     <label className="ex-reason">
                       Explain (optional)
-                      <textarea value={d.answer} rows={2} maxLength={4000} onChange={(e) => set(i, { answer: e.target.value })} />
+                      <DictationTextarea value={d.answer} rows={2} maxLength={4000} onChange={(e) => set(i, { answer: e.target.value })} />
                     </label>
                   )}
                 </>

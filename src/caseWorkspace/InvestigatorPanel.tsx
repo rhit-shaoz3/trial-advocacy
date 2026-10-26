@@ -4,6 +4,7 @@ import type { ViewableFile } from '../components/FileViewer'
 import { WitnessAvatar } from '../components/WitnessAvatar'
 import { fileTypeLabel, formatSize, shortDate } from '../courses/caseLabels'
 import type { Investigation } from '../courses/types'
+import { DictationTextarea } from '../components/Dictation'
 
 /** The longest assignment a team can send (matches the server). */
 const MAX_ASSIGNMENT_LENGTH = 4000
@@ -254,7 +255,7 @@ function InvestigatorEmail({
       <label className="cw-sr" htmlFor="cw-email-body">
         Your assignment
       </label>
-      <textarea
+      <DictationTextarea
         id="cw-email-body"
         value={assignment}
         onChange={(e) => setAssignment(e.target.value)}

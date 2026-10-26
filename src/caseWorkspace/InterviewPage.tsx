@@ -9,6 +9,7 @@ import type { Interview, InterviewAs, Side } from '../courses/types'
 import { ROLE_LABEL } from '../courses/worldLabel'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import './interview.css'
+import { DictationTextarea } from '../components/Dictation'
 
 /** Matches INTERVIEW_MINUTES on the server: a team's interview lasts an hour from its first question. */
 const INTERVIEW_MINUTES = 60
@@ -288,7 +289,7 @@ export function InterviewPage() {
               <label className="iv-sr" htmlFor="iv-question">
                 Your question
               </label>
-              <textarea
+              <DictationTextarea
                 id="iv-question"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}

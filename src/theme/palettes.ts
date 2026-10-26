@@ -16,7 +16,7 @@ export const PALETTE_INFO: Record<
     label: 'Navy & parchment',
     description: 'Deep navy on warm paper',
     light: { sidebar: '#10233f', page: '#f5f3ee', card: '#ffffff', button: '#10233f' },
-    dark: { sidebar: '#0a1220', page: '#1d1b16', card: '#262626', button: '#2b5ea9' },
+    dark: { sidebar: '#0a1220', page: '#1a1a1a', card: '#262626', button: '#2b5ea9' },
     accents: ['#b98b42', '#a84b43'],
   },
   slate: {
@@ -51,7 +51,7 @@ export const PALETTE_INFO: Record<
     label: 'Lagoon',
     description: 'Deep ocean and turquoise on sand, with coral and saffron',
     light: { sidebar: '#12355b', page: '#f4efe6', card: '#fffdf9', button: '#1e7d72' },
-    dark: { sidebar: '#071221', page: '#1d1a16', card: '#262626', button: '#1e7d72' },
+    dark: { sidebar: '#071221', page: '#1a1a1a', card: '#262626', button: '#1e7d72' },
     accents: ['#e76f51', '#e9c46a'],
   },
   contrast: {

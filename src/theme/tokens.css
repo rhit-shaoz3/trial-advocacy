@@ -443,20 +443,20 @@
 /* ---------- Navy & parchment (the default), dark ---------- */
 :root[data-theme='dark'] {
   /* Ink */
-  --ws-navy: #efeeeb;
-  --ws-text: #e6e4e0;
-  --fg-soft: #cfccc4;
-  --ws-muted: #aca79a;
+  --ws-navy: #ededed;
+  --ws-text: #e3e3e3;
+  --fg-soft: #cacaca;
+  --ws-muted: #a3a3a3;
   /* Surfaces */
-  --ws-paper: #1d1b16;
+  --ws-paper: #1a1a1a;
   --surface: #262626;
-  --subtle: #37332a;
+  --subtle: #303030;
   --surface-hover: #2b2b2b;
   --surface-translucent: rgba(255, 255, 255, 0.03);
   /* Lines */
-  --ws-line: #44423c;
-  --ws-row-line: #363430;
-  --border-strong: #5f5c53;
+  --ws-line: #404040;
+  --ws-row-line: #333333;
+  --border-strong: #595959;
   /* Brand: dark panels (sidebar, case banner) and the main buttons */
   --brand: #0a1220;
   --brand-light: #142035;
@@ -704,20 +704,20 @@
 /* ---------- Lagoon, dark ---------- */
 :root[data-theme='dark'][data-palette='lagoon'] {
   /* Ink */
-  --ws-navy: #efeeeb;
-  --ws-text: #e6e4e0;
-  --fg-soft: #cfcbc4;
-  --ws-muted: #aca69a;
+  --ws-navy: #ededed;
+  --ws-text: #e3e3e3;
+  --fg-soft: #cacaca;
+  --ws-muted: #a3a3a3;
   /* Surfaces */
-  --ws-paper: #1d1a16;
+  --ws-paper: #1a1a1a;
   --surface: #262626;
-  --subtle: #37322a;
+  --subtle: #303030;
   --surface-hover: #2b2b2b;
   --surface-translucent: rgba(255, 255, 255, 0.03);
   /* Lines */
-  --ws-line: #44413c;
-  --ws-row-line: #363430;
-  --border-strong: #5f5b53;
+  --ws-line: #404040;
+  --ws-row-line: #333333;
+  --border-strong: #595959;
   /* Brand: dark panels (sidebar, case banner) and the main buttons */
   --brand: #071221;
   --brand-light: #0e1e33;

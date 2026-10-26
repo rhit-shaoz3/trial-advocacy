@@ -26,7 +26,7 @@
   gap: 0.75rem;
 }
 
-/* The app's icon (public/favicon.svg). */
+/* The app's icon (BrandIcon). */
 .auth-brand-icon {
   flex: none;
   width: 2.4rem;

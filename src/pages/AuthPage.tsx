@@ -2,6 +2,7 @@ import { ArrowRight, CircleCheck, Eye, EyeOff, Gavel, GraduationCap, Mail, Messa
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/useAuth'
 import type { Role } from '../auth/types'
+import { BrandIcon } from '../components/BrandIcon'
 import { ThemeToggle } from '../theme/ThemeToggle'
 import './AuthPage.css'
 
@@ -74,7 +75,7 @@ export function AuthPage() {
     <div className="auth">
       <aside className="auth-panel">
         <div className="auth-brand">
-          <img className="auth-brand-icon" src="/favicon.svg" alt="" />
+          <BrandIcon className="auth-brand-icon" />
           <span>
             <strong>Getting to Trial</strong>
             <small>Pre-trial litigation simulator</small>

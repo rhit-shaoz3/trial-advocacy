@@ -4,6 +4,7 @@ import { Link, NavLink, useNavigate } from 'react-router'
 import { AccountDialog } from '../account/AccountDialog'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from './Avatar'
+import { BrandIcon } from './BrandIcon'
 import './AppShell.css'
 import { ThemeToggle } from '../theme/ThemeToggle'
 
@@ -55,7 +56,7 @@ export function AppShell({
     <div className="ws">
       <aside className="ws-sidebar">
         <Link to="/" className="ws-brand">
-          <img className="ws-brand-icon" src="/favicon.svg" alt="" />
+          <BrandIcon className="ws-brand-icon" />
           <span>
             <strong>Getting to Trial</strong>
             <small>{subtitle}</small>

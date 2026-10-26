@@ -29,6 +29,7 @@ import { matchupsRouter } from './matchupRoutes.ts'
 import { teamsRouter } from './teamRoutes.ts'
 import { getPreviewWorkspace, launchChecks } from './workspace.ts'
 import { applyDisclosures, requestsOpen } from '../exchange/exchange.ts'
+import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 
 declare module 'express-serve-static-core' {
@@ -153,6 +154,16 @@ caseRouter.use('/materials', materialsRouter)
 caseRouter.use('/witnesses', witnessesRouter)
 caseRouter.use('/tasks', tasksRouter)
 caseRouter.use('/exchange', exchangeRouter)
+
+/** How teams have used the background investigator, for the case dashboard. */
+caseRouter.get('/investigator/overview', async (req, res) => {
+  res.json({ overview: await investigatorOverview(req.courseCase!.id) })
+})
+
+/** How teams are deposing the other side's witnesses, for the case dashboard. */
+caseRouter.get('/depositions/overview', async (req, res) => {
+  res.json({ overview: await depositionOverview(req.courseCase!.id) })
+})
 
 caseRouter.put('/note', async (req, res) => {
   const note = readString(req.body, 'note').trim()

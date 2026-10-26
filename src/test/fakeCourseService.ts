@@ -84,6 +84,8 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     saveDisclosures: vi.fn(),
     completeExchangeSetup: vi.fn(),
     getExchangeOverview: vi.fn(),
+    getInvestigatorOverview: vi.fn().mockResolvedValue({ teams: 0, teamsUsed: 0, requests: 0, waiting: 0 }),
+    getDepositionOverview: vi.fn().mockResolvedValue({ teams: 0, teamsDeposed: 0, depositions: 0, questions: 0, objections: 0, reviewsWaiting: 0 }),
     listExchangeRequests: vi.fn().mockResolvedValue([]),
     getMyExchange: vi.fn().mockResolvedValue(null),
     submitDisclosures: vi.fn(),

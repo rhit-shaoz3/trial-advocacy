@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import type { CourseCase } from '../../courses/types'
+import { investigatorOf, type CourseCase } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { NotFoundPage } from '../NotFoundPage'
 import { CaseForm } from './CaseForm'
@@ -17,6 +17,7 @@ import { WitnessesSection } from './content/WitnessesSection'
 import { PhasePanel } from './PhasePanel'
 import { CaseSetupFlow } from './setup/CaseSetupFlow'
 import { ExchangeCard } from './exchange/ExchangeCard'
+import { DepositionCard, InvestigatorCard } from './PhaseCards'
 import { ExchangeSetupFlow, type ExchangeStep } from './exchange/ExchangeSetupFlow'
 import { ExchangeTab } from './exchange/ExchangeTab'
 import { TeamsSection } from './TeamsSection'
@@ -124,6 +125,14 @@ export function CaseDetailPage() {
     return <NotFoundPage message="That case does not exist, or you do not teach its course." />
   }
 
+  const launched = courseCase !== null && courseCase.status !== 'draft'
+  /** Past the information exchange (its card moves to its tab), and past investigating (likewise). */
+  const pastExchange = launched && (courseCase.phase === 'investigate' || courseCase.phase === 'deposition')
+  const pastInvestigate = launched && courseCase.phase === 'deposition'
+  const exchangeCard = (c: CourseCase) => (
+    <ExchangeCard courseId={courseId} courseCase={c} onSetUp={() => setExchangeStep('disclosures')} />
+  )
+
   return (
     <main className="page">
       {exchangeStep === null && (
@@ -228,12 +237,14 @@ export function CaseDetailPage() {
 
           <PhasePanel courseId={courseId} courseCase={courseCase} onChanged={setCourseCase} />
 
-          <ExchangeCard
-            courseId={courseId}
-            courseCase={courseCase}
-            onSetUp={() => setExchangeStep('disclosures')}
-            onOpenExchanges={() => selectTab('exchange')}
-          />
+          {/* The card for where the case is; earlier phases' cards move to their own tabs. */}
+          {courseCase.status !== 'draft' && courseCase.phase === 'deposition' ? (
+            <DepositionCard courseId={courseId} courseCase={courseCase} />
+          ) : courseCase.status !== 'draft' && courseCase.phase === 'investigate' ? (
+            <InvestigatorCard courseId={courseId} courseCase={courseCase} />
+          ) : (
+            exchangeCard(courseCase)
+          )}
 
           {courseCase.status === 'draft' && (
             <LaunchPanel
@@ -285,10 +296,18 @@ export function CaseDetailPage() {
               <WitnessesSection courseId={courseId} courseCase={courseCase} onCaseChange={setCourseCase} />
             )}
             {tab === 'investigator' && (
-              <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={setCourseCase} />
+              <>
+                {pastInvestigate && investigatorOf(courseCase).enabled && (
+                  <InvestigatorCard courseId={courseId} courseCase={courseCase} />
+                )}
+                <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={setCourseCase} />
+              </>
             )}
             {tab === 'exchange' && courseCase.exchangeReady && (
-              <ExchangeTab courseId={courseId} courseCase={courseCase} onEdit={setExchangeStep} />
+              <>
+                {pastExchange && exchangeCard(courseCase)}
+                <ExchangeTab courseId={courseId} courseCase={courseCase} onEdit={setExchangeStep} />
+              </>
             )}
             {tab === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
             {tab === 'student-view' && (

@@ -473,6 +473,14 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${casePath(courseId, caseId)}/exchange/overview`)).overview
   },
 
+  async getInvestigatorOverview(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/investigator/overview`)).overview
+  },
+
+  async getDepositionOverview(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/depositions/overview`)).overview
+  },
+
   async listExchangeRequests(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/exchange/requests`)).requests
   },

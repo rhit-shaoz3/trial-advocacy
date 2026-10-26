@@ -167,6 +167,17 @@ describe('asking the investigator', () => {
     expect(done).toMatchObject({ status: 'completed', report: 'Nothing more to report.', unlocked: [], seen: false })
   })
 
+  it('counts the teams that have used him and their requests, for the case dashboard', async () => {
+    await toInvestigate()
+    const overview = async () => (await prof.get(`${caseUrl()}/investigator/overview`)).body.overview
+    expect(await overview()).toEqual({ teams: 2, teamsUsed: 0, requests: 0, waiting: 0 })
+
+    ai.investigate = async () => 'Nothing more to report.'
+    await sendAndWait(plaintiff, 'Check the corner.')
+    // Waiting for the instructor until it's finished.
+    expect(await overview()).toEqual({ teams: 2, teamsUsed: 1, requests: 1, waiting: 1 })
+  })
+
   it("flags a report without its review block, still proposing the files it cites", async () => {
     await toInvestigate()
     ai.investigate = async () => 'I found the brake records. [NEW ACCESS: Maintenance log]'

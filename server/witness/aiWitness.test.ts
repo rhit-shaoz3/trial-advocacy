@@ -242,6 +242,15 @@ describe('interviewing an AI witness', () => {
     await prof.put(`${caseUrl()}/phase`).send({ phase: 'deposition' })
   })
 
+  it('counts depositions of the other side\'s witnesses, for the case dashboard', async () => {
+    const overview = async () => (await prof.get(`${caseUrl()}/depositions/overview`)).body.overview
+    expect(await overview()).toMatchObject({ teamsDeposed: 0, depositions: 0, questions: 0 })
+    // Ada's team is the plaintiff, and Elena testifies for the defense.
+    await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    await ada.post(`${interview()}/questions`).send({ question: 'And then?' })
+    expect(await overview()).toMatchObject({ teamsDeposed: 1, depositions: 1, questions: 2, objections: 0 })
+  })
+
   it('builds the witness from the case file', async () => {
     // Evidence kept with the instructor is still a record; another witness's deposition is their account.
     await prof.patch(`${caseUrl()}/materials/${files['Accident log.pdf']}`).send({ audience: 'instructor', description: 'Accident log' })

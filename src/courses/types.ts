@@ -693,6 +693,31 @@ export interface CalendarEventInput {
   caseId?: string | null
 }
 
+/** How teams have used the background investigator; matches server/courses/phaseOverview.ts. */
+export interface InvestigatorOverview {
+  /** Teams in a case world. */
+  teams: number
+  /** Teams that have sent him at least one assignment. */
+  teamsUsed: number
+  /** Assignments sent, whole class. */
+  requests: number
+  /** With him or the instructor, not back to the team yet. */
+  waiting: number
+}
+
+/** How teams are deposing the other side's witnesses; matches server/courses/phaseOverview.ts. */
+export interface DepositionOverview {
+  teams: number
+  /** Teams that have deposed at least one of the other side's witnesses. */
+  teamsDeposed: number
+  depositions: number
+  questions: number
+  /** Objections from the witnesses' lawyers. */
+  objections: number
+  /** Interview reviews still waiting for the instructor. */
+  reviewsWaiting: number
+}
+
 export interface CourseService {
   // Students
   /** The current user's courses, newest term first. */
@@ -830,6 +855,9 @@ export interface CourseService {
   /** Finishes the setup: students see it, and the case gains its phase. */
   completeExchangeSetup(courseId: string, caseId: string): Promise<{ settings: ExchangeSettings; case: CourseCase }>
   getExchangeOverview(courseId: string, caseId: string): Promise<ExchangeOverview>
+  /** The case dashboard's cards for the investigate and deposition phases. */
+  getInvestigatorOverview(courseId: string, caseId: string): Promise<InvestigatorOverview>
+  getDepositionOverview(courseId: string, caseId: string): Promise<DepositionOverview>
   /** Every set teams have sent each other, newest first: the instructor's read-only view. */
   listExchangeRequests(courseId: string, caseId: string): Promise<ExchangeRequest[]>
   // Information exchange: the student's team.

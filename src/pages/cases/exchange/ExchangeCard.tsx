@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, CheckCheck, CircleHelp, Clock, Eye, Lock, Pencil, ScrollText, Share2, Users } from 'lucide-react'
+import { ArrowRight, CheckCheck, CircleHelp, Clock, Lock, Pencil, ScrollText, Share2, Users } from 'lucide-react'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { worldLabel } from '../../../courses/worldLabel'
 import type { CourseCase, ExchangeOverview, ExchangeSettings } from '../../../courses/types'
@@ -26,14 +26,11 @@ export function ExchangeCard({
   courseId,
   courseCase,
   onSetUp,
-  onOpenExchanges,
 }: {
   courseId: string
   courseCase: CourseCase
   /** Opens the setup flow (to edit, once it's set up). */
   onSetUp(): void
-  /** Opens the Information exchange tab. */
-  onOpenExchanges(): void
 }) {
   const service = useCourseService()
   const ready = courseCase.exchangeReady ?? false
@@ -119,11 +116,6 @@ export function ExchangeCard({
           <button type="button" className="btn-secondary" onClick={onSetUp}>
             <Pencil aria-hidden="true" className="exchange-inline-icon" /> Edit settings
           </button>
-          {!introduction && (
-            <button type="button" className="btn-primary" onClick={onOpenExchanges}>
-              <Eye aria-hidden="true" className="exchange-inline-icon" /> See the exchanges
-            </button>
-          )}
         </div>
       </div>
 

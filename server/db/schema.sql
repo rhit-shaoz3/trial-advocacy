@@ -570,3 +570,12 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 );
 
 CREATE INDEX IF NOT EXISTS calendar_events_course_idx ON calendar_events (course_id, on_date);
+
+-- The AI's suggested witnesses, read from the initial file once the parties are
+-- named. `key` is what they were made from (initial file and party names), so
+-- they're made again if that changes. Offered once: when the instructor adds
+-- some or skips them, `done_at` is set and they're never shown again.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions jsonb;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_key text;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_status text;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_done_at timestamptz;

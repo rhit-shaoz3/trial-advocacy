@@ -10,6 +10,7 @@ import {
   type Side,
   type Witness,
   type WitnessInput,
+  type WitnessSuggestions,
 } from '../../../courses/types'
 import { ROLE_LABEL } from '../../../courses/worldLabel'
 import { WitnessAvatar } from '../../../components/WitnessAvatar'
@@ -122,6 +123,13 @@ export function WitnessesSection({
       </p>
 
       <WitnessSettings courseId={courseId} courseCase={courseCase} onSaved={onCaseChange} />
+
+      <SuggestedWitnesses
+        courseId={courseId}
+        caseId={caseId}
+        hasWitnesses={(witnesses?.length ?? 0) > 0}
+        onAdded={(added) => setWitnesses((prev) => [...(prev ?? []), ...added])}
+      />
 
       {editing === 'new' && (
         <WitnessForm
@@ -474,5 +482,143 @@ function WitnessForm({
         </p>
       )}
     </form>
+  )
+}
+
+/** How often to check back while the AI reads the initial file. */
+const SUGGESTIONS_POLL_MS = 3000
+
+/**
+ * The witnesses the AI read from the initial file (the complaint), offered
+ * once: tick the ones to add, and they're created with their name, role, and
+ * part in the story filled in. Adding or skipping puts the list away for good.
+ */
+function SuggestedWitnesses({
+  courseId,
+  caseId,
+  hasWitnesses,
+  onAdded,
+}: {
+  courseId: string
+  caseId: string
+  hasWitnesses: boolean
+  onAdded(witnesses: Witness[]): void
+}) {
+  const service = useCourseService()
+  const [state, setState] = useState<WitnessSuggestions | null>(null)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const load = () =>
+      service
+        .getWitnessSuggestions(courseId, caseId)
+        .then((next) => {
+          if (cancelled) return
+          setState(next)
+          if (next.status === 'ready') setPicked(new Set(next.suggestions.map((s) => s.name)))
+          // Keep checking while the file is read and the AI thinks.
+          if (next.status === 'waiting' && (next.reason === 'reading' || next.reason === 'thinking')) {
+            timer = setTimeout(load, SUGGESTIONS_POLL_MS)
+          }
+        })
+        .catch(() => {}) // the witness list still works without suggestions
+    load()
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [service, courseId, caseId])
+
+  if (!state || state.status === 'done' || state.status === 'failed') return null
+  if (state.status === 'waiting') {
+    if (hasWitnesses && (state.reason === 'no-file' || state.reason === 'no-parties')) return null
+    return (
+      <p className="muted suggest-note" role="status">
+        {state.reason === 'no-file'
+          ? 'Upload the complaint as the case’s initial file, and the AI will suggest likely witnesses from it.'
+          : state.reason === 'no-parties'
+            ? 'Name the plaintiff and defendant in the case details, and the AI will suggest likely witnesses.'
+            : 'Reading the complaint for likely witnesses…'}
+      </p>
+    )
+  }
+  if (state.suggestions.length === 0) return null
+
+  async function finish(add: boolean) {
+    if (state?.status !== 'ready') return
+    setBusy(true)
+    setError(null)
+    try {
+      const added: Witness[] = []
+      if (add) {
+        for (const s of state.suggestions.filter((s) => picked.has(s.name))) {
+          added.push(
+            await service.createWitness(courseId, caseId, {
+              ...BLANK,
+              name: s.name,
+              role: s.role,
+              description: s.description,
+              alignedSide: s.alignedSide,
+            }),
+          )
+        }
+      }
+      await service.finishWitnessSuggestions(courseId, caseId)
+      onAdded(added)
+      setState({ status: 'done' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      setBusy(false)
+    }
+  }
+
+  const toggle = (name: string, on: boolean) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(name)
+      else next.delete(name)
+      return next
+    })
+
+  return (
+    <section className="suggest-panel" aria-labelledby="suggest-title">
+      <h3 id="suggest-title">Likely witnesses from the complaint</h3>
+      <p className="muted">
+        Tick the ones to add. You can edit them afterward, and add their deposition files. These are only suggested
+        this once.
+      </p>
+      <ul>
+        {state.suggestions.map((s) => (
+          <li key={s.name}>
+            <label>
+              <input type="checkbox" checked={picked.has(s.name)} onChange={(e) => toggle(s.name, e.target.checked)} />
+              <span>
+                <strong>{s.name}</strong>
+                {s.role && <span className="muted"> · {s.role}</span>}
+                {s.alignedSide && <span className="badge">{ROLE_LABEL[s.alignedSide]}&rsquo;s side</span>}
+                {s.description && <small>{s.description}</small>}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="panel-form-actions">
+        <button type="button" className="btn-primary" onClick={() => finish(true)} disabled={busy || picked.size === 0}>
+          {busy ? 'Adding…' : picked.size === 1 ? 'Add 1 witness' : `Add ${picked.size} witnesses`}
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => finish(false)} disabled={busy}>
+          Skip
+        </button>
+      </div>
+    </section>
   )
 }

@@ -251,6 +251,14 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${casePath(courseId, caseId)}/witnesses`)).witnesses
   },
 
+  async getWitnessSuggestions(courseId, caseId) {
+    return apiRequest(`${casePath(courseId, caseId)}/witness-suggestions`)
+  },
+
+  async finishWitnessSuggestions(courseId, caseId) {
+    await apiRequest(`${casePath(courseId, caseId)}/witness-suggestions/done`, { method: 'POST' })
+  },
+
   async createWitness(courseId, caseId, input) {
     const body = await apiRequest(`${casePath(courseId, caseId)}/witnesses`, {
       method: 'POST',

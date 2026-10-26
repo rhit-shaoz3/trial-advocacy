@@ -694,6 +694,21 @@ export interface DepositionOverview {
   reviewsWaiting: number
 }
 
+/** A likely witness the AI read from the initial file; matches server/witness/suggest.ts. */
+export interface WitnessSuggestion {
+  name: string
+  role: string
+  description: string
+  alignedSide: Side | null
+}
+
+/** Where the suggested witnesses stand; matches `SuggestionsState` in server/witness/suggestions.ts. */
+export type WitnessSuggestions =
+  | { status: 'waiting'; reason: 'no-file' | 'no-parties' | 'reading' | 'thinking' }
+  | { status: 'ready'; suggestions: WitnessSuggestion[] }
+  | { status: 'failed'; error: string }
+  | { status: 'done' }
+
 export interface CourseService {
   // Students
   /** The current user's courses, newest term first. */
@@ -762,6 +777,10 @@ export interface CourseService {
   retryTranscription(courseId: string, caseId: string, materialId: string): Promise<CaseMaterial>
   listWitnesses(courseId: string, caseId: string): Promise<Witness[]>
   createWitness(courseId: string, caseId: string, input: WitnessInput): Promise<Witness>
+  /** The AI's suggested witnesses from the initial file, offered once. */
+  getWitnessSuggestions(courseId: string, caseId: string): Promise<WitnessSuggestions>
+  /** The instructor added some suggestions or skipped them: don't offer them again. */
+  finishWitnessSuggestions(courseId: string, caseId: string): Promise<void>
   updateWitness(courseId: string, caseId: string, witnessId: string, input: WitnessInput): Promise<Witness>
   deleteWitness(courseId: string, caseId: string, witnessId: string): Promise<void>
   /** Gives the witness an uploaded (already cropped) picture in place of a design. */

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../../../courses/CourseServiceContext'
 import { MemoryRouter } from 'react-router'
-import type { CaseMaterial, CaseWorkspace, CourseCase, CourseService } from '../../../courses/types'
+import type { CaseMaterial, CaseWorkspace, CourseCase, CourseService, Witness, WitnessInput } from '../../../courses/types'
 import { fakeCourseService } from '../../../test/fakeCourseService'
 import { InvestigatorSection } from './InvestigatorSection'
 import { LaunchPanel } from './LaunchPanel'
@@ -326,6 +326,42 @@ describe('WitnessesSection', () => {
       </MemoryRouter>,
       { listMaterials: vi.fn().mockResolvedValue([factPattern, deposition]), ...overrides },
     )
+
+  it('offers the witnesses the AI read from the complaint once, adding the ticked ones', async () => {
+    const suggestions = [
+      { name: 'Paige Winston', role: 'Rider', description: 'Hurt on Atlas.', alignedSide: 'plaintiff' as const },
+      { name: 'Logan Crest', role: 'Friend', description: 'Rode with her.', alignedSide: 'plaintiff' as const },
+    ]
+    const createWitness = vi.fn(async (_c: string, _k: string, input: WitnessInput): Promise<Witness> => ({ ...input, id: input.name, avatarUrl: null }))
+    const finishWitnessSuggestions = vi.fn().mockResolvedValue(undefined)
+    const { user } = renderSection({
+      getWitnessSuggestions: vi.fn().mockResolvedValue({ status: 'ready', suggestions }),
+      createWitness,
+      finishWitnessSuggestions,
+    })
+
+    const panel = await screen.findByRole('region', { name: 'Likely witnesses from the complaint' })
+    await user.click(within(panel).getByRole('checkbox', { name: /Logan Crest/ }))
+    await user.click(within(panel).getByRole('button', { name: 'Add 1 witness' }))
+
+    expect(createWitness).toHaveBeenCalledTimes(1)
+    expect(createWitness).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ name: 'Paige Winston', role: 'Rider', description: 'Hurt on Atlas.', alignedSide: 'plaintiff' }))
+    expect(finishWitnessSuggestions).toHaveBeenCalledWith('c1', 'k1')
+    // Gone for good, and the added witness is on the list.
+    expect(screen.queryByRole('region', { name: 'Likely witnesses from the complaint' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('listitem', { name: 'Paige Winston' })).toBeInTheDocument()
+  })
+
+  it('puts the suggestions away when skipped', async () => {
+    const finishWitnessSuggestions = vi.fn().mockResolvedValue(undefined)
+    const { user } = renderSection({
+      getWitnessSuggestions: vi.fn().mockResolvedValue({ status: 'ready', suggestions: [{ name: 'Logan Crest', role: '', description: '', alignedSide: null }] }),
+      finishWitnessSuggestions,
+    })
+    await user.click(await screen.findByRole('button', { name: 'Skip' }))
+    expect(finishWitnessSuggestions).toHaveBeenCalledWith('c1', 'k1')
+    expect(screen.queryByText('Likely witnesses from the complaint')).not.toBeInTheDocument()
+  })
 
   it('adds, edits, and removes witnesses', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)

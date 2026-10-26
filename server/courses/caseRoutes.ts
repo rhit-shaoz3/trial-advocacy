@@ -30,6 +30,7 @@ import { teamsRouter } from './teamRoutes.ts'
 import { getPreviewWorkspace, launchChecks } from './workspace.ts'
 import { applyDisclosures, requestsOpen } from '../exchange/exchange.ts'
 import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
+import { finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 
 declare module 'express-serve-static-core' {
@@ -170,6 +171,17 @@ caseRouter.use('/materials', materialsRouter)
 caseRouter.use('/witnesses', witnessesRouter)
 caseRouter.use('/tasks', tasksRouter)
 caseRouter.use('/exchange', exchangeRouter)
+
+/** The witnesses the AI suggests from the initial file, offered once while setting up the case. */
+caseRouter.get('/witness-suggestions', async (req, res) => {
+  res.json(await witnessSuggestions(req.courseCase!.id))
+})
+
+/** The instructor added some suggested witnesses, or skipped them: they're not offered again. */
+caseRouter.post('/witness-suggestions/done', async (req, res) => {
+  await finishWitnessSuggestions(req.courseCase!.id)
+  res.json({ status: 'done' })
+})
 
 /** How teams have used the background investigator, for the case dashboard. */
 caseRouter.get('/investigator/overview', async (req, res) => {

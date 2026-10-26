@@ -1425,3 +1425,60 @@ a.case-row:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* The AI's suggested witnesses, offered once while setting up a case (WitnessesSection). */
+.suggest-panel {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ws-blue);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.suggest-panel h3 {
+  margin: 0;
+  color: var(--ws-navy);
+  font: 400 1.15rem var(--ws-serif);
+}
+
+.suggest-panel p {
+  margin: 0;
+}
+
+.suggest-panel ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggest-panel label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.suggest-panel label input {
+  margin-top: 0.25rem;
+}
+
+.suggest-panel label small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+}
+
+.suggest-panel .badge {
+  margin-left: 0.4rem;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
+}
+
+.suggest-note {
+  margin: 0 0 1rem;
+}

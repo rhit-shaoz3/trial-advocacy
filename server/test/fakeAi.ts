@@ -3,6 +3,7 @@ import { ai } from '../ai/ai.ts'
 import { transcriptionsSettled } from '../courses/materialText.ts'
 import { investigationsSettled } from '../investigator/requests.ts'
 import { reviewsSettled } from '../reviews/reviews.ts'
+import { witnessSuggestionsSettled } from '../witness/suggestions.ts'
 
 // Server tests never call Claude. By default a file's "transcription" is its
 // own bytes as text, and the witness has no answer; tests that need the
@@ -20,6 +21,7 @@ beforeEach(() => {
   }
   // Edits nothing; tests that check the edit swap in their own.
   ai.finalizeReport = async (input) => input.body
+  ai.suggestWitnesses = async () => []
 })
 
 afterEach(async () => {
@@ -27,5 +29,6 @@ afterEach(async () => {
   await transcriptionsSettled()
   await reviewsSettled()
   await investigationsSettled()
+  await witnessSuggestionsSettled()
   Object.assign(ai, real)
 })

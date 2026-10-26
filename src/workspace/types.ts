@@ -28,6 +28,9 @@ export interface CaseSummary {
   worldCount?: number | null
   /** 0–100, or null while progress isn't tracked. */
   progress: number | null
+  /** Where the case is, and the phases it goes through (sample data leaves them out). */
+  phase?: CasePhase
+  phases?: CasePhase[]
   /** The next thing that matters, e.g. "Discovery due Oct 13" or "Awaiting instructor review". */
   nextMilestone: string | null
   /** The team's soonest-due open task (real cases; sample data uses nextMilestone). */

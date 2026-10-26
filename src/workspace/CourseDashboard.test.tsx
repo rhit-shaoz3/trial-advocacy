@@ -254,7 +254,8 @@ describe('course workspace', () => {
     const anderson = screen.getByRole('article', { name: 'Anderson v. Caldwell' })
     expect(anderson).toHaveTextContent('Case 24-CV-1847')
     expect(anderson).toHaveTextContent('Active')
-    expect(within(anderson).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '62')
+    // Where the case is, not a task percentage.
+    expect(within(anderson).getByRole('list', { name: 'Phase 2 of 4: Information exchange' })).toBeInTheDocument()
     expect(anderson).toHaveTextContent('4 participants')
     expect(within(anderson).getByRole('link', { name: 'Enter case: Anderson v. Caldwell' })).toHaveAttribute(
       'href',
@@ -339,7 +340,7 @@ describe('course workspace', () => {
     expect(rivera).toHaveTextContent('Case world D')
     expect(rivera).toHaveTextContent('Role: Defendant')
     expect(rivera).toHaveTextContent('5 participants')
-    // No progress is tracked yet, so no bar; four avatars and a count of the rest.
+    // No task progress bar; four avatars and a count of the rest.
     expect(within(rivera).queryByRole('progressbar')).not.toBeInTheDocument()
     expect(rivera).toHaveTextContent('+1')
     expect(within(rivera).getByRole('link', { name: 'Enter case: Rivera v. Thrill Park' })).toHaveAttribute(

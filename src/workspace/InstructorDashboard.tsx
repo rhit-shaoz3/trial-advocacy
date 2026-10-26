@@ -13,8 +13,9 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
+import { PhaseSteps } from '../components/PhaseSteps'
 import { PHASE_LABEL, shortDate } from '../courses/caseLabels'
-import { casePhases, type CasePhase } from '../courses/types'
+import { casePhases } from '../courses/types'
 import { caseInitials, greeting, longDate, timeAgo } from './format'
 import { StatCard } from './StatCard'
 import type { AttentionItem, AttentionTarget, CaseMonitor, DeadlineProgress, InstructorActivity } from './types'
@@ -221,7 +222,7 @@ function CaseMonitorCard({ caseMonitor: c, href }: { caseMonitor: CaseMonitor; h
         </div>
       </div>
 
-      {c.status !== 'draft' && <PhaseSteps phase={c.phase} investigator={c.investigatorEnabled !== false} exchange={c.exchangeReady ?? false} />}
+      {c.status !== 'draft' && <PhaseSteps phase={c.phase} phases={casePhases(c.investigatorEnabled !== false, c.exchangeReady ?? false)} />}
 
       {c.launch && (
         <Meter
@@ -252,24 +253,6 @@ function CaseMonitorCard({ caseMonitor: c, href }: { caseMonitor: CaseMonitor; h
  * Introduction → Information exchange → Investigate → Deposition (each middle
  * phase only when the case has it), with the current phase marked.
  */
-function PhaseSteps({ phase, investigator, exchange }: { phase: CasePhase; investigator: boolean; exchange: boolean }) {
-  const PHASES = casePhases(investigator, exchange)
-  const current = PHASES.indexOf(phase)
-  return (
-    <ol className="ws-phases" aria-label={`Phase ${current + 1} of ${PHASES.length}: ${PHASE_LABEL[phase]}`}>
-      {PHASES.map((p, i) => (
-        <li
-          key={p}
-          className={i < current ? 'ws-phase-done' : i === current ? 'ws-phase-current' : undefined}
-          aria-current={i === current ? 'step' : undefined}
-        >
-          {PHASE_LABEL[p]}
-        </li>
-      ))}
-    </ol>
-  )
-}
-
 /** Whether teams have done what's due: the instructor's cue to move the case on. */
 function TaskSignal({ tasks }: { tasks: NonNullable<CaseMonitor['tasks']> }) {
   if (tasks.teams === 0) return <p className="ws-subtle ws-monitor-note">No teams are in a case world yet.</p>

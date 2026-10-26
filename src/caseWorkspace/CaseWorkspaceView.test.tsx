@@ -139,9 +139,12 @@ describe('CaseWorkspaceView', () => {
     expect(screen.getByText('Case world D')).toBeInTheDocument()
     expect(screen.getByText('Role: Defendant · Team 7')).toBeInTheDocument()
 
-    const progress = screen.getByRole('region', { name: 'Case progress' })
-    expect(within(progress).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '33')
-    expect(progress).toHaveTextContent('1 of 3 tasks complete')
+    // The navy box shows the phase and what happens in it, not task progress.
+    const phase = screen.getByRole('region', { name: 'Current phase' })
+    expect(within(phase).getByRole('heading', { name: 'Introduction' })).toBeInTheDocument()
+    expect(phase).toHaveTextContent("meet your side's witnesses")
+    expect(within(phase).getByRole('list', { name: /^Phase 1 of \d: Introduction$/ })).toBeInTheDocument()
+    expect(within(phase).queryByRole('progressbar')).not.toBeInTheDocument()
 
     // The overview shows only the initial file, not the case summary or the rest of the case file.
     const background = screen.getByRole('region', { name: 'Case background' })

@@ -30,6 +30,7 @@ import {
   CATEGORY_LABEL,
   FILE_CATEGORIES,
   PHASE_LABEL,
+  STUDENT_PHASE_TEXT,
   dueLabel,
   fileCategory,
   fileTypeLabel,
@@ -39,6 +40,7 @@ import {
 } from '../courses/caseLabels'
 import {
   DEFAULT_INVESTIGATOR_NAME,
+  casePhases,
   INVESTIGATOR_AVATAR_URL,
   type CaseMaterial,
   type CaseWorkspace,
@@ -54,6 +56,7 @@ import {
 } from '../courses/types'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
+import { PhaseSteps } from '../components/PhaseSteps'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { ExchangePanel } from './exchange/ExchangePanel'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
@@ -677,38 +680,27 @@ function StatusPill({ status }: { status: CaseWorkspace['case']['status'] }) {
   )
 }
 
+/**
+ * The navy box at the top of the Overview: the case's current phase, what a
+ * team does in it, and where it sits among the case's phases.
+ */
 function ProgressBanner({ workspace }: { workspace: CaseWorkspace }) {
-  const { case: c, tasks } = workspace
-  const done = tasks.filter((t) => t.completedAt).length
-  const percent = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100)
-  const heading =
-    c.status === 'draft' ? 'Not launched yet' : c.status === 'closed' ? 'Case closed' : 'Case in progress'
+  const { case: c } = workspace
+  // Cases from before the investigator setting have him; null means this case has none.
+  const phases = casePhases(workspace.investigator !== null, workspace.exchangeReady ?? false)
+  const heading = c.status === 'draft' ? 'Not launched yet' : c.status === 'closed' ? 'Case closed' : PHASE_LABEL[c.phase]
   const text =
     c.status === 'draft'
       ? 'Students see this once the instructor launches the case worlds.'
       : c.status === 'closed'
         ? 'This case is finished. Its material stays here for reference.'
-        : 'Start with the case background, review the witnesses, and work through the tasks with your partner.'
+        : STUDENT_PHASE_TEXT[c.phase]
   return (
-    <section className="cw-banner" aria-label="Case progress">
-      <span className="cw-banner-eyebrow">Current phase</span>
+    <section className="cw-banner" aria-label="Current phase">
+      <span className="cw-banner-eyebrow">{c.status === 'active' ? 'Current phase' : 'Case status'}</span>
       <h2>{heading}</h2>
       <p>{text}</p>
-      <div className="cw-banner-progress">
-        <span>Overall progress</span>
-        <strong>{percent}%</strong>
-      </div>
-      <div
-        className="cw-banner-bar"
-        role="progressbar"
-        aria-label="Tasks complete"
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <span style={{ width: `${percent}%` }} />
-      </div>
-      <small>{tasks.length === 0 ? 'No tasks assigned yet' : `${done} of ${tasks.length} tasks complete`}</small>
+      {c.status === 'active' && <PhaseSteps phase={c.phase} phases={phases} onBrand />}
     </section>
   )
 }

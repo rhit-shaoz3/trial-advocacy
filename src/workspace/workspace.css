@@ -504,35 +504,6 @@
   flex-direction: column;
 }
 
-.ws-phases {
-  display: flex;
-  gap: 0.35rem;
-  margin: 0.9rem 0 0.2rem;
-  padding: 0;
-  list-style: none;
-}
-
-.ws-phases li {
-  flex: 1;
-  padding: 0.35rem 0.4rem;
-  border-radius: 0.35rem;
-  background: var(--tint-grey-bg);
-  color: var(--ws-muted);
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-align: center;
-}
-
-.ws-phases .ws-phase-done {
-  background: var(--tint-blue-bg);
-  color: var(--ws-blue);
-}
-
-.ws-phases .ws-phase-current {
-  background: var(--ws-blue);
-  color: var(--on-brand);
-}
-
 .ws-monitor-meter {
   margin-top: 0.9rem;
 }

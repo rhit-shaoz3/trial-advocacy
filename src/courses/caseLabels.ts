@@ -92,3 +92,11 @@ export const PHASE_LABEL: Record<CasePhase, string> = {
   investigate: 'Investigate',
   deposition: 'Deposition',
 }
+
+/** What a team does in each phase, as the team reads it. */
+export const STUDENT_PHASE_TEXT: Record<CasePhase, string> = {
+  introduction: "Read the case file, meet your side's witnesses, and pick your initial disclosures.",
+  information_exchange: "Send interrogatories and requests for admission, and answer the other side's.",
+  investigate: "Send the background investigator assignments. The other side's witnesses are still off-limits.",
+  deposition: "Every witness is open to both sides. Depose the other side's witnesses.",
+}

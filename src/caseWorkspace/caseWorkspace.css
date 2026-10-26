@@ -151,31 +151,8 @@
   font-size: 0.85rem;
 }
 
-.cw-banner-progress {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 1.25rem;
-  font-size: 0.75rem;
-}
-
-.cw-banner-bar {
-  height: 0.38rem;
-  margin: 0.45rem 0 0.5rem;
-  overflow: hidden;
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.cw-banner-bar span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--surface);
-}
-
-.cw-banner small {
-  color: var(--on-brand-muted);
-  font-size: 0.72rem;
+.cw-banner .ws-phases {
+  margin-top: 1.15rem;
 }
 
 /* Cards */

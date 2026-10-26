@@ -238,6 +238,9 @@ describe('the course home cases', () => {
         world: { number: 1, side: 'plaintiff' },
         worldCount: null,
         progress: null,
+        // Launched into its first phase; John Hastings is on by default, and there's no information exchange set up.
+        phase: 'introduction',
+        phases: ['introduction', 'investigate', 'deposition'],
         nextMilestone: null,
         nextTask: null,
         participants: [{ name: 'Ada Lawyer', avatarUrl: null }, { name: email(2), avatarUrl: null }, { name: email(3), avatarUrl: null }, { name: email(4), avatarUrl: null }],

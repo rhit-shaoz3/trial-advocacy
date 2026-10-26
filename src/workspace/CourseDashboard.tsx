@@ -13,7 +13,8 @@ import {
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
-import { caseOverview, shortDate } from '../courses/caseLabels'
+import { PhaseSteps } from '../components/PhaseSteps'
+import { PHASE_LABEL, caseOverview, shortDate } from '../courses/caseLabels'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import {
   calendarDaysUntil,
@@ -245,7 +246,6 @@ function caseSubtitle(c: CaseSummary) {
 }
 
 function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: string }) {
-  const progressLabel = `${c.title} progress`
   const subtitle = caseSubtitle(c)
   const milestone =
     c.nextMilestone ??
@@ -275,23 +275,14 @@ function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: st
       </div>
       <p className="ws-case-summary">{caseOverview(c.summary)}</p>
 
-      {c.progress !== null && (
-        <>
+      {c.phase && c.phases && c.status === 'active' && (
+        <div className="ws-case-phase">
           <div className="ws-progress-header">
-            <span>Case progress</span>
-            <strong>{c.progress}%</strong>
+            <span>Current phase</span>
+            <strong>{PHASE_LABEL[c.phase]}</strong>
           </div>
-          <div
-            className="ws-progress"
-            role="progressbar"
-            aria-label={progressLabel}
-            aria-valuenow={c.progress}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <span style={{ width: `${Math.max(0, Math.min(100, c.progress))}%` }} />
-          </div>
-        </>
+          <PhaseSteps phase={c.phase} phases={c.phases} />
+        </div>
       )}
 
       <div className="ws-case-meta">

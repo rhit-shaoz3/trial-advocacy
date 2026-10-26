@@ -341,6 +341,12 @@ CREATE TABLE IF NOT EXISTS review_facts (
   UNIQUE (review_id, position)
 );
 
+-- Which exchanges of the interview stated each fact, and which later ones
+-- built on it ({ producedBy: [turn], builtOn: [{ turn, answer }] }), so a
+-- denied fact's exchanges can be struck out of the team's transcript. Null
+-- for reviews from before this, and for investigator facts.
+ALTER TABLE review_facts ADD COLUMN IF NOT EXISTS links jsonb;
+
 -- Which students have opened a completed review's results.
 CREATE TABLE IF NOT EXISTS review_seen (
   review_id uuid        NOT NULL REFERENCES interview_reviews (id) ON DELETE CASCADE,

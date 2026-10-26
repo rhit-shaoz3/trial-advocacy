@@ -542,10 +542,11 @@ describe('StudentViewSection', () => {
       'Any plaintiff team',
       'Any defense team',
     ])
-    expect(previewWorkspace).toHaveBeenCalledWith('c1', 'k1', 'plaintiff', 'm1')
+    // The preview loads after the teams do, so wait for it.
+    await waitFor(() => expect(previewWorkspace).toHaveBeenCalledWith('c1', 'k1', 'plaintiff', 'm1'))
     expect(await screen.findByText('Not launched yet')).toBeInTheDocument()
 
     await user.selectOptions(picker, 'Any defense team')
-    expect(previewWorkspace).toHaveBeenLastCalledWith('c1', 'k1', 'defense', null)
+    await waitFor(() => expect(previewWorkspace).toHaveBeenLastCalledWith('c1', 'k1', 'defense', null))
   })
 })

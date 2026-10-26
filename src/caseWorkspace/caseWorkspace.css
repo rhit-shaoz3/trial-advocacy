@@ -1131,3 +1131,17 @@
   margin: 0 0.75rem 0.75rem;
   box-shadow: none;
 }
+
+/* A reviewed interview's transcript, in the Reviews tab */
+.cw-review-transcript {
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--ws-row-line);
+}
+
+.cw-review-transcript summary {
+  color: var(--link);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}

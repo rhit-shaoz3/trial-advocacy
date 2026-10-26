@@ -304,10 +304,12 @@ export function CaseDetailPage() {
               </>
             )}
             {tab === 'exchange' && courseCase.exchangeReady && (
-              <>
-                {pastExchange && exchangeCard(courseCase, true)}
-                <ExchangeTab courseId={courseId} courseCase={courseCase} onEdit={setExchangeStep} />
-              </>
+              <ExchangeTab
+                courseId={courseId}
+                courseCase={courseCase}
+                onEdit={setExchangeStep}
+                summary={pastExchange ? exchangeCard(courseCase, true) : undefined}
+              />
             )}
             {tab === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
             {tab === 'student-view' && (

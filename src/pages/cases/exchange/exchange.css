@@ -669,6 +669,54 @@
 }
 
 /* The Information exchange tab */
+/* The left column: the exchange card (after its phase), then the exchanges. */
+.exchange-tab-main {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.exchange-tab-main > .exchange-card {
+  margin-bottom: 0;
+}
+
+/* On its tab the card is compact: the two counts are small squares beside the teams bars. */
+.exchange-card-in-tab {
+  padding: 1rem 1.1rem;
+}
+
+.exchange-card-in-tab .exchange-stats {
+  grid-template-columns: 8.5rem 8.5rem minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.exchange-card-in-tab .exchange-stat {
+  padding: 0.7rem 0.8rem;
+}
+
+.exchange-card-in-tab .exchange-stat:not(:last-child) {
+  aspect-ratio: 1;
+}
+
+.exchange-card-in-tab .exchange-stat-number {
+  font-size: 1.6rem;
+}
+
+.exchange-card-in-tab .exchange-stat > span,
+.exchange-card-in-tab .exchange-stat p {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .exchange-card-in-tab .exchange-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .exchange-card-in-tab .exchange-stat:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
 .exchange-tab {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);

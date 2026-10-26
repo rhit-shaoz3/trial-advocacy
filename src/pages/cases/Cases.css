@@ -176,8 +176,8 @@ a.case-row:hover {
 /* A case whose guided setup isn't finished yet. */
 .badge-setup {
   margin-left: 0.4rem;
-  background: #e5ecf4;
-  color: #315e86;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
 }
 
 .teams-actions {

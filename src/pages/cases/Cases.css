@@ -205,12 +205,13 @@ a.case-row:hover {
   overflow-wrap: anywhere;
 }
 
+/* A shade darker than the page, in every theme. */
 .unpaired-panel {
   margin-bottom: 1.25rem;
   padding: 1rem 1.2rem;
-  border: 1px dashed var(--tint-amber-border);
+  border: 1px dashed color-mix(in srgb, var(--ws-paper) 75%, #000);
   border-radius: 0.6rem;
-  background: var(--tint-amber-bg);
+  background: color-mix(in srgb, var(--ws-paper) 93%, #000);
 }
 
 .unpaired-header {

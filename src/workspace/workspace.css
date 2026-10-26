@@ -446,32 +446,8 @@
   }
 }
 
-/* Something waiting for the user: reviews to do, or review results to read */
-.ws-notice {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
-  padding: 0.9rem 1.1rem;
-  border: 1px solid var(--tint-amber-border);
-  border-left: 3px solid var(--ws-gold);
-  border-radius: 0.6rem;
-  background: var(--tint-amber-bg);
-}
 
-.ws-notice > svg {
-  flex: none;
-  width: 1.3rem;
-  height: 1.3rem;
-  color: var(--tint-amber-fg);
-}
 
-.ws-notice p {
-  flex: 1 1 18rem;
-  margin: 0;
-  font-size: 0.9rem;
-}
 
 /* The instructor's dashboard (InstructorDashboard) */
 

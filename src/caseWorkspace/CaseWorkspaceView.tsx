@@ -58,6 +58,7 @@ import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
 import { FileViewer, type ViewableFile } from '../components/FileViewer'
 import { PhaseSteps } from '../components/PhaseSteps'
+import { Toast, Toasts } from '../components/Toasts'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { ExchangePanel } from './exchange/ExchangePanel'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
@@ -205,22 +206,33 @@ export function CaseWorkspaceView({
         </div>
       </header>
 
-      {unseen > 0 && tab !== 'reviews' && <NewResultsBanner onOpen={() => setTab('reviews')} />}
-      {investigator && unseenReports > 0 && tab !== 'investigator' && (
-        <NewReportBanner name={investigator.name} onOpen={() => setTab('investigator')} />
-      )}
-      {newResponses.length > 0 && tab !== 'exchange' && (
-        <NewResponsesBanner
-          from={newResponses[0].toTeam.number}
-          kinds={newResponses.map((r) => r.kind)}
-          onOpen={() => {
-            // Open the newest response itself, not just the tab.
-            const newest = [...newResponses].sort((a, b) => (b.respondedAt ?? '').localeCompare(a.respondedAt ?? ''))[0]
-            setExchangeFocus({ kind: newest.kind, id: newest.id })
-            setTab('exchange')
-          }}
-        />
-      )}
+      <Toasts>
+        {unseen > 0 && tab !== 'reviews' && (
+          <Toast icon={<Gavel />} title="New review results" action={{ label: 'See results', onClick: () => setTab('reviews') }} />
+        )}
+        {investigator && unseenReports > 0 && tab !== 'investigator' && (
+          <Toast
+            icon={<Search />}
+            title={`New report from ${investigator.name}`}
+            action={{ label: 'Read report', onClick: () => setTab('investigator') }}
+          />
+        )}
+        {newResponses.length > 0 && tab !== 'exchange' && (
+          <Toast
+            icon={<Inbox />}
+            title={`Team ${newResponses[0].toTeam.number} answered your ${[...new Set(newResponses.map((r) => r.kind))].map((k) => KIND_NOUN[k]).join(' and ')}`}
+            action={{
+              label: 'See answers',
+              onClick: () => {
+                // Open the newest response itself, not just the tab.
+                const newest = [...newResponses].sort((a, b) => (b.respondedAt ?? '').localeCompare(a.respondedAt ?? ''))[0]
+                setExchangeFocus({ kind: newest.kind, id: newest.id })
+                setTab('exchange')
+              },
+            }}
+          />
+        )}
+      </Toasts>
 
       <div className="cw-tabs" role="tablist" aria-label="Case sections">
         {tabs.map((t) => (
@@ -596,53 +608,7 @@ function FactList({ title, tone, facts }: { title: string; tone: 'accepted' | 'd
   )
 }
 
-/** Shown above the tabs while the team has review results it hasn't opened. */
-function NewResultsBanner({ onOpen }: { onOpen(): void }) {
-  return (
-    <div className="ws-notice cw-new-results" role="status">
-      <Gavel aria-hidden="true" />
-      <p>
-        <strong>New review results.</strong> Your instructor ruled on facts from your interviews.
-      </p>
-      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
-        See results
-      </button>
-    </div>
-  )
-}
-
-/** Shown above the tabs while the team has an investigator report it hasn't read. */
-function NewReportBanner({ name, onOpen }: { name: string; onOpen(): void }) {
-  return (
-    <div className="ws-notice cw-new-results" role="status">
-      <Search aria-hidden="true" />
-      <p>
-        <strong>New report from {name}.</strong> Your instructor has reviewed it, and it&rsquo;s in your case file.
-      </p>
-      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
-        Read report
-      </button>
-    </div>
-  )
-}
-
 const KIND_NOUN: Record<ExchangeKind, string> = { interrogatories: 'interrogatories', rfas: 'requests for admission' }
-
-/** Shown above the tabs while the other team's responses to the team's sets are unread. */
-function NewResponsesBanner({ from, kinds, onOpen }: { from: number; kinds: ExchangeKind[]; onOpen(): void }) {
-  const what = [...new Set(kinds)].map((k) => KIND_NOUN[k]).join(' and ')
-  return (
-    <div className="ws-notice cw-new-results" role="status">
-      <Inbox aria-hidden="true" />
-      <p>
-        <strong>Team {from} responded to your {what}.</strong> Both teams can see the responses.
-      </p>
-      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
-        See responses
-      </button>
-    </div>
-  )
-}
 
 /** The senior partner's welcome email, filled in from what the team's side has. */
 function TeamEmail({

@@ -97,7 +97,7 @@ describe('StudentCasePage: review results', () => {
       listMyReviews: vi.fn().mockResolvedValue([result]),
     })
 
-    expect(await screen.findByText('New review results.')).toBeInTheDocument()
+    expect(await screen.findByText('New review results')).toBeInTheDocument()
     expect(service.listMyReviews).toHaveBeenCalledWith('c1', 'k1')
     expect(screen.getByRole('tab', { name: 'Reviews, 1' })).toBeInTheDocument()
 
@@ -106,7 +106,7 @@ describe('StudentCasePage: review results', () => {
     const review = screen.getByRole('listitem', { name: 'Review of Elena Torres' })
     expect(within(review).getByRole('list', { name: 'Accepted' })).toHaveTextContent('Torres was on break at 3:00.')
     expect(within(review).getByRole('list', { name: 'Denied' })).toHaveTextContent('Torres smelled smoke.')
-    expect(screen.queryByText('New review results.')).not.toBeInTheDocument()
+    expect(screen.queryByText('New review results')).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Reviews' })).toBeInTheDocument()
   })
 
@@ -116,7 +116,7 @@ describe('StudentCasePage: review results', () => {
       listMyReviews: vi.fn().mockResolvedValue([{ ...result, seen: true, accepted: [], denied: [] }]),
     })
     await user.click(await screen.findByRole('tab', { name: 'Reviews' }))
-    expect(screen.queryByText('New review results.')).not.toBeInTheDocument()
+    expect(screen.queryByText('New review results')).not.toBeInTheDocument()
     expect(screen.getByText('No new facts: the witness kept to the record.')).toBeInTheDocument()
     expect(service.markReviewsSeen).not.toHaveBeenCalled()
   })

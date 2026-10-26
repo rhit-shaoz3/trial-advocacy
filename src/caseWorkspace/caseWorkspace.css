@@ -1140,9 +1140,6 @@
   font-size: 0.88rem;
 }
 
-.cw-new-results {
-  margin: 0 0 1rem;
-}
 
 /* In dark mode the banner's dark panel needs an edge to stand off the page. */
 :root[data-theme='dark'] .cw-banner {

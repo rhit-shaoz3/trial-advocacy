@@ -403,7 +403,8 @@ describe('the background investigator', () => {
     const onOpenInvestigator = vi.fn()
     const { user } = renderView({ workspace: open, investigations: [report({ seen: false })], onOpenInvestigator })
 
-    expect(screen.getByRole('status')).toHaveTextContent('New report from Nora Vance.')
+    // A notification in the corner, with a button to the report.
+    expect(screen.getByRole('status')).toHaveTextContent('New report from Nora Vance')
     expect(screen.getByRole('tab', { name: 'Investigator, 1' })).toBeInTheDocument()
     await user.click(screen.getByRole('tab', { name: /Case file/ }))
     expect(screen.getByRole('heading', { name: 'Investigator reports 1' })).toBeInTheDocument()
@@ -455,7 +456,7 @@ describe('CaseWorkspaceView: information exchange', () => {
   it('opens the new response itself from the notice', async () => {
     const { user } = renderView({ exchange, onOpenExchange: vi.fn() })
 
-    await user.click(screen.getByRole('button', { name: 'See responses' }))
+    await user.click(screen.getByRole('button', { name: 'See answers' }))
     const panel = screen.getByRole('tabpanel')
     expect(panel).toHaveTextContent('Admit the lift chain jerked.')
     expect(panel).not.toHaveTextContent(/You have \d/)

@@ -408,7 +408,7 @@ describe('reviews on the dashboard', () => {
       ruiz,
     )
 
-    expect(await screen.findByText('3 conversations are waiting for your review.')).toBeInTheDocument()
+    expect(await screen.findByText('3 reviews waiting')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Course' })
     expect(within(nav).getByRole('link', { name: 'Review, 3 waiting' })).toHaveAttribute('href', '/courses/c1/review')
 
@@ -419,14 +419,14 @@ describe('reviews on the dashboard', () => {
   it('shows nothing when no reviews wait', async () => {
     renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, reviewCount: 0 }) }), '/courses/c1', ruiz)
     await screen.findByRole('heading', { name: 'Good morning, Elena.' })
-    expect(screen.queryByText(/waiting for your review/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/reviews? waiting/)).not.toBeInTheDocument()
     expect(within(screen.getByRole('navigation', { name: 'Course' })).getByRole('link', { name: 'Review' })).toBeInTheDocument()
   })
 
   it('tells a student when their interviews have been reviewed, and keeps their resource library', async () => {
     renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, newReviewResults: 1 }) }))
 
-    expect(await screen.findByText('You have new results from your instructor.')).toBeInTheDocument()
+    expect(await screen.findByText('New review results')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open my cases' })).toHaveAttribute('href', '/courses/c1/cases')
     const nav = screen.getByRole('navigation', { name: 'Course' })
     expect(within(nav).getByRole('link', { name: 'Resource library' })).toBeInTheDocument()

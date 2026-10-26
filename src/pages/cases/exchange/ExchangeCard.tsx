@@ -52,7 +52,7 @@ export function ExchangeCard({
 
   if (!ready) {
     return (
-      <section className={inTab ? 'exchange-card exchange-card-in-tab' : 'exchange-card'} aria-labelledby="exchange-card-title">
+      <section className={inTab ? 'exchange-card exchange-card-in-tab exchange-card-compact' : 'exchange-card'} aria-labelledby="exchange-card-title">
         <div className="exchange-card-head">
           <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
             <Share2 />
@@ -101,7 +101,7 @@ export function ExchangeCard({
         : { label: `${courseCase.phase === 'information_exchange' ? 'Information exchange' : 'Requests'} open`, tone: 'exchange-phase-open' }
 
   return (
-    <section className={inTab ? 'exchange-card exchange-card-in-tab' : 'exchange-card'} aria-labelledby="exchange-card-title">
+    <section className={inTab ? 'exchange-card exchange-card-in-tab exchange-card-compact' : 'exchange-card'} aria-labelledby="exchange-card-title">
       <div className="exchange-card-head">
         <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
           <Share2 />
@@ -116,9 +116,12 @@ export function ExchangeCard({
           </h2>
         </div>
         <div className="exchange-card-actions">
-          <button type="button" className="btn-secondary" onClick={onSetUp}>
-            <Pencil aria-hidden="true" className="exchange-inline-icon" /> Edit settings
-          </button>
+          {/* On its tab the Settings panel beside it has the edit buttons. */}
+          {!inTab && (
+            <button type="button" className="btn-secondary" onClick={onSetUp}>
+              <Pencil aria-hidden="true" className="exchange-inline-icon" /> Edit settings
+            </button>
+          )}
         </div>
       </div>
 

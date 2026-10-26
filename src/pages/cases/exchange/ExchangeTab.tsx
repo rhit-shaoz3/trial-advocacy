@@ -35,7 +35,7 @@ export function ExchangeTab({
   courseId: string
   courseCase: CourseCase
   onEdit(step: ExchangeStep): void
-  /** Above the exchanges, in the same column: the exchange card, once its phase is over. */
+  /** Below the exchanges, in the same column: the exchange card, once its phase is over. */
   summary?: ReactNode
   now?: Date
 }) {
@@ -64,7 +64,6 @@ export function ExchangeTab({
   return (
     <div className="exchange-tab">
       <div className="exchange-tab-main">
-        {summary}
         <section className="course-section" aria-labelledby="exchanges-heading">
           <div className="section-header">
             <div>
@@ -170,6 +169,7 @@ export function ExchangeTab({
             when you look, and nothing here goes to the Review page.
           </p>
         </section>
+        {summary}
       </div>
 
       <section className="course-section exchange-settings-card" aria-labelledby="exchange-settings-heading">

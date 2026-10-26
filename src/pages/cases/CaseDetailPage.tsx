@@ -297,10 +297,10 @@ export function CaseDetailPage() {
             )}
             {tab === 'investigator' && (
               <>
+                <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={setCourseCase} />
                 {pastInvestigate && investigatorOf(courseCase).enabled && (
                   <InvestigatorCard courseId={courseId} courseCase={courseCase} inTab />
                 )}
-                <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={setCourseCase} />
               </>
             )}
             {tab === 'exchange' && courseCase.exchangeReady && (

@@ -483,9 +483,10 @@
   border-left-color: var(--border);
 }
 
-/* As wide as the investigator settings card below it. */
+/* Below the investigator settings, and as wide. */
 .investigator-card-in-tab {
   max-width: 46rem;
+  margin-top: 1.25rem;
 }
 
 .exchange-card-head {
@@ -669,7 +670,7 @@
 }
 
 /* The Information exchange tab */
-/* The left column: the exchange card (after its phase), then the exchanges. */
+/* The left column: the exchanges, then the exchange card (after its phase). */
 .exchange-tab-main {
   display: grid;
   gap: 1rem;
@@ -685,34 +686,34 @@
   padding: 1rem 1.1rem;
 }
 
-.exchange-card-in-tab .exchange-stats {
+.exchange-card-compact .exchange-stats {
   grid-template-columns: 8.5rem 8.5rem minmax(0, 1fr);
   gap: 0.6rem;
 }
 
-.exchange-card-in-tab .exchange-stat {
+.exchange-card-compact .exchange-stat {
   padding: 0.7rem 0.8rem;
 }
 
-.exchange-card-in-tab .exchange-stat:not(:last-child) {
+.exchange-card-compact .exchange-stat:not(:last-child) {
   aspect-ratio: 1;
 }
 
-.exchange-card-in-tab .exchange-stat-number {
+.exchange-card-compact .exchange-stat-number {
   font-size: 1.6rem;
 }
 
-.exchange-card-in-tab .exchange-stat > span,
-.exchange-card-in-tab .exchange-stat p {
+.exchange-card-compact .exchange-stat > span,
+.exchange-card-compact .exchange-stat p {
   font-size: 0.75rem;
 }
 
 @media (max-width: 640px) {
-  .exchange-card-in-tab .exchange-stats {
+  .exchange-card-compact .exchange-stats {
     grid-template-columns: 1fr 1fr;
   }
 
-  .exchange-card-in-tab .exchange-stat:last-child {
+  .exchange-card-compact .exchange-stat:last-child {
     grid-column: 1 / -1;
   }
 }

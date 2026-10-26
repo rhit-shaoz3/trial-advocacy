@@ -208,10 +208,11 @@ describe('the case dashboard card for each phase', () => {
     expect(screen.queryByRole('heading', { name: 'Requests between teams' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Information exchange' }))
-    // It sits above the exchanges, in their column, with the settings beside them.
+    // It sits below the exchanges, in their column, with the settings beside them, and no edit button of its own.
     const column = screen.getByRole('heading', { name: 'Requests between teams' }).closest('.exchange-tab-main')!
     expect(within(column as HTMLElement).getByRole('heading', { name: 'Exchanges' })).toBeInTheDocument()
     expect(within(column as HTMLElement).queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
+    expect(within(column as HTMLElement).queryByRole('button', { name: /Edit settings/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /See the exchanges/ })).not.toBeInTheDocument()
   })
 

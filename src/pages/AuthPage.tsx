@@ -1,4 +1,4 @@
-import { ArrowRight, CircleCheck, Eye, EyeOff, Gavel, GraduationCap, Mail, MessagesSquare, Scale, Users } from 'lucide-react'
+import { ArrowRight, CircleCheck, Eye, EyeOff, Gavel, GraduationCap, Mail, MessagesSquare, Users } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/useAuth'
 import type { Role } from '../auth/types'
@@ -74,9 +74,7 @@ export function AuthPage() {
     <div className="auth">
       <aside className="auth-panel">
         <div className="auth-brand">
-          <span className="auth-brand-icon">
-            <Scale aria-hidden="true" />
-          </span>
+          <img className="auth-brand-icon" src="/favicon.svg" alt="" />
           <span>
             <strong>Getting to Trial</strong>
             <small>Pre-trial litigation simulator</small>

@@ -60,13 +60,13 @@
   text-decoration: none;
 }
 
+/* The app's icon (public/favicon.svg), with a faint edge so it shows on the navy sidebar. */
 .ws-brand-icon {
-  display: grid;
-  place-items: center;
+  flex: none;
   width: 2.4rem;
   height: 2.4rem;
-  border: 1px solid currentColor;
-  border-radius: 50%;
+  border-radius: 22%;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
 .ws-brand strong {

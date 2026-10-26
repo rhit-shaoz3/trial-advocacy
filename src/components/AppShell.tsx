@@ -1,4 +1,4 @@
-import { LogOut, Scale, type LucideIcon } from 'lucide-react'
+import { LogOut, type LucideIcon } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router'
 import { AccountDialog } from '../account/AccountDialog'
@@ -55,9 +55,7 @@ export function AppShell({
     <div className="ws">
       <aside className="ws-sidebar">
         <Link to="/" className="ws-brand">
-          <span className="ws-brand-icon">
-            <Scale aria-hidden="true" />
-          </span>
+          <img className="ws-brand-icon" src="/favicon.svg" alt="" />
           <span>
             <strong>Getting to Trial</strong>
             <small>{subtitle}</small>

@@ -278,7 +278,7 @@ describe('InvestigatorSection', () => {
 
     const toggle = screen.getByRole('checkbox', { name: 'Use a background investigator' })
     expect(toggle).toBeChecked()
-    const save = screen.getByRole('button', { name: 'Save investigator' })
+    const save = screen.getByRole('button', { name: 'Save changes' })
     expect(save).toBeDisabled()
     await user.clear(screen.getByLabelText('Name'))
     await user.type(screen.getByLabelText('Name'), 'Nora Vance')
@@ -298,7 +298,7 @@ describe('InvestigatorSection', () => {
     const { user } = renderWith(<InvestigatorSection courseId="c1" courseCase={coaster} onSaved={vi.fn()} />, { saveInvestigator })
 
     await user.click(screen.getByRole('checkbox', { name: 'Use a background investigator' }))
-    await user.click(screen.getByRole('button', { name: 'Save investigator' }))
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Move the case out of the investigate phase')
   })
 })

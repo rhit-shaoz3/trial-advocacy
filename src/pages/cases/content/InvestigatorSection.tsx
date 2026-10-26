@@ -109,7 +109,7 @@ export function InvestigatorSection({
         </label>
         <div className="panel-form-actions">
           <button type="submit" className="btn-primary" disabled={saving || !changed}>
-            {saving ? 'Saving…' : 'Save investigator'}
+            {saving ? 'Saving…' : 'Save changes'}
           </button>
           {saved && !changed && (
             <span className="muted" role="status">

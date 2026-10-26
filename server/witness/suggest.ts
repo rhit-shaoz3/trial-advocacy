@@ -40,7 +40,7 @@ const INSTRUCTIONS = `You help a law instructor set up a practice civil case. Fr
 - The named plaintiff and defendant usually testify. Include them when they are people. When a party is a company, include the employees or officers the complaint names or clearly describes instead.
 - Add other people the complaint's account of what happened names or clearly describes: eyewitnesses, companions, employees involved, first responders, treating doctors.
 - Only people the complaint actually mentions. Never invent anyone. When someone is described but not named, use the description as their name (for example, "The ride operator").
-- For each: their name; their title or role in a few words; one sentence on their part in the events; and which side they'd most likely testify for (plaintiff or defense), or none if it isn't clear.
+- For each: their name; their title or job in two to five words, like "Ride operator" or "Park EMT" (not their part in the case); one sentence on their part in the events; and which side they'd most likely testify for (plaintiff or defense), or none if it isn't clear.
 
 List at most ${MAX_SUGGESTIONS}, the most important first. Give your answer by calling the ${TOOL_NAME} tool exactly once, and write nothing else.`
 

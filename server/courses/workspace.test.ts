@@ -1,6 +1,7 @@
 import type request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { pool } from '../db/pool.ts'
+import { transcriptionsSettled } from './materialText.ts'
 import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 
 let prof: request.Agent
@@ -294,6 +295,26 @@ describe("a student's case dashboard", () => {
     expect(own.status).toBe(302)
     expect((await plaintiff.get(own.headers.location)).headers['content-disposition']).toContain('attachment')
     expect((await plaintiff.get(`${myCaseUrl()}/materials/${byName('Defense memo.pdf')}/file`)).status).toBe(404)
+  })
+
+  it('shows a PDF in the viewer, but never a type that could run script, and gives a text version', async () => {
+    await uploadCaseFile(prof, caseUrl(), 'Notes.docx', { audience: 'plaintiff' }, Buffer.from('PK word'))
+    await launch()
+    await transcriptionsSettled()
+    const materials = (await prof.get(`${caseUrl()}/materials`)).body.materials as { id: string; filename: string }[]
+    const byName = (name: string) => materials.find((m) => m.filename === name)!.id
+    const view = async (name: string) => {
+      const res = await plaintiff.get(`${myCaseUrl()}/materials/${byName(name)}/file?view=1`)
+      return (await plaintiff.get(res.headers.location)).headers['content-disposition']
+    }
+
+    expect(await view('Plaintiff memo.pdf')).toMatch(/^inline; filename="Plaintiff memo.pdf"/)
+    // A Word file can't be shown in the page, so it still downloads; the viewer shows its text instead.
+    expect(await view('Notes.docx')).toMatch(/^attachment;/)
+    const text = await plaintiff.get(`${myCaseUrl()}/materials/${byName('Notes.docx')}/text`)
+    expect(text.status).toBe(200)
+    expect(text.body).toEqual({ status: 'ready', text: 'PK word' })
+    expect((await plaintiff.get(`${myCaseUrl()}/materials/${byName('Defense memo.pdf')}/text`)).status).toBe(404)
   })
 
   it('lets either teammate mark a task done for the whole team, and undo it', async () => {

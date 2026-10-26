@@ -186,12 +186,18 @@ describe('CaseWorkspaceView', () => {
     await user.click(screen.getByRole('button', { name: /^Case file/ }))
     expect(screen.getByRole('tab', { name: 'Case file, 4' })).toHaveAttribute('aria-selected', 'true')
     const documents = screen.getByRole('region', { name: 'Documents 2' })
-    const report = within(documents).getByRole('link', { name: /Incident report\.pdf/ })
-    expect(report).toHaveAttribute('href', '/files/m2')
+    // A file opens in the viewer; the icon beside it downloads it.
+    const report = within(documents).getByRole('button', { name: /Incident report\.pdf/ })
     expect(report).toHaveTextContent('Defense only')
-    expect(within(documents).getByRole('link', { name: /Fact pattern\.pdf/ })).toHaveTextContent('Start here')
+    expect(within(documents).getByRole('link', { name: 'Download Incident report.pdf' })).toHaveAttribute('href', '/files/m2')
+    expect(within(documents).getByRole('button', { name: /Fact pattern\.pdf/ })).toHaveTextContent('Start here')
     const images = screen.getByRole('region', { name: 'Images 1' })
-    expect(within(images).getByRole('link', { name: /Ride photo\.jpg/ })).toHaveTextContent('Image')
+    expect(within(images).getByRole('button', { name: /Ride photo\.jpg/ })).toHaveTextContent('Image')
+
+    await user.click(report)
+    const viewer = screen.getByRole('dialog', { name: 'Incident report.pdf' })
+    expect(within(viewer).getByTitle('Incident report.pdf')).toHaveAttribute('src', '/files/m2?view=1')
+    expect(within(viewer).getByRole('link', { name: 'Download' })).toHaveAttribute('href', '/files/m2')
     expect(screen.getByRole('region', { name: 'Audio 1' })).toHaveTextContent('911 call.mp3')
     expect(screen.queryByRole('region', { name: /Video/ })).not.toBeInTheDocument()
 
@@ -382,9 +388,9 @@ describe('the background investigator', () => {
     expect(panel).toHaveTextContent('1. Two operators declined to talk.')
     expect(within(panel).getByRole('heading', { name: 'Earlier reports' })).toBeInTheDocument()
     // The files come attached to the report, like an email.
-    const attachment = within(panel).getAllByRole('link', { name: 'Download Inspection log' })[0]
-    expect(attachment).toHaveAttribute('href', '/files/m9')
-    expect(attachment).toHaveTextContent('PDF · 2 KB')
+    // An attachment opens in the viewer, with a download beside it.
+    expect(within(panel).getAllByRole('button', { name: /Inspection log/ })[0]).toHaveTextContent('PDF · 2 KB')
+    expect(within(panel).getAllByRole('link', { name: 'Download Inspection log' })[0]).toHaveAttribute('href', '/files/m9')
     expect(panel).toHaveTextContent('1 attachment, also in your case file')
     expect(panel).toHaveTextContent('Watch people, including named witnesses, from public places')
     // The newest report comes before the next email.

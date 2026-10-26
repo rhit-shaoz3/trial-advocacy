@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Clock, Download, Lock, Mail, Paperclip, Send } from 'lucide-react'
+import { Clock, Download, FileText, Lock, Mail, Paperclip, Send } from 'lucide-react'
+import type { ViewableFile } from '../components/FileViewer'
 import { WitnessAvatar } from '../components/WitnessAvatar'
 import { fileTypeLabel, formatSize, shortDate } from '../courses/caseLabels'
 import type { Investigation } from '../courses/types'
@@ -26,6 +27,7 @@ export function InvestigatorPanel({
   teamName,
   investigations,
   downloadUrl,
+  onOpenFile,
   onSend,
 }: {
   investigator: { name: string; avatarUrl: string }
@@ -35,6 +37,8 @@ export function InvestigatorPanel({
   /** The team's requests, newest first; leave out (the preview) to show him without them. */
   investigations?: Investigation[]
   downloadUrl(materialId: string): string
+  /** Opens an attached file in the viewer; leave out to only offer downloads. */
+  onOpenFile?(file: ViewableFile): void
   /** Sends an assignment; leave out (the preview, or a closed case) to hide the email. */
   onSend?(assignment: string): Promise<void>
 }) {
@@ -97,7 +101,7 @@ export function InvestigatorPanel({
             </div>
           )}
 
-          {latest && <InvestigatorReport investigation={latest} downloadUrl={downloadUrl} latest />}
+          {latest && <InvestigatorReport investigation={latest} downloadUrl={downloadUrl} onOpenFile={onOpenFile} latest />}
 
           {onSend && !working && teamName && (
             <InvestigatorEmail name={investigator.name} teamName={teamName} onSend={onSend} />
@@ -108,7 +112,7 @@ export function InvestigatorPanel({
             <section className="cw-investigation-history" aria-labelledby="cw-investigation-history">
               <h3 id="cw-investigation-history">Earlier reports</h3>
               {earlier.map((r) => (
-                <InvestigatorReport key={r.id} investigation={r} downloadUrl={downloadUrl} />
+                <InvestigatorReport key={r.id} investigation={r} downloadUrl={downloadUrl} onOpenFile={onOpenFile} />
               ))}
             </section>
           )}
@@ -122,11 +126,14 @@ export function InvestigatorPanel({
 export function InvestigatorReport({
   investigation: r,
   downloadUrl,
+  onOpenFile,
   latest = false,
   onOpen,
 }: {
   investigation: Investigation
   downloadUrl(materialId: string): string
+  /** Opens an attached file in the viewer; leave out to only offer downloads. */
+  onOpenFile?(file: ViewableFile): void
   /** The newest report shows in full; earlier ones open on a click. */
   latest?: boolean
   /** Called when the report is opened (to mark it read). */
@@ -161,13 +168,39 @@ export function InvestigatorReport({
             <ul>
               {r.unlocked.map((f) => (
                 <li key={f.id}>
-                  <a href={downloadUrl(f.id)} download={f.filename} aria-label={`Download ${f.title}`}>
-                    <Download aria-hidden="true" />
-                    <span className="cw-attachment-name">{f.title}</span>
-                    <small>
-                      {fileTypeLabel(f.contentType)} · {formatSize(f.sizeBytes)}
-                    </small>
-                  </a>
+                  {onOpenFile ? (
+                    <>
+                      <button
+                        type="button"
+                        className="cw-attachment"
+                        title={`Open ${f.title} in the viewer`}
+                        onClick={() => onOpenFile(f)}
+                      >
+                        <FileText aria-hidden="true" />
+                        <span className="cw-attachment-name">{f.title}</span>
+                        <small>
+                          {fileTypeLabel(f.contentType)} · {formatSize(f.sizeBytes)}
+                        </small>
+                      </button>
+                      <a
+                        className="cw-attachment-download"
+                        href={downloadUrl(f.id)}
+                        download={f.filename}
+                        aria-label={`Download ${f.title}`}
+                        title="Download"
+                      >
+                        <Download aria-hidden="true" />
+                      </a>
+                    </>
+                  ) : (
+                    <a href={downloadUrl(f.id)} download={f.filename} aria-label={`Download ${f.title}`}>
+                      <Download aria-hidden="true" />
+                      <span className="cw-attachment-name">{f.title}</span>
+                      <small>
+                        {fileTypeLabel(f.contentType)} · {formatSize(f.sizeBytes)}
+                      </small>
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>

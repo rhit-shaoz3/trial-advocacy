@@ -378,6 +378,10 @@ export const httpCourseService: CourseService = {
     return `/api${myCasePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/file`
   },
 
+  async myMaterialText(courseId, caseId, materialId) {
+    return apiRequest(`${myCasePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/text`)
+  },
+
   async getInterview(courseId, caseId, witnessId, as) {
     return (await apiRequest(interviewPath(courseId, caseId, witnessId, as))).interview
   },

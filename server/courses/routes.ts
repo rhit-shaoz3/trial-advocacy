@@ -27,8 +27,8 @@ import {
   unseenReviewCount,
 } from '../reviews/reviews.ts'
 import { reviewsRouter } from '../reviews/reviewRoutes.ts'
-import { findMaterialFile, findWitness, listStorageKeys, removeStoredFiles, setTaskDone } from './caseContent.ts'
-import { sendMaterialFile } from './caseContentRoutes.ts'
+import { findMaterialFile, findMaterialText, findWitness, listStorageKeys, removeStoredFiles, setTaskDone } from './caseContent.ts'
+import { sendMaterialFile, sendMaterialText } from './caseContentRoutes.ts'
 import { findCase } from './cases.ts'
 import { casesRouter } from './caseRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
@@ -184,7 +184,16 @@ coursesRouter.get('/:courseId/my-cases/:caseId/materials/:materialId/file', asyn
   const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
   if (!isUuid(materialId)) throw new HttpError(404, 'File not found.')
   const viewer = await studentViewer(caseId, req.user!.id, workspace.side)
-  await sendMaterialFile(res, await findMaterialFile(caseId, materialId, viewer))
+  await sendMaterialFile(res, await findMaterialFile(caseId, materialId, viewer), req.query.view === '1')
+})
+
+/** A case file's text version, for the viewer, if the student can see the file. */
+coursesRouter.get('/:courseId/my-cases/:caseId/materials/:materialId/text', async (req, res) => {
+  const { courseId, caseId, materialId } = req.params
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  if (!isUuid(materialId)) throw new HttpError(404, 'File not found.')
+  const viewer = await studentViewer(caseId, req.user!.id, workspace.side)
+  await sendMaterialText(res, await findMaterialText(caseId, materialId, viewer))
 })
 
 /** Marks one of the case's tasks done (or not) for the student's whole team. */

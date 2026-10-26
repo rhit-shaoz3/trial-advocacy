@@ -618,6 +618,12 @@ export function questionWeight(text: string) {
 }
 
 /** Everything the UI needs from the courses backend. See `httpCourseService`. */
+/** A file's text version: `ready` with the text, or why there's none yet. */
+export interface MaterialTextResult {
+  status: 'pending' | 'ready' | 'none' | 'failed'
+  text: string | null
+}
+
 export interface CourseService {
   // Students
   /** The current user's courses, newest term first. */
@@ -715,6 +721,8 @@ export interface CourseService {
   /** Marks a task done (or not) for the student's whole team. */
   setTaskDone(courseId: string, caseId: string, taskId: string, done: boolean): Promise<CaseWorkspace>
   myMaterialDownloadUrl(courseId: string, caseId: string, materialId: string): string
+  /** A case file's text version, for the viewer, if the student can see the file. */
+  myMaterialText(courseId: string, caseId: string, materialId: string): Promise<MaterialTextResult>
 
   // Interviews with AI witnesses: the student's team's, or the instructor's test as one side.
   getInterview(courseId: string, caseId: string, witnessId: string, as: InterviewAs): Promise<Interview>

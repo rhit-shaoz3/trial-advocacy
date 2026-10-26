@@ -64,6 +64,7 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     getMyCaseWorkspace: vi.fn(),
     setTaskDone: vi.fn(),
     myMaterialDownloadUrl: (courseId, caseId, id) => `/my-download/${courseId}/${caseId}/${id}`,
+    myMaterialText: vi.fn().mockResolvedValue({ status: 'none', text: null }),
     getInterview: vi.fn(),
     askWitness: vi.fn(),
     restartInterview: vi.fn(),

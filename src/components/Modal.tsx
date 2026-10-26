@@ -12,6 +12,7 @@ export function Modal({
   title,
   icon,
   footer,
+  wide = false,
   onClose,
   children,
 }: {
@@ -20,6 +21,8 @@ export function Modal({
   icon?: ReactNode
   /** Buttons along the bottom. */
   footer?: ReactNode
+  /** Nearly the full window, for showing a document. */
+  wide?: boolean
   onClose(): void
   children: ReactNode
 }) {
@@ -34,7 +37,7 @@ export function Modal({
   return (
     <dialog
       ref={dialogRef}
-      className="modal"
+      className={wide ? 'modal modal-wide' : 'modal'}
       aria-labelledby={titleId}
       onClose={onClose}
       // A click on the backdrop lands on the dialog itself.

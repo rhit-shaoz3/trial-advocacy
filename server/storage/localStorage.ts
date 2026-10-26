@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import {
-  attachmentHeader,
+  dispositionHeader,
   DOWNLOAD_URL_TTL_SECONDS,
   KEY_PATTERN,
   UPLOAD_URL_TTL_SECONDS,
@@ -81,9 +81,9 @@ export function localStorage(dir: string): LocalStorage {
       await rename(pathFor(from), target)
     },
 
-    async downloadUrl(key, filename, contentType) {
+    async downloadUrl(key, filename, contentType, inline) {
       pathFor(key)
-      return signedUrl({ op: 'get', key, type: contentType, disposition: attachmentHeader(filename) }, DOWNLOAD_URL_TTL_SECONDS)
+      return signedUrl({ op: 'get', key, type: contentType, disposition: dispositionHeader(filename, contentType, inline) }, DOWNLOAD_URL_TTL_SECONDS)
     },
 
     async put(key, data) {

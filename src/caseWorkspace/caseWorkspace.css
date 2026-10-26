@@ -260,6 +260,53 @@
   background: var(--surface-hover);
 }
 
+/* A case file row: the main part opens the viewer, the icon at the end downloads. */
+.cw-file-row {
+  gap: 0.4rem;
+}
+
+.cw-file-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cw-file-open:hover strong {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.cw-file-download {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.4rem;
+  color: var(--muted);
+}
+
+.cw-file-download:hover {
+  background: var(--surface-hover);
+  color: var(--ws-navy);
+}
+
+.cw-file-download svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.cw-file-open:focus-visible,
+.cw-file-download:focus-visible,
 .cw-row-link:focus-visible,
 .cw-file:focus-visible {
   outline: 2px solid var(--focus);
@@ -862,7 +909,14 @@
   height: 0.85rem;
 }
 
-.cw-investigation-files a {
+.cw-investigation-files li {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.cw-investigation-files li > a:only-child,
+.cw-attachment {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -876,15 +930,48 @@
   text-decoration: none;
 }
 
-.cw-investigation-files a:hover {
+.cw-investigation-files li > a:only-child:hover,
+.cw-attachment:hover {
   border-color: var(--tint-blue-fg);
 }
 
-.cw-investigation-files a svg {
+.cw-investigation-files li > a:only-child svg,
+.cw-attachment svg {
   flex: none;
   width: 0.95rem;
   height: 0.95rem;
   color: var(--tint-blue-fg);
+}
+
+.cw-attachment {
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cw-attachment:hover .cw-attachment-name {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.cw-attachment-download {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.4rem;
+  color: var(--ws-muted);
+}
+
+.cw-attachment-download:hover {
+  background: var(--surface-hover);
+  color: var(--ws-navy);
+}
+
+.cw-attachment-download svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .cw-attachment-name {
@@ -892,7 +979,8 @@
   overflow-wrap: anywhere;
 }
 
-.cw-investigation-files a small {
+.cw-investigation-files li > a:only-child small,
+.cw-attachment small {
   flex: none;
   color: var(--ws-muted);
   font-size: 0.75rem;

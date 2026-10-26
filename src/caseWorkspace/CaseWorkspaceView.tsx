@@ -56,6 +56,7 @@ import {
 } from '../courses/types'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
+import { FileViewer, type ViewableFile } from '../components/FileViewer'
 import { PhaseSteps } from '../components/PhaseSteps'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { ExchangePanel } from './exchange/ExchangePanel'
@@ -101,6 +102,7 @@ export function CaseWorkspaceView({
   onRespondToRequest,
   onOpenExchange,
   initialTab = 'overview',
+  loadText,
   now = new Date(),
 }: {
   workspace: CaseWorkspace
@@ -132,9 +134,15 @@ export function CaseWorkspaceView({
   onOpenExchange?(): void
   /** The tab to open on, as when a notice links straight to a report. */
   initialTab?: CaseTab
+  /** A case file's text version, for the viewer to show a document the browser can't. */
+  loadText?(materialId: string): Promise<{ status: string; text: string | null }>
   now?: Date
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
+  /** The case file open in the viewer. */
+  const [viewing, setViewing] = useState<ViewableFile | null>(null)
+  const openMaterial = (m: CaseMaterial) =>
+    setViewing({ id: m.id, title: m.description || m.filename, filename: m.filename, contentType: m.contentType, sizeBytes: m.sizeBytes })
   /** The response "See responses" opens straight to; cleared on leaving the tab. */
   const [exchangeFocus, setExchangeFocus] = useState<{ kind: ExchangeKind; id: string } | null>(null)
   useEffect(() => {
@@ -245,7 +253,7 @@ export function CaseWorkspaceView({
                     <Mail aria-hidden="true" />
                     New message from your firm
                   </h2>
-                  <TeamEmail workspace={workspace} exchange={exchange} />
+                  <TeamEmail workspace={workspace} exchange={exchange} onOpenFile={openMaterial} />
                 </section>
               )}
 
@@ -260,7 +268,7 @@ export function CaseWorkspaceView({
                     </p>
                     <ul className="cw-files">
                       <li>
-                        <MaterialLink material={initialFile} href={downloadUrl(initialFile.id)} now={now} />
+                        <MaterialLink material={initialFile} href={downloadUrl(initialFile.id)} now={now} onOpen={() => openMaterial(initialFile)} />
                       </li>
                     </ul>
                   </>
@@ -320,7 +328,7 @@ export function CaseWorkspaceView({
                     <Mail aria-hidden="true" />
                     Welcome email from {exchange.firm.partner || 'your senior partner'}
                   </summary>
-                  <TeamEmail workspace={workspace} exchange={exchange} />
+                  <TeamEmail workspace={workspace} exchange={exchange} onOpenFile={openMaterial} />
                 </details>
               )}
             </div>
@@ -373,6 +381,7 @@ export function CaseWorkspaceView({
                       key={r.id}
                       investigation={r}
                       downloadUrl={downloadUrl}
+                      onOpenFile={setViewing}
                       onOpen={onOpenInvestigator}
                     />
                   ))}
@@ -390,7 +399,7 @@ export function CaseWorkspaceView({
                   <ul className="cw-list">
                     {g.files.map((m) => (
                       <li key={m.id}>
-                        <MaterialLink material={m} href={downloadUrl(m.id)} now={now} row />
+                        <MaterialLink material={m} href={downloadUrl(m.id)} now={now} row onOpen={() => openMaterial(m)} />
                       </li>
                     ))}
                   </ul>
@@ -462,6 +471,7 @@ export function CaseWorkspaceView({
             teamName={team && world ? `Team ${team.number}` : null}
             investigations={investigations}
             downloadUrl={downloadUrl}
+            onOpenFile={setViewing}
             onSend={c.status === 'active' ? onSendInvestigation : undefined}
           />
         )}
@@ -487,6 +497,14 @@ export function CaseWorkspaceView({
           </ListPanel>
         )}
       </div>
+      {viewing && (
+        <FileViewer
+          file={viewing}
+          downloadUrl={downloadUrl(viewing.id)}
+          loadText={loadText && (() => loadText(viewing.id))}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   )
 }
@@ -627,7 +645,15 @@ function NewResponsesBanner({ from, kinds, onOpen }: { from: number; kinds: Exch
 }
 
 /** The senior partner's welcome email, filled in from what the team's side has. */
-function TeamEmail({ workspace, exchange }: { workspace: CaseWorkspace; exchange: StudentExchange }) {
+function TeamEmail({
+  workspace,
+  exchange,
+  onOpenFile,
+}: {
+  workspace: CaseWorkspace
+  exchange: StudentExchange
+  onOpenFile(material: CaseMaterial): void
+}) {
   const { materials, witnesses, team, case: c } = workspace
   const side = exchange.side
   const starting = materials.find((m) => m.initial)
@@ -638,7 +664,11 @@ function TeamEmail({ workspace, exchange }: { workspace: CaseWorkspace; exchange
       side={side}
       recipients={(team?.members ?? []).map(displayName)}
       startingFile={starting ? `the ${starting.description || starting.filename}` : null}
-      documents={materials.filter((m) => !m.initial).map((m) => m.description || m.filename)}
+      documents={materials.filter((m) => !m.initial).map((m) => ({ id: m.id, title: m.description || m.filename }))}
+      onOpenDocument={(id) => {
+        const file = materials.find((m) => m.id === id)
+        if (file) onOpenFile(file)
+      }}
       witnesses={witnesses
         .filter((w) => !w.disclosed && (w.side === side || (w.side === null && w.audience === side)))
         .map((w) => (w.role ? `${w.name}, ${w.role.charAt(0).toLowerCase()}${w.role.slice(1)}` : w.name))}
@@ -705,39 +735,46 @@ function ProgressBanner({ workspace }: { workspace: CaseWorkspace }) {
   )
 }
 
+/** A case file: click to open it in the viewer; the icon at the end downloads it. */
 function MaterialLink({
   material: m,
   href,
   now,
   row = false,
+  onOpen,
 }: {
   material: CaseMaterial
   href: string
   now: Date
   row?: boolean
+  onOpen(): void
 }) {
   const Icon = CATEGORY_ICON[fileCategory(m.contentType)]
   return (
-    <a href={href} download className={row ? 'cw-row cw-row-link' : 'cw-file'}>
-      <span className="ws-icon-tile ws-icon-tile-sm ws-tone-blue" aria-hidden="true">
-        <Icon />
-      </span>
-      <span className="cw-row-body">
-        <strong>{m.filename}</strong>
-        <small>
-          {fileTypeLabel(m.contentType)} · Added {shortDate(m.uploadedAt, now)} · {formatSize(m.sizeBytes)}
-        </small>
-        {m.description && <span className="cw-row-desc">{m.description}</span>}
-      </span>
-      {m.initial && row && <span className="cw-badge">Start here</span>}
-      {m.audience !== 'all' && (
-        <span className="cw-badge">
-          {/* A team only sees an instructors-only file when it's been shared with them. */}
-          {m.audience === 'instructor' ? 'Shared with your team' : AUDIENCE_LABEL[m.audience]}
+    <div className={row ? 'cw-row cw-row-link cw-file-row' : 'cw-file cw-file-row'}>
+      <button type="button" className="cw-file-open" onClick={onOpen} title={`Open ${m.filename} in the viewer`}>
+        <span className="ws-icon-tile ws-icon-tile-sm ws-tone-blue" aria-hidden="true">
+          <Icon />
         </span>
-      )}
-      <Download className="cw-row-end" aria-hidden="true" />
-    </a>
+        <span className="cw-row-body">
+          <strong>{m.filename}</strong>
+          <small>
+            {fileTypeLabel(m.contentType)} · Added {shortDate(m.uploadedAt, now)} · {formatSize(m.sizeBytes)}
+          </small>
+          {m.description && <span className="cw-row-desc">{m.description}</span>}
+        </span>
+        {m.initial && row && <span className="cw-badge">Start here</span>}
+        {m.audience !== 'all' && (
+          <span className="cw-badge">
+            {/* A team only sees an instructors-only file when it's been shared with them. */}
+            {m.audience === 'instructor' ? 'Shared with your team' : AUDIENCE_LABEL[m.audience]}
+          </span>
+        )}
+      </button>
+      <a href={href} download className="cw-file-download" aria-label={`Download ${m.filename}`} title="Download">
+        <Download aria-hidden="true" />
+      </a>
+    </div>
   )
 }
 

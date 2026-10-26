@@ -10,7 +10,7 @@ import {
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import {
-  attachmentHeader,
+  dispositionHeader,
   DOWNLOAD_URL_TTL_SECONDS,
   UPLOAD_URL_TTL_SECONDS,
   type FileStorage,
@@ -52,13 +52,13 @@ export function s3Storage(bucket: string, region: string): FileStorage {
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: from }))
     },
 
-    downloadUrl(key, filename, contentType) {
+    downloadUrl(key, filename, contentType, inline) {
       return getSignedUrl(
         client,
         new GetObjectCommand({
           Bucket: bucket,
           Key: key,
-          ResponseContentDisposition: attachmentHeader(filename),
+          ResponseContentDisposition: dispositionHeader(filename, contentType, inline),
           ResponseContentType: contentType,
         }),
         { expiresIn: DOWNLOAD_URL_TTL_SECONDS },

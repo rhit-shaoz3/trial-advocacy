@@ -110,8 +110,9 @@ describe('MaterialsSection', () => {
       updateMaterial,
     })
 
-    const link = await screen.findByRole('link', { name: 'Fact pattern.pdf' })
-    expect(link).toHaveAttribute('href', '/download/c1/k1/m1')
+    // The name opens the viewer; the icon beside it downloads.
+    await screen.findByRole('button', { name: 'Fact pattern.pdf' })
+    expect(screen.getByRole('link', { name: 'Download Fact pattern.pdf' })).toHaveAttribute('href', '/download/c1/k1/m1')
     expect(screen.getByText('244 KB · Read first.')).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'PDF' })).toBeInTheDocument()
 
@@ -169,7 +170,7 @@ describe('MaterialsSection', () => {
 
     expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', photo, { audience: 'defense', description: 'Ride photo' })
     expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', log, { audience: 'all', description: 'Ride log (March)' })
-    expect(await screen.findByRole('link', { name: 'photo.jpg' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'photo.jpg' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /Ready to upload/ })).not.toBeInTheDocument()
     expect(onChange).toHaveBeenCalled()
   })
@@ -193,7 +194,7 @@ describe('MaterialsSection', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('b.pdf: Upload failed.')
     expect(screen.getByRole('heading', { name: 'Ready to upload (1)' })).toBeInTheDocument()
     expect(screen.getByLabelText('Label for b.pdf')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'a.pdf' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'a.pdf' })).toBeInTheDocument()
   })
 
   it('refuses files over 10 MB without uploading, and deletes after confirming', async () => {
@@ -201,7 +202,7 @@ describe('MaterialsSection', () => {
     const { user, service } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, {
       listMaterials: vi.fn().mockResolvedValue([factPattern]),
     })
-    await screen.findByRole('link', { name: 'Fact pattern.pdf' })
+    await screen.findByRole('button', { name: 'Fact pattern.pdf' })
 
     const huge = new File(['x'], 'huge.pdf')
     Object.defineProperty(huge, 'size', { value: 100 * 1024 * 1024 + 1 })
@@ -212,7 +213,7 @@ describe('MaterialsSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete Fact pattern.pdf' }))
     expect(service.deleteMaterial).toHaveBeenCalledWith('c1', 'k1', 'm1')
-    expect(screen.queryByRole('link', { name: 'Fact pattern.pdf' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Fact pattern.pdf' })).not.toBeInTheDocument()
   })
 })
 

@@ -499,7 +499,11 @@ export const httpCourseService: CourseService = {
   },
 
   async getReviewTranscript(courseId, reviewId) {
-    return (await apiRequest(`${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/transcript`)).turns
+    return apiRequest(`${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/transcript`)
+  },
+
+  async getMyReviewTranscript(courseId, caseId, reviewId) {
+    return apiRequest(`${myCasePath(courseId, caseId)}/reviews/${encodeURIComponent(reviewId)}/transcript`)
   },
 
   async restartInterview(courseId, caseId, witnessId, as) {

@@ -47,7 +47,8 @@ describe('buildFactsRequest', () => {
     expect(rest.text).toContain('Witness: Dana Lee')
     expect(rest.text).toContain('<settled_facts>\n- Dana mopped at 8:45.\n</settled_facts>')
     expect(rest.text).toContain('<facts_ruled_untrue>\n- A sign was posted.\n</facts_ruled_untrue>')
-    expect(rest.text).toContain('Q: When did you mop?\nA: Around 8:45, and I used the yellow bucket.')
+    // Numbered, so each fact can say which exchange it came from.
+    expect(rest.text).toContain('Q1: When did you mop?\nA1: Around 8:45, and I used the yellow bucket.')
 
     const none = buildFactsRequest({ ...input, settled: { accepted: [], denied: [] } }).messages[0]
       .content as Anthropic.Messages.TextBlockParam[]
@@ -59,9 +60,38 @@ describe('findNewFacts', () => {
   it('returns the reported facts, trimmed and capped', async () => {
     const client = fakeClient([toolUse(['  Dana used the yellow bucket. ', '', 7, ...Array(30).fill('More.')])])
     const facts = await findNewFacts(client, input)
-    expect(facts[0]).toBe('Dana used the yellow bucket.')
+    // A bare sentence still counts, without links.
+    expect(facts[0]).toEqual({ text: 'Dana used the yellow bucket.', producedBy: [], builtOn: [] })
     expect(facts).toHaveLength(MAX_NEW_FACTS)
     expect(client.requests).toHaveLength(1)
+  })
+
+  it('turns question numbers into exchanges, dropping ones outside the transcript', async () => {
+    const long = { ...input, transcript: [1, 2, 3, 4].map((n) => ({ question: `Q${n}?`, answer: `A${n}.` })) }
+    const client = fakeClient([
+      toolUse([
+        {
+          text: 'Dana left the gate open.',
+          from_questions: [2, 2, 9],
+          later_questions: [
+            { question: 3, answer_relies_on_it: true },
+            { question: 4, answer_relies_on_it: false },
+            { question: 2, answer_relies_on_it: true },
+            { question: 0, answer_relies_on_it: true },
+          ],
+        },
+      ]),
+    ])
+    expect(await findNewFacts(client, long)).toEqual([
+      { text: 'Dana left the gate open.', producedBy: [1], builtOn: [{ turn: 2, answer: true }, { turn: 3, answer: false }] },
+    ])
+  })
+
+  it('asks for the questions behind each fact', () => {
+    const tool = buildFactsRequest(input).tools![0] as Anthropic.Messages.Tool
+    const items = (tool.input_schema.properties as Record<string, { items: { required: string[] } }>).facts.items
+    expect(items.required).toEqual(['text', 'from_questions', 'later_questions'])
+    expect(buildFactsRequest(input).system).toContain('answer_relies_on_it')
   })
 
   it('fails when no list comes back', async () => {

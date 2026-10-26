@@ -7,8 +7,9 @@ import {
   type DocumentDecision,
   type FactDecision,
   type InterviewReview,
-  type ReviewTurn,
+  type ReviewTranscript,
 } from '../../courses/types'
+import { MarkedTranscript } from '../../components/MarkedTranscript'
 import { ROLE_LABEL, worldLabel } from '../../courses/worldLabel'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import './Review.css'
@@ -413,17 +414,18 @@ function ReviewCard({
   )
 }
 
-/** The conversation behind a review, loaded the first time it's opened. */
+/** The conversation behind a review, loaded the first time it's opened, marked as the rulings so far stand. */
 function Transcript({ courseId, reviewId }: { courseId: string; reviewId: string }) {
   const service = useCourseService()
-  const [turns, setTurns] = useState<ReviewTurn[] | null>(null)
+  const [transcript, setTranscript] = useState<ReviewTranscript | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   function load(open: boolean) {
-    if (!open || turns) return
+    // Reload each time it opens: the marks follow the rulings made since.
+    if (!open) return
     service
       .getReviewTranscript(courseId, reviewId)
-      .then(setTurns)
+      .then(setTranscript)
       .catch((err: Error) => setError(err.message))
   }
 
@@ -432,23 +434,10 @@ function Transcript({ courseId, reviewId }: { courseId: string; reviewId: string
       <summary>Show conversation</summary>
       {error ? (
         <p className="form-error">{error}</p>
-      ) : !turns ? (
+      ) : !transcript ? (
         <p className="muted">Loading…</p>
       ) : (
-        <ol>
-          {turns.map((t, i) => (
-            <li key={i}>
-              <p>
-                <strong>Q.</strong> {t.question}
-                {t.askedBy && <small className="muted"> ({t.askedBy})</small>}
-              </p>
-              {t.objection && <p className="review-objection">{t.objection}</p>}
-              <p>
-                <strong>A.</strong> {t.answer}
-              </p>
-            </li>
-          ))}
-        </ol>
+        <MarkedTranscript transcript={transcript} />
       )}
     </details>
   )

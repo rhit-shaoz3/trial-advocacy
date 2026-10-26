@@ -251,6 +251,24 @@ describe('interviewing an AI witness', () => {
     expect(await overview()).toMatchObject({ teamsDeposed: 1, depositions: 1, questions: 2, objections: 0 })
   })
 
+  it("shows the witness a file the team has, by name, and refuses one it doesn't", async () => {
+    const res = await ada
+      .post(`${interview()}/questions`)
+      .send({ question: 'Do you recognize this document?', exhibitIds: [files['Accident log.pdf']] })
+    expect(res.status).toBe(200)
+    // The witness already has every case file; the question names the one handed over.
+    expect(asked[0].question).toBe('[Exhibit: "Accident log"] Do you recognize this document?')
+    expect(res.body.interview.turns[0].question).toBe('[Exhibit: "Accident log"] Do you recognize this document?')
+    // The files the team can show are listed, and an instructors-only one isn't among them.
+    const titles = res.body.interview.exhibits.map((e: { title: string }) => e.title)
+    expect(titles).toContain('Accident log')
+    expect(titles).not.toContain('Torres deposition')
+
+    const hidden = await ada.post(`${interview()}/questions`).send({ question: 'And this?', exhibitIds: [files['Torres deposition.pdf']] })
+    expect(hidden.status).toBe(400)
+    expect(hidden.body.error).toBe('You can only show the witness files your team has.')
+  })
+
   it('builds the witness from the case file', async () => {
     // Evidence kept with the instructor is still a record; another witness's deposition is their account.
     await prof.patch(`${caseUrl()}/materials/${files['Accident log.pdf']}`).send({ audience: 'instructor', description: 'Accident log' })

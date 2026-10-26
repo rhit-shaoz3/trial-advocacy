@@ -306,3 +306,58 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Documents shown to the witness with a question (ExhibitPicker, QuestionText). */
+.iv-exhibits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  grid-column: 1 / -1;
+}
+
+.iv-exhibits select {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.iv-exhibit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0.35rem 0.25rem 0;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+  font-size: 0.8rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.iv-bubble .iv-exhibit {
+  display: flex;
+  width: fit-content;
+}
+
+/* Two classes, to beat the workspace's general icon size. */
+.iv-bubble .iv-exhibit svg,
+.iv-exhibits .iv-exhibit svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.iv-exhibit button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}

@@ -416,10 +416,10 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(interviewPath(courseId, caseId, witnessId, as))).interview
   },
 
-  async askWitness(courseId, caseId, witnessId, as, question) {
+  async askWitness(courseId, caseId, witnessId, as, question, exhibitIds = []) {
     const body = await apiRequest(interviewPath(courseId, caseId, witnessId, as, '/questions'), {
       method: 'POST',
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, exhibitIds }),
     })
     return body.interview
   },

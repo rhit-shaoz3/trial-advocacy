@@ -42,7 +42,7 @@ import {
 } from './caseContent.ts'
 import { queueTranscription } from './materialText.ts'
 import { listTeams } from './teams.ts'
-import { askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
+import { asExhibits, askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
 
 const MAX_FILENAME_LENGTH = 200
 const MAX_NAME_LENGTH = 120
@@ -427,7 +427,16 @@ async function testInterview(req: Request): Promise<InterviewContext> {
   const id = readId(req.params.witnessId as string, 'Witness not found.')
   const witness = await findWitness(req.courseCase!.id, id)
   if (!witness) throw new HttpError(404, 'Witness not found.')
-  return { courseCase: req.courseCase!, witness, owner: { teamId: null, side }, matchupId: null, userId: req.user!.id, closed: false }
+  return {
+    courseCase: req.courseCase!,
+    witness,
+    owner: { teamId: null, side },
+    matchupId: null,
+    userId: req.user!.id,
+    closed: false,
+    // Testing, the instructor can show any case file.
+    exhibits: asExhibits(await listMaterials(req.courseCase!.id)),
+  }
 }
 
 witnessesRouter.get('/:witnessId/interview', async (req, res) => {

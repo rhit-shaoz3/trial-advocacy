@@ -50,6 +50,8 @@ export interface Interview {
     createdAt: Date
   }[]
   maxTurns: number
+  /** Case files the asker can show the witness. */
+  exhibits?: Exhibit[]
   /** When a team's interview ends on its own: an hour after the first question. Null before that, and for instructor tests. */
   endsAt: Date | null
   /** False when the witness isn't set up yet, or the case is closed. */
@@ -171,6 +173,41 @@ export interface InterviewContext {
   userId: string
   /** The case is closed: the interview can be read but not continued. */
   closed: boolean
+  /** Case files the asker can show the witness: their team's, or (testing) any. */
+  exhibits: Exhibit[]
+}
+
+/** A case file shown to the witness, by the title the witness's documents use. */
+export interface Exhibit {
+  id: string
+  title: string
+}
+
+/** The most files one question can show the witness. */
+export const MAX_EXHIBITS = 3
+
+/** The files as exhibits: titled the way the witness's documents are (description, else filename). */
+export const asExhibits = (files: { id: string; description: string; filename: string }[]): Exhibit[] =>
+  files.map((f) => ({ id: f.id, title: f.description || f.filename }))
+
+/**
+ * The question as the witness gets it: a marker for each document the
+ * attorney hands over, then what they asked. The witness already has every
+ * case file (cached with its instructions), so naming it is enough.
+ */
+export const withExhibits = (question: string, shown: Exhibit[]) =>
+  [...shown.map((e) => `[Exhibit: "${e.title}"]`), question].join(' ')
+
+function readExhibits(ctx: InterviewContext, body: unknown): Exhibit[] {
+  const raw = (body as Record<string, unknown> | undefined)?.exhibitIds ?? []
+  if (!Array.isArray(raw) || raw.some((id) => typeof id !== 'string')) throw new HttpError(400, 'Choose documents from the case file.')
+  const ids = [...new Set(raw as string[])]
+  if (ids.length > MAX_EXHIBITS) throw new HttpError(400, `Show at most ${MAX_EXHIBITS} documents with one question.`)
+  return ids.map((id) => {
+    const exhibit = ctx.exhibits.find((e) => e.id === id)
+    if (!exhibit) throw new HttpError(400, 'You can only show the witness files your team has.')
+    return exhibit
+  })
 }
 
 /** The open interview (a fresh one if the last ran out of time). */
@@ -181,7 +218,7 @@ export async function getInterview(ctx: InterviewContext): Promise<Interview> {
     await closeInterview(interviewId, ctx.owner.teamId)
     return getInterview(ctx)
   }
-  return current
+  return { ...current, exhibits: ctx.exhibits }
 }
 
 /** Ends the current interview and opens a fresh one. */
@@ -208,6 +245,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
   if (question.length > MAX_QUESTION_LENGTH) {
     throw new HttpError(400, `Questions must be at most ${MAX_QUESTION_LENGTH} characters.`)
   }
+  const asked = withExhibits(question, readExhibits(ctx, body))
   const interviewId = await openInterview(ctx.witness.id, ctx.owner, ctx.userId)
   const before = await view(ctx.witness, ctx.owner, interviewId, ctx.closed)
   if (!before.canAsk) throw new HttpError(409, before.notice!)
@@ -225,7 +263,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
       profile,
       settings,
       transcript: transcript.map((t) => ({ question: t.question, reply: t.reply })),
-      question,
+      question: asked,
     })
   } catch (err) {
     if (err instanceof WitnessNotReadyError) throw new HttpError(409, err.message)
@@ -245,7 +283,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
       [
         interviewId,
         transcript.length,
-        question,
+        asked,
         reply.reply,
         reply.objection ? `${reply.objection.speaker}: ${reply.objection.text}` : null,
         reply.answer,
@@ -259,5 +297,5 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
     }
     throw err
   }
-  return view(ctx.witness, ctx.owner, interviewId, ctx.closed)
+  return { ...(await view(ctx.witness, ctx.owner, interviewId, ctx.closed)), exhibits: ctx.exhibits }
 }

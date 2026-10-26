@@ -15,7 +15,7 @@ import {
   type CourseFields,
   type TaughtCourse,
 } from './courses.ts'
-import { askQuestion, endInterview, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
+import { asExhibits, askQuestion, endInterview, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
 import {
   findTeamInterviewReview,
   findTeamWorld,
@@ -243,6 +243,8 @@ async function teamInterview(req: Request): Promise<InterviewContext> {
     matchupId: world?.matchupId ?? null,
     userId: req.user!.id,
     closed: workspace.case.status !== 'active',
+    // The files the team has, to show the witness.
+    exhibits: asExhibits(workspace.materials),
   }
 }
 

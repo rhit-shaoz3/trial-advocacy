@@ -65,7 +65,7 @@ describe('InterviewPage', () => {
     expect(screen.getByRole('link', { name: 'Case' })).toHaveAttribute('href', '/courses/c1/cases/k1')
 
     await user.type(screen.getByLabelText('Your question'), 'Where were you?{Enter}')
-    expect(askWitness).toHaveBeenCalledWith('c1', 'k1', 'w1', 'team', 'Where were you?')
+    expect(askWitness).toHaveBeenCalledWith('c1', 'k1', 'w1', 'team', 'Where were you?', [])
     const transcript = screen.getByRole('list', { name: 'Transcript' })
     expect(await screen.findByText('At the booth.')).toBeInTheDocument()
     // The question on the right as yours, the answer on the left as the witness's.
@@ -150,6 +150,30 @@ describe('InterviewPage', () => {
     expect(await screen.findByText(/As plaintiff’s counsel/)).toBeInTheDocument()
     expect(getInterview).toHaveBeenCalledWith('c1', 'k1', 'w1', 'team')
     expect(screen.queryByRole('button', { name: 'Defendant' })).not.toBeInTheDocument()
+  })
+})
+
+describe('InterviewPage: showing documents', () => {
+  it('shows the witness a case file with the question, and the transcript marks it', async () => {
+    const withFiles = { ...empty, exhibits: [{ id: 'm1', title: 'Complaint' }, { id: 'm2', title: 'Accident log' }] }
+    const answered = { ...withFiles, turns: [turn(0, '[Exhibit: "Complaint"] Do you recognize this document?', 'Yes, I read it.')] }
+    const askWitness = vi.fn().mockResolvedValue(answered)
+    const { user } = renderPage({ getInterview: vi.fn().mockResolvedValue(withFiles), askWitness })
+
+    const picker = await screen.findByRole('combobox', { name: 'Show the witness a document' })
+    await user.selectOptions(picker, 'Accident log')
+    await user.selectOptions(picker, 'Complaint')
+    // Changed your mind about one.
+    await user.click(screen.getByRole('button', { name: "Don't show Accident log" }))
+    await user.type(screen.getByLabelText('Your question'), 'Do you recognize this document?{Enter}')
+
+    expect(askWitness).toHaveBeenCalledWith('c1', 'k1', 'w1', 'team', 'Do you recognize this document?', ['m1'])
+    // In the transcript, the document shows as a chip before the question.
+    const transcript = screen.getByRole('list', { name: 'Transcript' })
+    expect(await within(transcript).findByText('Yes, I read it.')).toBeInTheDocument()
+    const bubble = within(transcript).getByText(/Do you recognize this document\?/)
+    expect(bubble).toHaveTextContent('Shown: Complaint')
+    expect(bubble).not.toHaveTextContent('[Exhibit')
   })
 })
 

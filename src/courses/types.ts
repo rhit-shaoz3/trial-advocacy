@@ -306,6 +306,8 @@ export interface Interview {
     createdAt: string
   }[]
   maxTurns: number
+  /** Case files the asker can show the witness during the interview. */
+  exhibits?: { id: string; title: string }[]
   /**
    * When a team's interview ends on its own (an hour after the first
    * question) and goes to the instructor for review. Null before the first
@@ -822,7 +824,8 @@ export interface CourseService {
 
   // Interviews with AI witnesses: the student's team's, or the instructor's test as one side.
   getInterview(courseId: string, caseId: string, witnessId: string, as: InterviewAs): Promise<Interview>
-  askWitness(courseId: string, caseId: string, witnessId: string, as: InterviewAs, question: string): Promise<Interview>
+  /** Asks the next question, showing the witness `exhibitIds` (case files it already has) with it. */
+  askWitness(courseId: string, caseId: string, witnessId: string, as: InterviewAs, question: string, exhibitIds?: string[]): Promise<Interview>
   /** Ends the interview and starts an empty one. */
   restartInterview(courseId: string, caseId: string, witnessId: string, as: InterviewAs): Promise<Interview>
   /** Ends the team's interview and sends it to the instructor for review; opens a fresh one. */

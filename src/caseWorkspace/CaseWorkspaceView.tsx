@@ -61,6 +61,7 @@ import { PhaseSteps } from '../components/PhaseSteps'
 import { Toast, Toasts } from '../components/Toasts'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { ExchangePanel } from './exchange/ExchangePanel'
+import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
 import './caseWorkspace.css'
 
@@ -629,7 +630,7 @@ function TeamEmail({
       firm={exchange.firm}
       side={side}
       recipients={(team?.members ?? []).map(displayName)}
-      startingFile={starting ? `the ${starting.description || starting.filename}` : null}
+      startingFile={starting ? startingFilePhrase(starting.description || starting.filename) : null}
       documents={materials.filter((m) => !m.initial).map((m) => ({ id: m.id, title: m.description || m.filename }))}
       onOpenDocument={(id) => {
         const file = materials.find((m) => m.id === id)

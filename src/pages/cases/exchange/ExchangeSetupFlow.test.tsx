@@ -85,10 +85,31 @@ describe('ExchangeSetupFlow', () => {
 
     expect(await screen.findByRole('list', { name: 'Your choices' })).toHaveTextContent('Subpoenas')
     expect(screen.getByText('Teams won’t see this.')).toBeInTheDocument()
+    // Both sides have disclosures, but the emails are missing names; finishing still works.
+    const warnings = screen.getByLabelText('Before you finish')
+    expect(warnings).not.toHaveTextContent(/initial disclosures/)
+    expect(warnings).toHaveTextContent('The plaintiff welcome email has no firm, so it\'s signed "Margaret Hale" at "the firm".')
+    expect(warnings).toHaveTextContent('The defense welcome email has no firm or senior partner')
     await user.click(screen.getByRole('button', { name: 'Finish setup' }))
     expect(service.completeExchangeSetup).toHaveBeenCalledWith('c1', 'k1')
     expect(onCaseChange).toHaveBeenCalledWith(expect.objectContaining({ exchangeReady: true }))
     expect(onExit).toHaveBeenCalled()
+  })
+
+  it('warns at the review when no disclosures are picked or a side has nothing to pick', async () => {
+    const { user } = renderFlow({
+      getExchange: vi.fn().mockResolvedValue({
+        settings: { ...settings, firms: { plaintiff: { firm: 'Hale LLP', partner: 'Margaret Hale' }, defense: { firm: 'Brandt LLP', partner: 'Daniel Brandt' } } },
+        options: [{ kind: 'witness', id: 'w2', side: 'defense', name: 'Michael Rose', detail: '', avatarUrl: null }],
+      }),
+    })
+    for (let i = 0; i < 5; i++) await user.click(await screen.findByRole('button', { name: 'Next' }))
+
+    const warnings = await screen.findByLabelText('Before you finish')
+    expect(warnings).toHaveTextContent('The plaintiff side has no witnesses or one-side files to disclose yet')
+    expect(warnings).toHaveTextContent("You haven't picked any defense initial disclosures.")
+    expect(warnings).not.toHaveTextContent(/welcome email/)
+    expect(screen.getByRole('button', { name: 'Finish setup' })).toBeEnabled()
   })
 
   it('saves and leaves partway through', async () => {

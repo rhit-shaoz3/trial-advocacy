@@ -1071,7 +1071,11 @@
     .setup-body,
     .setup-done,
     .review-card,
-    .account-dialog
+    .account-dialog,
+    .modal,
+    .exchange-card,
+    .welcome-email,
+    .exchange-tab > .course-section
 ) {
   --ws-navy: var(--card-ws-navy);
   --ws-text: var(--card-ws-text);

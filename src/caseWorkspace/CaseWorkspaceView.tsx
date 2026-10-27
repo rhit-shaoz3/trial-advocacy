@@ -14,8 +14,12 @@ import {
   FileAudio,
   FileVideo,
   Gavel,
+  Inbox,
+  Lock,
+  Mail,
   MessageSquare,
   Search,
+  Share2,
   Users,
 } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
@@ -38,15 +42,21 @@ import {
   INVESTIGATOR_AVATAR_URL,
   type CaseMaterial,
   type CaseWorkspace,
+  type DisclosurePick,
+  type ExchangeKind,
   type Investigation,
+  type ItemResponse,
   type MyTeamMember,
   type ReviewResult,
   type ReviewTranscript,
   type Side,
+  type StudentExchange,
 } from '../courses/types'
 import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
+import { ExchangePanel } from './exchange/ExchangePanel'
+import { WelcomeEmail } from './exchange/WelcomeEmail'
 import './caseWorkspace.css'
 
 type Tab = CaseTab
@@ -82,6 +92,11 @@ export function CaseWorkspaceView({
   investigations,
   onSendInvestigation,
   onOpenInvestigator,
+  exchange,
+  onSubmitDisclosures,
+  onSendRequest,
+  onRespondToRequest,
+  onOpenExchange,
   initialTab = 'overview',
   now = new Date(),
 }: {
@@ -105,11 +120,23 @@ export function CaseWorkspaceView({
   onSendInvestigation?(assignment: string): Promise<void>
   /** Called when the student opens the investigator or a report, to mark the reports read. */
   onOpenInvestigator?(): void
+  /** The team's information exchange; leave out (the preview, or not set up) to hide its tab. */
+  exchange?: StudentExchange | null
+  onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
+  onSendRequest?(kind: ExchangeKind, items: string[]): Promise<void>
+  onRespondToRequest?(requestId: string, responses: ItemResponse[]): Promise<void>
+  /** Called when the student opens the Information exchange tab, to mark the responses read. */
+  onOpenExchange?(): void
   /** The tab to open on, as when a notice links straight to a report. */
   initialTab?: CaseTab
   now?: Date
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
+  /** The response "See responses" opens straight to; cleared on leaving the tab. */
+  const [exchangeFocus, setExchangeFocus] = useState<{ kind: ExchangeKind; id: string } | null>(null)
+  useEffect(() => {
+    if (tab !== 'exchange') setExchangeFocus(null)
+  }, [tab])
   const unseen = reviews?.filter((r) => !r.seen).length ?? 0
   const reports = investigations?.filter((i) => i.status === 'completed') ?? []
   const unseenReports = reports.filter((r) => !r.seen).length
@@ -118,11 +145,16 @@ export function CaseWorkspaceView({
     workspace.investigator === undefined
       ? { name: DEFAULT_INVESTIGATOR_NAME, avatarUrl: INVESTIGATOR_AVATAR_URL }
       : workspace.investigator
-  // Being on the Reviews or Investigator tab marks what's there read, however the student got there.
+  const exchangeRequests = exchange ? [...(exchange.interrogatories?.requests ?? []), ...(exchange.rfas?.requests ?? [])] : []
+  /** Responses to the team's sets that this student hasn't read. */
+  const newResponses = exchangeRequests.filter((r) => r.direction === 'sent' && r.respondedAt && !r.seen)
+  const toRespond = exchangeRequests.filter((r) => r.direction === 'received' && !r.respondedAt).length
+  // Being on the Reviews, Investigator, or Information exchange tab marks what's there read, however the student got there.
   useEffect(() => {
     if (tab === 'reviews' && unseen > 0) onOpenReviews?.()
     if (tab === 'investigator' && unseenReports > 0) onOpenInvestigator?.()
-  }, [tab, unseen, unseenReports, onOpenReviews, onOpenInvestigator])
+    if (tab === 'exchange' && newResponses.length > 0) onOpenExchange?.()
+  }, [tab, unseen, unseenReports, onOpenReviews, onOpenInvestigator, newResponses.length, onOpenExchange])
   const { case: c, team, world, materials, witnesses, tasks } = workspace
   const initialFile = materials.find((m) => m.initial)
   const byCategory = FILE_CATEGORIES.map((category) => ({
@@ -137,6 +169,9 @@ export function CaseWorkspaceView({
     { id: 'overview', label: 'Overview' },
     { id: 'case-file', label: 'Case file', count: materials.length + reports.length },
     { id: 'witnesses', label: 'Witnesses', count: witnesses.length },
+    ...(exchange
+      ? [{ id: 'exchange' as const, label: 'Information exchange', count: toRespond + newResponses.length }]
+      : []),
     ...(investigator ? [{ id: 'investigator' as const, label: 'Investigator', count: unseenReports }] : []),
     { id: 'tasks', label: 'Tasks', count: openTasks.length },
     ...(reviews ? [{ id: 'reviews' as const, label: 'Reviews', count: unseen }] : []),
@@ -163,6 +198,18 @@ export function CaseWorkspaceView({
       {investigator && unseenReports > 0 && tab !== 'investigator' && (
         <NewReportBanner name={investigator.name} onOpen={() => setTab('investigator')} />
       )}
+      {newResponses.length > 0 && tab !== 'exchange' && (
+        <NewResponsesBanner
+          from={newResponses[0].toTeam.number}
+          kinds={newResponses.map((r) => r.kind)}
+          onOpen={() => {
+            // Open the newest response itself, not just the tab.
+            const newest = [...newResponses].sort((a, b) => (b.respondedAt ?? '').localeCompare(a.respondedAt ?? ''))[0]
+            setExchangeFocus({ kind: newest.kind, id: newest.id })
+            setTab('exchange')
+          }}
+        />
+      )}
 
       <div className="cw-tabs" role="tablist" aria-label="Case sections">
         {tabs.map((t) => (
@@ -188,6 +235,16 @@ export function CaseWorkspaceView({
           <div className="cw-overview">
             <div className="cw-main">
               <ProgressBanner workspace={workspace} />
+
+              {exchange && c.phase === 'introduction' && (
+                <section className="cw-welcome" aria-labelledby="cw-welcome-title">
+                  <h2 id="cw-welcome-title" className="cw-welcome-title">
+                    <Mail aria-hidden="true" />
+                    New message from your firm
+                  </h2>
+                  <TeamEmail workspace={workspace} exchange={exchange} />
+                </section>
+              )}
 
               <section className="cw-card" aria-labelledby="cw-start-here">
                 <span className="ws-eyebrow">Start here</span>
@@ -229,6 +286,21 @@ export function CaseWorkspaceView({
                     detail={count(witnesses.length, 'person', 'people')}
                     onOpen={() => setTab('witnesses')}
                   />
+                  {exchange && (
+                    <WorkbenchRow
+                      icon={<Share2 />}
+                      tone="green"
+                      title="Information exchange"
+                      detail={
+                        toRespond > 0
+                          ? `${count(toRespond, 'set')} to respond to`
+                          : exchange.requestsOpen
+                            ? 'Interrogatories and requests for admission'
+                            : 'Initial disclosures'
+                      }
+                      onOpen={() => setTab('exchange')}
+                    />
+                  )}
                   <WorkbenchRow
                     icon={<ClipboardList />}
                     tone="rose"
@@ -238,6 +310,16 @@ export function CaseWorkspaceView({
                   />
                 </ul>
               </section>
+
+              {exchange && c.phase !== 'introduction' && (
+                <details className="cw-welcome-later">
+                  <summary>
+                    <Mail aria-hidden="true" />
+                    Welcome email from {exchange.firm.partner || 'your senior partner'}
+                  </summary>
+                  <TeamEmail workspace={workspace} exchange={exchange} />
+                </details>
+              )}
             </div>
 
             <aside className="cw-side">
@@ -247,6 +329,7 @@ export function CaseWorkspaceView({
                 canToggle={canToggle}
                 onToggleTask={onToggleTask}
                 onViewAll={() => setTab('tasks')}
+                onOpenExchange={exchange ? () => setTab('exchange') : undefined}
                 now={now}
               />
               <CaseTeam workspace={workspace} />
@@ -320,7 +403,9 @@ export function CaseWorkspaceView({
             sub={
               c.phase === 'deposition'
                 ? `People in ${c.title}. Interview your side's AI witnesses with your partner, and depose the other side's.`
-                : `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's witnesses are revealed in the deposition phase.`
+                : witnesses.some((w) => w.disclosed)
+                  ? `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's disclosed witnesses show here; you can depose them in the deposition phase.`
+                  : `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's witnesses are revealed in the deposition phase.`
             }
             empty="No witnesses have been added yet."
           >
@@ -337,7 +422,17 @@ export function CaseWorkspaceView({
                   {w.description && <p>{w.description}</p>}
                 </div>
                 {theirs && <span className="cw-badge cw-badge-theirs">{WITNESS_FOR[w.side!]}</span>}
-                {w.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[w.audience]}</span>}
+                {w.disclosed ? (
+                  <span className="cw-badge cw-badge-theirs">Disclosed by the other side</span>
+                ) : (
+                  w.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[w.audience]}</span>
+                )}
+                {w.disclosed && (
+                  <span className="cw-interview cw-interview-off" aria-disabled="true">
+                    <Lock aria-hidden="true" />
+                    Can&rsquo;t interview yet
+                  </span>
+                )}
                 {w.canInterview &&
                   (interviewHref ? (
                     <Link to={interviewHref(w.id)} className="cw-interview" aria-label={`${action} ${w.name}`}>
@@ -365,6 +460,17 @@ export function CaseWorkspaceView({
             investigations={investigations}
             downloadUrl={downloadUrl}
             onSend={c.status === 'active' ? onSendInvestigation : undefined}
+          />
+        )}
+
+        {tab === 'exchange' && exchange && (
+          <ExchangePanel
+            exchange={exchange}
+            onSubmitDisclosures={c.status === 'active' ? onSubmitDisclosures : undefined}
+            onSend={c.status === 'active' ? onSendRequest : undefined}
+            onRespond={c.status === 'active' ? onRespondToRequest : undefined}
+            focus={exchangeFocus}
+            now={now}
           />
         )}
 
@@ -496,6 +602,45 @@ function NewReportBanner({ name, onOpen }: { name: string; onOpen(): void }) {
         Read report
       </button>
     </div>
+  )
+}
+
+const KIND_NOUN: Record<ExchangeKind, string> = { interrogatories: 'interrogatories', rfas: 'requests for admission' }
+
+/** Shown above the tabs while the other team's responses to the team's sets are unread. */
+function NewResponsesBanner({ from, kinds, onOpen }: { from: number; kinds: ExchangeKind[]; onOpen(): void }) {
+  const what = [...new Set(kinds)].map((k) => KIND_NOUN[k]).join(' and ')
+  return (
+    <div className="ws-notice cw-new-results" role="status">
+      <Inbox aria-hidden="true" />
+      <p>
+        <strong>Team {from} responded to your {what}.</strong> Both teams can see the responses.
+      </p>
+      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
+        See responses
+      </button>
+    </div>
+  )
+}
+
+/** The senior partner's welcome email, filled in from what the team's side has. */
+function TeamEmail({ workspace, exchange }: { workspace: CaseWorkspace; exchange: StudentExchange }) {
+  const { materials, witnesses, team, case: c } = workspace
+  const side = exchange.side
+  const starting = materials.find((m) => m.initial)
+  return (
+    <WelcomeEmail
+      caseTitle={c.title}
+      firm={exchange.firm}
+      side={side}
+      recipients={(team?.members ?? []).map(displayName)}
+      startingFile={starting ? `the ${starting.description || starting.filename}` : null}
+      documents={materials.filter((m) => !m.initial).map((m) => m.description || m.filename)}
+      witnesses={witnesses
+        .filter((w) => !w.disclosed && (w.side === side || (w.side === null && w.audience === side)))
+        .map((w) => (w.role ? `${w.name}, ${w.role.charAt(0).toLowerCase()}${w.role.slice(1)}` : w.name))}
+      disclosures={exchange.disclosures !== null}
+    />
   )
 }
 
@@ -686,7 +831,7 @@ function TaskRow({
 
   return (
     <li className={`cw-row ${done ? 'cw-task-done' : ''}`}>
-      {canToggle ? (
+      {canToggle && !t.auto ? (
         <button
           type="button"
           className="cw-check"
@@ -708,6 +853,7 @@ function TaskRow({
         <small className={overdue ? 'cw-overdue' : undefined}>
           {t.dueAt ? `Due ${dueLabel(t.dueAt, now)}` : 'No due date'}
           {done && t.completedBy && ` · Completed by ${t.completedBy}`}
+          {!done && t.auto && ' · Completes when you do it'}
         </small>
         {t.description && <p>{t.description}</p>}
       </div>
@@ -725,6 +871,7 @@ function NextTask({
   canToggle,
   onToggleTask,
   onViewAll,
+  onOpenExchange,
   now,
 }: {
   task: WorkspaceTask | undefined
@@ -732,6 +879,8 @@ function NextTask({
   canToggle: boolean
   onToggleTask?(taskId: string, done: boolean): Promise<void>
   onViewAll(): void
+  /** Opens the Information exchange tab, where its own tasks are done. */
+  onOpenExchange?(): void
   now: Date
 }) {
   const [saving, setSaving] = useState(false)
@@ -750,7 +899,12 @@ function NextTask({
             <CalendarClock aria-hidden="true" />
             {task.dueAt ? `Due ${dueLabel(task.dueAt, now)}` : 'No due date'}
           </p>
-          {canToggle ? (
+          {task.auto && onOpenExchange ? (
+            <button type="button" className="ws-btn ws-btn-primary cw-next-btn" onClick={onOpenExchange}>
+              {task.id === 'exchange:disclosures' ? 'Start' : 'Respond'}
+              <ArrowRight aria-hidden="true" />
+            </button>
+          ) : canToggle && !task.auto ? (
             <button
               type="button"
               className="ws-btn ws-btn-primary cw-next-btn"

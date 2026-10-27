@@ -16,7 +16,7 @@ const draft: CourseCase = {
   title: 'Rivera v. Thrill Park',
   summary: 'A rollercoaster stalls mid-loop.',
   status: 'draft',
-  phase: 'subpoena',
+  phase: 'introduction',
   instructorNote: '',
   inWorldDate: null,
   disputedIssues: '',
@@ -125,8 +125,21 @@ describe('the guided case setup', () => {
     expect(screen.queryByRole('region', { name: 'Teams' })).not.toBeInTheDocument()
   })
 
-  it('finishes with congratulations, then shows the case as a student would', async () => {
-    const service = setupService({ getCase: vi.fn().mockResolvedValue({ ...draft, setupStep: 'tasks' }) })
+  it('finishes with congratulations, then opens the information exchange setup', async () => {
+    const service = setupService({
+      getCase: vi.fn().mockResolvedValue({ ...draft, setupStep: 'tasks' }),
+      getExchange: vi.fn().mockResolvedValue({
+        settings: {
+          setupCompletedAt: null,
+          disclosures: { enabled: true, materialIds: [], witnessIds: [] },
+          subpoenas: { enabled: true, limit: 3, days: 14 },
+          interrogatories: { enabled: true, limit: 25, days: 30 },
+          rfas: { enabled: true, limit: 25, days: 30 },
+          firms: { plaintiff: { firm: '', partner: '' }, defense: { firm: '', partner: '' } },
+        },
+        options: [],
+      }),
+    })
     const user = renderAt('/courses/c1/cases/k1', service)
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Tasks' })).toBeInTheDocument()
@@ -135,9 +148,11 @@ describe('the guided case setup', () => {
 
     expect(service.completeSetup).toHaveBeenCalledWith('c1', 'k1')
     expect(await screen.findByRole('heading', { name: 'Congratulations, you created a new case: Rivera v. Thrill Park!' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'See it as a student' }))
+    expect(screen.getByText(/open the Student view tab on the case page/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Set up information exchange' }))
 
-    expect(await screen.findByRole('tab', { name: 'Student view' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Set up information exchange' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Initial disclosures' })).toBeInTheDocument()
   })
 
   it('goes to the case from the congratulations', async () => {

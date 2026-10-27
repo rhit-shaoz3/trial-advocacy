@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowRight, Check, Eye, PartyPopper } from 'lucide-react'
+import { ArrowRight, Check, PartyPopper, Share2 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { SETUP_STEPS, type CourseCase, type SetupStep } from '../../../courses/types'
@@ -40,7 +40,7 @@ const STEP_HINT: Record<SetupStep, string> = {
 /** The steps with their own form; the rest show one of the case page's sections. */
 const OWN_HEADING: SetupStep[] = ['details', 'facts']
 
-export type SetupExit = 'student-view' | 'case'
+export type SetupExit = 'exchange' | 'case'
 
 /**
  * Setting up a new case, one step at a time: details, important facts, the
@@ -346,17 +346,21 @@ function SetupDone({ title, onExit }: { title: string; onExit(to: SetupExit): vo
       </h1>
       <p className="muted">
         It&rsquo;s still a draft, so students can&rsquo;t see it yet. Launch the case worlds from the case page when
-        everything is ready.
+        everything is ready. To see the case the way students will, open the Student view tab on the case page.
       </p>
       <div className="setup-footer-buttons setup-done-buttons">
         <button type="button" className="setup-skip" onClick={() => onExit('case')}>
           Go to the case
         </button>
-        <button type="button" className="setup-next" onClick={() => onExit('student-view')}>
-          <Eye aria-hidden="true" />
-          See it as a student
+        <button type="button" className="setup-next" onClick={() => onExit('exchange')}>
+          <Share2 aria-hidden="true" />
+          Set up information exchange
         </button>
       </div>
+      <p className="muted setup-done-note">
+        Information exchange covers initial disclosures, subpoenas, interrogatories, and requests for admission. You can
+        also set it up later from the case page.
+      </p>
     </section>
   )
 }

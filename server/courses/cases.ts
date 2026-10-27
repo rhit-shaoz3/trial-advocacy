@@ -3,13 +3,18 @@ import { pool } from '../db/pool.ts'
 export const CASE_STATUSES = ['draft', 'active', 'closed'] as const
 export type CaseStatus = (typeof CASE_STATUSES)[number]
 
-/** In order. Every case starts in subpoena; the instructor moves it on (or back). */
-export const CASE_PHASES = ['subpoena', 'investigate', 'deposition'] as const
+/** In order. Every case starts in introduction; the instructor moves it on (or back). */
+export const CASE_PHASES = ['introduction', 'information_exchange', 'investigate', 'deposition'] as const
 export type CasePhase = (typeof CASE_PHASES)[number]
 
-/** A case's phases: without a background investigator there's no investigate phase. */
-export const casePhases = (investigatorEnabled: boolean): CasePhase[] =>
-  investigatorEnabled ? [...CASE_PHASES] : CASE_PHASES.filter((p) => p !== 'investigate')
+/**
+ * A case's phases: there's no information exchange phase until its setup is
+ * finished, and no investigate phase without a background investigator.
+ */
+export const casePhases = (investigatorEnabled: boolean, exchangeReady: boolean): CasePhase[] =>
+  CASE_PHASES.filter(
+    (p) => (p !== 'investigate' || investigatorEnabled) && (p !== 'information_exchange' || exchangeReady),
+  )
 
 /** What every case's background investigator is called until the instructor renames him. */
 export const DEFAULT_INVESTIGATOR_NAME = 'John Hastings'
@@ -53,6 +58,8 @@ export interface CourseCase {
   /** When the instructor finished the guided setup; null until then. */
   setupCompletedAt: Date | null
   investigator: InvestigatorSettings
+  /** Whether the information exchange setup is finished (so students see it, and the case has its phase). */
+  exchangeReady: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -71,6 +78,8 @@ const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "ins
   setup_step AS "setupStep", setup_completed_at AS "setupCompletedAt",
   json_build_object('enabled', investigator_enabled, 'name', investigator_name,
                     'instructions', investigator_instructions) AS investigator,
+  EXISTS (SELECT 1 FROM information_exchange ie
+          WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
   created_at AS "createdAt", updated_at AS "updatedAt"`
 
 /** Oldest first, so the term's first case stays on top. */

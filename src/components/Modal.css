@@ -1,0 +1,99 @@
+/* A dialog over the page (Modal). Theme tokens fall back to the navy defaults. */
+
+.modal {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal::backdrop {
+  background: rgba(8, 14, 24, 0.55);
+}
+
+.modal-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem 1.75rem 1.4rem;
+}
+
+.modal-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 0.85rem;
+}
+
+.modal-head-icon {
+  grid-template-columns: auto 1fr auto;
+}
+
+.modal-head h2 {
+  margin: 0.15rem 0 0;
+  color: var(--ws-navy);
+  font: 400 1.55rem/1.2 var(--ws-serif);
+}
+
+.modal-icon {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.55rem;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+}
+
+.modal-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.modal-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: var(--subtle);
+}
+
+.modal-close svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.modal-body {
+  display: grid;
+  gap: 0.9rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.modal-body p {
+  margin: 0;
+}
+
+.modal-body h3 {
+  margin: 0.25rem 0 0;
+  color: var(--ws-navy);
+  font: 400 1.15rem var(--ws-serif);
+}
+
+.modal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}

@@ -19,6 +19,8 @@ export interface CaseMonitor {
   phase: CasePhase
   /** Whether the case has a background investigator (and so an investigate phase). */
   investigatorEnabled: boolean
+  /** Whether the information exchange is set up (and so the case has that phase). */
+  exchangeReady: boolean
   worldCount: number
   /** Drafts: launch checklist items met, of the total, and the first one still missing. */
   launch: { ready: number; total: number; next: string | null } | null
@@ -118,6 +120,7 @@ async function caseMonitors(courseId: string, now: Date): Promise<CaseMonitor[]>
     status: CaseMonitor['status']
     phase: CasePhase
     investigatorEnabled: boolean
+    exchangeReady: boolean
     worldCount: number
     due: number
     teamsDoneDue: number
@@ -137,6 +140,8 @@ async function caseMonitors(courseId: string, now: Date): Promise<CaseMonitor[]>
        GROUP BY mt.case_id, mt.team_id
      )
      SELECT c.id, c.title, c.status, c.phase, c.investigator_enabled AS "investigatorEnabled",
+            EXISTS (SELECT 1 FROM information_exchange ie
+                    WHERE ie.case_id = c.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
             (SELECT count(*)::int FROM matchups mu WHERE mu.case_id = c.id) AS "worldCount",
             coalesce(max(tt.due), 0)::int AS due,
             count(tt.team_id) FILTER (WHERE tt.done_due = tt.due)::int AS "teamsDoneDue",
@@ -158,6 +163,7 @@ async function caseMonitors(courseId: string, now: Date): Promise<CaseMonitor[]>
         status: r.status,
         phase: r.phase,
         investigatorEnabled: r.investigatorEnabled,
+        exchangeReady: r.exchangeReady,
         worldCount: r.worldCount,
       }
       if (r.status === 'draft') {

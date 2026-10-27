@@ -336,8 +336,18 @@
   transition: transform 0.2s, background-color 0.2s, border-color 0.2s;
 }
 
-.ws-btn:hover {
+.ws-btn:hover:not(:disabled) {
   transform: translateY(-1px);
+}
+
+/* A button that can't be used yet (a locked section) looks it, and doesn't react to hover. */
+.ws-btn:disabled {
+  border-color: var(--ws-line);
+  background: var(--subtle);
+  color: var(--ws-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .ws-btn svg {
@@ -351,7 +361,7 @@
   box-shadow: 0 5px 14px rgba(16, 35, 63, 0.15);
 }
 
-.ws-btn-primary:hover {
+.ws-btn-primary:hover:not(:disabled) {
   background: var(--button-hover);
 }
 
@@ -361,7 +371,7 @@
   color: var(--ws-navy);
 }
 
-.ws-btn-secondary:hover {
+.ws-btn-secondary:hover:not(:disabled) {
   border-color: var(--border-strong);
 }
 

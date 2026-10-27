@@ -87,7 +87,8 @@ export function fromLocalInput(value: string) {
 }
 
 export const PHASE_LABEL: Record<CasePhase, string> = {
-  subpoena: 'Subpoena',
+  introduction: 'Introduction',
+  information_exchange: 'Information exchange',
   investigate: 'Investigate',
   deposition: 'Deposition',
 }

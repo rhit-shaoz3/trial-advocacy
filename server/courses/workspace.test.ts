@@ -266,7 +266,7 @@ describe("a student's case dashboard", () => {
       title: 'Rivera v. Thrill Park',
       summary: 'A test case.',
       status: 'active',
-      phase: 'subpoena',
+      phase: 'introduction',
       instructorNote: 'Mind the timeline.',
     })
     expect(workspace.side).toBe('plaintiff')
@@ -399,8 +399,8 @@ describe("the instructor's student-view preview", () => {
 describe('case phases', () => {
   const setPhase = (phase: unknown, agent = prof) => agent.put(`${caseUrl()}/phase`).send({ phase })
 
-  it('starts in subpoena, and the instructor moves it forward or back', async () => {
-    expect((await prof.get(caseUrl())).body.case.phase).toBe('subpoena')
+  it('starts in introduction, and the instructor moves it forward or back', async () => {
+    expect((await prof.get(caseUrl())).body.case.phase).toBe('introduction')
 
     const moved = await setPhase('deposition')
     expect(moved.status).toBe(200)
@@ -427,7 +427,7 @@ describe('case phases', () => {
     const student = (await signedInAgent('student', email(1))).agent
     expect((await setPhase('deposition', other)).status).toBe(404)
     expect((await setPhase('deposition', student)).status).toBe(404)
-    expect((await prof.get(caseUrl())).body.case.phase).toBe('subpoena')
+    expect((await prof.get(caseUrl())).body.case.phase).toBe('introduction')
   })
 
   describe('what each side sees', () => {
@@ -458,10 +458,10 @@ describe('case phases', () => {
       unpaired = (await signedInAgent('student', email(5))).agent
     })
 
-    it("hides each side's witnesses from the other, and the investigator, in subpoena", async () => {
-      expect(await view(plaintiff)).toEqual({ phase: 'subpoena', investigator: false, witnesses: ['Rider', 'Bystander'] })
+    it("hides each side's witnesses from the other, and the investigator, in introduction", async () => {
+      expect(await view(plaintiff)).toEqual({ phase: 'introduction', investigator: false, witnesses: ['Rider', 'Bystander'] })
       expect(await view(defense)).toEqual({
-        phase: 'subpoena',
+        phase: 'introduction',
         investigator: false,
         witnesses: ['Operator', 'Bystander', 'Engineer'],
       })

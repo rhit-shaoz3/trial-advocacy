@@ -1,0 +1,878 @@
+/* The instructor's information exchange: its setup flow, the case page card, and its tab. Theme tokens fall back to the navy defaults. */
+
+.link-like {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.exchange-setup .case-back {
+  justify-self: start;
+  margin-bottom: 0;
+}
+
+/* The step's heading, with the small Include switch at the top right */
+.exchange-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.exchange-include {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1.4rem;
+  color: var(--fg-soft);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* A checkbox drawn as a small switch */
+.switch {
+  position: relative;
+  flex: none;
+  width: 2.5rem;
+  height: 1.45rem;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+  appearance: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.switch::after {
+  position: absolute;
+  top: 0.18rem;
+  left: 0.2rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  content: '';
+  transition: transform 0.15s;
+}
+
+.switch:checked {
+  background: var(--success);
+}
+
+.switch:checked::after {
+  transform: translateX(1.05rem);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* A turned-off section stays visible, faded */
+.exchange-off {
+  opacity: 0.5;
+}
+
+.exchange-note {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+/* Initial disclosures: one column per side */
+.exchange-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 760px) {
+  .exchange-sides {
+    grid-template-columns: 1fr;
+  }
+}
+
+.exchange-sides .exchange-note {
+  grid-column: 1 / -1;
+}
+
+.exchange-side {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+}
+
+.exchange-side header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.exchange-side header small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.exchange-side h3 {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.exchange-empty {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.exchange-side-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.exchange-side-badge::before {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+
+.exchange-side-plaintiff {
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+}
+
+.exchange-side-defense {
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
+}
+
+.exchange-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.2rem 0;
+  cursor: pointer;
+}
+
+.exchange-pick input {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--button);
+}
+
+.exchange-pick > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.exchange-pick strong {
+  color: var(--ws-navy);
+  font-size: 0.88rem;
+}
+
+.exchange-pick small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Limits */
+.exchange-settings {
+  display: grid;
+}
+
+.exchange-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--ws-row-line, var(--border));
+}
+
+.exchange-setting strong {
+  color: var(--ws-navy);
+}
+
+.exchange-setting p {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+}
+
+.stepper {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.stepper-control {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.stepper-control button {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  border: none;
+  background: var(--subtle);
+  color: var(--ws-navy);
+  cursor: pointer;
+}
+
+.stepper-control button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.stepper-control svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.stepper-control input {
+  width: 3.5rem;
+  padding: 0.5rem 0;
+  border: none;
+  background: none;
+  color: var(--ws-navy);
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  appearance: textfield;
+}
+
+.stepper-control input::-webkit-inner-spin-button,
+.stepper-control input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+/* Welcome email: firms beside the preview */
+.exchange-email {
+  display: grid;
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .exchange-email {
+    grid-template-columns: 1fr;
+  }
+}
+
+.exchange-firms {
+  display: grid;
+  gap: 1rem;
+}
+
+.exchange-firm {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+}
+
+.exchange-firm legend {
+  padding: 0 0.3rem;
+}
+
+.exchange-firm label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.exchange-firm input {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 400;
+}
+
+.exchange-preview {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.exchange-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.exchange-preview-head .link-button {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+/* Review */
+.exchange-review {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  list-style: none;
+}
+
+.exchange-review li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+}
+
+.exchange-review li + li {
+  border-top: 1px solid var(--ws-row-line, var(--border));
+}
+
+.exchange-review li > span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.exchange-review strong {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ws-navy);
+}
+
+.exchange-review small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.exchange-review .link-button,
+.exchange-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  text-decoration: none;
+}
+
+.exchange-review .link-button svg,
+.exchange-back svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.exchange-status {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.exchange-status-on {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.exchange-next {
+  padding: 1rem 1.1rem;
+  border-radius: 0.6rem;
+  background: var(--bg);
+}
+
+.exchange-next h3 {
+  margin: 0 0 0.75rem;
+  color: var(--ws-navy);
+  font: 400 1.1rem var(--ws-serif);
+}
+
+.exchange-next ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: phase;
+}
+
+.exchange-next li {
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  counter-increment: phase;
+}
+
+.exchange-next li strong {
+  color: var(--ws-navy);
+  font-size: 0.88rem;
+}
+
+.exchange-next li strong::before {
+  margin-right: 0.4rem;
+  color: var(--tint-blue-fg);
+  content: counter(phase) '.';
+}
+
+.exchange-next li small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.exchange-footer-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.exchange-footer-spacer {
+  flex: 1;
+}
+
+/* The card at the top of the case page */
+.exchange-card {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1.2rem 1.4rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ws-blue);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.exchange-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.exchange-card-head > div {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+.exchange-card-head h2 {
+  margin: 0.2rem 0 0;
+  color: var(--ws-navy);
+  font: 400 1.35rem var(--ws-serif);
+}
+
+.exchange-card-head p {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+}
+
+.exchange-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.exchange-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.exchange-phase-badge {
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.exchange-phase-badge.exchange-phase-waiting {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.exchange-phase-badge.exchange-phase-open {
+  background: var(--tint-purple-bg);
+  color: var(--tint-purple-fg);
+}
+
+.exchange-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exchange-parts li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.5rem;
+  background: var(--bg);
+}
+
+.exchange-parts strong {
+  color: var(--ws-navy);
+  font-size: 0.85rem;
+}
+
+.exchange-parts small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.exchange-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+
+.exchange-stat {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.55rem;
+  background: var(--bg);
+}
+
+.exchange-stat > span {
+  color: var(--fg-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.exchange-stat-number {
+  color: var(--ws-navy);
+  font: 400 2rem/1.1 var(--ws-serif);
+}
+
+.exchange-stat-number small {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font: 400 0.85rem var(--ws-sans);
+}
+
+.exchange-stat p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.exchange-bars {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exchange-bars li {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.83rem;
+}
+
+.exchange-bars strong {
+  color: var(--ws-navy);
+}
+
+.exchange-bar {
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ws-row-line, var(--border));
+}
+
+.exchange-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+}
+
+.exchange-waiting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.exchange-waiting svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--fg-soft);
+}
+
+.exchange-overdue {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* The Information exchange tab */
+.exchange-tab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .exchange-tab {
+    grid-template-columns: 1fr;
+  }
+}
+
+.exchange-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.exchange-filters button {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.exchange-filters button[aria-pressed='true'] {
+  border-color: var(--button);
+  background: var(--button);
+  color: var(--on-brand);
+}
+
+.exchange-sets {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  list-style: none;
+}
+
+.exchange-sets > li + li {
+  border-top: 1px solid var(--ws-row-line, var(--border));
+}
+
+.exchange-set summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.exchange-set summary::-webkit-details-marker {
+  display: none;
+}
+
+.exchange-set summary > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.exchange-set summary strong {
+  color: var(--ws-navy);
+  font-size: 0.88rem;
+}
+
+.exchange-set summary small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.exchange-set-items {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0 1rem 1rem 3.7rem;
+  list-style: none;
+}
+
+.exchange-set-items li {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--bg);
+  font-size: 0.85rem;
+}
+
+.exchange-set-items li strong {
+  color: var(--ws-navy);
+}
+
+.exchange-set-items li p {
+  margin: 0;
+  color: var(--fg-soft);
+}
+
+.exchange-settings-card {
+  display: grid;
+  gap: 0;
+}
+
+.exchange-settings-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exchange-settings-card li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--ws-row-line, var(--border));
+}
+
+.exchange-settings-card li > span {
+  display: grid;
+}
+
+.exchange-settings-card li strong {
+  color: var(--ws-navy);
+  font-size: 0.88rem;
+}
+
+.exchange-settings-card li small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.exchange-badge {
+  flex: none;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.exchange-badge-answered {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.exchange-badge-waiting {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.exchange-badge-overdue {
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
+}
+
+.exchange-badge-objection {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.exchange-inline-icon,
+.exchange-part-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  vertical-align: -0.15rem;
+}
+
+.exchange-part-icon {
+  color: var(--ws-blue);
+}
+
+.exchange-cta,
+.exchange-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.exchange-cta svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.exchange-tab > .course-section {
+  margin: 0;
+  padding: 1.2rem 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.exchange-tab .section-header {
+  margin-bottom: 0.75rem;
+}
+
+.exchange-world-select select {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.exchange-edit {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}

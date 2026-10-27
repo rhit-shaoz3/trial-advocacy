@@ -28,6 +28,8 @@ import { materialsRouter, tasksRouter, witnessesRouter } from './caseContentRout
 import { matchupsRouter } from './matchupRoutes.ts'
 import { teamsRouter } from './teamRoutes.ts'
 import { getPreviewWorkspace, launchChecks } from './workspace.ts'
+import { applyDisclosures, requestsOpen } from '../exchange/exchange.ts'
+import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -150,6 +152,7 @@ caseRouter.use('/matchups', matchupsRouter)
 caseRouter.use('/materials', materialsRouter)
 caseRouter.use('/witnesses', witnessesRouter)
 caseRouter.use('/tasks', tasksRouter)
+caseRouter.use('/exchange', exchangeRouter)
 
 caseRouter.put('/note', async (req, res) => {
   const note = readString(req.body, 'note').trim()
@@ -197,17 +200,30 @@ caseRouter.put('/investigator', async (req, res) => {
   res.json({ case: await setInvestigator(req.course!.id, req.courseCase!.id, { enabled: body.enabled, name, instructions }) })
 })
 
-/** Moves every world in the case to `{ phase }`: subpoena, investigate (with an investigator), or deposition. */
+/**
+ * Moves every world in the case to `{ phase }`: introduction, information
+ * exchange (once it's set up), investigate (with an investigator), or
+ * deposition. Leaving the introduction phase shares the instructor's initial
+ * disclosures with both sides; going back to it takes them back.
+ */
 caseRouter.put('/phase', async (req, res) => {
-  const phase = readString(req.body, 'phase')
-  if (!CASE_PHASES.includes(phase as CasePhase)) throw new HttpError(400, 'Choose a valid phase.')
-  if (!casePhases(req.courseCase!.investigator.enabled).includes(phase as CasePhase)) {
-    throw new HttpError(409, 'This case has no background investigator, so it has no investigate phase.')
+  const phase = readString(req.body, 'phase') as CasePhase
+  const current = req.courseCase!
+  if (!CASE_PHASES.includes(phase)) throw new HttpError(400, 'Choose a valid phase.')
+  if (!casePhases(current.investigator.enabled, current.exchangeReady).includes(phase)) {
+    throw new HttpError(
+      409,
+      phase === 'investigate'
+        ? 'This case has no background investigator, so it has no investigate phase.'
+        : 'Set up information exchange before moving the case to that phase.',
+    )
   }
-  if (req.courseCase!.status === 'closed') {
+  if (current.status === 'closed') {
     throw new HttpError(409, 'This case is closed, so its phase can no longer change.')
   }
-  res.json({ case: await setCasePhase(req.course!.id, req.courseCase!.id, phase as CasePhase) })
+  const updated = await setCasePhase(req.course!.id, current.id, phase)
+  await applyDisclosures(current.id, requestsOpen(phase))
+  res.json({ case: updated })
 })
 
 /** The guided setup reached `{ step }` (the furthest step is kept). */

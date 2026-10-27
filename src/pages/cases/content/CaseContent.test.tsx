@@ -259,7 +259,7 @@ describe('InvestigatorSection', () => {
     title: 'Rivera v. Thrill Park',
     summary: '',
     status: 'draft',
-    phase: 'subpoena',
+    phase: 'introduction',
     instructorNote: '',
     inWorldDate: null,
     disputedIssues: '',
@@ -308,7 +308,7 @@ describe('WitnessesSection', () => {
     title: 'Rivera v. Thrill Park',
     summary: '',
     status: 'draft',
-    phase: 'subpoena',
+    phase: 'introduction',
     instructorNote: '',
     inWorldDate: null,
     disputedIssues: '',
@@ -510,7 +510,7 @@ describe('TasksSection', () => {
 
 describe('StudentViewSection', () => {
   const workspace: CaseWorkspace = {
-    case: { id: 'k1', title: 'Rivera v. Thrill Park', summary: '', status: 'draft', phase: 'subpoena', instructorNote: '' },
+    case: { id: 'k1', title: 'Rivera v. Thrill Park', summary: '', status: 'draft', phase: 'introduction', instructorNote: '' },
     team: null,
     world: null,
     side: 'plaintiff',

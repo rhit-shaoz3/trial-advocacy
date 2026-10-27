@@ -13,8 +13,10 @@ import {
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
-import { caseOverview, shortDate } from '../courses/caseLabels'
-import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
+import { PhaseSteps } from '../components/PhaseSteps'
+import { Toast, Toasts } from '../components/Toasts'
+import { PHASE_LABEL, caseOverview, shortDate } from '../courses/caseLabels'
+import { sideLabel, worldLabel } from '../courses/worldLabel'
 import {
   calendarDaysUntil,
   caseInitials,
@@ -95,34 +97,25 @@ function StudentDashboard({ now }: { now: Date }) {
         </Link>
       </div>
 
-      {isInstructor && home.reviewCount ? (
-        <div className="ws-notice" role="status">
-          <Gavel aria-hidden="true" />
-          <p>
-            <strong>
-              {home.reviewCount === 1
-                ? '1 conversation is waiting for your review.'
-                : `${home.reviewCount} conversations are waiting for your review.`}
-            </strong>{' '}
-            Rule on the new facts the AI witnesses and the investigator added.
-          </p>
-          <Link to={`${base}/review${search}`} className="ws-btn ws-btn-primary">
-            Review now
-          </Link>
-        </div>
-      ) : null}
-      {!isInstructor && home.newReviewResults ? (
-        <div className="ws-notice" role="status">
-          <Gavel aria-hidden="true" />
-          <p>
-            <strong>You have new results from your instructor.</strong> Rulings on your interviews are in your
-            case&rsquo;s Reviews tab, and investigator reports are in its Investigator tab and case file.
-          </p>
-          <Link to={newResultsPath(base, search, home.newResultsAt)} className="ws-btn ws-btn-primary">
-            {!home.newResultsAt ? 'Open my cases' : home.newResultsAt.kind === 'investigation' ? 'Read report' : 'See results'}
-          </Link>
-        </div>
-      ) : null}
+      <Toasts>
+        {isInstructor && home.reviewCount ? (
+          <Toast
+            icon={<Gavel />}
+            title={home.reviewCount === 1 ? '1 review waiting' : `${home.reviewCount} reviews waiting`}
+            action={{ label: 'Review now', to: `${base}/review${search}` }}
+          />
+        ) : null}
+        {!isInstructor && home.newReviewResults ? (
+          <Toast
+            icon={<Gavel />}
+            title={home.newResultsAt?.kind === 'investigation' ? 'New investigator report' : 'New review results'}
+            action={{
+              label: !home.newResultsAt ? 'Open my cases' : home.newResultsAt.kind === 'investigation' ? 'Read report' : 'See results',
+              to: newResultsPath(base, search, home.newResultsAt),
+            }}
+          />
+        ) : null}
+      </Toasts>
 
       <section className="ws-stats" aria-label="Summary">
         <StatCard
@@ -145,7 +138,7 @@ function StudentDashboard({ now }: { now: Date }) {
         />
         <StatCard
           icon={<Clock />}
-          tone="rose"
+          tone="purple"
           value={deadlines.length}
           label="Upcoming deadlines"
           note={daysToDeadline === null ? undefined : `Next ${inDays(daysToDeadline)}`}
@@ -238,14 +231,13 @@ function caseLabel(c: CaseSummary) {
 
 /** Under the title: the student's role, or the sample data's case type. */
 function caseSubtitle(c: CaseSummary) {
-  if (c.world) return `Role: ${ROLE_LABEL[c.world.side]}`
+  if (c.world) return `Role: ${sideLabel(c.world.side, c.parties)}`
   if (c.caseType) return c.caseType
   if (c.worldCount == null) return 'Awaiting opposition'
   return null
 }
 
 function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: string }) {
-  const progressLabel = `${c.title} progress`
   const subtitle = caseSubtitle(c)
   const milestone =
     c.nextMilestone ??
@@ -275,23 +267,14 @@ function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: st
       </div>
       <p className="ws-case-summary">{caseOverview(c.summary)}</p>
 
-      {c.progress !== null && (
-        <>
+      {c.phase && c.phases && c.status === 'active' && (
+        <div className="ws-case-phase">
           <div className="ws-progress-header">
-            <span>Case progress</span>
-            <strong>{c.progress}%</strong>
+            <span>Current phase</span>
+            <strong>{PHASE_LABEL[c.phase]}</strong>
           </div>
-          <div
-            className="ws-progress"
-            role="progressbar"
-            aria-label={progressLabel}
-            aria-valuenow={c.progress}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <span style={{ width: `${Math.max(0, Math.min(100, c.progress))}%` }} />
-          </div>
-        </>
+          <PhaseSteps phase={c.phase} phases={c.phases} />
+        </div>
       )}
 
       <div className="ws-case-meta">

@@ -20,7 +20,7 @@
 }
 
 .review-tab[aria-selected='true'] {
-  border-bottom-color: var(--ws-red);
+  border-bottom-color: var(--ws-blue);
   color: var(--ws-navy);
 }
 

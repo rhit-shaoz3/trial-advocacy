@@ -1,4 +1,4 @@
-# Trial Advocacy
+# Getting to Trial
 
 A pre-trial litigation simulator for law students. CS 397 (Innovation Lab) quarter project.
 

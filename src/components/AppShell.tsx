@@ -1,9 +1,10 @@
-import { LogOut, Scale, type LucideIcon } from 'lucide-react'
+import { LogOut, type LucideIcon } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router'
 import { AccountDialog } from '../account/AccountDialog'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from './Avatar'
+import { BrandIcon } from './BrandIcon'
 import './AppShell.css'
 import { ThemeToggle } from '../theme/ThemeToggle'
 
@@ -55,11 +56,9 @@ export function AppShell({
     <div className="ws">
       <aside className="ws-sidebar">
         <Link to="/" className="ws-brand">
-          <span className="ws-brand-icon">
-            <Scale aria-hidden="true" />
-          </span>
+          <BrandIcon className="ws-brand-icon" />
           <span>
-            <strong>Trial Advocacy</strong>
+            <strong>Getting to Trial</strong>
             <small>{subtitle}</small>
           </span>
         </Link>

@@ -176,8 +176,8 @@ a.case-row:hover {
 /* A case whose guided setup isn't finished yet. */
 .badge-setup {
   margin-left: 0.4rem;
-  background: #e5ecf4;
-  color: #315e86;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
 }
 
 .teams-actions {
@@ -205,12 +205,13 @@ a.case-row:hover {
   overflow-wrap: anywhere;
 }
 
+/* A shade darker than the page, in every theme. */
 .unpaired-panel {
   margin-bottom: 1.25rem;
   padding: 1rem 1.2rem;
-  border: 1px dashed var(--tint-amber-border);
+  border: 1px dashed color-mix(in srgb, var(--ws-paper) 75%, #000);
   border-radius: 0.6rem;
-  background: var(--tint-amber-bg);
+  background: color-mix(in srgb, var(--ws-paper) 93%, #000);
 }
 
 .unpaired-header {
@@ -470,7 +471,7 @@ a.case-row:hover {
 }
 
 .case-tab[aria-selected='true'] {
-  border-bottom-color: var(--ws-red);
+  border-bottom-color: var(--ws-blue);
   color: var(--ws-navy);
 }
 
@@ -847,8 +848,8 @@ a.case-row:hover {
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 0.4rem;
-  background: var(--tint-green-bg);
-  color: var(--tint-green-fg);
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
 }
 
 .phase-change-icon svg {
@@ -1080,8 +1081,8 @@ a.case-row:hover {
 }
 
 .content-ai-witness {
-  background: var(--tint-green-bg);
-  color: var(--tint-green-fg);
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
 }
 
 /* The AI witness part of the witness form */
@@ -1377,4 +1378,107 @@ a.case-row:hover {
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* A case file in the instructor's list: the name opens the viewer, the icon downloads. */
+.content-file-open {
+  font-weight: 600;
+  text-align: left;
+}
+
+.content-file-download {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-left: 0.25rem;
+  border-radius: 0.35rem;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+.content-file-download:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.content-file-download svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+/* The parties' names, side by side (CaseForm, setup Details). */
+.case-parties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.case-parties label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .case-parties {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The AI's suggested witnesses, offered once while setting up a case (WitnessesSection). */
+.suggest-panel {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ws-blue);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.suggest-panel h3 {
+  margin: 0;
+  color: var(--ws-navy);
+  font: 400 1.15rem var(--ws-serif);
+}
+
+.suggest-panel p {
+  margin: 0;
+}
+
+.suggest-panel ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggest-panel label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.suggest-panel label input {
+  margin-top: 0.25rem;
+}
+
+.suggest-panel label small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+}
+
+.suggest-panel .badge {
+  margin-left: 0.4rem;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
+}
+
+.suggest-note {
+  margin: 0 0 1rem;
 }

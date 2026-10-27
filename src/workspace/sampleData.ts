@@ -32,6 +32,8 @@ export function withSampleData(home: CourseHome, now = new Date()): CourseHome {
           'A customer injured in a grocery store alleges the owner failed to address a known hazardous condition.',
         status: 'active',
         progress: 62,
+        phase: 'information_exchange',
+        phases: ['introduction', 'information_exchange', 'investigate', 'deposition'],
         nextMilestone: `Discovery due ${shortDate(3)}`,
         participants: [
           { name: 'Alex Morgan' },
@@ -49,6 +51,8 @@ export function withSampleData(home: CourseHome, now = new Date()): CourseHome {
           'A transit passenger brings a negligence claim following an injury during an emergency stop.',
         status: 'in-review',
         progress: 88,
+        phase: 'deposition',
+        phases: ['introduction', 'information_exchange', 'investigate', 'deposition'],
         nextMilestone: 'Awaiting instructor review',
         participants: [
           { name: 'Alex Morgan' },

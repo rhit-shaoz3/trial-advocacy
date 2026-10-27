@@ -301,6 +301,17 @@ export async function findMaterialFile(caseId: string, id: string, viewer?: Mate
   return rows[0] ?? null
 }
 
+/** A file's transcription, if the viewer (when given) can see the file. */
+export async function findMaterialText(caseId: string, id: string, viewer?: MaterialViewer) {
+  const { rows } = await pool.query<{ textStatus: TextStatus; text: string | null }>(
+    `SELECT text_status AS "textStatus", text_content AS text
+     FROM case_materials
+     WHERE case_id = $1 AND id = $2 ${viewer ? `AND ${visibleToViewer(3)}` : ''}`,
+    viewer ? [caseId, id, ...viewerParams(viewer)] : [caseId, id],
+  )
+  return rows[0] ?? null
+}
+
 /**
  * Deletes files from storage after their rows are gone. A failure is logged
  * rather than undoing the delete; the files are unreachable either way.

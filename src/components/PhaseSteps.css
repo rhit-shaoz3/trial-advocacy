@@ -1,0 +1,46 @@
+/* A case's phases as a row of steps (PhaseSteps.tsx). */
+
+.ws-phases {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.9rem 0 0.2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.ws-phases li {
+  flex: 1;
+  padding: 0.35rem 0.4rem;
+  border-radius: 0.35rem;
+  background: var(--tint-grey-bg);
+  color: var(--ws-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ws-phases .ws-phase-done {
+  background: var(--tint-blue-bg);
+  color: var(--ws-blue);
+}
+
+.ws-phases .ws-phase-current {
+  background: var(--ws-blue);
+  color: var(--on-brand);
+}
+
+/* On the navy phase banner. */
+.ws-phases-on-brand li {
+  background: rgba(255, 255, 255, 0.1);
+  color: color-mix(in srgb, var(--on-brand) 70%, transparent);
+}
+
+.ws-phases-on-brand .ws-phase-done {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--on-brand);
+}
+
+.ws-phases-on-brand .ws-phase-current {
+  background: var(--on-brand);
+  color: var(--brand);
+}

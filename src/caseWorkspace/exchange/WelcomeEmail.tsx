@@ -24,6 +24,7 @@ export function WelcomeEmail({
   recipients,
   startingFile,
   documents,
+  onOpenDocument,
   witnesses,
   disclosures,
   highlightDisclosures = false,
@@ -35,8 +36,10 @@ export function WelcomeEmail({
   recipients: string[]
   /** The file every team starts from, e.g. the amended complaint. */
   startingFile: string | null
-  /** The other documents the team's side has. */
-  documents: string[]
+  /** The other documents the team's side has; with an id, they open in the viewer. */
+  documents: { title: string; id?: string }[]
+  /** Opens a document in the viewer; leave out (the setup preview) for plain names. */
+  onOpenDocument?(id: string): void
   /** The team's side's witnesses. */
   witnesses: string[]
   /** Whether the case includes initial disclosures (adds a line about them). */
@@ -74,9 +77,20 @@ export function WelcomeEmail({
         {documents.length > 0 && (
           <ul aria-label="Documents">
             {documents.map((d) => (
-              <li key={d}>
+              <li key={d.id ?? d.title}>
                 <FileText aria-hidden="true" />
-                {d}
+                {d.id && onOpenDocument ? (
+                  <button
+                    type="button"
+                    className="welcome-email-file"
+                    title={`Open ${d.title} in the viewer`}
+                    onClick={() => onOpenDocument(d.id!)}
+                  >
+                    {d.title}
+                  </button>
+                ) : (
+                  d.title
+                )}
               </li>
             ))}
           </ul>

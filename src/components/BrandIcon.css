@@ -1,0 +1,30 @@
+/* The app icon in the theme's colours (BrandIcon). Parchment on the sidebar's colour. */
+
+.brand-icon {
+  --brand-icon-tile: var(--brand, #1b2a4a);
+  --brand-icon-ink: #f1e6cf;
+  display: block;
+}
+
+.brand-icon-tile {
+  fill: var(--brand-icon-tile);
+}
+
+/* The glass: a touch lighter than the tile, like the original. */
+.brand-icon-lens {
+  fill: color-mix(in srgb, var(--brand-icon-tile) 80%, #ffffff);
+  stroke: var(--brand-icon-ink);
+}
+
+.brand-icon-line {
+  stroke: var(--brand-icon-ink);
+}
+
+/* Where the handle crosses the gavel, the tile's colour shows through. */
+.brand-icon-cut {
+  stroke: var(--brand-icon-tile);
+}
+
+.brand-icon-fill {
+  fill: var(--brand-icon-ink);
+}

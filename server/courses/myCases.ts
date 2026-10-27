@@ -1,5 +1,6 @@
 import { avatarUrlSql } from '../auth/users.ts'
 import { pool } from '../db/pool.ts'
+import { casePhases, type CasePhase } from './cases.ts'
 import type { Side } from './matchups.ts'
 import type { RosterEntry } from './roster.ts'
 
@@ -11,6 +12,8 @@ export interface MyCase {
   title: string
   summary: string
   status: 'active' | 'closed'
+  /** The parties' names; empty when the instructor hasn't named them. */
+  parties: { plaintiff: string; defendant: string }
   /** Null until the instructor pairs this student for the case. */
   team: { number: number; members: Member[] } | null
   /** The student's case world; null until their team is matched. `number` 1 is World A. */
@@ -27,6 +30,7 @@ export async function listMyCases(courseId: string, userId: string): Promise<MyC
     title: string
     summary: string
     status: MyCase['status']
+    parties: MyCase['parties']
     teamId: string | null
     teamNumber: number | null
     worldNumber: number | null
@@ -35,6 +39,7 @@ export async function listMyCases(courseId: string, userId: string): Promise<MyC
     opponentNumber: number | null
   }>(
     `SELECT c.id, c.title, c.summary, c.status,
+            json_build_object('plaintiff', c.plaintiff_name, 'defendant', c.defendant_name) AS parties,
             mine.team_id AS "teamId", t.number AS "teamNumber",
             mu.number AS "worldNumber", mt.side,
             opp.team_id AS "opponentTeamId", ot.number AS "opponentNumber"
@@ -75,6 +80,7 @@ export async function listMyCases(courseId: string, userId: string): Promise<MyC
     title: r.title,
     summary: r.summary,
     status: r.status,
+    parties: r.parties,
     team: r.teamId ? { number: r.teamNumber!, members: membersOf(r.teamId) } : null,
     world:
       r.worldNumber && r.opponentTeamId
@@ -95,14 +101,31 @@ export interface CaseSummary {
   status: 'active' | 'closed'
   /** The student's case world and role in it, once their team is matched. */
   world: { number: number; side: Side } | null
+  /** The parties' names, for the student's role ("Paige Winston (Plaintiff)"); empty for the instructor. */
+  parties?: { plaintiff: string; defendant: string }
   /** How many case worlds the case has (the instructor's view). */
   worldCount: number | null
   /** Percent of the team's tasks done; null for the instructor or when there are no tasks. */
   progress: number | null
+  /** Where the case is, and the phases it goes through. */
+  phase: CasePhase
+  phases: CasePhase[]
   nextMilestone: null
   /** The team's soonest-due open task. */
   nextTask: { title: string; dueAt: Date | null } | null
   participants: { name: string; avatarUrl: string | null }[]
+}
+
+/** Each case's current phase and its phases (no investigate without an investigator, no exchange until it's set up). */
+async function phaseInfo(caseIds: string[]) {
+  const { rows } = await pool.query<{ id: string; phase: CasePhase; investigatorEnabled: boolean; exchangeReady: boolean }>(
+    `SELECT c.id, c.phase, c.investigator_enabled AS "investigatorEnabled",
+            EXISTS (SELECT 1 FROM information_exchange ie
+                    WHERE ie.case_id = c.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"
+     FROM cases c WHERE c.id = ANY($1)`,
+    [caseIds],
+  )
+  return new Map(rows.map((r) => [r.id, { phase: r.phase, phases: casePhases(r.investigatorEnabled, r.exchangeReady) }]))
 }
 
 const nameOf = (m: RosterEntry) => ({ name: m.name ?? m.email, avatarUrl: m.avatarUrl })
@@ -149,6 +172,7 @@ const WEEK = 7 * 24 * 60 * 60 * 1000
 export async function studentHome(courseId: string, userId: string, now = new Date()) {
   const cases = (await listMyCases(courseId, userId)).filter((c) => c.team)
   const tasks = await Promise.all(cases.map((c) => teamTasks(c.id, userId, c.world?.side ?? null)))
+  const phases = await phaseInfo(cases.map((c) => c.id))
 
   const summaries: CaseSummary[] = cases.map((c, i) => {
     const done = tasks[i].filter((t) => t.completedAt).length
@@ -159,8 +183,10 @@ export async function studentHome(courseId: string, userId: string, now = new Da
       summary: c.summary,
       status: c.status,
       world: c.world && { number: c.world.number, side: c.world.side },
+      parties: c.parties,
       worldCount: null,
       progress: tasks[i].length === 0 ? null : Math.round((done / tasks[i].length) * 100),
+      ...phases.get(c.id)!,
       nextMilestone: null,
       nextTask: next ? { title: next.title, dueAt: next.dueAt } : null,
       // Everyone in the student's world: their pairing, then the opposition.
@@ -192,7 +218,7 @@ export async function studentHome(courseId: string, userId: string, now = new Da
 
 /** The instructor's course-home cases: every non-draft case, with all its paired students. */
 export async function homeCasesForInstructor(courseId: string): Promise<CaseSummary[]> {
-  const { rows } = await pool.query<Omit<CaseSummary, 'world' | 'progress' | 'nextMilestone' | 'nextTask'>>(
+  const { rows } = await pool.query<Omit<CaseSummary, 'world' | 'progress' | 'phase' | 'phases' | 'nextMilestone' | 'nextTask'>>(
     `SELECT c.id, c.title, c.summary, c.status,
             (SELECT count(*)::int FROM matchups mu WHERE mu.case_id = c.id) AS "worldCount",
             coalesce((SELECT json_agg(json_build_object('name', coalesce(u.name, m.email), 'avatarUrl', ${avatarUrlSql('u')})
@@ -207,5 +233,6 @@ export async function homeCasesForInstructor(courseId: string): Promise<CaseSumm
      ORDER BY c.created_at, c.title`,
     [courseId],
   )
-  return rows.map((r) => ({ ...r, world: null, progress: null, nextMilestone: null, nextTask: null }))
+  const phases = await phaseInfo(rows.map((r) => r.id))
+  return rows.map((r) => ({ ...r, world: null, progress: null, ...phases.get(r.id)!, nextMilestone: null, nextTask: null }))
 }

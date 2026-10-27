@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ChevronRight, Clock, Gavel, RotateCcw, Send } from 'lucide-react'
+import { ChevronRight, Clock, FileText, Gavel, RotateCcw, Send, X } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
@@ -9,6 +9,7 @@ import type { Interview, InterviewAs, Side } from '../courses/types'
 import { ROLE_LABEL } from '../courses/worldLabel'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import './interview.css'
+import { DictationTextarea } from '../components/Dictation'
 
 /** Matches INTERVIEW_MINUTES on the server: a team's interview lasts an hour from its first question. */
 const INTERVIEW_MINUTES = 60
@@ -43,6 +44,8 @@ export function InterviewPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [question, setQuestion] = useState('')
+  /** Case files to show the witness with the next question. */
+  const [shown, setShown] = useState<Exhibit[]>([])
   /** The question waiting for the witness's answer. */
   const [asking, setAsking] = useState<string | null>(null)
   const [restarting, setRestarting] = useState(false)
@@ -106,13 +109,16 @@ export function InterviewPage() {
     if (!text || asking) return
     setError(null)
     setSentNote(null)
-    setAsking(text)
+    const showing = shown
+    setAsking(withExhibits(text, showing))
     setQuestion('')
+    setShown([])
     try {
-      setInterview(await service.askWitness(courseId, caseId, witnessId, as, text))
+      setInterview(await service.askWitness(courseId, caseId, witnessId, as, text, showing.map((e) => e.id)))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setQuestion(text)
+      setShown(showing)
       // A partner may have asked meanwhile; show the transcript as it is now.
       service.getInterview(courseId, caseId, witnessId, as).then(setInterview, () => {})
     } finally {
@@ -285,10 +291,19 @@ export function InterviewPage() {
             </p>
           ) : (
             <form className="iv-composer" onSubmit={ask}>
+              {(interview.exhibits?.length ?? 0) > 0 && (
+                <ExhibitPicker
+                  exhibits={interview.exhibits!}
+                  shown={shown}
+                  disabled={!canAsk}
+                  onShow={(e) => setShown((prev) => [...prev, e])}
+                  onRemove={(id) => setShown((prev) => prev.filter((e) => e.id !== id))}
+                />
+              )}
               <label className="iv-sr" htmlFor="iv-question">
                 Your question
               </label>
-              <textarea
+              <DictationTextarea
                 id="iv-question"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
@@ -322,7 +337,9 @@ function Question({ text, name, avatarUrl, you }: { text: string; name: string |
           <span className="iv-sr">Question from </span>
           {you ? 'You' : (name ?? 'Your team')}
         </span>
-        <p className="iv-bubble">{text}</p>
+        <p className="iv-bubble">
+          <QuestionText text={text} />
+        </p>
       </div>
       <Avatar name={name ?? '?'} src={avatarUrl} size="sm" />
     </div>
@@ -351,6 +368,88 @@ function Answer({
         </span>
         <div className="iv-bubble">{children}</div>
       </div>
+    </div>
+  )
+}
+
+type Exhibit = { id: string; title: string }
+
+/** The most documents one question can show (matches MAX_EXHIBITS on the server). */
+const MAX_EXHIBITS = 3
+
+/** The question as the server stores it: a marker for each document shown, then the question. */
+const withExhibits = (text: string, shown: Exhibit[]) => [...shown.map((e) => `[Exhibit: "${e.title}"]`), text].join(' ')
+
+const EXHIBIT_MARKER = /^\[Exhibit: "([^"]*)"\]\s*/
+
+/** A question, with any documents shown to the witness as chips before it. */
+function QuestionText({ text }: { text: string }) {
+  const titles: string[] = []
+  let rest = text
+  for (let m = rest.match(EXHIBIT_MARKER); m; m = rest.match(EXHIBIT_MARKER)) {
+    titles.push(m[1])
+    rest = rest.slice(m[0].length)
+  }
+  return (
+    <>
+      {titles.map((t, i) => (
+        <span key={i} className="iv-exhibit">
+          <FileText aria-hidden="true" />
+          <span className="iv-sr">Shown: </span>
+          {t}
+        </span>
+      ))}
+      {rest}
+    </>
+  )
+}
+
+/**
+ * Pick case files to show the witness with the next question ("Do you
+ * recognize this document?"). Nothing is uploaded: the witness already has
+ * every case file, so the question just names the one handed over.
+ */
+function ExhibitPicker({
+  exhibits,
+  shown,
+  disabled,
+  onShow,
+  onRemove,
+}: {
+  exhibits: Exhibit[]
+  shown: Exhibit[]
+  disabled: boolean
+  onShow(exhibit: Exhibit): void
+  onRemove(id: string): void
+}) {
+  const left = exhibits.filter((e) => !shown.some((s) => s.id === e.id))
+  return (
+    <div className="iv-exhibits">
+      <select
+        aria-label="Show the witness a document"
+        value=""
+        disabled={disabled || shown.length >= MAX_EXHIBITS || left.length === 0}
+        onChange={(e) => {
+          const exhibit = exhibits.find((x) => x.id === e.target.value)
+          if (exhibit) onShow(exhibit)
+        }}
+      >
+        <option value="">{shown.length >= MAX_EXHIBITS ? `Up to ${MAX_EXHIBITS} documents` : 'Show a document…'}</option>
+        {left.map((e) => (
+          <option key={e.id} value={e.id}>
+            {e.title}
+          </option>
+        ))}
+      </select>
+      {shown.map((e) => (
+        <span key={e.id} className="iv-exhibit">
+          <FileText aria-hidden="true" />
+          {e.title}
+          <button type="button" aria-label={`Don't show ${e.title}`} onClick={() => onRemove(e.id)}>
+            <X aria-hidden="true" />
+          </button>
+        </span>
+      ))}
     </div>
   )
 }

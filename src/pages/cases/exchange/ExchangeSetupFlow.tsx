@@ -505,7 +505,7 @@ function EmailStep({
           side={preview}
           recipients={[]}
           startingFile="the case's starting file"
-          documents={sideOptions.filter((o) => o.kind === 'material').map((o) => o.name)}
+          documents={sideOptions.filter((o) => o.kind === 'material').map((o) => ({ title: o.name }))}
           witnesses={sideOptions.filter((o) => o.kind === 'witness').map((o) => o.name)}
           disclosures={settings.disclosures.enabled}
           highlightDisclosures

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, CheckCheck, CircleHelp, Clock, Eye, Lock, Pencil, ScrollText, Share2, Users } from 'lucide-react'
+import { ArrowRight, CheckCheck, CircleHelp, Clock, Lock, Pencil, ScrollText, Share2, Users } from 'lucide-react'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { worldLabel } from '../../../courses/worldLabel'
 import type { CourseCase, ExchangeOverview, ExchangeSettings } from '../../../courses/types'
@@ -26,14 +26,14 @@ export function ExchangeCard({
   courseId,
   courseCase,
   onSetUp,
-  onOpenExchanges,
+  inTab = false,
 }: {
   courseId: string
   courseCase: CourseCase
   /** Opens the setup flow (to edit, once it's set up). */
   onSetUp(): void
-  /** Opens the Information exchange tab. */
-  onOpenExchanges(): void
+  /** On its tab (after its phase): styled like the tab's other cards. */
+  inTab?: boolean
 }) {
   const service = useCourseService()
   const ready = courseCase.exchangeReady ?? false
@@ -52,7 +52,7 @@ export function ExchangeCard({
 
   if (!ready) {
     return (
-      <section className="exchange-card" aria-labelledby="exchange-card-title">
+      <section className={inTab ? 'exchange-card exchange-card-in-tab exchange-card-compact' : 'exchange-card'} aria-labelledby="exchange-card-title">
         <div className="exchange-card-head">
           <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
             <Share2 />
@@ -101,7 +101,7 @@ export function ExchangeCard({
         : { label: `${courseCase.phase === 'information_exchange' ? 'Information exchange' : 'Requests'} open`, tone: 'exchange-phase-open' }
 
   return (
-    <section className="exchange-card" aria-labelledby="exchange-card-title">
+    <section className={inTab ? 'exchange-card exchange-card-in-tab exchange-card-compact' : 'exchange-card'} aria-labelledby="exchange-card-title">
       <div className="exchange-card-head">
         <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
           <Share2 />
@@ -116,12 +116,10 @@ export function ExchangeCard({
           </h2>
         </div>
         <div className="exchange-card-actions">
-          <button type="button" className="btn-secondary" onClick={onSetUp}>
-            <Pencil aria-hidden="true" className="exchange-inline-icon" /> Edit settings
-          </button>
-          {!introduction && (
-            <button type="button" className="btn-primary" onClick={onOpenExchanges}>
-              <Eye aria-hidden="true" className="exchange-inline-icon" /> See the exchanges
+          {/* On its tab the Settings panel beside it has the edit buttons. */}
+          {!inTab && (
+            <button type="button" className="btn-secondary" onClick={onSetUp}>
+              <Pencil aria-hidden="true" className="exchange-inline-icon" /> Edit settings
             </button>
           )}
         </div>

@@ -11,6 +11,17 @@
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
 }
 
+.modal-wide {
+  width: min(72rem, calc(100vw - 2rem));
+  height: calc(100vh - 2rem);
+}
+
+.modal-wide .modal-panel {
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
 .modal::backdrop {
   background: rgba(8, 14, 24, 0.55);
 }

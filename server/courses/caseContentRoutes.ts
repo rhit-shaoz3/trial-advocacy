@@ -4,7 +4,7 @@ import { extname } from 'node:path'
 import { pictureFrom, readPicture, sendPicture } from '../auth/avatars.ts'
 import { requireUser } from '../auth/requireUser.ts'
 import { HttpError } from '../httpError.ts'
-import { KEY_PATTERN, MAX_UPLOAD_BYTES } from '../storage/shared.ts'
+import { KEY_PATTERN, MAX_UPLOAD_BYTES, dispositionHeader } from '../storage/shared.ts'
 import { storage } from '../storage/storage.ts'
 import { isUuid, readString } from '../validation.ts'
 import {
@@ -19,6 +19,7 @@ import {
   deleteWitness,
   existingMaterialIds,
   findMaterialFile,
+  type findMaterialText,
   findWitness,
   getMaterialText,
   listMaterials,
@@ -41,7 +42,7 @@ import {
 } from './caseContent.ts'
 import { queueTranscription } from './materialText.ts'
 import { listTeams } from './teams.ts'
-import { askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
+import { asExhibits, askQuestion, getInterview, restartInterview, type InterviewContext } from '../witness/interviews.ts'
 
 const MAX_FILENAME_LENGTH = 200
 const MAX_NAME_LENGTH = 120
@@ -96,19 +97,30 @@ function readId(id: string, notFound: string) {
 }
 
 /**
- * Redirects to a short-lived download link from storage. Files are always
- * served as attachments, never rendered in the page, so an upload can't run
- * script here. Files from before object storage are sent from the database.
+ * Redirects to a short-lived download link from storage. Files are served as
+ * attachments, so an upload can't run script here; `view` (the in-app viewer)
+ * shows a file in the page only when its type can't run script (PDFs, plain
+ * text, pictures, audio and video). Files from before object storage are sent
+ * from the database.
  */
-export async function sendMaterialFile(res: Response, file: Awaited<ReturnType<typeof findMaterialFile>>) {
+export async function sendMaterialFile(res: Response, file: Awaited<ReturnType<typeof findMaterialFile>>, view = false) {
   if (!file) throw new HttpError(404, 'File not found.')
   if (file.storageKey) {
-    res.redirect(302, await storage.downloadUrl(file.storageKey, file.filename, file.contentType))
+    res.redirect(302, await storage.downloadUrl(file.storageKey, file.filename, file.contentType, view))
     return
   }
-  res.attachment(file.filename)
-  res.set({ 'Content-Type': file.contentType, 'X-Content-Type-Options': 'nosniff' })
+  res.set({
+    'Content-Type': file.contentType,
+    'Content-Disposition': dispositionHeader(file.filename, file.contentType, view),
+    'X-Content-Type-Options': 'nosniff',
+  })
   res.send(file.data)
+}
+
+/** A file's text version (its transcription), for the viewer to show a document the browser can't. */
+export async function sendMaterialText(res: Response, text: Awaited<ReturnType<typeof findMaterialText>>) {
+  if (!text) throw new HttpError(404, 'File not found.')
+  res.json({ status: text.textStatus, text: text.textStatus === 'ready' ? text.text : null })
 }
 
 /** Mounted under /api/courses/:courseId/cases/:caseId/materials, after the course and case are loaded. */
@@ -241,7 +253,7 @@ materialsRouter.put('/:materialId/shares', async (req, res) => {
 
 materialsRouter.get('/:materialId/file', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
-  await sendMaterialFile(res, await findMaterialFile(req.courseCase!.id, id))
+  await sendMaterialFile(res, await findMaterialFile(req.courseCase!.id, id), req.query.view === '1')
 })
 
 /** The file's transcription as plain text, for the instructor to check what the AI witnesses read. */
@@ -415,7 +427,16 @@ async function testInterview(req: Request): Promise<InterviewContext> {
   const id = readId(req.params.witnessId as string, 'Witness not found.')
   const witness = await findWitness(req.courseCase!.id, id)
   if (!witness) throw new HttpError(404, 'Witness not found.')
-  return { courseCase: req.courseCase!, witness, owner: { teamId: null, side }, matchupId: null, userId: req.user!.id, closed: false }
+  return {
+    courseCase: req.courseCase!,
+    witness,
+    owner: { teamId: null, side },
+    matchupId: null,
+    userId: req.user!.id,
+    closed: false,
+    // Testing, the instructor can show any case file.
+    exhibits: asExhibits(await listMaterials(req.courseCase!.id)),
+  }
 }
 
 witnessesRouter.get('/:witnessId/interview', async (req, res) => {

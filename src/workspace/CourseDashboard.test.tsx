@@ -6,7 +6,7 @@ import App from '../App'
 import { AuthProvider } from '../auth/AuthProvider'
 import type { AuthService, User } from '../auth/types'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
-import type { CourseService } from '../courses/types'
+import type { CalendarItem, CourseService } from '../courses/types'
 import { fakeCourseService } from '../test/fakeCourseService'
 import { withSampleData } from './sampleData'
 import type { CourseHome } from './types'
@@ -254,7 +254,8 @@ describe('course workspace', () => {
     const anderson = screen.getByRole('article', { name: 'Anderson v. Caldwell' })
     expect(anderson).toHaveTextContent('Case 24-CV-1847')
     expect(anderson).toHaveTextContent('Active')
-    expect(within(anderson).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '62')
+    // Where the case is, not a task percentage.
+    expect(within(anderson).getByRole('list', { name: 'Phase 2 of 4: Information exchange' })).toBeInTheDocument()
     expect(anderson).toHaveTextContent('4 participants')
     expect(within(anderson).getByRole('link', { name: 'Enter case: Anderson v. Caldwell' })).toHaveAttribute(
       'href',
@@ -339,7 +340,7 @@ describe('course workspace', () => {
     expect(rivera).toHaveTextContent('Case world D')
     expect(rivera).toHaveTextContent('Role: Defendant')
     expect(rivera).toHaveTextContent('5 participants')
-    // No progress is tracked yet, so no bar; four avatars and a count of the rest.
+    // No task progress bar; four avatars and a count of the rest.
     expect(within(rivera).queryByRole('progressbar')).not.toBeInTheDocument()
     expect(rivera).toHaveTextContent('+1')
     expect(within(rivera).getByRole('link', { name: 'Enter case: Rivera v. Thrill Park' })).toHaveAttribute(
@@ -358,9 +359,9 @@ describe('course workspace', () => {
       fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(emptyHome) }),
     )
 
-    await user.click(await screen.findByRole('link', { name: 'Calendar' }))
+    await user.click(await screen.findByRole('link', { name: 'Resource library' }))
 
-    expect(screen.getByRole('heading', { name: 'Calendar' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Resource library' })).toBeInTheDocument()
     expect(screen.getByText('This page is coming soon.')).toBeInTheDocument()
   })
 
@@ -407,7 +408,7 @@ describe('reviews on the dashboard', () => {
       ruiz,
     )
 
-    expect(await screen.findByText('3 conversations are waiting for your review.')).toBeInTheDocument()
+    expect(await screen.findByText('3 reviews waiting')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Course' })
     expect(within(nav).getByRole('link', { name: 'Review, 3 waiting' })).toHaveAttribute('href', '/courses/c1/review')
 
@@ -418,14 +419,14 @@ describe('reviews on the dashboard', () => {
   it('shows nothing when no reviews wait', async () => {
     renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, reviewCount: 0 }) }), '/courses/c1', ruiz)
     await screen.findByRole('heading', { name: 'Good morning, Elena.' })
-    expect(screen.queryByText(/waiting for your review/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/reviews? waiting/)).not.toBeInTheDocument()
     expect(within(screen.getByRole('navigation', { name: 'Course' })).getByRole('link', { name: 'Review' })).toBeInTheDocument()
   })
 
   it('tells a student when their interviews have been reviewed, and keeps their resource library', async () => {
     renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, newReviewResults: 1 }) }))
 
-    expect(await screen.findByText('You have new results from your instructor.')).toBeInTheDocument()
+    expect(await screen.findByText('New review results')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open my cases' })).toHaveAttribute('href', '/courses/c1/cases')
     const nav = screen.getByRole('navigation', { name: 'Course' })
     expect(within(nav).getByRole('link', { name: 'Resource library' })).toBeInTheDocument()
@@ -493,11 +494,13 @@ describe("the instructor's own dashboard", () => {
     const summary = await screen.findByRole('region', { name: 'Course summary' })
     expect(summary).toHaveTextContent('30/32Students signed up2 pending')
     expect(summary).toHaveTextContent('1Active case+1 draft')
-    expect(summary).toHaveTextContent('214Witness questions this week')
+    expect(summary).not.toHaveTextContent('Witness questions this week')
     expect(summary).toHaveTextContent('2Reviews waitingNeeds your ruling')
     expect(screen.getByText(/3 things need your attention/)).toBeInTheDocument()
     expect(screen.queryByText('Tasks completed')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Your cases' })).not.toBeInTheDocument()
+    // A case can be added straight from here.
+    expect(screen.getByRole('link', { name: 'Add case' })).toHaveAttribute('href', '/courses/c1/cases/new')
   })
 
   it("links each thing that needs the instructor to where it's fixed", async () => {
@@ -548,5 +551,70 @@ describe("the instructor's own dashboard", () => {
     )
     expect(await screen.findByText(/Nothing needs you right now/)).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Needs your attention' })).not.toBeInTheDocument()
+  })
+})
+
+describe('the calendar', () => {
+  const item = (over: Partial<CalendarItem>): CalendarItem => ({
+    id: 'x',
+    kind: 'task',
+    title: 'Task',
+    notes: '',
+    date: '2026-10-20',
+    dueAt: null,
+    caseId: 'k1',
+    caseTitle: 'Rivera v. Thrill Park',
+    teamNumber: null,
+    done: false,
+    mine: false,
+    ...over,
+  })
+  const items = [
+    item({ id: 't1', title: 'Outline the deposition', dueAt: '2026-10-20T23:59:00.000Z' }),
+    item({ id: 'e1', kind: 'case', title: 'Depositions begin', date: '2026-10-22' }),
+    item({ id: 'e2', kind: 'personal', title: 'Read the file', date: '2026-10-14', caseId: null, caseTitle: null, mine: true }),
+    item({ id: 'e3', kind: 'team', title: 'Team prep', date: '2026-10-15', teamNumber: 3 }),
+  ]
+
+  it("puts a student's tasks, case dates, and events on the month, by kind, and filters them", async () => {
+    const service = fakeCourseService({
+      getCourseHome: vi.fn().mockResolvedValue(emptyHome),
+      getCalendar: vi.fn().mockResolvedValue(items),
+      listMyCases: vi.fn().mockResolvedValue([]),
+    })
+    const { user } = renderCourse(service, '/courses/c1/calendar')
+
+    const grid = await screen.findByRole('grid', { name: 'October 2026' })
+    expect(within(grid).getByRole('button', { name: 'Outline the deposition' })).toHaveClass('cal-kind-task')
+    expect(within(grid).getByRole('button', { name: 'Depositions begin' })).toHaveClass('cal-kind-case')
+    expect(within(grid).getByRole('button', { name: 'Read the file' })).toHaveClass('cal-kind-personal')
+    expect(within(grid).getByRole('button', { name: 'Team prep' })).toHaveClass('cal-kind-team')
+
+    // Turning a kind off hides it.
+    await user.click(screen.getByRole('button', { name: 'Team' }))
+    expect(within(grid).queryByRole('button', { name: 'Team prep' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Tasks' }))
+    expect(within(grid).queryByRole('button', { name: 'Outline the deposition' })).not.toBeInTheDocument()
+    expect(within(grid).getByRole('button', { name: 'Depositions begin' })).toBeInTheDocument()
+  })
+
+  it('shares a new event with the team', async () => {
+    const createCalendarEvent = vi.fn().mockResolvedValue(items)
+    const service = fakeCourseService({
+      getCourseHome: vi.fn().mockResolvedValue(emptyHome),
+      getCalendar: vi.fn().mockResolvedValue([]),
+      listMyCases: vi.fn().mockResolvedValue([{ id: 'k1', title: 'Rivera v. Thrill Park', summary: '', status: 'active', team: { number: 3, members: [] }, world: null }]),
+      createCalendarEvent,
+    })
+    const { user } = renderCourse(service, '/courses/c1/calendar')
+
+    await user.click(await screen.findByRole('button', { name: 'Add an event on Fri, Oct 16' }))
+    const form = screen.getByRole('form', { name: 'Add event' })
+    await user.type(within(form).getByLabelText('Title'), 'Team prep')
+    await user.click(within(form).getByRole('radio', { name: 'Share with my team' }))
+    await user.click(within(form).getByRole('button', { name: 'Add event' }))
+
+    expect(createCalendarEvent).toHaveBeenCalledWith('c1', { kind: 'team', title: 'Team prep', notes: '', date: '2026-10-16', caseId: 'k1' })
+    expect(await screen.findByRole('button', { name: 'Team prep' })).toBeInTheDocument()
   })
 })

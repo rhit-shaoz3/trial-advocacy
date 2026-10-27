@@ -51,6 +51,8 @@ export interface CourseCase {
   inWorldDate: string | null
   /** Issues the AI witnesses must leave disputed (one per line). */
   disputedIssues: string
+  /** The parties' names; empty when the instructor hasn't named them. */
+  parties: CaseParties
   /** Instructors and AI witnesses only; never sent to students. */
   importantFacts: ImportantFacts
   /** The furthest step of the guided setup the instructor has reached. */
@@ -64,16 +66,31 @@ export interface CourseCase {
   updatedAt: Date
 }
 
-/** The editable fields, already validated. Without `importantFacts`, an edit keeps the current ones. */
+export interface CaseParties {
+  plaintiff: string
+  defendant: string
+}
+
+/** The parties named by an "X v. Y" title, or empty names. */
+export function partiesFromTitle(title: string): CaseParties {
+  const [plaintiff, defendant] = title.split(/\s+v\.?\s+/i)
+  return plaintiff?.trim() && defendant?.trim()
+    ? { plaintiff: plaintiff.trim(), defendant: defendant.trim() }
+    : { plaintiff: '', defendant: '' }
+}
+
+/** The editable fields, already validated. Without `importantFacts` or `parties`, an edit keeps the current ones. */
 export interface CaseFields {
   title: string
   summary: string
   status: CaseStatus
   importantFacts?: ImportantFacts
+  parties?: CaseParties
 }
 
 const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "instructorNote",
   to_char(in_world_date, 'YYYY-MM-DD') AS "inWorldDate", disputed_issues AS "disputedIssues",
+  json_build_object('plaintiff', plaintiff_name, 'defendant', defendant_name) AS parties,
   json_build_object('plaintiff', plaintiff_key_facts, 'defense', defense_key_facts) AS "importantFacts",
   setup_step AS "setupStep", setup_completed_at AS "setupCompletedAt",
   json_build_object('enabled', investigator_enabled, 'name', investigator_name,
@@ -101,8 +118,8 @@ export async function findCase(courseId: string, id: string) {
 
 export async function createCase(courseId: string, fields: CaseFields) {
   const { rows } = await pool.query<CourseCase>(
-    `INSERT INTO cases (course_id, title, summary, status, plaintiff_key_facts, defense_key_facts)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO cases (course_id, title, summary, status, plaintiff_key_facts, defense_key_facts, plaintiff_name, defendant_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING ${CASE_COLUMNS}`,
     [
       courseId,
@@ -111,6 +128,9 @@ export async function createCase(courseId: string, fields: CaseFields) {
       fields.status,
       fields.importantFacts?.plaintiff ?? [],
       fields.importantFacts?.defense ?? [],
+      // Unnamed, they come from an "X v. Y" title.
+      (fields.parties ?? partiesFromTitle(fields.title)).plaintiff,
+      (fields.parties ?? partiesFromTitle(fields.title)).defendant,
     ],
   )
   return rows[0]
@@ -120,7 +140,8 @@ export async function createCase(courseId: string, fields: CaseFields) {
 export async function updateCase(courseId: string, id: string, fields: CaseFields) {
   const { rows } = await pool.query<CourseCase>(
     `UPDATE cases SET title = $3, summary = $4, status = $5, plaintiff_key_facts = coalesce($6, plaintiff_key_facts),
-       defense_key_facts = coalesce($7, defense_key_facts), updated_at = now()
+       defense_key_facts = coalesce($7, defense_key_facts), plaintiff_name = coalesce($8, plaintiff_name),
+       defendant_name = coalesce($9, defendant_name), updated_at = now()
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [
@@ -131,6 +152,8 @@ export async function updateCase(courseId: string, id: string, fields: CaseField
       fields.status,
       fields.importantFacts?.plaintiff ?? null,
       fields.importantFacts?.defense ?? null,
+      fields.parties?.plaintiff ?? null,
+      fields.parties?.defendant ?? null,
     ],
   )
   return rows[0] ?? null

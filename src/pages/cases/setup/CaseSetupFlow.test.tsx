@@ -78,10 +78,18 @@ describe('the guided case setup', () => {
     expect(screen.queryByRole('button', { name: 'Skip for now' })).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('Case name'), 'Rivera v. Thrill Park')
     expect(next).toBeDisabled()
+    // The parties fill in from an "X v. Y" name; students see their side by them.
+    expect(screen.getByLabelText('Plaintiff')).toHaveValue('Rivera')
+    expect(screen.getByLabelText('Defendant')).toHaveValue('Thrill Park')
     await user.type(screen.getByLabelText('Description'), 'A rollercoaster stalls mid-loop.')
     await user.click(next)
 
-    expect(service.createCase).toHaveBeenCalledWith('c1', { title: 'Rivera v. Thrill Park', summary: 'A rollercoaster stalls mid-loop.' })
+    expect(service.createCase).toHaveBeenCalledWith('c1', {
+      title: 'Rivera v. Thrill Park',
+      summary: 'A rollercoaster stalls mid-loop.',
+      plaintiffName: 'Rivera',
+      defendantName: 'Thrill Park',
+    })
     expect(service.reachSetupStep).toHaveBeenCalledWith('c1', 'k1', 'facts')
     // The setup carries on at the case's own address, replacing the new-case page.
     await waitFor(() => expect(screen.getByRole('heading', { level: 2, name: 'Important facts' })).toBeInTheDocument())
@@ -172,6 +180,10 @@ describe('the guided case setup', () => {
 
     await user.type(screen.getByLabelText('Case name'), 'Rivera')
     await user.type(screen.getByLabelText('Description'), 'x')
+    // Without "v." in the name, the parties have to be typed in before Next.
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+    await user.type(screen.getByLabelText('Plaintiff'), 'Ana Rivera')
+    await user.type(screen.getByLabelText('Defendant'), 'Thrill Park')
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Add a short description of the case.')

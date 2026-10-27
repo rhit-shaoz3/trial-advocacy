@@ -24,10 +24,15 @@ export interface CaseSummary {
   status: CaseStatus
   /** A student's case world and their role in it, once their team is matched. */
   world?: { number: number; side: Side } | null
+  /** The parties' names, for the student's role. */
+  parties?: { plaintiff: string; defendant: string }
   /** How many case worlds the case has; set for the instructor. */
   worldCount?: number | null
   /** 0–100, or null while progress isn't tracked. */
   progress: number | null
+  /** Where the case is, and the phases it goes through (sample data leaves them out). */
+  phase?: CasePhase
+  phases?: CasePhase[]
   /** The next thing that matters, e.g. "Discovery due Oct 13" or "Awaiting instructor review". */
   nextMilestone: string | null
   /** The team's soonest-due open task (real cases; sample data uses nextMilestone). */

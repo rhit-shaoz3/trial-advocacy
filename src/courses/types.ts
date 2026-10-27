@@ -94,10 +94,17 @@ export interface ImportantFacts {
   defense: string[]
 }
 
+/** The parties as the instructor named them; empty when they haven't been named. */
+export interface CaseParties {
+  plaintiff: string
+  defendant: string
+}
+
 export interface CourseCase {
   id: string
   title: string
   summary: string
+  parties?: CaseParties
   status: CourseCaseStatus
   phase: CasePhase
   /** Shown on every student's case dashboard. */
@@ -140,6 +147,9 @@ export interface CaseInput {
   status?: CourseCaseStatus
   /** Launching needs at least one per side. Left out of an edit, they stay as they are. */
   importantFacts?: ImportantFacts
+  /** The parties' names; left out of an edit, they stay as they are. */
+  plaintiffName?: string
+  defendantName?: string
 }
 
 /** Students paired for one case: usually two, three for the odd one out. */
@@ -181,6 +191,7 @@ export interface MyCase {
   title: string
   summary: string
   status: Exclude<CourseCaseStatus, 'draft'>
+  parties?: CaseParties
   /** Null until the instructor pairs this student for the case. */
   team: { number: number; members: MyTeamMember[] } | null
   /** Null until their team is matched. `number` 1 is World A. */
@@ -295,6 +306,8 @@ export interface Interview {
     createdAt: string
   }[]
   maxTurns: number
+  /** Case files the asker can show the witness during the interview. */
+  exhibits?: { id: string; title: string }[]
   /**
    * When a team's interview ends on its own (an hour after the first
    * question) and goes to the instructor for review. Null before the first
@@ -440,6 +453,7 @@ export interface CaseWorkspace {
     status: CourseCaseStatus
     phase: CasePhase
     instructorNote: string
+    parties?: CaseParties
   }
   team: MyCase['team']
   world: MyCase['world']
@@ -618,6 +632,85 @@ export function questionWeight(text: string) {
 }
 
 /** Everything the UI needs from the courses backend. See `httpCourseService`. */
+/** A file's text version: `ready` with the text, or why there's none yet. */
+export interface MaterialTextResult {
+  status: 'pending' | 'ready' | 'none' | 'failed'
+  text: string | null
+}
+
+/** What's on a course calendar: a task's due date, or an event. */
+export type CalendarKind = 'task' | 'case' | 'personal' | 'team'
+
+/** One thing on the calendar; matches `CalendarItem` in server/calendar/calendar.ts. */
+export interface CalendarItem {
+  id: string
+  kind: CalendarKind
+  title: string
+  notes: string
+  /** YYYY-MM-DD: the event's day, or the day a task is due. */
+  date: string
+  /** A task's exact due time. */
+  dueAt: string | null
+  caseId: string | null
+  caseTitle: string | null
+  /** A team event's team. */
+  teamNumber: number | null
+  /** A student's task: whether their team has done it. */
+  done: boolean | null
+  /** Whether this user made it (and so can change it). */
+  mine: boolean
+}
+
+/** A new calendar event: a case date (instructor), a personal reminder, or one shared with the team. */
+export interface CalendarEventInput {
+  kind: 'case' | 'personal' | 'team'
+  title: string
+  notes: string
+  date: string
+  /** The case date's case, or the case whose team to share with. */
+  caseId?: string | null
+}
+
+/** How teams have used the background investigator; matches server/courses/phaseOverview.ts. */
+export interface InvestigatorOverview {
+  /** Teams in a case world. */
+  teams: number
+  /** Teams that have sent him at least one assignment. */
+  teamsUsed: number
+  /** Assignments sent, whole class. */
+  requests: number
+  /** With him or the instructor, not back to the team yet. */
+  waiting: number
+}
+
+/** How teams are deposing the other side's witnesses; matches server/courses/phaseOverview.ts. */
+export interface DepositionOverview {
+  teams: number
+  /** Teams that have deposed at least one of the other side's witnesses. */
+  teamsDeposed: number
+  depositions: number
+  questions: number
+  /** Objections from the witnesses' lawyers. */
+  objections: number
+  /** Interview reviews still waiting for the instructor. */
+  reviewsWaiting: number
+}
+
+/** A likely witness the AI read from the initial file; matches server/witness/suggest.ts. */
+export interface WitnessSuggestion {
+  name: string
+  role: string
+  description: string
+  alignedSide: Side | null
+}
+
+/** Where the suggested witnesses stand; matches `SuggestionsState` in server/witness/suggestions.ts. */
+export type WitnessSuggestions =
+  | { status: 'waiting'; reason: 'no-file' | 'no-parties' | 'reading' | 'thinking' }
+  | { status: 'ready'; suggestions: WitnessSuggestion[] }
+  | { status: 'failed'; error: string }
+  | { status: 'done' }
+
 export interface CourseService {
   // Students
   /** The current user's courses, newest term first. */
@@ -686,6 +779,10 @@ export interface CourseService {
   retryTranscription(courseId: string, caseId: string, materialId: string): Promise<CaseMaterial>
   listWitnesses(courseId: string, caseId: string): Promise<Witness[]>
   createWitness(courseId: string, caseId: string, input: WitnessInput): Promise<Witness>
+  /** The AI's suggested witnesses from the initial file, offered once. */
+  getWitnessSuggestions(courseId: string, caseId: string): Promise<WitnessSuggestions>
+  /** The instructor added some suggestions or skipped them: don't offer them again. */
+  finishWitnessSuggestions(courseId: string, caseId: string): Promise<void>
   updateWitness(courseId: string, caseId: string, witnessId: string, input: WitnessInput): Promise<Witness>
   deleteWitness(courseId: string, caseId: string, witnessId: string): Promise<void>
   /** Gives the witness an uploaded (already cropped) picture in place of a design. */
@@ -710,15 +807,25 @@ export interface CourseService {
   // Students
   /** The current student's non-draft cases and their team in each. */
   listMyCases(courseId: string): Promise<MyCase[]>
+
+  // The course calendar: tasks on their due dates, and events.
+  getCalendar(courseId: string): Promise<CalendarItem[]>
+  /** Each of these returns the whole calendar again. */
+  createCalendarEvent(courseId: string, input: CalendarEventInput): Promise<CalendarItem[]>
+  updateCalendarEvent(courseId: string, eventId: string, input: Pick<CalendarEventInput, 'title' | 'notes' | 'date'>): Promise<CalendarItem[]>
+  deleteCalendarEvent(courseId: string, eventId: string): Promise<CalendarItem[]>
   /** The student's dashboard for one launched case. */
   getMyCaseWorkspace(courseId: string, caseId: string): Promise<CaseWorkspace>
   /** Marks a task done (or not) for the student's whole team. */
   setTaskDone(courseId: string, caseId: string, taskId: string, done: boolean): Promise<CaseWorkspace>
   myMaterialDownloadUrl(courseId: string, caseId: string, materialId: string): string
+  /** A case file's text version, for the viewer, if the student can see the file. */
+  myMaterialText(courseId: string, caseId: string, materialId: string): Promise<MaterialTextResult>
 
   // Interviews with AI witnesses: the student's team's, or the instructor's test as one side.
   getInterview(courseId: string, caseId: string, witnessId: string, as: InterviewAs): Promise<Interview>
-  askWitness(courseId: string, caseId: string, witnessId: string, as: InterviewAs, question: string): Promise<Interview>
+  /** Asks the next question, showing the witness `exhibitIds` (case files it already has) with it. */
+  askWitness(courseId: string, caseId: string, witnessId: string, as: InterviewAs, question: string, exhibitIds?: string[]): Promise<Interview>
   /** Ends the interview and starts an empty one. */
   restartInterview(courseId: string, caseId: string, witnessId: string, as: InterviewAs): Promise<Interview>
   /** Ends the team's interview and sends it to the instructor for review; opens a fresh one. */
@@ -744,6 +851,9 @@ export interface CourseService {
   /** Finishes the setup: students see it, and the case gains its phase. */
   completeExchangeSetup(courseId: string, caseId: string): Promise<{ settings: ExchangeSettings; case: CourseCase }>
   getExchangeOverview(courseId: string, caseId: string): Promise<ExchangeOverview>
+  /** The case dashboard's cards for the investigate and deposition phases. */
+  getInvestigatorOverview(courseId: string, caseId: string): Promise<InvestigatorOverview>
+  getDepositionOverview(courseId: string, caseId: string): Promise<DepositionOverview>
   /** Every set teams have sent each other, newest first: the instructor's read-only view. */
   listExchangeRequests(courseId: string, caseId: string): Promise<ExchangeRequest[]>
   // Information exchange: the student's team.

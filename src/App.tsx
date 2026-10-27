@@ -15,6 +15,7 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { ReviewPage } from './pages/review/ReviewPage'
 import { ComingSoon } from './workspace/ComingSoon'
 import { CourseDashboard } from './workspace/CourseDashboard'
+import { CalendarPage } from './pages/calendar/CalendarPage'
 import { WorkspaceLayout } from './workspace/WorkspaceLayout'
 
 /** Pages outside a student's course workspace: the course list, instructor pages. */
@@ -51,7 +52,7 @@ function App() {
           element={isInstructor ? <CaseDetailPage /> : <StudentCasePage />}
         />
         <Route path="cases/:caseId/witnesses/:witnessId" element={<InterviewPage />} />
-        <Route path="calendar" element={<ComingSoon title="Calendar" />} />
+        <Route path="calendar" element={<CalendarPage />} />
         <Route path="resources" element={<ComingSoon title="Resource library" />} />
         {isInstructor && <Route path="review" element={<ReviewPage />} />}
         {isInstructor && <Route path="manage" element={<CoursePage />} />}

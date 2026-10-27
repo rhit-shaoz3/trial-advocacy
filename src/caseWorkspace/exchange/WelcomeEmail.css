@@ -102,6 +102,31 @@
   color: var(--ws-blue);
 }
 
+/* A document the team has: its name opens it in the viewer. */
+.welcome-email-file {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent);
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+
+.welcome-email-file:hover {
+  text-decoration-color: currentColor;
+}
+
+
+
+.welcome-email-file:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .welcome-email-first {
   padding: 0.6rem 0.8rem;
   border-radius: 0.5rem;

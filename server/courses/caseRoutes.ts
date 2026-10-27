@@ -29,6 +29,8 @@ import { matchupsRouter } from './matchupRoutes.ts'
 import { teamsRouter } from './teamRoutes.ts'
 import { getPreviewWorkspace, launchChecks } from './workspace.ts'
 import { applyDisclosures, requestsOpen } from '../exchange/exchange.ts'
+import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
+import { finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 
 declare module 'express-serve-static-core' {
@@ -90,7 +92,23 @@ function readCaseFields(body: unknown, defaultStatus?: CaseStatus, creating = fa
   }
   if (!CASE_STATUSES.includes(status as CaseStatus)) throw new HttpError(400, 'Choose a valid status.')
 
-  return { title, summary, status: status as CaseStatus, importantFacts: readImportantFacts(body) }
+  return { title, summary, status: status as CaseStatus, importantFacts: readImportantFacts(body), parties: readParties(body) }
+}
+
+const MAX_PARTY_LENGTH = 200
+
+/** `{ plaintiffName, defendantName }`, or undefined to leave them as they are (or name them from the title). */
+function readParties(body: unknown) {
+  const fields = body as Record<string, unknown> | undefined
+  if (fields?.plaintiffName === undefined && fields?.defendantName === undefined) return undefined
+  const plaintiff = readString(body, 'plaintiffName').trim()
+  const defendant = readString(body, 'defendantName').trim()
+  if (!plaintiff) throw new HttpError(400, 'Name the plaintiff.')
+  if (!defendant) throw new HttpError(400, 'Name the defendant.')
+  if (plaintiff.length > MAX_PARTY_LENGTH || defendant.length > MAX_PARTY_LENGTH) {
+    throw new HttpError(400, `Party names must be at most ${MAX_PARTY_LENGTH} characters.`)
+  }
+  return { plaintiff, defendant }
 }
 
 /** Mounted under /api/courses/:courseId/cases, after the course is loaded. */
@@ -153,6 +171,27 @@ caseRouter.use('/materials', materialsRouter)
 caseRouter.use('/witnesses', witnessesRouter)
 caseRouter.use('/tasks', tasksRouter)
 caseRouter.use('/exchange', exchangeRouter)
+
+/** The witnesses the AI suggests from the initial file, offered once while setting up the case. */
+caseRouter.get('/witness-suggestions', async (req, res) => {
+  res.json(await witnessSuggestions(req.courseCase!.id))
+})
+
+/** The instructor added some suggested witnesses, or skipped them: they're not offered again. */
+caseRouter.post('/witness-suggestions/done', async (req, res) => {
+  await finishWitnessSuggestions(req.courseCase!.id)
+  res.json({ status: 'done' })
+})
+
+/** How teams have used the background investigator, for the case dashboard. */
+caseRouter.get('/investigator/overview', async (req, res) => {
+  res.json({ overview: await investigatorOverview(req.courseCase!.id) })
+})
+
+/** How teams are deposing the other side's witnesses, for the case dashboard. */
+caseRouter.get('/depositions/overview', async (req, res) => {
+  res.json({ overview: await depositionOverview(req.courseCase!.id) })
+})
 
 caseRouter.put('/note', async (req, res) => {
   const note = readString(req.body, 'note').trim()

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../../../courses/CourseServiceContext'
 import { MemoryRouter } from 'react-router'
-import type { CaseMaterial, CaseWorkspace, CourseCase, CourseService } from '../../../courses/types'
+import type { CaseMaterial, CaseWorkspace, CourseCase, CourseService, Witness, WitnessInput } from '../../../courses/types'
 import { fakeCourseService } from '../../../test/fakeCourseService'
 import { InvestigatorSection } from './InvestigatorSection'
 import { LaunchPanel } from './LaunchPanel'
@@ -110,8 +110,9 @@ describe('MaterialsSection', () => {
       updateMaterial,
     })
 
-    const link = await screen.findByRole('link', { name: 'Fact pattern.pdf' })
-    expect(link).toHaveAttribute('href', '/download/c1/k1/m1')
+    // The name opens the viewer; the icon beside it downloads.
+    await screen.findByRole('button', { name: 'Fact pattern.pdf' })
+    expect(screen.getByRole('link', { name: 'Download Fact pattern.pdf' })).toHaveAttribute('href', '/download/c1/k1/m1')
     expect(screen.getByText('244 KB · Read first.')).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'PDF' })).toBeInTheDocument()
 
@@ -169,7 +170,7 @@ describe('MaterialsSection', () => {
 
     expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', photo, { audience: 'defense', description: 'Ride photo' })
     expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', log, { audience: 'all', description: 'Ride log (March)' })
-    expect(await screen.findByRole('link', { name: 'photo.jpg' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'photo.jpg' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /Ready to upload/ })).not.toBeInTheDocument()
     expect(onChange).toHaveBeenCalled()
   })
@@ -193,7 +194,7 @@ describe('MaterialsSection', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('b.pdf: Upload failed.')
     expect(screen.getByRole('heading', { name: 'Ready to upload (1)' })).toBeInTheDocument()
     expect(screen.getByLabelText('Label for b.pdf')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'a.pdf' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'a.pdf' })).toBeInTheDocument()
   })
 
   it('refuses files over 10 MB without uploading, and deletes after confirming', async () => {
@@ -201,7 +202,7 @@ describe('MaterialsSection', () => {
     const { user, service } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, {
       listMaterials: vi.fn().mockResolvedValue([factPattern]),
     })
-    await screen.findByRole('link', { name: 'Fact pattern.pdf' })
+    await screen.findByRole('button', { name: 'Fact pattern.pdf' })
 
     const huge = new File(['x'], 'huge.pdf')
     Object.defineProperty(huge, 'size', { value: 100 * 1024 * 1024 + 1 })
@@ -212,7 +213,7 @@ describe('MaterialsSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete Fact pattern.pdf' }))
     expect(service.deleteMaterial).toHaveBeenCalledWith('c1', 'k1', 'm1')
-    expect(screen.queryByRole('link', { name: 'Fact pattern.pdf' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Fact pattern.pdf' })).not.toBeInTheDocument()
   })
 })
 
@@ -277,7 +278,7 @@ describe('InvestigatorSection', () => {
 
     const toggle = screen.getByRole('checkbox', { name: 'Use a background investigator' })
     expect(toggle).toBeChecked()
-    const save = screen.getByRole('button', { name: 'Save investigator' })
+    const save = screen.getByRole('button', { name: 'Save changes' })
     expect(save).toBeDisabled()
     await user.clear(screen.getByLabelText('Name'))
     await user.type(screen.getByLabelText('Name'), 'Nora Vance')
@@ -297,7 +298,7 @@ describe('InvestigatorSection', () => {
     const { user } = renderWith(<InvestigatorSection courseId="c1" courseCase={coaster} onSaved={vi.fn()} />, { saveInvestigator })
 
     await user.click(screen.getByRole('checkbox', { name: 'Use a background investigator' }))
-    await user.click(screen.getByRole('button', { name: 'Save investigator' }))
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Move the case out of the investigate phase')
   })
 })
@@ -325,6 +326,42 @@ describe('WitnessesSection', () => {
       </MemoryRouter>,
       { listMaterials: vi.fn().mockResolvedValue([factPattern, deposition]), ...overrides },
     )
+
+  it('offers the witnesses the AI read from the complaint once, adding the ticked ones', async () => {
+    const suggestions = [
+      { name: 'Paige Winston', role: 'Rider', description: 'Hurt on Atlas.', alignedSide: 'plaintiff' as const },
+      { name: 'Logan Crest', role: 'Friend', description: 'Rode with her.', alignedSide: 'plaintiff' as const },
+    ]
+    const createWitness = vi.fn(async (_c: string, _k: string, input: WitnessInput): Promise<Witness> => ({ ...input, id: input.name, avatarUrl: null }))
+    const finishWitnessSuggestions = vi.fn().mockResolvedValue(undefined)
+    const { user } = renderSection({
+      getWitnessSuggestions: vi.fn().mockResolvedValue({ status: 'ready', suggestions }),
+      createWitness,
+      finishWitnessSuggestions,
+    })
+
+    const panel = await screen.findByRole('region', { name: 'Likely witnesses from the complaint' })
+    await user.click(within(panel).getByRole('checkbox', { name: /Logan Crest/ }))
+    await user.click(within(panel).getByRole('button', { name: 'Add 1 witness' }))
+
+    expect(createWitness).toHaveBeenCalledTimes(1)
+    expect(createWitness).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ name: 'Paige Winston', role: 'Rider', description: 'Hurt on Atlas.', alignedSide: 'plaintiff' }))
+    expect(finishWitnessSuggestions).toHaveBeenCalledWith('c1', 'k1')
+    // Gone for good, and the added witness is on the list.
+    expect(screen.queryByRole('region', { name: 'Likely witnesses from the complaint' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('listitem', { name: 'Paige Winston' })).toBeInTheDocument()
+  })
+
+  it('puts the suggestions away when skipped', async () => {
+    const finishWitnessSuggestions = vi.fn().mockResolvedValue(undefined)
+    const { user } = renderSection({
+      getWitnessSuggestions: vi.fn().mockResolvedValue({ status: 'ready', suggestions: [{ name: 'Logan Crest', role: '', description: '', alignedSide: null }] }),
+      finishWitnessSuggestions,
+    })
+    await user.click(await screen.findByRole('button', { name: 'Skip' }))
+    expect(finishWitnessSuggestions).toHaveBeenCalledWith('c1', 'k1')
+    expect(screen.queryByText('Likely witnesses from the complaint')).not.toBeInTheDocument()
+  })
 
   it('adds, edits, and removes witnesses', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -461,17 +498,17 @@ describe('WitnessesSection', () => {
     expect(within(item).getByRole('link', { name: 'Test as defense' })).toHaveAttribute('href', '/courses/c1/cases/k1/witnesses/w1?side=defense')
   })
 
-  it('saves the case date and disputed issues', async () => {
-    const saved = { ...coaster, inWorldDate: '2024-10-01', disputedIssues: 'Where she stood.' }
+  it('saves the disputed issues, with no case date to set', async () => {
+    const saved = { ...coaster, disputedIssues: 'Where she stood.' }
     const saveWitnessSettings = vi.fn().mockResolvedValue(saved)
     const onCaseChange = vi.fn()
     const { user } = renderSection({ saveWitnessSettings }, onCaseChange)
 
     const form = await screen.findByRole('form', { name: 'AI witness settings' })
-    fireEvent.change(within(form).getByLabelText(/Today.s date in the case/), { target: { value: '2024-10-01' } })
+    expect(within(form).queryByLabelText(/date in the case/)).not.toBeInTheDocument()
     await user.type(within(form).getByLabelText(/Issues the witnesses/), 'Where she stood.')
     await user.click(within(form).getByRole('button', { name: 'Save settings' }))
-    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', { inWorldDate: '2024-10-01', disputedIssues: 'Where she stood.' })
+    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', { inWorldDate: null, disputedIssues: 'Where she stood.' })
     expect(onCaseChange).toHaveBeenCalledWith(saved)
   })
 })

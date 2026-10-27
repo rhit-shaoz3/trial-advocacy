@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { DEFAULT_INVESTIGATOR_NAME, INVESTIGATOR_AVATAR_URL, investigatorOf, type CourseCase } from '../../../courses/types'
+import { DictationTextarea } from '../../../components/Dictation'
 
 /**
  * The case's background investigator, the same for every team: whether the
@@ -93,7 +94,7 @@ export function InvestigatorSection({
         </label>
         <label>
           Instructions for the investigator (optional)
-          <textarea
+          <DictationTextarea
             value={instructions}
             onChange={(e) => {
               setInstructions(e.target.value)
@@ -108,7 +109,7 @@ export function InvestigatorSection({
         </label>
         <div className="panel-form-actions">
           <button type="submit" className="btn-primary" disabled={saving || !changed}>
-            {saving ? 'Saving…' : 'Save investigator'}
+            {saving ? 'Saving…' : 'Save changes'}
           </button>
           {saved && !changed && (
             <span className="muted" role="status">

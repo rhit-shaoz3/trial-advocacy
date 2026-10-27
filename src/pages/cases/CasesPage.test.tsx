@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -185,5 +185,52 @@ describe('CaseDetailPage', () => {
     renderAt('/courses/c1/cases/nope', { getCase: vi.fn().mockRejectedValue(new Error('Case not found.')) })
 
     expect(await screen.findByRole('heading', { name: 'Not found' })).toBeInTheDocument()
+  })
+})
+
+describe('the case dashboard card for each phase', () => {
+  const launched = { ...coaster, status: 'active' as const, exchangeReady: true, setupCompletedAt: '2026-10-02T15:00:00.000Z' }
+  // The exchange card's own data never arrives here; only where it shows matters.
+  const pending = () => new Promise<never>(() => {})
+  const exchangeMocks = { getExchange: vi.fn(pending), getExchangeOverview: vi.fn(pending) }
+
+  it('shows the investigator card while investigating, and moves the exchange card to its tab', async () => {
+    const { user } = renderAt('/courses/c1/cases/k1', {
+      getCase: vi.fn().mockResolvedValue({ ...launched, phase: 'investigate' }),
+      getInvestigatorOverview: vi.fn().mockResolvedValue({ teams: 4, teamsUsed: 3, requests: 7, waiting: 1 }),
+      ...exchangeMocks,
+    })
+
+    const card = (await screen.findByRole('heading', { name: 'Assignments to John Hastings' })).closest('section')!
+    expect(await within(card).findByLabelText('3 of 4 teams')).toBeInTheDocument()
+    expect(card).toHaveTextContent('Conversations7')
+    expect(card).toHaveTextContent('1 report not back to the team yet')
+    expect(screen.queryByRole('heading', { name: 'Requests between teams' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Information exchange' }))
+    // It sits below the exchanges, in their column, with the settings beside them, and no edit button of its own.
+    const column = screen.getByRole('heading', { name: 'Requests between teams' }).closest('.exchange-tab-main')!
+    expect(within(column as HTMLElement).getByRole('heading', { name: 'Exchanges' })).toBeInTheDocument()
+    expect(within(column as HTMLElement).queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
+    expect(within(column as HTMLElement).queryByRole('button', { name: /Edit settings/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /See the exchanges/ })).not.toBeInTheDocument()
+  })
+
+  it('shows the deposition card in the deposition phase, and moves the investigator card to its tab', async () => {
+    const { user } = renderAt('/courses/c1/cases/k1', {
+      getCase: vi.fn().mockResolvedValue({ ...launched, phase: 'deposition' }),
+      getDepositionOverview: vi.fn().mockResolvedValue({ teams: 4, teamsDeposed: 2, depositions: 5, questions: 61, objections: 9, reviewsWaiting: 2 }),
+      ...exchangeMocks,
+    })
+
+    const card = (await screen.findByRole('heading', { name: 'Deposing the other side’s witnesses' })).closest('section')!
+    expect(await within(card).findByLabelText('2 of 4 teams')).toBeInTheDocument()
+    expect(card).toHaveTextContent('Depositions5')
+    expect(card).toHaveTextContent('Questions asked619 objections')
+    expect(card).toHaveTextContent('2 interviews waiting for your review')
+    expect(screen.queryByRole('heading', { name: 'Assignments to John Hastings' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+    expect(await screen.findByRole('heading', { name: 'Assignments to John Hastings' })).toBeInTheDocument()
   })
 })

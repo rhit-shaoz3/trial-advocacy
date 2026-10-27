@@ -3,7 +3,7 @@ import { pool } from '../db/pool.ts'
 export type Role = 'student' | 'instructor'
 
 /** The colour themes on the account page; navy and parchment by default. */
-export const THEMES = ['navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast'] as const
+export const THEMES = ['navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast', 'radioactive'] as const
 export type Theme = (typeof THEMES)[number]
 
 export const MAX_NAME_LENGTH = 100

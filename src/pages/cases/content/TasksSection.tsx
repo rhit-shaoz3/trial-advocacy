@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, dueLabel, fromLocalInput, toLocalInput } from '../../../courses/caseLabels'
 import { AUDIENCES, type Audience, type CaseTask, type TaskInput } from '../../../courses/types'
+import { DictationTextarea } from '../../../components/Dictation'
 
 const BLANK: TaskInput = { title: '', description: '', dueAt: null, audience: 'all' }
 
@@ -173,7 +174,7 @@ function TaskForm({
       </label>
       <label className="content-form-full">
         Details (optional)
-        <textarea
+        <DictationTextarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Draft an outline and list the exhibits you plan to introduce."

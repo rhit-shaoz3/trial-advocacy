@@ -157,8 +157,8 @@
 }
 
 .exchange-side-defense {
-  background: var(--tint-rose-bg);
-  color: var(--tint-rose-fg);
+  background: var(--tint-orange-bg);
+  color: var(--tint-orange-fg);
 }
 
 .exchange-pick {
@@ -477,6 +477,18 @@
   background: var(--surface);
 }
 
+/* On its tab, after its phase: a plain card like the tab's others. */
+.exchange-card-in-tab {
+  border-left-width: 1px;
+  border-left-color: var(--border);
+}
+
+/* Below the investigator settings, and as wide. */
+.investigator-card-in-tab {
+  max-width: 46rem;
+  margin-top: 1.25rem;
+}
+
 .exchange-card-head {
   display: flex;
   flex-wrap: wrap;
@@ -658,6 +670,54 @@
 }
 
 /* The Information exchange tab */
+/* The left column: the exchanges, then the exchange card (after its phase). */
+.exchange-tab-main {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.exchange-tab-main > .exchange-card {
+  margin-bottom: 0;
+}
+
+/* On its tab the card is compact: the two counts are small squares beside the teams bars. */
+.exchange-card-in-tab {
+  padding: 1rem 1.1rem;
+}
+
+.exchange-card-compact .exchange-stats {
+  grid-template-columns: 8.5rem 8.5rem minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.exchange-card-compact .exchange-stat {
+  padding: 0.7rem 0.8rem;
+}
+
+.exchange-card-compact .exchange-stat:not(:last-child) {
+  aspect-ratio: 1;
+}
+
+.exchange-card-compact .exchange-stat-number {
+  font-size: 1.6rem;
+}
+
+.exchange-card-compact .exchange-stat > span,
+.exchange-card-compact .exchange-stat p {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .exchange-card-compact .exchange-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .exchange-card-compact .exchange-stat:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
 .exchange-tab {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);

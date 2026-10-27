@@ -60,13 +60,14 @@
   text-decoration: none;
 }
 
-.ws-brand-icon {
-  display: grid;
-  place-items: center;
+/* The app's icon (BrandIcon), in the sidebar's colour, with a faint edge. */
+/* Two classes, to beat the workspace's general icon size (.ws svg). */
+.ws-brand .ws-brand-icon {
+  flex: none;
   width: 2.4rem;
   height: 2.4rem;
-  border: 1px solid currentColor;
-  border-radius: 50%;
+  border-radius: 22%;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
 .ws-brand strong {
@@ -117,7 +118,7 @@
 }
 
 .ws-sidebar nav a.active {
-  box-shadow: inset 2px 0 var(--ws-red);
+  box-shadow: inset 2px 0 var(--ws-gold);
 }
 
 .ws-nav-badge {
@@ -128,8 +129,8 @@
   margin-left: auto;
   padding: 0 0.35rem;
   border-radius: 999px;
-  background: var(--ws-red);
-  color: var(--on-brand);
+  background: var(--ws-gold);
+  color: var(--brand);
   font-size: 0.7rem;
   font-weight: 800;
 }
@@ -462,14 +463,14 @@
   color: var(--tint-amber-fg);
 }
 
-.ws-avatar-green {
-  background: var(--tint-green-bg);
-  color: var(--tint-green-fg);
+.ws-avatar-purple {
+  background: var(--tint-purple-bg);
+  color: var(--tint-purple-fg);
 }
 
-.ws-avatar-rose {
-  background: var(--tint-rose-bg);
-  color: var(--tint-rose-fg);
+.ws-avatar-orange {
+  background: var(--tint-orange-bg);
+  color: var(--tint-orange-fg);
 }
 
 .ws-avatar-stack {
@@ -520,7 +521,7 @@
     overflow: visible;
   }
 
-  .ws-brand-icon {
+  .ws-brand .ws-brand-icon {
     width: 2rem;
     height: 2rem;
   }

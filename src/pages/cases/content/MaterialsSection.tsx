@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
-import { Upload, X } from 'lucide-react'
+import { Download, Upload, X } from 'lucide-react'
+import { FileViewer } from '../../../components/FileViewer'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate } from '../../../courses/caseLabels'
 import {
@@ -69,6 +70,8 @@ export function MaterialsSection({
   const [teams, setTeams] = useState<CaseTeams | null>(null)
   /** The file whose sharing is being edited. */
   const [sharing, setSharing] = useState<string | null>(null)
+  /** The file open in the viewer. */
+  const [viewing, setViewing] = useState<CaseMaterial | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -375,8 +378,22 @@ export function MaterialsSection({
                 <Fragment key={m.id}>
                   <tr>
                     <td>
-                      <a href={service.materialDownloadUrl(courseId, caseId, m.id)} download>
+                      <button
+                        type="button"
+                        className="link-button content-file-open"
+                        title={`Open ${m.filename} in the viewer`}
+                        onClick={() => setViewing(m)}
+                      >
                         {m.filename}
+                      </button>
+                      <a
+                        className="content-file-download"
+                        href={service.materialDownloadUrl(courseId, caseId, m.id)}
+                        download
+                        aria-label={`Download ${m.filename}`}
+                        title="Download"
+                      >
+                        <Download aria-hidden="true" />
                       </a>
                       <small className="muted content-meta">
                         {formatSize(m.sizeBytes)}
@@ -464,6 +481,18 @@ export function MaterialsSection({
             </tbody>
           </table>
         </div>
+      )}
+      {viewing && (
+        <FileViewer
+          file={{ id: viewing.id, title: viewing.description || viewing.filename, filename: viewing.filename, contentType: viewing.contentType, sizeBytes: viewing.sizeBytes }}
+          downloadUrl={service.materialDownloadUrl(courseId, caseId, viewing.id)}
+          loadText={async () => {
+            // The transcription the AI witnesses read, as plain text.
+            const res = await fetch(service.materialTextUrl(courseId, caseId, viewing.id), { credentials: 'same-origin' })
+            return res.ok ? { status: 'ready', text: await res.text() } : { status: 'none', text: null }
+          }}
+          onClose={() => setViewing(null)}
+        />
       )}
     </section>
   )

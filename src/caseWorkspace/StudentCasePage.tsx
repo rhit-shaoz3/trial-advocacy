@@ -176,6 +176,7 @@ export function StudentCasePage() {
           <CaseWorkspaceView
             workspace={data}
             downloadUrl={(id) => service.myMaterialDownloadUrl(courseId, caseId, id)}
+            loadText={(id) => service.myMaterialText(courseId, caseId, id)}
             onToggleTask={toggleTask}
             interviewHref={(id) => `/courses/${courseId}/cases/${caseId}/witnesses/${id}${workspace?.search ?? ''}`}
             instructorName={workspace?.home.course.instructorName}

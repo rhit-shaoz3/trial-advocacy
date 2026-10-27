@@ -30,6 +30,7 @@ import {
   CATEGORY_LABEL,
   FILE_CATEGORIES,
   PHASE_LABEL,
+  STUDENT_PHASE_TEXT,
   dueLabel,
   fileCategory,
   fileTypeLabel,
@@ -39,6 +40,7 @@ import {
 } from '../courses/caseLabels'
 import {
   DEFAULT_INVESTIGATOR_NAME,
+  casePhases,
   INVESTIGATOR_AVATAR_URL,
   type CaseMaterial,
   type CaseWorkspace,
@@ -52,8 +54,11 @@ import {
   type Side,
   type StudentExchange,
 } from '../courses/types'
-import { ROLE_LABEL, worldLabel } from '../courses/worldLabel'
+import { sideLabel, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
+import { FileViewer, type ViewableFile } from '../components/FileViewer'
+import { PhaseSteps } from '../components/PhaseSteps'
+import { Toast, Toasts } from '../components/Toasts'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { ExchangePanel } from './exchange/ExchangePanel'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
@@ -98,6 +103,7 @@ export function CaseWorkspaceView({
   onRespondToRequest,
   onOpenExchange,
   initialTab = 'overview',
+  loadText,
   now = new Date(),
 }: {
   workspace: CaseWorkspace
@@ -129,9 +135,15 @@ export function CaseWorkspaceView({
   onOpenExchange?(): void
   /** The tab to open on, as when a notice links straight to a report. */
   initialTab?: CaseTab
+  /** A case file's text version, for the viewer to show a document the browser can't. */
+  loadText?(materialId: string): Promise<{ status: string; text: string | null }>
   now?: Date
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
+  /** The case file open in the viewer. */
+  const [viewing, setViewing] = useState<ViewableFile | null>(null)
+  const openMaterial = (m: CaseMaterial) =>
+    setViewing({ id: m.id, title: m.description || m.filename, filename: m.filename, contentType: m.contentType, sizeBytes: m.sizeBytes })
   /** The response "See responses" opens straight to; cleared on leaving the tab. */
   const [exchangeFocus, setExchangeFocus] = useState<{ kind: ExchangeKind; id: string } | null>(null)
   useEffect(() => {
@@ -194,22 +206,33 @@ export function CaseWorkspaceView({
         </div>
       </header>
 
-      {unseen > 0 && tab !== 'reviews' && <NewResultsBanner onOpen={() => setTab('reviews')} />}
-      {investigator && unseenReports > 0 && tab !== 'investigator' && (
-        <NewReportBanner name={investigator.name} onOpen={() => setTab('investigator')} />
-      )}
-      {newResponses.length > 0 && tab !== 'exchange' && (
-        <NewResponsesBanner
-          from={newResponses[0].toTeam.number}
-          kinds={newResponses.map((r) => r.kind)}
-          onOpen={() => {
-            // Open the newest response itself, not just the tab.
-            const newest = [...newResponses].sort((a, b) => (b.respondedAt ?? '').localeCompare(a.respondedAt ?? ''))[0]
-            setExchangeFocus({ kind: newest.kind, id: newest.id })
-            setTab('exchange')
-          }}
-        />
-      )}
+      <Toasts>
+        {unseen > 0 && tab !== 'reviews' && (
+          <Toast icon={<Gavel />} title="New review results" action={{ label: 'See results', onClick: () => setTab('reviews') }} />
+        )}
+        {investigator && unseenReports > 0 && tab !== 'investigator' && (
+          <Toast
+            icon={<Search />}
+            title={`New report from ${investigator.name}`}
+            action={{ label: 'Read report', onClick: () => setTab('investigator') }}
+          />
+        )}
+        {newResponses.length > 0 && tab !== 'exchange' && (
+          <Toast
+            icon={<Inbox />}
+            title={`Team ${newResponses[0].toTeam.number} answered your ${[...new Set(newResponses.map((r) => r.kind))].map((k) => KIND_NOUN[k]).join(' and ')}`}
+            action={{
+              label: 'See answers',
+              onClick: () => {
+                // Open the newest response itself, not just the tab.
+                const newest = [...newResponses].sort((a, b) => (b.respondedAt ?? '').localeCompare(a.respondedAt ?? ''))[0]
+                setExchangeFocus({ kind: newest.kind, id: newest.id })
+                setTab('exchange')
+              },
+            }}
+          />
+        )}
+      </Toasts>
 
       <div className="cw-tabs" role="tablist" aria-label="Case sections">
         {tabs.map((t) => (
@@ -242,7 +265,7 @@ export function CaseWorkspaceView({
                     <Mail aria-hidden="true" />
                     New message from your firm
                   </h2>
-                  <TeamEmail workspace={workspace} exchange={exchange} />
+                  <TeamEmail workspace={workspace} exchange={exchange} onOpenFile={openMaterial} />
                 </section>
               )}
 
@@ -257,7 +280,7 @@ export function CaseWorkspaceView({
                     </p>
                     <ul className="cw-files">
                       <li>
-                        <MaterialLink material={initialFile} href={downloadUrl(initialFile.id)} now={now} />
+                        <MaterialLink material={initialFile} href={downloadUrl(initialFile.id)} now={now} onOpen={() => openMaterial(initialFile)} />
                       </li>
                     </ul>
                   </>
@@ -289,7 +312,7 @@ export function CaseWorkspaceView({
                   {exchange && (
                     <WorkbenchRow
                       icon={<Share2 />}
-                      tone="green"
+                      tone="purple"
                       title="Information exchange"
                       detail={
                         toRespond > 0
@@ -303,7 +326,7 @@ export function CaseWorkspaceView({
                   )}
                   <WorkbenchRow
                     icon={<ClipboardList />}
-                    tone="rose"
+                    tone="orange"
                     title="Tasks"
                     detail={tasks.length === 0 ? 'None yet' : `${openTasks.length} of ${tasks.length} open`}
                     onOpen={() => setTab('tasks')}
@@ -317,7 +340,7 @@ export function CaseWorkspaceView({
                     <Mail aria-hidden="true" />
                     Welcome email from {exchange.firm.partner || 'your senior partner'}
                   </summary>
-                  <TeamEmail workspace={workspace} exchange={exchange} />
+                  <TeamEmail workspace={workspace} exchange={exchange} onOpenFile={openMaterial} />
                 </details>
               )}
             </div>
@@ -370,6 +393,7 @@ export function CaseWorkspaceView({
                       key={r.id}
                       investigation={r}
                       downloadUrl={downloadUrl}
+                      onOpenFile={setViewing}
                       onOpen={onOpenInvestigator}
                     />
                   ))}
@@ -387,7 +411,7 @@ export function CaseWorkspaceView({
                   <ul className="cw-list">
                     {g.files.map((m) => (
                       <li key={m.id}>
-                        <MaterialLink material={m} href={downloadUrl(m.id)} now={now} row />
+                        <MaterialLink material={m} href={downloadUrl(m.id)} now={now} row onOpen={() => openMaterial(m)} />
                       </li>
                     ))}
                   </ul>
@@ -459,6 +483,7 @@ export function CaseWorkspaceView({
             teamName={team && world ? `Team ${team.number}` : null}
             investigations={investigations}
             downloadUrl={downloadUrl}
+            onOpenFile={setViewing}
             onSend={c.status === 'active' ? onSendInvestigation : undefined}
           />
         )}
@@ -484,6 +509,14 @@ export function CaseWorkspaceView({
           </ListPanel>
         )}
       </div>
+      {viewing && (
+        <FileViewer
+          file={viewing}
+          downloadUrl={downloadUrl(viewing.id)}
+          loadText={loadText && (() => loadText(viewing.id))}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   )
 }
@@ -575,56 +608,18 @@ function FactList({ title, tone, facts }: { title: string; tone: 'accepted' | 'd
   )
 }
 
-/** Shown above the tabs while the team has review results it hasn't opened. */
-function NewResultsBanner({ onOpen }: { onOpen(): void }) {
-  return (
-    <div className="ws-notice cw-new-results" role="status">
-      <Gavel aria-hidden="true" />
-      <p>
-        <strong>New review results.</strong> Your instructor ruled on facts from your interviews.
-      </p>
-      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
-        See results
-      </button>
-    </div>
-  )
-}
-
-/** Shown above the tabs while the team has an investigator report it hasn't read. */
-function NewReportBanner({ name, onOpen }: { name: string; onOpen(): void }) {
-  return (
-    <div className="ws-notice cw-new-results" role="status">
-      <Search aria-hidden="true" />
-      <p>
-        <strong>New report from {name}.</strong> Your instructor has reviewed it, and it&rsquo;s in your case file.
-      </p>
-      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
-        Read report
-      </button>
-    </div>
-  )
-}
-
 const KIND_NOUN: Record<ExchangeKind, string> = { interrogatories: 'interrogatories', rfas: 'requests for admission' }
 
-/** Shown above the tabs while the other team's responses to the team's sets are unread. */
-function NewResponsesBanner({ from, kinds, onOpen }: { from: number; kinds: ExchangeKind[]; onOpen(): void }) {
-  const what = [...new Set(kinds)].map((k) => KIND_NOUN[k]).join(' and ')
-  return (
-    <div className="ws-notice cw-new-results" role="status">
-      <Inbox aria-hidden="true" />
-      <p>
-        <strong>Team {from} responded to your {what}.</strong> Both teams can see the responses.
-      </p>
-      <button type="button" className="ws-btn ws-btn-primary" onClick={onOpen}>
-        See responses
-      </button>
-    </div>
-  )
-}
-
 /** The senior partner's welcome email, filled in from what the team's side has. */
-function TeamEmail({ workspace, exchange }: { workspace: CaseWorkspace; exchange: StudentExchange }) {
+function TeamEmail({
+  workspace,
+  exchange,
+  onOpenFile,
+}: {
+  workspace: CaseWorkspace
+  exchange: StudentExchange
+  onOpenFile(material: CaseMaterial): void
+}) {
   const { materials, witnesses, team, case: c } = workspace
   const side = exchange.side
   const starting = materials.find((m) => m.initial)
@@ -635,7 +630,11 @@ function TeamEmail({ workspace, exchange }: { workspace: CaseWorkspace; exchange
       side={side}
       recipients={(team?.members ?? []).map(displayName)}
       startingFile={starting ? `the ${starting.description || starting.filename}` : null}
-      documents={materials.filter((m) => !m.initial).map((m) => m.description || m.filename)}
+      documents={materials.filter((m) => !m.initial).map((m) => ({ id: m.id, title: m.description || m.filename }))}
+      onOpenDocument={(id) => {
+        const file = materials.find((m) => m.id === id)
+        if (file) onOpenFile(file)
+      }}
       witnesses={witnesses
         .filter((w) => !w.disclosed && (w.side === side || (w.side === null && w.audience === side)))
         .map((w) => (w.role ? `${w.name}, ${w.role.charAt(0).toLowerCase()}${w.role.slice(1)}` : w.name))}
@@ -659,8 +658,8 @@ function caseFileSummary(groups: { category: FileCategory; files: unknown[] }[])
 }
 
 /** "Role: Defendant · Team 2", or where the student is in getting assigned. */
-function assignmentLine({ team, world, side, preview }: CaseWorkspace) {
-  if (world) return `Role: ${ROLE_LABEL[world.side]} · Team ${team!.number}`
+function assignmentLine({ team, world, side, preview, case: c }: CaseWorkspace) {
+  if (world) return `Role: ${sideLabel(world.side, c.parties)} · Team ${team!.number}`
   if (team) return `Team ${team.number} · Case world not assigned yet`
   if (preview && side) return `Previewing as any ${side} team`
   return 'Not on a team yet'
@@ -677,75 +676,71 @@ function StatusPill({ status }: { status: CaseWorkspace['case']['status'] }) {
   )
 }
 
+/**
+ * The navy box at the top of the Overview: the case's current phase, what a
+ * team does in it, and where it sits among the case's phases.
+ */
 function ProgressBanner({ workspace }: { workspace: CaseWorkspace }) {
-  const { case: c, tasks } = workspace
-  const done = tasks.filter((t) => t.completedAt).length
-  const percent = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100)
-  const heading =
-    c.status === 'draft' ? 'Not launched yet' : c.status === 'closed' ? 'Case closed' : 'Case in progress'
+  const { case: c } = workspace
+  // Cases from before the investigator setting have him; null means this case has none.
+  const phases = casePhases(workspace.investigator !== null, workspace.exchangeReady ?? false)
+  const heading = c.status === 'draft' ? 'Not launched yet' : c.status === 'closed' ? 'Case closed' : PHASE_LABEL[c.phase]
   const text =
     c.status === 'draft'
       ? 'Students see this once the instructor launches the case worlds.'
       : c.status === 'closed'
         ? 'This case is finished. Its material stays here for reference.'
-        : 'Start with the case background, review the witnesses, and work through the tasks with your partner.'
+        : STUDENT_PHASE_TEXT[c.phase]
   return (
-    <section className="cw-banner" aria-label="Case progress">
-      <span className="cw-banner-eyebrow">Current phase</span>
+    <section className="cw-banner" aria-label="Current phase">
+      <span className="cw-banner-eyebrow">{c.status === 'active' ? 'Current phase' : 'Case status'}</span>
       <h2>{heading}</h2>
       <p>{text}</p>
-      <div className="cw-banner-progress">
-        <span>Overall progress</span>
-        <strong>{percent}%</strong>
-      </div>
-      <div
-        className="cw-banner-bar"
-        role="progressbar"
-        aria-label="Tasks complete"
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <span style={{ width: `${percent}%` }} />
-      </div>
-      <small>{tasks.length === 0 ? 'No tasks assigned yet' : `${done} of ${tasks.length} tasks complete`}</small>
+      {c.status === 'active' && <PhaseSteps phase={c.phase} phases={phases} onBrand />}
     </section>
   )
 }
 
+/** A case file: click to open it in the viewer; the icon at the end downloads it. */
 function MaterialLink({
   material: m,
   href,
   now,
   row = false,
+  onOpen,
 }: {
   material: CaseMaterial
   href: string
   now: Date
   row?: boolean
+  onOpen(): void
 }) {
   const Icon = CATEGORY_ICON[fileCategory(m.contentType)]
   return (
-    <a href={href} download className={row ? 'cw-row cw-row-link' : 'cw-file'}>
-      <span className="ws-icon-tile ws-icon-tile-sm ws-tone-blue" aria-hidden="true">
-        <Icon />
-      </span>
-      <span className="cw-row-body">
-        <strong>{m.filename}</strong>
-        <small>
-          {fileTypeLabel(m.contentType)} · Added {shortDate(m.uploadedAt, now)} · {formatSize(m.sizeBytes)}
-        </small>
-        {m.description && <span className="cw-row-desc">{m.description}</span>}
-      </span>
-      {m.initial && row && <span className="cw-badge">Start here</span>}
-      {m.audience !== 'all' && (
-        <span className="cw-badge">
-          {/* A team only sees an instructors-only file when it's been shared with them. */}
-          {m.audience === 'instructor' ? 'Shared with your team' : AUDIENCE_LABEL[m.audience]}
+    <div className={row ? 'cw-row cw-row-link cw-file-row' : 'cw-file cw-file-row'}>
+      <button type="button" className="cw-file-open" onClick={onOpen} title={`Open ${m.filename} in the viewer`}>
+        <span className="ws-icon-tile ws-icon-tile-sm ws-tone-blue" aria-hidden="true">
+          <Icon />
         </span>
-      )}
-      <Download className="cw-row-end" aria-hidden="true" />
-    </a>
+        <span className="cw-row-body">
+          <strong>{m.filename}</strong>
+          <small>
+            {fileTypeLabel(m.contentType)} · Added {shortDate(m.uploadedAt, now)} · {formatSize(m.sizeBytes)}
+          </small>
+          {m.description && <span className="cw-row-desc">{m.description}</span>}
+        </span>
+        {m.initial && row && <span className="cw-badge">Start here</span>}
+        {m.audience !== 'all' && (
+          <span className="cw-badge">
+            {/* A team only sees an instructors-only file when it's been shared with them. */}
+            {m.audience === 'instructor' ? 'Shared with your team' : AUDIENCE_LABEL[m.audience]}
+          </span>
+        )}
+      </button>
+      <a href={href} download className="cw-file-download" aria-label={`Download ${m.filename}`} title="Download">
+        <Download aria-hidden="true" />
+      </a>
+    </div>
   )
 }
 
@@ -934,7 +929,7 @@ function NextTask({
 }
 
 /** The student's own team and side, and (once matched) the opposing team in their case world. */
-function CaseTeam({ workspace: { team, world } }: { workspace: CaseWorkspace }) {
+function CaseTeam({ workspace: { team, world, case: c } }: { workspace: CaseWorkspace }) {
   return (
     <section className="cw-card" aria-labelledby="cw-team">
       <h2 id="cw-team" className="cw-card-title">
@@ -944,7 +939,7 @@ function CaseTeam({ workspace: { team, world } }: { workspace: CaseWorkspace }) 
         {!team
           ? 'Not on a team yet.'
           : world
-            ? `${ROLE_LABEL[world.side]} · Team ${team.number}`
+            ? `${sideLabel(world.side, c.parties)} · Team ${team.number}`
             : `Team ${team.number} · Waiting for a case world`}
       </p>
       {team && <People members={team.members} role={world ? COUNSEL[world.side] : 'Teammate'} />}
@@ -957,7 +952,7 @@ function CaseTeam({ workspace: { team, world } }: { workspace: CaseWorkspace }) 
           {world ? (
             <>
               <p className="cw-section-sub">
-                {ROLE_LABEL[other(world.side)]} · Team {world.opponents.number}
+                {sideLabel(other(world.side), c.parties)} · Team {world.opponents.number}
               </p>
               <People members={world.opponents.members} role={COUNSEL[other(world.side)]} />
             </>

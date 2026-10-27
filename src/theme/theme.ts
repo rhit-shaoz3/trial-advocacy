@@ -9,7 +9,7 @@
 
 export type Mode = 'light' | 'dark'
 
-export const PALETTES = ['navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast'] as const
+export const PALETTES = ['navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast', 'radioactive'] as const
 export type Palette = (typeof PALETTES)[number]
 
 const MODE_KEY = 'theme'

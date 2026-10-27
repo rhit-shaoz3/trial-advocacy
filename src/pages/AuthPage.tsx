@@ -1,7 +1,8 @@
-import { ArrowRight, CircleCheck, Eye, EyeOff, Gavel, GraduationCap, Mail, MessagesSquare, Scale, Users } from 'lucide-react'
+import { ArrowRight, CircleCheck, Eye, EyeOff, Gavel, GraduationCap, Mail, MessagesSquare, Users } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/useAuth'
 import type { Role } from '../auth/types'
+import { BrandIcon } from '../components/BrandIcon'
 import { ThemeToggle } from '../theme/ThemeToggle'
 import './AuthPage.css'
 
@@ -16,7 +17,7 @@ const ROLE_OPTIONS: { role: Role; title: string; desc: string; Icon: typeof User
 
 const HIGHLIGHTS = [
   { Icon: MessagesSquare, tone: 'blue', text: 'Interview AI witnesses who answer like real ones' },
-  { Icon: Users, tone: 'green', text: 'Prepare with your team, against another' },
+  { Icon: Users, tone: 'purple', text: 'Prepare with your team, against another' },
   { Icon: Gavel, tone: 'amber', text: 'Instructors rule on every new fact' },
 ] as const
 
@@ -74,11 +75,9 @@ export function AuthPage() {
     <div className="auth">
       <aside className="auth-panel">
         <div className="auth-brand">
-          <span className="auth-brand-icon">
-            <Scale aria-hidden="true" />
-          </span>
+          <BrandIcon className="auth-brand-icon" />
           <span>
-            <strong>Trial Advocacy</strong>
+            <strong>Getting to Trial</strong>
             <small>Pre-trial litigation simulator</small>
           </span>
         </div>
@@ -107,7 +106,7 @@ export function AuthPage() {
           </figure>
         </div>
 
-        <p className="auth-footer">© 2026 Trial Advocacy · Learning through practice</p>
+        <p className="auth-footer">© 2026 Getting to Trial · Learning through practice</p>
       </aside>
 
       <main className="auth-main">
@@ -116,7 +115,7 @@ export function AuthPage() {
         </div>
 
         <div className="auth-form-wrap">
-          <p className="auth-eyebrow">Welcome to Trial Advocacy</p>
+          <p className="auth-eyebrow">Welcome to Getting to Trial</p>
           <h1 className="auth-title">{isSignUp ? 'Create your account.' : 'Welcome back.'}</h1>
           <p className="auth-subtitle">
             {isSignUp

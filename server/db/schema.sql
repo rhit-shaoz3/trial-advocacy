@@ -19,7 +19,7 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_theme_check;
 UPDATE users SET theme = CASE theme WHEN 'stone' THEN 'earth' WHEN 'vivid' THEN 'contrast' ELSE theme END
   WHERE theme IN ('stone', 'vivid');
 ALTER TABLE users ADD CONSTRAINT users_theme_check
-  CHECK (theme IN ('navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast'));
+  CHECK (theme IN ('navy', 'slate', 'earth', 'vibrant', 'forest', 'lagoon', 'contrast', 'radioactive'));
 
 -- The user's profile picture in file storage (avatars/<userId>/<uuid>), or
 -- null to show their initials.
@@ -364,6 +364,15 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_enabled boolean NOT NULL
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_name text NOT NULL DEFAULT 'John Hastings';
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_instructions text NOT NULL DEFAULT '';
 
+-- The parties, as the instructor names them ("Paige Winston", "Thrillville Parks"); students see
+-- their side as "Paige Winston (Plaintiff)". Cases from before are named from an "X v. Y" title.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS plaintiff_name text NOT NULL DEFAULT '';
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS defendant_name text NOT NULL DEFAULT '';
+UPDATE cases
+   SET plaintiff_name = trim(substring(title from '^(.*?)\s+[vV]\.?\s+')),
+       defendant_name = trim(regexp_replace(title, '^.*?\s+[vV]\.?\s+', ''))
+ WHERE plaintiff_name = '' AND defendant_name = '' AND title ~ '\s[vV]\.?\s';
+
 -- Reviews also cover a team's investigator requests (kind 'investigation'):
 -- the assignment the team emailed, the investigator's report, and the clean
 -- report the team gets once the instructor has ruled. 'finalizing' is the AI
@@ -540,3 +549,33 @@ CREATE TABLE IF NOT EXISTS session (
 );
 
 CREATE INDEX IF NOT EXISTS session_expire_idx ON session (expire);
+
+-- The course calendar's own events (tasks show up on their due dates too).
+-- case: a date the instructor marks for a case, for everyone in it.
+-- personal: one user's own reminder. team: shared with one team's members.
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id  uuid        NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+  kind       text        NOT NULL CHECK (kind IN ('case', 'personal', 'team')),
+  case_id    uuid        REFERENCES cases (id) ON DELETE CASCADE,
+  team_id    uuid        REFERENCES teams (id) ON DELETE CASCADE,
+  title      text        NOT NULL,
+  notes      text        NOT NULL DEFAULT '',
+  on_date    date        NOT NULL,
+  created_by uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (kind <> 'case' OR (case_id IS NOT NULL AND team_id IS NULL)),
+  CHECK (kind <> 'team' OR team_id IS NOT NULL),
+  CHECK (kind <> 'personal' OR (case_id IS NULL AND team_id IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS calendar_events_course_idx ON calendar_events (course_id, on_date);
+
+-- The AI's suggested witnesses, read from the initial file once the parties are
+-- named. `key` is what they were made from (initial file and party names), so
+-- they're made again if that changes. Offered once: when the instructor adds
+-- some or skips them, `done_at` is set and they're never shown again.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions jsonb;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_key text;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_status text;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_done_at timestamptz;

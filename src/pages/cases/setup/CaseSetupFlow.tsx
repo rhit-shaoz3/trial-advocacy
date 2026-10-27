@@ -11,6 +11,9 @@ import { cleanFacts, toRows } from '../factRows'
 import { ImportantFactsField } from '../ImportantFactsField'
 import { TeamsSection } from '../TeamsSection'
 import './CaseSetupFlow.css'
+import { PartyFields } from '../CaseForm'
+import { titleParties } from '../../../courses/worldLabel'
+import { DictationTextarea } from '../../../components/Dictation'
 
 const STEP_LABEL: Record<SetupStep, string> = {
   details: 'Details',
@@ -154,11 +157,22 @@ export function CaseSetupFlow({
             courseCase={courseCase}
             busy={busy}
             error={error}
-            onNext={(title, summary) =>
+            onNext={(title, summary, plaintiffName, defendantName) =>
               advance(async () => {
-                if (!courseCase) return service.createCase(courseId, { title, summary })
-                if (title === courseCase.title && summary === courseCase.summary) return courseCase
-                return service.updateCase(courseId, courseCase.id, { title, summary, status: courseCase.status })
+                if (!courseCase) return service.createCase(courseId, { title, summary, plaintiffName, defendantName })
+                const same =
+                  title === courseCase.title &&
+                  summary === courseCase.summary &&
+                  plaintiffName === courseCase.parties?.plaintiff &&
+                  defendantName === courseCase.parties?.defendant
+                if (same) return courseCase
+                return service.updateCase(courseId, courseCase.id, {
+                  title,
+                  summary,
+                  status: courseCase.status,
+                  plaintiffName,
+                  defendantName,
+                })
               })
             }
           />
@@ -235,15 +249,27 @@ function DetailsStep({
   courseCase: CourseCase | null
   busy: boolean
   error: string | null
-  onNext(title: string, summary: string): void
+  onNext(title: string, summary: string, plaintiffName: string, defendantName: string): void
 }) {
   const [title, setTitle] = useState(courseCase?.title ?? '')
   const [summary, setSummary] = useState(courseCase?.summary ?? '')
-  const ready = title.trim() !== '' && summary.trim() !== ''
+  const [plaintiff, setPlaintiff] = useState(courseCase?.parties?.plaintiff ?? '')
+  const [defendant, setDefendant] = useState(courseCase?.parties?.defendant ?? '')
+  /** Whether the instructor has typed a party name (until then, an "X v. Y" title fills them in). */
+  const [partiesTouched, setPartiesTouched] = useState(Boolean(courseCase?.parties?.plaintiff))
+  const ready = title.trim() !== '' && summary.trim() !== '' && plaintiff.trim() !== '' && defendant.trim() !== ''
+
+  function changeTitle(value: string) {
+    setTitle(value)
+    if (partiesTouched) return
+    const named = titleParties(value)
+    setPlaintiff(named.plaintiff)
+    setDefendant(named.defendant)
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (ready) onNext(title.trim(), summary.trim())
+    if (ready) onNext(title.trim(), summary.trim(), plaintiff.trim(), defendant.trim())
   }
 
   return (
@@ -253,16 +279,29 @@ function DetailsStep({
         <input
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => changeTitle(e.target.value)}
           placeholder="Rivera v. Thrill Park"
           maxLength={120}
           required
           autoFocus
         />
       </label>
+      <PartyFields
+        plaintiff={plaintiff}
+        defendant={defendant}
+        onPlaintiff={(v) => {
+          setPartiesTouched(true)
+          setPlaintiff(v)
+        }}
+        onDefendant={(v) => {
+          setPartiesTouched(true)
+          setDefendant(v)
+        }}
+      />
+      <p className="muted field-hint">Students see their side by these names, for example &ldquo;Paige Winston (Plaintiff)&rdquo;.</p>
       <label>
         Description
-        <textarea
+        <DictationTextarea
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
           placeholder="A rollercoaster stopped mid-loop and a rider was hurt. Was the park negligent?"

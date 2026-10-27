@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, CheckCheck, CircleHelp, Eye, Pencil } from 'lucide-react'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { shortDate } from '../../../courses/caseLabels'
@@ -29,11 +29,14 @@ export function ExchangeTab({
   courseId,
   courseCase,
   onEdit,
+  summary,
   now = new Date(),
 }: {
   courseId: string
   courseCase: CourseCase
   onEdit(step: ExchangeStep): void
+  /** Below the exchanges, in the same column: the exchange card, once its phase is over. */
+  summary?: ReactNode
   now?: Date
 }) {
   const service = useCourseService()
@@ -60,111 +63,114 @@ export function ExchangeTab({
 
   return (
     <div className="exchange-tab">
-      <section className="course-section" aria-labelledby="exchanges-heading">
-        <div className="section-header">
-          <div>
-            <span className="ws-eyebrow">Read only</span>
-            <h2 id="exchanges-heading">Exchanges</h2>
+      <div className="exchange-tab-main">
+        <section className="course-section" aria-labelledby="exchanges-heading">
+          <div className="section-header">
+            <div>
+              <span className="ws-eyebrow">Read only</span>
+              <h2 id="exchanges-heading">Exchanges</h2>
+            </div>
+            {worlds.length > 1 && (
+              <label className="exchange-world-select">
+                <select
+                  aria-label="Case world"
+                  value={world}
+                  onChange={(e) => setWorld(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                >
+                  <option value="all">Every case world</option>
+                  {worlds.map((n) => (
+                    <option key={n} value={n}>
+                      Case world {worldLabel(n)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
-          {worlds.length > 1 && (
-            <label className="exchange-world-select">
-              <select
-                aria-label="Case world"
-                value={world}
-                onChange={(e) => setWorld(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-              >
-                <option value="all">Every case world</option>
-                {worlds.map((n) => (
-                  <option key={n} value={n}>
-                    Case world {worldLabel(n)}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="exchange-filters" role="group" aria-label="Show">
+            {(['all', 'interrogatories', 'rfas'] as const).map((k) => (
+              <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>
+                {k === 'all' ? 'All' : KIND_LABEL[k]}
+              </button>
+            ))}
+          </div>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
           )}
-        </div>
-        <div className="exchange-filters" role="group" aria-label="Show">
-          {(['all', 'interrogatories', 'rfas'] as const).map((k) => (
-            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>
-              {k === 'all' ? 'All' : KIND_LABEL[k]}
-            </button>
-          ))}
-        </div>
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        {!requests ? (
-          !error && <p className="muted">Loading…</p>
-        ) : shown.length === 0 ? (
-          <p className="muted">
-            {courseCase.phase === 'introduction'
-              ? 'Teams can send requests once you move the case to information exchange.'
-              : 'No requests yet.'}
-          </p>
-        ) : (
-          <ul className="exchange-sets">
-            {shown.map((r) => {
-              const s = status(r, now)
-              const Icon = r.kind === 'interrogatories' ? CircleHelp : CheckCheck
-              const noun = r.kind === 'interrogatories' ? 'question' : 'request'
-              return (
-                <li key={r.id}>
-                  <details className="exchange-set">
-                    <summary>
-                      <span className={`ws-icon-tile ws-icon-tile-sm ${r.kind === 'interrogatories' ? 'ws-tone-blue' : 'ws-tone-amber'}`} aria-hidden="true">
-                        <Icon />
-                      </span>
-                      <span>
-                        <strong>
-                          {KIND_LABEL[r.kind]} · Case world {worldLabel(r.worldNumber)}
-                        </strong>
-                        <small>
-                          Team {r.fromTeam.number} ({SIDE_LABEL[r.fromTeam.side]}) <ArrowRight aria-label="to" className="exchange-inline-icon" /> Team{' '}
-                          {r.toTeam.number} ({SIDE_LABEL[r.toTeam.side]}) · {r.items.length} {noun}
-                          {r.items.length === 1 ? '' : 's'} ·{' '}
-                          {r.respondedAt ? `answered ${shortDate(r.respondedAt, now)}` : `due ${shortDate(r.dueAt, now)}`}
-                        </small>
-                      </span>
-                      <span className={`exchange-badge exchange-badge-${s.tone}`}>{s.label}</span>
-                    </summary>
-                    <ol className="exchange-set-items">
-                      {r.items.map((item) => (
-                        <li key={item.position}>
+          {!requests ? (
+            !error && <p className="muted">Loading…</p>
+          ) : shown.length === 0 ? (
+            <p className="muted">
+              {courseCase.phase === 'introduction'
+                ? 'Teams can send requests once you move the case to information exchange.'
+                : 'No requests yet.'}
+            </p>
+          ) : (
+            <ul className="exchange-sets">
+              {shown.map((r) => {
+                const s = status(r, now)
+                const Icon = r.kind === 'interrogatories' ? CircleHelp : CheckCheck
+                const noun = r.kind === 'interrogatories' ? 'question' : 'request'
+                return (
+                  <li key={r.id}>
+                    <details className="exchange-set">
+                      <summary>
+                        <span className={`ws-icon-tile ws-icon-tile-sm ${r.kind === 'interrogatories' ? 'ws-tone-blue' : 'ws-tone-amber'}`} aria-hidden="true">
+                          <Icon />
+                        </span>
+                        <span>
                           <strong>
-                            {item.position}. {item.text}
+                            {KIND_LABEL[r.kind]} · Case world {worldLabel(r.worldNumber)}
                           </strong>
-                          {r.respondedAt ? (
-                            r.kind === 'interrogatories' ? (
-                              <p>
-                                {item.objection && <span className="exchange-badge exchange-badge-objection">Objection</span>} {item.answer}
-                              </p>
+                          <small>
+                            Team {r.fromTeam.number} ({SIDE_LABEL[r.fromTeam.side]}) <ArrowRight aria-label="to" className="exchange-inline-icon" /> Team{' '}
+                            {r.toTeam.number} ({SIDE_LABEL[r.toTeam.side]}) · {r.items.length} {noun}
+                            {r.items.length === 1 ? '' : 's'} ·{' '}
+                            {r.respondedAt ? `answered ${shortDate(r.respondedAt, now)}` : `due ${shortDate(r.dueAt, now)}`}
+                          </small>
+                        </span>
+                        <span className={`exchange-badge exchange-badge-${s.tone}`}>{s.label}</span>
+                      </summary>
+                      <ol className="exchange-set-items">
+                        {r.items.map((item) => (
+                          <li key={item.position}>
+                            <strong>
+                              {item.position}. {item.text}
+                            </strong>
+                            {r.respondedAt ? (
+                              r.kind === 'interrogatories' ? (
+                                <p>
+                                  {item.objection && <span className="exchange-badge exchange-badge-objection">Objection</span>} {item.answer}
+                                </p>
+                              ) : (
+                                <p>
+                                  <span className="exchange-badge exchange-badge-answered">{ADMISSION[item.admission!]}</span>{' '}
+                                  {item.admission === 'partial'
+                                    ? `Agree: ${item.agreePart} Disagree: ${item.disagreePart}`
+                                    : item.answer}
+                                </p>
+                              )
                             ) : (
-                              <p>
-                                <span className="exchange-badge exchange-badge-answered">{ADMISSION[item.admission!]}</span>{' '}
-                                {item.admission === 'partial'
-                                  ? `Agree: ${item.agreePart} Disagree: ${item.disagreePart}`
-                                  : item.answer}
-                              </p>
-                            )
-                          ) : (
-                            <p className="muted">No response yet.</p>
-                          )}
-                        </li>
-                      ))}
-                    </ol>
-                  </details>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-        <p className="muted exchange-note">
-          <Eye aria-hidden="true" className="exchange-inline-icon" /> Only you can see this view. Students aren&rsquo;t told
-          when you look, and nothing here goes to the Review page.
-        </p>
-      </section>
+                              <p className="muted">No response yet.</p>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    </details>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <p className="muted exchange-note">
+            <Eye aria-hidden="true" className="exchange-inline-icon" /> Only you can see this view. Students aren&rsquo;t told
+            when you look, and nothing here goes to the Review page.
+          </p>
+        </section>
+        {summary}
+      </div>
 
       <section className="course-section exchange-settings-card" aria-labelledby="exchange-settings-heading">
         <div className="section-header">

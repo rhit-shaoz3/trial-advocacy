@@ -251,6 +251,14 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${casePath(courseId, caseId)}/witnesses`)).witnesses
   },
 
+  async getWitnessSuggestions(courseId, caseId) {
+    return apiRequest(`${casePath(courseId, caseId)}/witness-suggestions`)
+  },
+
+  async finishWitnessSuggestions(courseId, caseId) {
+    await apiRequest(`${casePath(courseId, caseId)}/witness-suggestions/done`, { method: 'POST' })
+  },
+
   async createWitness(courseId, caseId, input) {
     const body = await apiRequest(`${casePath(courseId, caseId)}/witnesses`, {
       method: 'POST',
@@ -362,6 +370,28 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${coursePath(courseId)}/my-cases`)).cases
   },
 
+  async getCalendar(courseId) {
+    return (await apiRequest(`${coursePath(courseId)}/calendar`)).items
+  },
+
+  async createCalendarEvent(courseId, input) {
+    const body = await apiRequest(`${coursePath(courseId)}/calendar/events`, { method: 'POST', body: JSON.stringify(input) })
+    return body.items
+  },
+
+  async updateCalendarEvent(courseId, eventId, input) {
+    const body = await apiRequest(`${coursePath(courseId)}/calendar/events/${encodeURIComponent(eventId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+    return body.items
+  },
+
+  async deleteCalendarEvent(courseId, eventId) {
+    const body = await apiRequest(`${coursePath(courseId)}/calendar/events/${encodeURIComponent(eventId)}`, { method: 'DELETE' })
+    return body.items
+  },
+
   async getMyCaseWorkspace(courseId, caseId) {
     return (await apiRequest(myCasePath(courseId, caseId))).workspace
   },
@@ -378,14 +408,18 @@ export const httpCourseService: CourseService = {
     return `/api${myCasePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/file`
   },
 
+  async myMaterialText(courseId, caseId, materialId) {
+    return apiRequest(`${myCasePath(courseId, caseId)}/materials/${encodeURIComponent(materialId)}/text`)
+  },
+
   async getInterview(courseId, caseId, witnessId, as) {
     return (await apiRequest(interviewPath(courseId, caseId, witnessId, as))).interview
   },
 
-  async askWitness(courseId, caseId, witnessId, as, question) {
+  async askWitness(courseId, caseId, witnessId, as, question, exhibitIds = []) {
     const body = await apiRequest(interviewPath(courseId, caseId, witnessId, as, '/questions'), {
       method: 'POST',
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, exhibitIds }),
     })
     return body.interview
   },
@@ -441,6 +475,14 @@ export const httpCourseService: CourseService = {
 
   async getExchangeOverview(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/exchange/overview`)).overview
+  },
+
+  async getInvestigatorOverview(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/investigator/overview`)).overview
+  },
+
+  async getDepositionOverview(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/depositions/overview`)).overview
   },
 
   async listExchangeRequests(courseId, caseId) {

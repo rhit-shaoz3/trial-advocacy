@@ -2,9 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Trial Advocacy</title>
+    <title>Getting to Trial</title>
     <script>
       // Pick light/dark and the colour theme before the page draws, so it never
       // flashes the wrong one. Keep in sync with src/theme/theme.ts: light/dark
@@ -19,7 +21,7 @@
       }
       try {
         var palette = localStorage.getItem('palette')
-        if (/^(navy|slate|earth|vibrant|forest|lagoon|contrast)$/.test(palette || '')) document.documentElement.dataset.palette = palette
+        if (/^(navy|slate|earth|vibrant|forest|lagoon|contrast|radioactive)$/.test(palette || '')) document.documentElement.dataset.palette = palette
       } catch (e) {}
     </script>
     <!-- Fonts for the course workspace (src/workspace). -->

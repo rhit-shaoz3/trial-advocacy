@@ -579,3 +579,8 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions jsonb;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_key text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_status text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_done_at timestamptz;
+
+-- Word documents (.docx) weren't read before; read the ones marked as having no text again.
+UPDATE case_materials SET text_status = 'pending', text_error = NULL
+ WHERE text_status = 'none'
+   AND content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';

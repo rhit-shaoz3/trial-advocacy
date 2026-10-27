@@ -1,8 +1,10 @@
 import type request from 'supertest'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { ai } from '../ai/ai.ts'
+import { transcribeFile } from '../ai/transcribe.ts'
 import { transcriptionsSettled } from '../courses/materialText.ts'
 import { pool } from '../db/pool.ts'
+import { docxOf } from '../test/docx.ts'
 import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 import type { SuggestInput } from './suggest.ts'
 import { witnessSuggestionsSettled } from './suggestions.ts'
@@ -60,6 +62,33 @@ describe('suggested witnesses', () => {
     const ready = await suggestions()
     expect(ready.status).toBe('ready')
     expect(ready.suggestions.map((s: { name: string }) => s.name)).toEqual(['Paige Winston', 'Elena Torres'])
+  })
+
+  it('reads a Word document complaint', async () => {
+    // Word documents are read locally, so the real reader runs (no client is used).
+    ai.transcribe = (file) => transcribeFile(null as never, file)
+    let asked: SuggestInput | undefined
+    ai.suggestWitnesses = async (input) => {
+      asked = input
+      return [{ name: 'Elena Torres', role: 'Ride operator', description: '', alignedSide: 'defense' }]
+    }
+    const file = (await uploadCaseFile(prof, caseUrl(), 'Complaint.docx', { audience: 'all' }, docxOf(complaint))).body.material
+    await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: file.id })
+    await transcriptionsSettled()
+    await suggestions()
+    await witnessSuggestionsSettled()
+    expect(asked?.complaint).toBe(complaint)
+    expect((await suggestions()).suggestions.map((s: { name: string }) => s.name)).toEqual(['Elena Torres'])
+  })
+
+  it("says so when the initial file can't be read", async () => {
+    ai.transcribe = (file) => transcribeFile(null as never, file)
+    const file = (await uploadCaseFile(prof, caseUrl(), 'Complaint.docx', { audience: 'all' }, Buffer.from('not a docx'))).body.material
+    await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: file.id })
+    await transcriptionsSettled()
+    const failed = await suggestions()
+    expect(failed.status).toBe('failed')
+    expect(failed.error).toMatch(/couldn't be read/)
   })
 
   it('is offered once: after adding some or skipping, they never come back', async () => {

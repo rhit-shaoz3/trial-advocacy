@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { DOCX_TYPE, docxText } from './docx.ts'
 import { modelFor } from './models.ts'
 
 /** Largest file sent to Claude inline (base64 grows it by a third; requests cap at 32 MB). */
@@ -40,11 +41,17 @@ export function buildTranscribeRequest(
 }
 
 /**
- * Text files are used as they are; PDFs and images are transcribed by Claude.
- * Audio and video aren't supported yet (returns null: nothing to read).
+ * Text files are used as they are, and Word documents (.docx) are read on the
+ * server; PDFs and images are transcribed by Claude. Audio and video aren't
+ * supported yet (returns null: nothing to read).
  */
 export async function transcribeFile(client: Anthropic, file: FileToTranscribe): Promise<string | null> {
   if (file.contentType.startsWith('text/')) return file.data.toString('utf8').trim()
+  if (file.contentType === DOCX_TYPE) {
+    const text = docxText(file.data)
+    if (!text) throw new TranscriptionError('No text could be read from this Word document. Save it as a PDF and upload that instead.')
+    return text
+  }
 
   let source: Anthropic.Messages.ContentBlockParam
   if (file.contentType === 'application/pdf') {

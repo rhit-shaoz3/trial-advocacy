@@ -1,4 +1,5 @@
 import { ai, AiNotConfiguredError } from '../ai/ai.ts'
+import { transcribeMaterial } from '../courses/materialText.ts'
 import { pool } from '../db/pool.ts'
 import type { WitnessSuggestion } from './suggest.ts'
 
@@ -49,8 +50,14 @@ export async function witnessSuggestions(caseId: string): Promise<SuggestionsSta
   if (!c || c.doneAt) return { status: 'done' }
   if (!c.fileId) return { status: 'waiting', reason: 'no-file' }
   if (!c.plaintiff || !c.defendant) return { status: 'waiting', reason: 'no-parties' }
-  if (c.textStatus === 'pending') return { status: 'waiting', reason: 'reading' }
-  if (c.textStatus !== 'ready' || !c.text) return { status: 'failed', error: "The initial file couldn't be read." }
+  if (c.textStatus === 'pending') {
+    // Read it now if nothing is (after a restart, or a file queued to be read again); joins a run already going.
+    void transcribeMaterial(c.fileId)
+    return { status: 'waiting', reason: 'reading' }
+  }
+  if (c.textStatus !== 'ready' || !c.text) {
+    return { status: 'failed', error: "The starting file's text couldn't be read, so no witnesses could be suggested from it." }
+  }
 
   const key = `${c.fileId}|${c.plaintiff}|${c.defendant}`
   if (c.key === key && c.status === 'ready') return { status: 'ready', suggestions: await withoutCurrent(caseId, c.stored ?? []) }

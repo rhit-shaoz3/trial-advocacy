@@ -533,7 +533,14 @@ function SuggestedWitnesses({
     }
   }, [service, courseId, caseId])
 
-  if (!state || state.status === 'done' || state.status === 'failed') return null
+  if (!state || state.status === 'done') return null
+  if (state.status === 'failed') {
+    return (
+      <p className="muted suggest-note" role="status">
+        {state.error} Upload the complaint as a PDF or Word document and make it the starting file to try again.
+      </p>
+    )
+  }
   if (state.status === 'waiting') {
     if (hasWitnesses && (state.reason === 'no-file' || state.reason === 'no-parties')) return null
     return (

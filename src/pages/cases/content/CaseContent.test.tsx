@@ -363,6 +363,13 @@ describe('WitnessesSection', () => {
     expect(screen.queryByText('Likely witnesses from the complaint')).not.toBeInTheDocument()
   })
 
+  it("says why when the complaint couldn't be read", async () => {
+    renderSection({
+      getWitnessSuggestions: vi.fn().mockResolvedValue({ status: 'failed', error: "The starting file's text couldn't be read." }),
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent(/couldn't be read\. Upload the complaint as a PDF or Word document/)
+  })
+
   it('adds, edits, and removes witnesses', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const elena = { id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: '', audience: 'all' as const, ...blankAi }

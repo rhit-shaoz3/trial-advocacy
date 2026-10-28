@@ -590,6 +590,9 @@ export interface ExchangeOverview {
     /** Sets the other team hasn't responded to yet, and how many of those are past due. */
     waiting: number
     overdue: number
+    /** Subpoenas served across the class, and how many still need the instructor's answer. */
+    subpoenasServed: number
+    subpoenasWaiting: number
   }
   /** What the move to information exchange shares: the disclosed files and witnesses, by name. */
   disclosed: { materials: string[]; witnesses: string[] }
@@ -615,7 +618,9 @@ export async function exchangeOverview(caseId: string): Promise<ExchangeOverview
        count(DISTINCT r.from_team_id) FILTER (WHERE r.kind = 'interrogatories')::int AS "teamsSentInterrogatories",
        count(DISTINCT r.from_team_id) FILTER (WHERE r.kind = 'rfas')::int AS "teamsSentRfas",
        count(DISTINCT r.id) FILTER (WHERE r.responded_at IS NULL)::int AS waiting,
-       count(DISTINCT r.id) FILTER (WHERE r.responded_at IS NULL AND r.due_at < now())::int AS overdue
+       count(DISTINCT r.id) FILTER (WHERE r.responded_at IS NULL AND r.due_at < now())::int AS overdue,
+       (SELECT count(*)::int FROM subpoenas WHERE case_id = $1) AS "subpoenasServed",
+       (SELECT count(*)::int FROM subpoenas WHERE case_id = $1 AND responded_at IS NULL) AS "subpoenasWaiting"
      FROM exchange_requests r JOIN exchange_items i ON i.request_id = r.id
      WHERE r.case_id = $1`,
     [caseId],

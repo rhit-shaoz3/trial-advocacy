@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowRight, Check, ChevronLeft, FileText, Minus, Pencil, Plus } from 'lucide-react'
+import { ArrowRight, Check, ChevronLeft, FileText, Minus, Pencil, Plus, TriangleAlert } from 'lucide-react'
 import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import type {
@@ -436,7 +436,10 @@ function PartForm({ part, value, onChange }: { part: Part; value: PartSettings; 
         />
       </SettingRow>
       {part === 'subpoenas' && (
-        <p className="muted exchange-note">Students don&rsquo;t send subpoenas yet; these settings are kept for when they do.</p>
+        <p className="muted exchange-note">
+          Teams serve subpoenas on people and organizations from the information exchange phase on. You answer each one
+          on the Review page, as its recipient: produce case files, or quash it.
+        </p>
       )}
     </div>
   )
@@ -554,8 +557,39 @@ function ReviewStep({
     { step: 'rfas', title: 'Requests for admission', summary: partSummary(settings.rfas, 'requests'), included: settings.rfas.enabled },
     { step: 'email', title: 'Welcome email', summary: `${firm('plaintiff')} (plaintiff) · ${firm('defense')} (defense)`, included: null },
   ]
+  // Not blocking: the instructor can finish now and fill these in later.
+  const warnings: string[] = []
+  for (const side of ['plaintiff', 'defense'] as const) {
+    const label = SIDE_LABEL[side].toLowerCase()
+    const mine = options.filter((o) => o.side === side)
+    const isPicked = (o: DisclosureOption) => (o.kind === 'witness' ? disclosed.witnessIds : disclosed.materialIds).includes(o.id)
+    if (settings.disclosures.enabled && !mine.some(isPicked)) {
+      warnings.push(
+        mine.length === 0
+          ? `The ${label} side has no witnesses or one-side files to disclose yet, so its students have nothing to pick from. Add them on the Witnesses and Case file tabs.`
+          : `You haven't picked any ${label} initial disclosures. Students' picks are compared with yours, and nothing is shared when the case moves on.`,
+      )
+    }
+    const firmName = settings.firms[side].firm.trim()
+    const partner = settings.firms[side].partner.trim()
+    if (!firmName || !partner) {
+      warnings.push(
+        `The ${label} welcome email has no ${!firmName && !partner ? 'firm or senior partner' : !firmName ? 'firm' : 'senior partner'}, so it's signed "${partner || 'Your senior partner'}" at "${firmName || 'the firm'}".`,
+      )
+    }
+  }
   return (
     <>
+      {warnings.length > 0 && (
+        <div className="exchange-warnings" aria-label="Before you finish">
+          {warnings.map((w) => (
+            <p key={w} className="phase-warning">
+              <TriangleAlert aria-hidden="true" />
+              {w}
+            </p>
+          ))}
+        </div>
+      )}
       <ul className="exchange-review" aria-label="Your choices">
         {rows.map((r) => (
           <li key={r.step}>
@@ -586,7 +620,7 @@ function ReviewStep({
           </li>
           <li>
             <strong>Information exchange</strong>
-            <small>Your initial disclosures go to everyone. Teams send interrogatories and requests for admission.</small>
+            <small>Your initial disclosures go to everyone. Teams serve subpoenas, and send interrogatories and requests for admission.</small>
           </li>
           <li>
             <strong>Investigate</strong>

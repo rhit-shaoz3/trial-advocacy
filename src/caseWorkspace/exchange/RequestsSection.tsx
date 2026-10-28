@@ -273,7 +273,7 @@ function StatusBadge({ request: r, now }: { request: ExchangeRequest; now: Date 
 }
 
 /** One block per question the team can still ask (a bar when there are many). */
-function Meter({ used, limit }: { used: number; limit: number }) {
+export function Meter({ used, limit }: { used: number; limit: number }) {
   if (limit > 30) {
     return (
       <div className="ex-meter-bar" role="progressbar" aria-label="Used" aria-valuenow={used} aria-valuemin={0} aria-valuemax={limit}>
@@ -290,7 +290,7 @@ function Meter({ used, limit }: { used: number; limit: number }) {
   )
 }
 
-function SubHead({
+export function SubHead({
   eyebrow,
   title,
   sub,

@@ -4,6 +4,7 @@ import { useCourseService } from '../../courses/CourseServiceContext'
 import {
   FACT_DECISIONS,
   INVESTIGATOR_AVATAR_URL,
+  type CourseSubpoena,
   type DocumentDecision,
   type FactDecision,
   type InterviewReview,
@@ -14,6 +15,7 @@ import { ROLE_LABEL, worldLabel } from '../../courses/worldLabel'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import './Review.css'
 import { WitnessAvatar } from '../../components/WitnessAvatar'
+import { SubpoenaCard } from './SubpoenaCard'
 
 type Tab = 'open' | 'completed'
 
@@ -46,6 +48,7 @@ export function ReviewPage() {
   const [params, setParams] = useSearchParams()
   const tab: Tab = params.get('tab') === 'completed' ? 'completed' : 'open'
   const [reviews, setReviews] = useState<InterviewReview[] | null>(null)
+  const [subpoenas, setSubpoenas] = useState<CourseSubpoena[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** Reviews finished here whose new count isn't back from the server yet. */
   const [finishing, setFinishing] = useState<string[]>([])
@@ -54,11 +57,15 @@ export function ReviewPage() {
   useEffect(() => {
     let cancelled = false
     setReviews(null)
+    setSubpoenas(null)
     setError(null)
     setFinishError(null)
-    service
-      .listReviews(courseId, tab)
-      .then((list) => !cancelled && setReviews(list))
+    Promise.all([service.listReviews(courseId, tab), service.listSubpoenas(courseId, tab)])
+      .then(([list, served]) => {
+        if (cancelled) return
+        setReviews(list)
+        setSubpoenas(served)
+      })
       .catch((err: Error) => !cancelled && setError(err.message))
     return () => {
       cancelled = true
@@ -124,8 +131,15 @@ export function ReviewPage() {
     }
   }
 
+  /** An answered subpoena leaves To review; the waiting count follows from the server. */
+  function answered(subpoena: CourseSubpoena) {
+    setSubpoenas((prev) => prev?.filter((s) => s.id !== subpoena.id) ?? null)
+    void reloadHome?.()
+  }
+
   // The count drops as soon as a review is finished, without waiting for the server.
   const waiting = workspace ? Math.max(0, (workspace.home.reviewCount ?? 0) - finishing.length) : undefined
+  const loaded = reviews && subpoenas
 
   return (
     <main className="ws-page review-page">
@@ -136,7 +150,8 @@ export function ReviewPage() {
           <p className="ws-subtle">
             When a team ends an interview, the new facts the AI witness added come here, and so does every
             background investigator report before the team sees it. Rule on each fact as the judge: it stands or
-            it doesn&rsquo;t, for that team&rsquo;s case world or for every world.
+            it doesn&rsquo;t, for that team&rsquo;s case world or for every world. Subpoenas teams serve come here
+            too, for you to answer as the recipient.
           </p>
         </div>
       </div>
@@ -165,25 +180,44 @@ export function ReviewPage() {
         <p className="form-error" role="alert">
           Could not load the reviews. {error}
         </p>
-      ) : !reviews ? (
+      ) : !loaded ? (
         <p className="ws-subtle">Loading reviews…</p>
-      ) : reviews.length === 0 ? (
+      ) : reviews.length === 0 && subpoenas.length === 0 ? (
         <div className="ws-empty">
           <p className="case-empty-title">{tab === 'open' ? 'Nothing to review.' : 'No completed reviews yet.'}</p>
           <p className="ws-subtle">
             {tab === 'open'
-              ? 'Conversations show up here when a team ends an interview with an AI witness, and reports when the investigator answers a team.'
-              : 'Reviews you finish are kept here with your rulings.'}
+              ? 'Conversations show up here when a team ends an interview with an AI witness, reports when the investigator answers a team, and subpoenas when a team serves one.'
+              : 'Reviews you finish and subpoenas you answer are kept here.'}
           </p>
         </div>
       ) : (
-        <ul className="review-list" aria-label={tab === 'open' ? 'To review' : 'Completed reviews'}>
-          {reviews.map((r) => (
-            <li key={r.id}>
-              <ReviewCard courseId={courseId} review={r} onChange={replace} onFinish={finish} />
-            </li>
-          ))}
-        </ul>
+        <>
+          {subpoenas.length > 0 && (
+            <>
+              <h2 className="review-section-title">Subpoenas</h2>
+              <ul className="review-list" aria-label={tab === 'open' ? 'Subpoenas to answer' : 'Answered subpoenas'}>
+                {subpoenas.map((s) => (
+                  <li key={s.id}>
+                    <SubpoenaCard courseId={courseId} subpoena={s} onAnswer={tab === 'open' ? answered : undefined} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {reviews.length > 0 && (
+            <>
+              {subpoenas.length > 0 && <h2 className="review-section-title">Interviews and reports</h2>}
+              <ul className="review-list" aria-label={tab === 'open' ? 'To review' : 'Completed reviews'}>
+                {reviews.map((r) => (
+                  <li key={r.id}>
+                    <ReviewCard courseId={courseId} review={r} onChange={replace} onFinish={finish} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
       )}
     </main>
   )

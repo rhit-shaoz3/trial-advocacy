@@ -8,14 +8,6 @@ export const AUDIENCE_LABEL: Record<MaterialAudience, string> = {
   instructor: 'Instructors only',
 }
 
-/**
- * The case overview: the summary's first paragraph, for lists and cards.
- * Later paragraphs (procedural history, rulings) show only on the case page.
- */
-export function caseOverview(summary: string) {
-  return summary.trim().split(/\n\s*\n/)[0].trim()
-}
-
 /** The broad kinds of file in a case file, in the order they're listed. */
 export const FILE_CATEGORIES = ['document', 'image', 'audio', 'video'] as const
 export type FileCategory = (typeof FILE_CATEGORIES)[number]
@@ -96,7 +88,7 @@ export const PHASE_LABEL: Record<CasePhase, string> = {
 /** What a team does in each phase, as the team reads it. */
 export const STUDENT_PHASE_TEXT: Record<CasePhase, string> = {
   introduction: "Read the case file, meet your side's witnesses, and pick your initial disclosures.",
-  information_exchange: "Send interrogatories and requests for admission, and answer the other side's.",
+  information_exchange: "Serve subpoenas, send interrogatories and requests for admission, and answer the other side's.",
   investigate: "Send the background investigator assignments. The other side's witnesses are still off-limits.",
   deposition: "Every witness is open to both sides. Depose the other side's witnesses.",
 }

@@ -514,8 +514,25 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ responses }) })).exchange
   },
 
+  async serveSubpoena(courseId, caseId, recipient, records) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/subpoenas`, {
+      method: 'POST',
+      body: JSON.stringify({ recipient, records }),
+    })
+    return body.exchange
+  },
+
   async markExchangeSeen(courseId, caseId) {
     await apiRequest(`${myCasePath(courseId, caseId)}/exchange/seen`, { method: 'POST' })
+  },
+
+  async listSubpoenas(courseId, status) {
+    return (await apiRequest(`${coursePath(courseId)}/subpoenas?status=${status}`)).subpoenas
+  },
+
+  async answerSubpoena(courseId, subpoenaId, answer) {
+    const path = `${coursePath(courseId)}/subpoenas/${encodeURIComponent(subpoenaId)}/answer`
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify(answer) })).subpoena
   },
 
   async listReviews(courseId, status) {

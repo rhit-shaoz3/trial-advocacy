@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import { caseOverview } from '../../courses/caseLabels'
 import type { MyCase, MyTeamMember } from '../../courses/types'
 import { sideLabel, worldLabel } from '../../courses/worldLabel'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
@@ -91,7 +90,6 @@ export function MyCasesPage() {
                   <h2>{c.title}</h2>
                   <CaseStatusBadge status={c.status} />
                 </div>
-                {c.summary && <p className="case-row-summary">{caseOverview(c.summary)}</p>}
                 <Assignment team={c.team} world={c.world} parties={c.parties} />
               </Link>
             </li>

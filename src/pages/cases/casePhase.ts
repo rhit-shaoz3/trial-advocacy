@@ -7,7 +7,7 @@ export const PHASE_HINT: Record<CasePhase, string> = {
   introduction:
     "Teams have the case and their side's witnesses. With information exchange set up, they also have the welcome email, and each student picks their initial disclosures.",
   information_exchange:
-    'Your initial disclosures are shared with both sides. Teams send each other interrogatories and requests for admission.',
+    'Your initial disclosures are shared with both sides. Teams serve subpoenas, and send each other interrogatories and requests for admission.',
   investigate: "Teams can use the background investigator. The other side's witnesses can't be interviewed yet.",
   deposition: 'Every witness is revealed to both sides and can be deposed.',
 }

@@ -82,6 +82,17 @@
   font-size: 0.8rem;
 }
 
+/* Review step: what's still empty (finishing isn't blocked) */
+.exchange-warnings {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.exchange-warnings .phase-warning {
+  margin: 0;
+}
+
 /* Initial disclosures: one column per side */
 .exchange-sides {
   display: grid;

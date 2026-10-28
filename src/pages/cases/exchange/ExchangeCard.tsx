@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { ArrowRight, CheckCheck, CircleHelp, Clock, Lock, Pencil, ScrollText, Share2, Users } from 'lucide-react'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { worldLabel } from '../../../courses/worldLabel'
@@ -178,6 +179,13 @@ export function ExchangeCard({
                 <p>Requests, whole class</p>
               </div>
             )}
+            {settings?.subpoenas.enabled && (
+              <div className="exchange-stat">
+                <span>Subpoenas served</span>
+                <div className="exchange-stat-number">{overview.activity.subpoenasServed ?? 0}</div>
+                <p>You answer them on the Review page</p>
+              </div>
+            )}
             <div className="exchange-stat">
               <span>Teams that have sent at least one</span>
               <ul className="exchange-bars">
@@ -213,6 +221,16 @@ export function ExchangeCard({
             </strong>
             {overview.activity.overdue > 0 && <span className="exchange-overdue">{overview.activity.overdue} overdue</span>}
           </p>
+          {(overview.activity.subpoenasWaiting ?? 0) > 0 && (
+            <p className="exchange-waiting">
+              <ScrollText aria-hidden="true" />
+              <strong>
+                {overview.activity.subpoenasWaiting} {overview.activity.subpoenasWaiting === 1 ? 'subpoena' : 'subpoenas'} for you to
+                answer
+              </strong>
+              <Link to={`/courses/${courseId}/review`}>Go to Review</Link>
+            </p>
+          )}
         </>
       )}
 

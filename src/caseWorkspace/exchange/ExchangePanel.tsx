@@ -1,18 +1,26 @@
 import { useState } from 'react'
-import { BookOpen, CheckCheck, CircleHelp, Lock, Users } from 'lucide-react'
+import { BookOpen, CheckCheck, CircleHelp, Lock, ScrollText, Users } from 'lucide-react'
 import type { DisclosurePick, ExchangeKind, ItemResponse, StudentExchange } from '../../courses/types'
 import { DisclosuresSection } from './DisclosuresSection'
 import { RequestsSection } from './RequestsSection'
+import { SubpoenasSection } from './SubpoenasSection'
 import { TeachMe, type TeachTopic } from './TeachMe'
 import './exchange.css'
 
-type Section = 'disclosures' | ExchangeKind
+type Section = 'disclosures' | 'subpoenas' | ExchangeKind
 
 const OTHER_SIDE = { plaintiff: 'Defense', defense: 'Plaintiff' } as const
 
+/** "Subpoenas, interrogatories, and requests for admission", from the parts' labels. */
+function listOf(labels: string[]) {
+  const [first, ...rest] = labels.map((l, i) => (i === 0 ? l : l.toLowerCase()))
+  if (rest.length === 0) return first
+  return rest.length === 1 ? `${first} and ${rest[0]}` : `${[first, ...rest.slice(0, -1)].join(', ')}, and ${rest.at(-1)}`
+}
+
 /**
  * A team's Information exchange tab: a menu of its parts (initial disclosures,
- * interrogatories, requests for admission) beside the one that's open. Each
+ * subpoenas, interrogatories, requests for admission) beside the one that's open. Each
  * part has a Teach me guide at its top right.
  */
 export function ExchangePanel({
@@ -20,6 +28,8 @@ export function ExchangePanel({
   onSubmitDisclosures,
   onSend,
   onRespond,
+  onServeSubpoena,
+  onOpenDocument,
   focus,
   now = new Date(),
 }: {
@@ -28,8 +38,11 @@ export function ExchangePanel({
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
   onSend?(kind: ExchangeKind, items: string[]): Promise<void>
   onRespond?(requestId: string, responses: ItemResponse[]): Promise<void>
-  /** A request to open on, as when a notice links to its response. */
-  focus?: { kind: ExchangeKind; id: string } | null
+  onServeSubpoena?(recipient: string, records: string): Promise<void>
+  /** Opens a case file produced in answer to a subpoena. */
+  onOpenDocument?(materialId: string): void
+  /** A request or subpoena to open on, as when a notice links to its answer. */
+  focus?: { kind: ExchangeKind | 'subpoenas'; id: string } | null
   now?: Date
 }) {
   const parts: { id: Section; label: string; icon: typeof Users; locked: boolean; badge: string | null }[] = []
@@ -41,6 +54,17 @@ export function ExchangePanel({
       icon: Users,
       locked: false,
       badge: d.review ? 'Review' : d.submission ? 'Submitted' : d.open ? 'To do' : null,
+    })
+  }
+  if (exchange.subpoenas) {
+    const part = exchange.subpoenas
+    const answers = part.served.filter((s) => s.respondedAt && !s.seen).length
+    parts.push({
+      id: 'subpoenas',
+      label: 'Subpoenas',
+      icon: ScrollText,
+      locked: !exchange.requestsOpen,
+      badge: answers > 0 ? `${answers} new` : `${part.remaining}/${part.limit} left`,
     })
   }
   for (const [kind, label, icon] of [
@@ -89,14 +113,22 @@ export function ExchangePanel({
             {p.locked ? <Lock aria-hidden="true" /> : <p.icon aria-hidden="true" />}
             <span>{p.label}</span>
             {!p.locked && p.badge && (
-              <span className={p.badge.includes('to respond') || p.badge === 'To do' ? 'cw-badge cw-badge-overdue' : 'cw-badge'}>
+              <span
+                className={
+                  p.badge.includes('to respond') || p.badge === 'To do'
+                    ? 'cw-badge cw-badge-overdue'
+                    : p.badge.endsWith(' new')
+                      ? 'cw-badge cw-badge-new'
+                      : 'cw-badge'
+                }
+              >
                 {p.badge}
               </span>
             )}
           </button>
         ))}
         {!exchange.requestsOpen && parts.some((p) => p.locked) && (
-          <p className="ex-menu-note">Interrogatories and requests for admission open in the information exchange phase.</p>
+          <p className="ex-menu-note">{listOf(parts.filter((p) => p.locked).map((p) => p.label))} open in the information exchange phase.</p>
         )}
         <div className="ex-menu-teach">
           <strong>
@@ -108,6 +140,18 @@ export function ExchangePanel({
       <div className="ex-content">
         {section === 'disclosures' && exchange.disclosures && (
           <DisclosuresSection disclosures={exchange.disclosures} onSubmit={onSubmitDisclosures} onTeach={() => setTeach('disclosures')} />
+        )}
+        {section === 'subpoenas' && exchange.subpoenas && (
+          <SubpoenasSection
+            part={exchange.subpoenas}
+            open={exchange.requestsOpen}
+            opponentNumber={exchange.opponentNumber}
+            onServe={onServeSubpoena}
+            onOpenDocument={onOpenDocument}
+            onTeach={() => setTeach('subpoenas')}
+            initialSubpoenaId={focus?.kind === 'subpoenas' ? focus.id : undefined}
+            now={now}
+          />
         )}
         {(section === 'interrogatories' || section === 'rfas') && exchange[section] && (
           <RequestsSection

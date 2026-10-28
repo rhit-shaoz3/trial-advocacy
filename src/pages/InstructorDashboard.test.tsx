@@ -112,3 +112,64 @@ describe('InstructorDashboard', () => {
     expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled()
   })
 })
+
+describe('InstructorDashboard: cases shared with you', () => {
+  const shared = {
+    id: 'sh1',
+    caseTitle: 'Winston v. Thrillville',
+    summary: 'A rider was hurt.',
+    fromName: 'Prof. Kim',
+    fromEmail: 'kim@example.com',
+    sharedAt: '2026-10-28T12:00:00Z',
+    includeTasks: true,
+  }
+
+  function renderWithCases(service: CourseService) {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <CourseServiceContext.Provider value={service}>
+          <Routes>
+            <Route index element={<InstructorDashboard />} />
+            <Route path="courses/:courseId/cases/:caseId" element={<p>Case page</p>} />
+          </Routes>
+        </CourseServiceContext.Provider>
+      </MemoryRouter>,
+    )
+    return user
+  }
+
+  it('declines one, which goes away', async () => {
+    const declineSharedCase = vi.fn().mockResolvedValue(undefined)
+    const user = renderWithCases(
+      fakeCourseService({
+        listTaughtCourses: vi.fn().mockResolvedValue([trial]),
+        listSharedCases: vi.fn().mockResolvedValue([shared]),
+        declineSharedCase,
+      }),
+    )
+    const notice = await screen.findByRole('region', { name: 'Cases shared with you' })
+    expect(notice).toHaveTextContent('Prof. Kim shared Winston v. Thrillville with you.')
+    await user.click(screen.getByRole('button', { name: 'Decline' }))
+    expect(declineSharedCase).toHaveBeenCalledWith('sh1')
+    expect(screen.queryByRole('region', { name: 'Cases shared with you' })).not.toBeInTheDocument()
+  })
+
+  it('accepts one into a class, and opens the copy', async () => {
+    const acceptSharedCase = vi.fn().mockResolvedValue({ courseId: 'c1', case: { id: 'k9', title: 'Winston v. Thrillville' } })
+    const user = renderWithCases(
+      fakeCourseService({
+        listTaughtCourses: vi.fn().mockResolvedValue([trial]),
+        listSharedCases: vi.fn().mockResolvedValue([shared]),
+        acceptSharedCase,
+      }),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add Winston v. Thrillville' })
+    expect(screen.getByRole('combobox', { name: 'Which class is this case for?' })).toHaveValue('c1')
+    await user.click(screen.getByRole('button', { name: 'Add to class' }))
+    expect(acceptSharedCase).toHaveBeenCalledWith('sh1', 'c1')
+    expect(await screen.findByText('Case page')).toBeInTheDocument()
+    expect(dialog).not.toBeInTheDocument()
+  })
+})

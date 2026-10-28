@@ -404,6 +404,10 @@ describe('subpoenas', () => {
       expect.objectContaining({ teamNumber: 1, recipient: 'Mercy Hospital', requestType: 'documents', records: 'All records of the June 10 visit.' }),
     ])
     expect((await exchange(cy)).subpoenas.served).toEqual([])
+    // The notice is new to the other team until they open the exchange.
+    expect((await exchange(cy)).subpoenas.notices[0].seen).toBe(false)
+    await cy.post(`${exchangeUrl()}/seen`)
+    expect((await exchange(cy)).subpoenas.notices[0].seen).toBe(true)
     expect(s).toMatchObject({ outcome: null, response: null, documents: [] })
     expect(s).not.toHaveProperty('draft')
 

@@ -9,6 +9,13 @@ import { buildSubpoenaPrompt, SUBPOENA_USER_MESSAGE, type SubpoenaContext } from
 // response document; the instructor reviews it before the team sees it.
 
 export const SUBPOENA_EFFORT = 'high'
+/**
+ * Thinking counts toward this, and at high effort it can take most of 16K
+ * tokens before a long production starts, so there's room for both; a limit
+ * this size needs a streamed request.
+ */
+export const SUBPOENA_MAX_TOKENS = 64000
+
 
 export function buildSubpoenaRequest(
   context: SubpoenaContext,
@@ -16,7 +23,7 @@ export function buildSubpoenaRequest(
 ): Anthropic.Beta.Messages.MessageCreateParamsNonStreaming {
   return {
     model,
-    max_tokens: 16000,
+    max_tokens: SUBPOENA_MAX_TOKENS,
     // Adaptive thinking: the model decides how much to reason; effort caps it.
     thinking: { type: 'adaptive' },
     output_config: { effort: SUBPOENA_EFFORT },
@@ -30,7 +37,7 @@ export function buildSubpoenaRequest(
 
 /** The recipient's response, tag lines and all, exactly as written. */
 export async function respondToSubpoena(client: ReportClient, context: SubpoenaContext): Promise<string> {
-  const response = await client.beta.messages.create(buildSubpoenaRequest(context))
+  const response = await client.beta.messages.stream(buildSubpoenaRequest(context)).finalMessage()
   if (response.stop_reason === 'refusal') throw new Error('The recipient declined to draft a response. Try again with notes.')
   if (response.stop_reason === 'max_tokens') throw new Error('The response was cut off.')
   const text = response.content

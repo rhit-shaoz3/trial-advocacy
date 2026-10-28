@@ -61,7 +61,9 @@ export function ExchangePanel({
   }
   if (exchange.subpoenas) {
     const part = exchange.subpoenas
-    const answers = part.served.filter((s) => s.respondedAt && !s.seen).length
+    // Answers to the team's subpoenas, and notices of the other team's, not yet seen.
+    const answers =
+      part.served.filter((s) => s.respondedAt && !s.seen).length + part.notices.filter((n) => n.seen === false).length
     parts.push({
       id: 'subpoenas',
       label: 'Subpoenas',

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Copy, Pencil, Share2 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import { investigatorOf, type CourseCase } from '../../courses/types'
@@ -7,6 +7,7 @@ import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { NotFoundPage } from '../NotFoundPage'
 import { CaseForm } from './CaseForm'
 import { CaseStatusBadge } from './CaseStatusBadge'
+import { DuplicateCaseDialog, ShareCaseDialog } from './CopyCaseDialogs'
 import { STATUS_HINT } from './caseStatus'
 import { LaunchPanel } from './content/LaunchPanel'
 import { MaterialsSection } from './content/MaterialsSection'
@@ -42,6 +43,12 @@ type TabId = (typeof TABS)[number]['id']
  * of what students see. The tab is kept in the URL (?tab=materials).
  */
 export function CaseDetailPage() {
+  const { caseId = '' } = useParams()
+  // A new case (like a copy just made of this one) starts afresh.
+  return <CaseDetail key={caseId} />
+}
+
+function CaseDetail() {
   const { courseId = '', caseId = '' } = useParams()
   const service = useCourseService()
   const workspace = useOutletContext<WorkspaceContext | undefined>()
@@ -61,6 +68,7 @@ export function CaseDetailPage() {
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [copying, setCopying] = useState<'duplicate' | 'share' | null>(null)
   // Bumped whenever something the launch checklist depends on changes.
   const [checksKey, setChecksKey] = useState(0)
 
@@ -220,16 +228,41 @@ export function CaseDetailPage() {
                 <h1>{courseCase.title}</h1>
                 <p className="muted">
                   <CaseStatusBadge status={courseCase.status} /> {STATUS_HINT[courseCase.status]}
-                  {' · '}
-                  <button type="button" className="link-button" onClick={() => setEditing(true)}>
-                    Edit case
-                  </button>
                 </p>
+                {courseCase.copiedFrom && (
+                  <p className="muted case-copied-from">
+                    Copied from {courseCase.copiedFrom.title}
+                    {courseCase.copiedFrom.owner ? ` · ${courseCase.copiedFrom.owner}` : ''}
+                  </p>
+                )}
                 {courseCase.instructorNote && (
                   <p className="case-note">
                     <strong>Note to students:</strong> {courseCase.instructorNote}
                   </p>
                 )}
+              </div>
+              <div className="case-actions" role="toolbar" aria-label="Case actions">
+                <button type="button" className="case-action" onClick={() => setEditing(true)} aria-label="Edit case" title="Edit case">
+                  <Pencil aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="case-action"
+                  onClick={() => setCopying('duplicate')}
+                  aria-label="Duplicate case"
+                  title="Duplicate case"
+                >
+                  <Copy aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="case-action"
+                  onClick={() => setCopying('share')}
+                  aria-label="Share case"
+                  title="Share case"
+                >
+                  <Share2 aria-hidden="true" />
+                </button>
               </div>
             </header>
           )}
@@ -326,6 +359,22 @@ export function CaseDetailPage() {
             )}
           </div>
         </>
+      )}
+      {courseCase && copying === 'duplicate' && (
+        <DuplicateCaseDialog
+          courseId={courseId}
+          courseCase={courseCase}
+          onClose={() => setCopying(null)}
+          onDone={(copy) => {
+            setCopying(null)
+            workspace?.reloadHome()
+            // The copy opens on its teams and worlds.
+            navigate(`/courses/${copy.courseId}/cases/${copy.case.id}`, { state: { courseCase: copy.case } })
+          }}
+        />
+      )}
+      {courseCase && copying === 'share' && (
+        <ShareCaseDialog courseId={courseId} courseCase={courseCase} onClose={() => setCopying(null)} />
       )}
     </main>
   )

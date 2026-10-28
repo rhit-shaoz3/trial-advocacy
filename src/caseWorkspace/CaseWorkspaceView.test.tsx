@@ -469,4 +469,30 @@ describe('CaseWorkspaceView: information exchange', () => {
     expect(panel).toHaveTextContent('Admit the lift chain jerked.')
     expect(panel).not.toHaveTextContent(/You have \d/)
   })
+
+  it("tells the team when the other team serves a subpoena, and opens the notices", async () => {
+    const onOpenExchange = vi.fn()
+    const withNotice: StudentExchange = {
+      ...exchange,
+      rfas: { ...exchange.rfas!, requests: [] },
+      subpoenas: {
+        types: ['documents'],
+        limit: 3,
+        days: 14,
+        used: 0,
+        remaining: 3,
+        served: [],
+        notices: [
+          { id: 's9', teamNumber: 2, recipient: 'Mercy Hospital', requestType: 'documents', records: 'ER records.', sentAt: '2026-10-29T12:00:00Z', seen: false },
+        ],
+      },
+    }
+    const { user } = renderView({ exchange: withNotice, onOpenExchange })
+
+    expect(screen.getByRole('tab', { name: 'Information exchange, 1' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'See notice' }))
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Notices from Team 2')
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('To Mercy Hospital')
+    expect(onOpenExchange).toHaveBeenCalled()
+  })
 })

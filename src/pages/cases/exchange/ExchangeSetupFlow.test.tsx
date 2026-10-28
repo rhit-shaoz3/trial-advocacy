@@ -65,6 +65,8 @@ describe('ExchangeSetupFlow', () => {
 
     // Subpoenas: limited to documents and ESI (the last kind can't be unticked), then turned off with the Include switch.
     expect(await screen.findByRole('heading', { level: 2, name: 'Subpoenas' })).toBeInTheDocument()
+    // The instructor answers subpoenas, so there's no deadline to set.
+    expect(screen.queryByRole('spinbutton', { name: 'Days to respond' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('checkbox', { name: /Tangible things/ }))
     await user.click(screen.getByRole('checkbox', { name: /Inspection of premises/ }))
     await user.click(screen.getByRole('checkbox', { name: /Electronically stored information/ }))

@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import {
   dispositionHeader,
@@ -79,6 +79,11 @@ export function localStorage(dir: string): LocalStorage {
       const target = pathFor(to)
       await mkdir(dirname(target), { recursive: true })
       await rename(pathFor(from), target)
+    },
+    async copy(from, to) {
+      const target = pathFor(to)
+      await mkdir(dirname(target), { recursive: true })
+      await copyFile(pathFor(from), target)
     },
 
     async downloadUrl(key, filename, contentType, inline) {

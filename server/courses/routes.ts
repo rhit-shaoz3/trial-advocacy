@@ -30,6 +30,7 @@ import { calendarRouter } from '../calendar/calendarRoutes.ts'
 import { reviewsRouter } from '../reviews/reviewRoutes.ts'
 import { findMaterialFile, findMaterialText, findWitness, listStorageKeys, removeStoredFiles, setTaskDone } from './caseContent.ts'
 import { sendMaterialFile, sendMaterialText } from './caseContentRoutes.ts'
+import { acceptSharedCase, declineSharedCase, listSharedCases } from './caseCopy.ts'
 import { findCase } from './cases.ts'
 import { casesRouter } from './caseRoutes.ts'
 import { rosterRouter } from './rosterRoutes.ts'
@@ -83,6 +84,30 @@ coursesRouter.get('/', async (req, res) => {
 coursesRouter.get('/teaching', async (req, res) => {
   assertInstructor(req)
   res.json({ courses: await listTaughtCourses(req.user!.id) })
+})
+
+/** Cases other instructors shared with this one, waiting to be accepted or declined. */
+coursesRouter.get('/shared-cases', async (req, res) => {
+  assertInstructor(req)
+  res.json({ shares: await listSharedCases(req.user!.id) })
+})
+
+/** Copies a shared case into one of the instructor's classes: `{ courseId }`. */
+coursesRouter.post('/shared-cases/:shareId/accept', async (req, res) => {
+  assertInstructor(req)
+  const shareId = String(req.params.shareId)
+  const courseId = readString(req.body, 'courseId')
+  if (!isUuid(shareId)) throw new HttpError(404, 'That shared case is no longer waiting for you.')
+  if (!isUuid(courseId)) throw new HttpError(400, 'Choose a class for the case.')
+  res.status(201).json({ case: await acceptSharedCase(shareId, req.user!.id, courseId), courseId })
+})
+
+coursesRouter.post('/shared-cases/:shareId/decline', async (req, res) => {
+  assertInstructor(req)
+  const shareId = String(req.params.shareId)
+  if (!isUuid(shareId)) throw new HttpError(404, 'That shared case is no longer waiting for you.')
+  await declineSharedCase(shareId, req.user!.id)
+  res.status(204).end()
 })
 
 /** Validates the body of a create or edit request. */

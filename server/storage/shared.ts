@@ -14,6 +14,8 @@ export interface FileStorage {
   /** The stored size in bytes, or null if there's nothing at `key`. */
   size(key: string): Promise<number | null>
   move(from: string, to: string): Promise<void>
+  /** Copies a stored file to a new key (a copied case gets its own files). */
+  copy(from: string, to: string): Promise<void>
   /**
    * A link (valid for 5 minutes) that downloads the file as an attachment named
    * `filename`, or, with `inline` and a type that can't run script (see

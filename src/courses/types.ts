@@ -123,8 +123,23 @@ export interface CourseCase {
   investigator?: InvestigatorSettings
   /** Whether the information exchange setup is finished (students see it, and the case has its phase). */
   exchangeReady?: boolean
+  /** A copy whose guided setup is just its teams and worlds, until finished. */
+  copySetup?: boolean
+  /** The case it was copied from, and whose it was; null for a case made from scratch. */
+  copiedFrom?: { title: string; owner: string | null } | null
   createdAt: string
   updatedAt: string
+}
+
+/** A case another instructor shared, waiting to be accepted or declined. */
+export interface SharedCase {
+  id: string
+  caseTitle: string
+  summary: string
+  fromName: string | null
+  fromEmail: string | null
+  sharedAt: string
+  includeTasks: boolean
 }
 
 /** The case's investigator settings (cases from before the field have him, as John Hastings). */
@@ -638,6 +653,8 @@ export interface SubpoenaNotice {
   requestType: SubpoenaType
   records: string
   sentAt: string
+  /** Whether this student has seen the notice. */
+  seen: boolean
 }
 
 /** A team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */
@@ -842,6 +859,19 @@ export interface CourseService {
   getCase(courseId: string, caseId: string): Promise<CourseCase>
   updateCase(courseId: string, caseId: string, input: CaseInput & { status: CourseCaseStatus }): Promise<CourseCase>
   deleteCase(courseId: string, caseId: string): Promise<void>
+  /** Copies the case into a class the instructor teaches (this one when `targetCourseId` is the same). */
+  duplicateCase(
+    courseId: string,
+    caseId: string,
+    options: { targetCourseId: string; includeTasks: boolean; title: string },
+  ): Promise<{ courseId: string; case: CourseCase }>
+  /** Shares the case with another instructor by email; they accept or decline it. */
+  shareCase(courseId: string, caseId: string, email: string, includeTasks: boolean): Promise<{ toName: string; toEmail: string }>
+  /** Cases other instructors shared with this one, waiting to be accepted or declined. */
+  listSharedCases(): Promise<SharedCase[]>
+  /** Copies a shared case into one of the instructor's classes. */
+  acceptSharedCase(shareId: string, courseId: string): Promise<{ courseId: string; case: CourseCase }>
+  declineSharedCase(shareId: string): Promise<void>
   /** The guided setup reached `step` (the furthest step reached is kept). */
   reachSetupStep(courseId: string, caseId: string, step: SetupStep): Promise<CourseCase>
   completeSetup(courseId: string, caseId: string): Promise<CourseCase>

@@ -19,9 +19,9 @@ export const SUBPOENA_TYPE_SHORT: Record<SubpoenaType, string> = {
   inspection: 'inspections',
 }
 
-/** "3 subpoenas per team · 14 days to respond · documents and ESI only" */
+/** "3 subpoenas per team · documents and ESI only" (no deadline: the instructor answers them). */
 export function subpoenaSummary(part: SubpoenaSettings) {
-  const base = partSummary(part, 'subpoenas')
+  const base = `${part.limit} subpoena${part.limit === 1 ? '' : 's'} per team`
   const types = part.types ?? SUBPOENA_TYPES
   if (types.length === SUBPOENA_TYPES.length) return base
   const names = types.map((t) => SUBPOENA_TYPE_SHORT[t])

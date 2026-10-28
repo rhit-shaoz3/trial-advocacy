@@ -228,6 +228,7 @@ describe('ExchangePanel: subpoenas', () => {
         requestType: 'esi',
         records: 'Maintenance logs, 2018–2019.',
         sentAt: '2026-10-29T12:00:00Z',
+        seen: false,
       },
     ],
   }
@@ -246,13 +247,14 @@ describe('ExchangePanel: subpoenas', () => {
     const user = renderPanel(open, { onServeSubpoena, onOpenDocument })
 
     const menu = screen.getByRole('navigation', { name: 'Information exchange' })
-    expect(within(menu).getByRole('button', { name: /Subpoenas/ })).toHaveTextContent('1 new')
+    expect(within(menu).getByRole('button', { name: /Subpoenas/ })).toHaveTextContent('2 new')
     await user.click(within(menu).getByRole('button', { name: /Subpoenas/ }))
     expect(screen.getByText('2/3')).toBeInTheDocument()
     const notices = screen.getByRole('heading', { name: 'Notices from Team 2' }).closest('section')!
     expect(notices).toHaveTextContent('To Atlas Coaster Co.')
     expect(notices).toHaveTextContent('Maintenance logs, 2018–2019.')
     expect(notices).toHaveTextContent('Electronically stored information · Served by Team 2')
+    expect(notices).toHaveTextContent('New')
 
     await user.click(screen.getByRole('button', { name: /To Mercy Hospital/ }))
     expect(screen.getByRole('heading', { name: 'Subpoena to Mercy Hospital' })).toBeInTheDocument()

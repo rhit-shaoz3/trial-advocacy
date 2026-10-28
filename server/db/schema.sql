@@ -636,6 +636,28 @@ ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS based_on_material_id uuid REFEREN
 -- that world's witnesses, investigators and subpoena recipients read it.
 ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS matchup_id uuid REFERENCES matchups (id) ON DELETE CASCADE;
 
+-- Copying a case (duplicating it, or accepting one another instructor
+-- shared): the copy starts as a draft whose guided setup is only its teams and
+-- worlds (copy_setup), and remembers where it came from.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS copy_setup boolean NOT NULL DEFAULT false;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS copied_from_title text;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS copied_from_name text;
+
+-- A case one instructor shared with another, waiting for them to accept (the
+-- case is copied into one of their classes then) or decline. Either way the row
+-- goes; deleting the case takes its pending shares with it.
+CREATE TABLE IF NOT EXISTS case_shares (
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id       uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  from_user_id  uuid        REFERENCES users (id) ON DELETE SET NULL,
+  to_user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  include_tasks boolean     NOT NULL DEFAULT true,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (case_id, to_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS case_shares_to_idx ON case_shares (to_user_id);
+
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (
   sid    varchar      PRIMARY KEY,

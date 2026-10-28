@@ -51,6 +51,9 @@ export function s3Storage(bucket: string, region: string): FileStorage {
       await client.send(new CopyObjectCommand({ Bucket: bucket, CopySource: `${bucket}/${from}`, Key: to }))
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: from }))
     },
+    async copy(from, to) {
+      await client.send(new CopyObjectCommand({ Bucket: bucket, CopySource: `${bucket}/${from}`, Key: to }))
+    },
 
     downloadUrl(key, filename, contentType, inline) {
       return getSignedUrl(

@@ -29,3 +29,45 @@
 .year-input {
   width: 6.5rem;
 }
+
+/* Cases other instructors shared */
+.shared-cases {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.shared-case {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--tint-blue-fg);
+  border-radius: 0.6rem;
+  background: var(--tint-blue-bg);
+  color: var(--fg);
+}
+
+.shared-case > svg {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  color: var(--tint-blue-fg);
+}
+
+.shared-case p {
+  flex: 1;
+  margin: 0;
+}
+
+.shared-case-actions {
+  display: flex;
+  flex: none;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .shared-case {
+    flex-wrap: wrap;
+  }
+}

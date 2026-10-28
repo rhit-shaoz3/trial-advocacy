@@ -104,9 +104,16 @@
 
 .ex-section-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+/* The title keeps a readable width; the buttons beside it wrap below when there's no room. */
+.ex-section-head > div:first-child {
+  flex: 1 1 16rem;
+  min-width: 0;
 }
 
 .cw .ex-section-head h2 {
@@ -1066,4 +1073,49 @@
   height: 0.95rem;
   margin-top: 0.2rem;
   color: var(--success);
+}
+
+/* Subpoenas */
+
+.ex-subpoena-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.ex-text-input {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 400;
+}
+
+.ex-subpoena-block {
+  margin-left: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.ex-notice {
+  align-items: flex-start;
+}
+
+.ex-notice-records {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.ex-produced {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ex-produced .cw-section-sub {
+  margin: 0;
 }

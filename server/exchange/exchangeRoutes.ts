@@ -37,6 +37,14 @@ import {
   type SettingsInput,
   type TeamContext,
 } from './exchange.ts'
+import {
+  markSubpoenasSeen,
+  serveSubpoena,
+  subpoenaNotices,
+  teamSubpoenas,
+  type SubpoenaNotice,
+  type TeamSubpoena,
+} from './subpoenas.ts'
 
 const MAX_NAME_LENGTH = 120
 const MAX_REASON_LENGTH = 1000
@@ -129,6 +137,16 @@ export interface StudentPart {
   requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
 }
 
+/** The team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */
+export interface StudentSubpoenas {
+  limit: number
+  days: number
+  used: number
+  remaining: number
+  served: TeamSubpoena[]
+  notices: SubpoenaNotice[]
+}
+
 // Shape sent to the client; matches `StudentExchange` in src/courses/types.ts.
 export interface StudentExchange {
   phase: CasePhase
@@ -147,6 +165,7 @@ export interface StudentExchange {
     /** How their picks compare with the instructor's, once the case has moved on. */
     review: DisclosureReview | null
   } | null
+  subpoenas: StudentSubpoenas | null
   interrogatories: StudentPart | null
   rfas: StudentPart | null
 }
@@ -213,6 +232,11 @@ async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
         .map((r) => ({ ...r, direction: r.fromTeam.id === ctx.teamId ? 'sent' : 'received' })),
     }
   }
+  const subpoenas = async (p: PartSettings): Promise<StudentSubpoenas | null> => {
+    if (!p.enabled) return null
+    const [served, notices] = await Promise.all([teamSubpoenas(ctx.caseId, ctx.teamId, ctx.userId), subpoenaNotices(ctx.caseId, ctx.teamId)])
+    return { limit: p.limit, days: p.days, used: served.length, remaining: Math.max(0, p.limit - served.length), served, notices }
+  }
   const numbers = await teamNumbers(ctx)
   return {
     phase: ctx.phase,
@@ -229,6 +253,7 @@ async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
           review: open ? compareDisclosures(submission, sideOptions, key) : null,
         }
       : null,
+    subpoenas: await subpoenas(settings.subpoenas),
     interrogatories: await part('interrogatories', settings.interrogatories),
     rfas: await part('rfas', settings.rfas),
   }
@@ -316,9 +341,22 @@ myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
   res.json({ exchange: await studentExchange(ctx) })
 })
 
-/** Marks the responses to the team's sets as read by this student. */
+/** Serves a subpoena: `{ recipient, records }`, who it's for and the records wanted. */
+myExchangeRouter.post('/subpoenas', async (req, res) => {
+  const ctx = await requireStudentContext(req)
+  if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Subpoenas open in the information exchange phase.')
+  const settings = await getSettings(ctx.caseId)
+  if (!settings.subpoenas.enabled) throw new HttpError(409, "This case doesn't include subpoenas.")
+  await serveSubpoena(ctx, settings.subpoenas, readString(req.body, 'recipient'), readString(req.body, 'records'))
+  res.status(201).json({ exchange: await studentExchange(ctx) })
+})
+
+/** Marks the responses to the team's sets, and the answers to its subpoenas, as read by this student. */
 myExchangeRouter.post('/seen', async (req, res) => {
   const ctx = await studentContext(req)
-  if (ctx) await markExchangeSeen(ctx.caseId, ctx.teamId, ctx.userId)
+  if (ctx) {
+    await markExchangeSeen(ctx.caseId, ctx.teamId, ctx.userId)
+    await markSubpoenasSeen(ctx.caseId, ctx.teamId, ctx.userId)
+  }
   res.status(204).end()
 })

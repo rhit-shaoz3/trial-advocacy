@@ -204,3 +204,55 @@ describe('ReviewPage', () => {
     expect(within(card).getByRole('button', { name: 'Finish review' })).toBeEnabled()
   })
 })
+
+describe('ReviewPage: subpoenas', () => {
+  const subpoena = {
+    id: 's1',
+    caseId: 'k1',
+    caseTitle: 'Rivera v. Thrill Park',
+    worldNumber: 1,
+    teamNumber: 3,
+    side: 'plaintiff' as const,
+    team: ['Ada Lawyer'],
+    recipient: 'Mercy Hospital',
+    records: 'ER records for June 10.',
+    sentBy: 'Ada Lawyer',
+    sentAt: '2026-10-28T12:00:00Z',
+    dueAt: '2099-11-11T12:00:00Z',
+    outcome: null,
+    response: null,
+    respondedAt: null,
+    respondedBy: null,
+    documents: [],
+  }
+  const files = [
+    { id: 'm0', filename: 'Complaint.pdf', description: '', initial: true, audience: 'all' },
+    { id: 'm1', filename: 'er.pdf', description: 'ER chart', initial: false, audience: 'instructor' },
+  ]
+
+  it('answers by producing files, or quashes with a reason', async () => {
+    const answerSubpoena = vi.fn().mockResolvedValue({ ...subpoena, outcome: 'complied', respondedAt: '2026-10-30T12:00:00Z' })
+    const { user } = renderPage({
+      listSubpoenas: vi.fn().mockResolvedValue([subpoena]),
+      listMaterials: vi.fn().mockResolvedValue(files),
+      answerSubpoena,
+    })
+
+    const card = await screen.findByRole('article', { name: 'Subpoena to Mercy Hospital' })
+    expect(card).toHaveTextContent('World A · Plaintiff · Team 3 (Ada Lawyer)')
+    expect(card).toHaveTextContent('ER records for June 10.')
+    const send = within(card).getByRole('button', { name: 'Send answer' })
+    expect(send).toBeDisabled()
+
+    await user.click(within(card).getByRole('radio', { name: 'Quash' }))
+    expect(send).toBeDisabled()
+    await user.click(within(card).getByRole('radio', { name: 'Comply' }))
+    // The initial file isn't offered: every team has it.
+    const er = await within(card).findByRole('checkbox', { name: /ER chart/ })
+    expect(within(card).queryByRole('checkbox', { name: /Complaint/ })).not.toBeInTheDocument()
+    await user.click(er)
+    await user.click(send)
+    expect(answerSubpoena).toHaveBeenCalledWith('c1', 's1', { outcome: 'complied', response: '', materialIds: ['m1'] })
+    expect(screen.queryByRole('article', { name: 'Subpoena to Mercy Hospital' })).not.toBeInTheDocument()
+  })
+})

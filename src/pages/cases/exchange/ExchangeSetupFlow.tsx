@@ -436,7 +436,10 @@ function PartForm({ part, value, onChange }: { part: Part; value: PartSettings; 
         />
       </SettingRow>
       {part === 'subpoenas' && (
-        <p className="muted exchange-note">Students don&rsquo;t send subpoenas yet; these settings are kept for when they do.</p>
+        <p className="muted exchange-note">
+          Teams serve subpoenas on people and organizations from the information exchange phase on. You answer each one
+          on the Review page, as its recipient: produce case files, or quash it.
+        </p>
       )}
     </div>
   )
@@ -617,7 +620,7 @@ function ReviewStep({
           </li>
           <li>
             <strong>Information exchange</strong>
-            <small>Your initial disclosures go to everyone. Teams send interrogatories and requests for admission.</small>
+            <small>Your initial disclosures go to everyone. Teams serve subpoenas, and send interrogatories and requests for admission.</small>
           </li>
           <li>
             <strong>Investigate</strong>

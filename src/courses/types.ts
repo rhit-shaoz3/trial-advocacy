@@ -590,6 +590,67 @@ export interface StudentPart {
   requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
 }
 
+/** How the instructor, as the recipient, answered a subpoena. */
+export type SubpoenaOutcome = 'complied' | 'quashed'
+
+/** A case file produced in answer to a subpoena. */
+export interface ProducedDocument {
+  materialId: string
+  title: string
+}
+
+/** A subpoena the team served, with the answer once it's in. */
+export interface TeamSubpoena {
+  id: string
+  recipient: string
+  records: string
+  sentBy: string | null
+  sentAt: string
+  dueAt: string
+  outcome: SubpoenaOutcome | null
+  response: string | null
+  respondedAt: string | null
+  documents: ProducedDocument[]
+  /** Whether this student has read the answer. */
+  seen: boolean
+}
+
+/** Notice of a subpoena the other team in the case world served (never what came back). */
+export interface SubpoenaNotice {
+  id: string
+  teamNumber: number
+  recipient: string
+  records: string
+  sentAt: string
+}
+
+/** A team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */
+export interface StudentSubpoenas {
+  limit: number
+  days: number
+  used: number
+  remaining: number
+  served: TeamSubpoena[]
+  notices: SubpoenaNotice[]
+}
+
+/** A subpoena as the instructor answers it on the Review page. */
+export interface CourseSubpoena extends Omit<TeamSubpoena, 'seen'> {
+  caseId: string
+  caseTitle: string
+  worldNumber: number
+  teamNumber: number
+  side: Side
+  team: string[]
+  respondedBy: string | null
+}
+
+export interface SubpoenaAnswer {
+  outcome: SubpoenaOutcome
+  response: string
+  materialIds: string[]
+}
+
 /** A team's information exchange. */
 export interface StudentExchange {
   phase: CasePhase
@@ -606,6 +667,8 @@ export interface StudentExchange {
     submission: DisclosureSubmission | null
     review: DisclosureReview | null
   } | null
+  /** Optional for responses from before subpoenas; null when the case leaves them out. */
+  subpoenas?: StudentSubpoenas | null
   interrogatories: StudentPart | null
   rfas: StudentPart | null
 }
@@ -621,6 +684,8 @@ export interface ExchangeOverview {
     teamsSentRfas: number
     waiting: number
     overdue: number
+    subpoenasServed?: number
+    subpoenasWaiting?: number
   }
   /** What moving to information exchange shares, by name. */
   disclosed: { materials: string[]; witnesses: string[] }
@@ -864,9 +929,15 @@ export interface CourseService {
   /** Sends a set to the other team, one question or request per item. */
   sendExchangeRequest(courseId: string, caseId: string, kind: ExchangeKind, items: string[]): Promise<StudentExchange>
   respondToExchangeRequest(courseId: string, caseId: string, requestId: string, responses: ItemResponse[]): Promise<StudentExchange>
-  /** Marks the responses to the team's sets as read. */
+  /** Serves a subpoena for records on a person or organization. */
+  serveSubpoena(courseId: string, caseId: string, recipient: string, records: string): Promise<StudentExchange>
+  /** Marks the responses to the team's sets, and the answers to its subpoenas, as read. */
   markExchangeSeen(courseId: string, caseId: string): Promise<void>
   // The instructor's review panel.
+  /** Subpoenas waiting for the instructor's answer (soonest due first), or answered ones. */
+  listSubpoenas(courseId: string, status: 'open' | 'completed'): Promise<CourseSubpoena[]>
+  /** Answers a subpoena, once; produced files are shared with the team. */
+  answerSubpoena(courseId: string, subpoenaId: string, answer: SubpoenaAnswer): Promise<CourseSubpoena>
   listReviews(courseId: string, status: 'open' | 'completed'): Promise<InterviewReview[]>
   decideFact(courseId: string, reviewId: string, factId: string, decision: FactDecision): Promise<InterviewReview>
   /** Allows (or not) the team to have a case file the investigator found. */

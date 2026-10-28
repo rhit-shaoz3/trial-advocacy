@@ -78,11 +78,16 @@ export function StudentCasePage() {
     await afterExchange(await service.respondToExchangeRequest(courseId, caseId, requestId, responses))
   }
 
-  /** Opening the Information exchange tab marks the other team's responses read. */
+  async function serveSubpoena(recipient: string, records: string) {
+    setExchange(await service.serveSubpoena(courseId, caseId, recipient, records))
+  }
+
+  /** Opening the Information exchange tab marks the other team's responses, and subpoena answers, read. */
   function openExchange() {
     setExchange((prev) =>
       prev && {
         ...prev,
+        subpoenas: prev.subpoenas && { ...prev.subpoenas, served: prev.subpoenas.served.map((s) => ({ ...s, seen: true })) },
         interrogatories: prev.interrogatories && {
           ...prev.interrogatories,
           requests: prev.interrogatories.requests.map((r) => ({ ...r, seen: true })),
@@ -191,6 +196,7 @@ export function StudentCasePage() {
             onSubmitDisclosures={submitDisclosures}
             onSendRequest={sendRequest}
             onRespondToRequest={respondToRequest}
+            onServeSubpoena={serveSubpoena}
             onOpenExchange={openExchange}
             initialTab={initialTab}
           />

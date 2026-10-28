@@ -38,6 +38,8 @@ import { homeCasesForInstructor, listMyCases, studentHome } from './myCases.ts'
 import { findStudentTeamId, getStudentWorkspace, studentViewer } from './workspace.ts'
 import { sendInvestigation, teamInvestigations, type InvestigationContext } from '../investigator/requests.ts'
 import { myExchangeRouter } from '../exchange/exchangeRoutes.ts'
+import { subpoenasRouter } from '../exchange/subpoenaRoutes.ts'
+import { openSubpoenaCount } from '../exchange/subpoenas.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -155,7 +157,8 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
           cases: await homeCasesForInstructor(course.id),
           upcoming: [],
           stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
-          reviewCount: await openReviewCount(course.id),
+          // Subpoenas waiting for an answer are on the Review page too.
+          reviewCount: (await openReviewCount(course.id)) + (await openSubpoenaCount(course.id)),
           instructor: await instructorHome(course.id),
         }
       : {
@@ -357,5 +360,6 @@ courseRouter.delete('/', async (req, res) => {
 courseRouter.use('/roster', rosterRouter)
 courseRouter.use('/cases', casesRouter)
 courseRouter.use('/reviews', reviewsRouter)
+courseRouter.use('/subpoenas', subpoenasRouter)
 
 coursesRouter.use('/:courseId', courseRouter)

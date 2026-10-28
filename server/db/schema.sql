@@ -541,6 +541,49 @@ CREATE TABLE IF NOT EXISTS exchange_seen (
   PRIMARY KEY (request_id, user_id)
 );
 
+-- A subpoena a team serves on a person or organization for records, from the
+-- information exchange phase on. The instructor answers it on the Review page
+-- by `due_at`: complied (a response, and any case files produced, which are
+-- shared with the team) or quashed (with the reason). The other team in the
+-- case world gets notice of it, but not what was produced.
+CREATE TABLE IF NOT EXISTS subpoenas (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id      uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  -- The team's case world as it was when served, like a review's.
+  matchup_id   uuid        REFERENCES matchups (id) ON DELETE SET NULL,
+  world_number integer     NOT NULL,
+  team_number  integer     NOT NULL,
+  side         text        NOT NULL CHECK (side IN ('plaintiff', 'defense')),
+  recipient    text        NOT NULL,
+  records      text        NOT NULL,
+  sent_by      uuid        REFERENCES users (id) ON DELETE SET NULL,
+  sent_at      timestamptz NOT NULL DEFAULT now(),
+  due_at       timestamptz NOT NULL,
+  outcome      text        CHECK (outcome IN ('complied', 'quashed')),
+  response     text,
+  responded_at timestamptz,
+  responded_by uuid        REFERENCES users (id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS subpoenas_case_idx ON subpoenas (case_id);
+
+-- The case files produced in answer to a subpoena.
+CREATE TABLE IF NOT EXISTS subpoena_documents (
+  subpoena_id uuid    NOT NULL REFERENCES subpoenas (id) ON DELETE CASCADE,
+  material_id uuid    NOT NULL REFERENCES case_materials (id) ON DELETE CASCADE,
+  position    integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (subpoena_id, material_id)
+);
+
+-- Which students have read the answer to their team's subpoena.
+CREATE TABLE IF NOT EXISTS subpoena_seen (
+  subpoena_id uuid        NOT NULL REFERENCES subpoenas (id) ON DELETE CASCADE,
+  user_id     uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  seen_at     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (subpoena_id, user_id)
+);
+
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (
   sid    varchar      PRIMARY KEY,

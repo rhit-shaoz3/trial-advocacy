@@ -3,7 +3,7 @@ import { BookOpen, Check, Clock, ListChecks, Lock, MessageSquare, Sparkles, Tria
 import { Modal } from '../../components/Modal'
 import { FEDERAL, type PartSettings } from '../../courses/types'
 
-export type TeachTopic = 'disclosures' | 'interrogatories' | 'rfas'
+export type TeachTopic = 'disclosures' | 'subpoenas' | 'interrogatories' | 'rfas'
 
 /**
  * The "Teach me" guide for one part of the information exchange: the rule
@@ -66,6 +66,41 @@ export function TeachMe({
           <p className="teach-note">
             In this course, your picks are practice. When your instructor moves the case to information exchange,
             you&rsquo;ll see how your picks compare with your instructor&rsquo;s.
+          </p>
+        </div>
+      </Modal>
+    )
+  }
+
+  if (topic === 'subpoenas') {
+    return (
+      <Modal eyebrow="Teach me · FRCP 45" title="What is a subpoena?" icon={<BookOpen />} onClose={onClose} footer={close}>
+        <div className="teach">
+          <p>
+            A subpoena orders a person or organization to produce documents or other things they hold, or to testify
+            (FRCP 45(a)(1)). Unlike interrogatories, it can reach people who aren&rsquo;t parties to the case: a hospital,
+            a state safety board, the company that built the ride.
+          </p>
+          <div className="teach-rules">
+            <Rule icon={<MessageSquare />} big="Notice first" detail="to every other party before it’s served (FRCP 45(a)(4))" />
+            <Rule icon={<Clock />} big="14 days" detail="for the recipient to object, if compliance is due later (FRCP 45(d)(2)(B))" />
+          </div>
+          {part && <Differs text={`Your team can serve ${part.limit} subpoenas, and each recipient has ${part.days} days to answer.`} />}
+          <h3>How litigators use them</h3>
+          <Tips
+            tips={[
+              'Get records the other side doesn’t have, or won’t hand over: medical charts, inspection reports, maintenance logs.',
+              'Name the recipient exactly, and describe the records narrowly: who, what, and which dates.',
+              'Check first whether the records will come through disclosures or interrogatories.',
+            ]}
+          />
+          <Fact icon={<TriangleAlert />}>
+            A court must quash a subpoena that asks for privileged material or puts an undue burden on the recipient
+            (FRCP 45(d)(3)). &ldquo;Every record you have&rdquo; is the classic way to get quashed.
+          </Fact>
+          <p className="teach-note">
+            In this course, your instructor answers each subpoena as its recipient: with the records, or by quashing it.
+            The other team sees that you served it, but not what came back.
           </p>
         </div>
       </Modal>

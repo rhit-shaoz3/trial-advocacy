@@ -188,3 +188,65 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
     expect(dialog).toHaveTextContent('Your instructor allows 15 interrogatories per team instead of 25.')
   })
 })
+
+describe('ExchangePanel: subpoenas', () => {
+  const subpoenas = {
+    limit: 3,
+    days: 14,
+    used: 1,
+    remaining: 2,
+    served: [
+      {
+        id: 's1',
+        recipient: 'Mercy Hospital',
+        records: 'ER records for June 10.',
+        sentBy: 'Ada Lawyer',
+        sentAt: '2026-10-28T12:00:00Z',
+        dueAt: '2026-11-11T12:00:00Z',
+        outcome: 'complied' as const,
+        response: 'Enclosed.',
+        respondedAt: '2026-10-30T12:00:00Z',
+        documents: [{ materialId: 'm9', title: 'ER chart' }],
+        seen: false,
+      },
+    ],
+    notices: [{ id: 's2', teamNumber: 2, recipient: 'Atlas Coaster Co.', records: 'Maintenance logs, 2018–2019.', sentAt: '2026-10-29T12:00:00Z' }],
+  }
+  const open = { ...base, phase: 'information_exchange' as const, requestsOpen: true, disclosures: null, subpoenas }
+
+  it('waits for the information exchange phase', async () => {
+    const user = renderPanel({ ...base, subpoenas: { ...subpoenas, served: [], notices: [], used: 0, remaining: 3 } })
+    expect(screen.getByText('Subpoenas, interrogatories, and requests for admission open in the information exchange phase.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Subpoenas/ }))
+    expect(screen.getByText('Subpoenas open in the information exchange phase.')).toBeInTheDocument()
+  })
+
+  it('serves one, and shows the answer, the produced files, and notice of the other team’s', async () => {
+    const onServeSubpoena = vi.fn().mockResolvedValue(undefined)
+    const onOpenDocument = vi.fn()
+    const user = renderPanel(open, { onServeSubpoena, onOpenDocument })
+
+    const menu = screen.getByRole('navigation', { name: 'Information exchange' })
+    expect(within(menu).getByRole('button', { name: /Subpoenas/ })).toHaveTextContent('1 new')
+    await user.click(within(menu).getByRole('button', { name: /Subpoenas/ }))
+    expect(screen.getByText('2/3')).toBeInTheDocument()
+    const notices = screen.getByRole('heading', { name: 'Notices from Team 2' }).closest('section')!
+    expect(notices).toHaveTextContent('To Atlas Coaster Co.')
+    expect(notices).toHaveTextContent('Maintenance logs, 2018–2019.')
+
+    await user.click(screen.getByRole('button', { name: /To Mercy Hospital/ }))
+    expect(screen.getByRole('heading', { name: 'Subpoena to Mercy Hospital' })).toBeInTheDocument()
+    expect(screen.getByText('Enclosed.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /ER chart/ }))
+    expect(onOpenDocument).toHaveBeenCalledWith('m9')
+
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    await user.click(screen.getByRole('button', { name: 'Serve a subpoena' }))
+    const serve = screen.getByRole('button', { name: 'Serve subpoena' })
+    expect(serve).toBeDisabled()
+    await user.type(screen.getByLabelText('To'), 'Lincoln Ride Safety Board')
+    await user.type(screen.getByLabelText('Records to produce'), 'Inspection reports for Atlas Adventure, 2017–2019.')
+    await user.click(serve)
+    expect(onServeSubpoena).toHaveBeenCalledWith('Lincoln Ride Safety Board', 'Inspection reports for Atlas Adventure, 2017–2019.')
+  })
+})

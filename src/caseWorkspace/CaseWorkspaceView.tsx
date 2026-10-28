@@ -18,6 +18,7 @@ import {
   Lock,
   Mail,
   MessageSquare,
+  ScrollText,
   Search,
   Share2,
   Users,
@@ -102,6 +103,7 @@ export function CaseWorkspaceView({
   onSubmitDisclosures,
   onSendRequest,
   onRespondToRequest,
+  onServeSubpoena,
   onOpenExchange,
   initialTab = 'overview',
   loadText,
@@ -132,7 +134,8 @@ export function CaseWorkspaceView({
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
   onSendRequest?(kind: ExchangeKind, items: string[]): Promise<void>
   onRespondToRequest?(requestId: string, responses: ItemResponse[]): Promise<void>
-  /** Called when the student opens the Information exchange tab, to mark the responses read. */
+  onServeSubpoena?(recipient: string, records: string): Promise<void>
+  /** Called when the student opens the Information exchange tab, to mark the responses and subpoena answers read. */
   onOpenExchange?(): void
   /** The tab to open on, as when a notice links straight to a report. */
   initialTab?: CaseTab
@@ -146,7 +149,7 @@ export function CaseWorkspaceView({
   const openMaterial = (m: CaseMaterial) =>
     setViewing({ id: m.id, title: m.description || m.filename, filename: m.filename, contentType: m.contentType, sizeBytes: m.sizeBytes })
   /** The response "See responses" opens straight to; cleared on leaving the tab. */
-  const [exchangeFocus, setExchangeFocus] = useState<{ kind: ExchangeKind; id: string } | null>(null)
+  const [exchangeFocus, setExchangeFocus] = useState<{ kind: ExchangeKind | 'subpoenas'; id: string } | null>(null)
   useEffect(() => {
     if (tab !== 'exchange') setExchangeFocus(null)
   }, [tab])
@@ -162,12 +165,14 @@ export function CaseWorkspaceView({
   /** Responses to the team's sets that this student hasn't read. */
   const newResponses = exchangeRequests.filter((r) => r.direction === 'sent' && r.respondedAt && !r.seen)
   const toRespond = exchangeRequests.filter((r) => r.direction === 'received' && !r.respondedAt).length
+  /** Answers to the team's subpoenas that this student hasn't read. */
+  const newAnswers = exchange?.subpoenas?.served.filter((sp) => sp.respondedAt && !sp.seen) ?? []
   // Being on the Reviews, Investigator, or Information exchange tab marks what's there read, however the student got there.
   useEffect(() => {
     if (tab === 'reviews' && unseen > 0) onOpenReviews?.()
     if (tab === 'investigator' && unseenReports > 0) onOpenInvestigator?.()
-    if (tab === 'exchange' && newResponses.length > 0) onOpenExchange?.()
-  }, [tab, unseen, unseenReports, onOpenReviews, onOpenInvestigator, newResponses.length, onOpenExchange])
+    if (tab === 'exchange' && newResponses.length + newAnswers.length > 0) onOpenExchange?.()
+  }, [tab, unseen, unseenReports, onOpenReviews, onOpenInvestigator, newResponses.length, newAnswers.length, onOpenExchange])
   const { case: c, team, world, materials, witnesses, tasks } = workspace
   const initialFile = materials.find((m) => m.initial)
   const byCategory = FILE_CATEGORIES.map((category) => ({
@@ -183,7 +188,7 @@ export function CaseWorkspaceView({
     { id: 'case-file', label: 'Case file', count: materials.length + reports.length },
     { id: 'witnesses', label: 'Witnesses', count: witnesses.length },
     ...(exchange
-      ? [{ id: 'exchange' as const, label: 'Information exchange', count: toRespond + newResponses.length }]
+      ? [{ id: 'exchange' as const, label: 'Information exchange', count: toRespond + newResponses.length + newAnswers.length }]
       : []),
     ...(investigator ? [{ id: 'investigator' as const, label: 'Investigator', count: unseenReports }] : []),
     { id: 'tasks', label: 'Tasks', count: openTasks.length },
@@ -228,6 +233,19 @@ export function CaseWorkspaceView({
                 // Open the newest response itself, not just the tab.
                 const newest = [...newResponses].sort((a, b) => (b.respondedAt ?? '').localeCompare(a.respondedAt ?? ''))[0]
                 setExchangeFocus({ kind: newest.kind, id: newest.id })
+                setTab('exchange')
+              },
+            }}
+          />
+        )}
+        {newAnswers.length > 0 && tab !== 'exchange' && (
+          <Toast
+            icon={<ScrollText />}
+            title={`${newAnswers[0].recipient} answered your subpoena${newAnswers.length > 1 ? ` (and ${newAnswers.length - 1} more)` : ''}`}
+            action={{
+              label: 'See answer',
+              onClick: () => {
+                setExchangeFocus({ kind: 'subpoenas', id: newAnswers[0].id })
                 setTab('exchange')
               },
             }}
@@ -319,7 +337,7 @@ export function CaseWorkspaceView({
                         toRespond > 0
                           ? `${count(toRespond, 'set')} to respond to`
                           : exchange.requestsOpen
-                            ? 'Interrogatories and requests for admission'
+                            ? 'Subpoenas, interrogatories, and requests for admission'
                             : 'Initial disclosures'
                       }
                       onOpen={() => setTab('exchange')}
@@ -495,6 +513,11 @@ export function CaseWorkspaceView({
             onSubmitDisclosures={c.status === 'active' ? onSubmitDisclosures : undefined}
             onSend={c.status === 'active' ? onSendRequest : undefined}
             onRespond={c.status === 'active' ? onRespondToRequest : undefined}
+            onServeSubpoena={c.status === 'active' ? onServeSubpoena : undefined}
+            onOpenDocument={(id) => {
+              const file = materials.find((m) => m.id === id)
+              if (file) openMaterial(file)
+            }}
             focus={exchangeFocus}
             now={now}
           />

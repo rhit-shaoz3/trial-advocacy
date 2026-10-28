@@ -296,7 +296,97 @@ describe('interrogatories and requests for admission', () => {
   })
 
   it("is the instructor's only, and students can't use the instructor's routes", async () => {
+    expect((await ada.get(`/api/courses/${course.id}/subpoenas`)).status).toBe(404)
     expect((await ada.get(`${caseUrl()}/exchange`)).status).toBe(404)
     expect((await ada.get(`${caseUrl()}/exchange/requests`)).status).toBe(404)
+  })
+})
+
+describe('subpoenas', () => {
+  const subpoenasUrl = () => `/api/courses/${course.id}/subpoenas`
+  const serve = (agent: request.Agent, recipient: string, records = 'All records of the June 10 visit.') =>
+    agent.post(`${exchangeUrl()}/subpoenas`).send({ recipient, records })
+
+  beforeEach(async () => {
+    await setUp()
+  })
+
+  it('opens in the information exchange phase, and keeps each team to its limit', async () => {
+    expect((await serve(ada, 'Mercy Hospital')).status).toBe(409)
+    await toExchange()
+
+    expect((await serve(ada, ' ')).status).toBe(400)
+    const served = await serve(ada, 'Mercy Hospital')
+    expect(served.status).toBe(201)
+    expect(served.body.exchange.subpoenas).toMatchObject({ limit: 3, days: 14, used: 1, remaining: 2 })
+    const s = served.body.exchange.subpoenas.served[0]
+    expect(s).toMatchObject({ recipient: 'Mercy Hospital', sentBy: 'Ada Lawyer', outcome: null, documents: [] })
+    expect(Math.round((new Date(s.dueAt).getTime() - new Date(s.sentAt).getTime()) / 86_400_000)).toBe(14)
+
+    // Partners share the team's count.
+    await serve(bo, 'Lincoln Ride Safety Board')
+    await serve(bo, 'Atlas Coaster Co.')
+    const out = await serve(ada, 'One more')
+    expect(out.status).toBe(409)
+    expect(out.body.error).toBe('Your team is out of subpoenas.')
+  })
+
+  it('gives the other team notice, and the instructor answers on the Review page', async () => {
+    await toExchange()
+    await serve(ada, 'Mercy Hospital')
+    const s = (await exchange(ada)).subpoenas.served[0]
+
+    // Notice only: who and what, nothing produced.
+    expect((await exchange(cy)).subpoenas.notices).toEqual([
+      expect.objectContaining({ teamNumber: 1, recipient: 'Mercy Hospital', records: 'All records of the June 10 visit.' }),
+    ])
+    expect((await exchange(cy)).subpoenas.served).toEqual([])
+
+    const open = (await prof.get(subpoenasUrl())).body.subpoenas
+    expect(open).toEqual([
+      expect.objectContaining({ id: s.id, caseTitle: 'Ramirez v. Thrillville', worldNumber: 1, teamNumber: 1, side: 'plaintiff', team: ['Ada Lawyer', 'Bo Brief'] }),
+    ])
+    expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(1)
+
+    const answer = (body: object) => prof.post(`${subpoenasUrl()}/${s.id}/answer`).send(body)
+    expect((await answer({ outcome: 'quashed', response: ' ' })).status).toBe(400)
+    expect((await answer({ outcome: 'complied', response: '' })).status).toBe(400)
+    // The incident report is the defense's; producing it shares it with Team 1 only.
+    const done = await answer({ outcome: 'complied', response: 'Enclosed.', materialIds: [incident] })
+    expect(done.status).toBe(200)
+    expect(done.body.subpoena).toMatchObject({ outcome: 'complied', respondedBy: 'Prof. Ruiz', documents: [{ materialId: incident, title: 'Incident report.pdf' }] })
+    expect((await answer({ outcome: 'quashed', response: 'No.' })).status).toBe(409)
+    expect((await prof.get(subpoenasUrl())).body.subpoenas).toEqual([])
+    expect((await prof.get(`${subpoenasUrl()}?status=completed`)).body.subpoenas).toHaveLength(1)
+
+    const back = (await exchange(ada)).subpoenas.served[0]
+    expect(back).toMatchObject({ outcome: 'complied', response: 'Enclosed.', seen: false })
+    const files = (await ada.get(myCaseUrl())).body.workspace.materials.map((m: { filename: string }) => m.filename)
+    expect(files).toContain('Incident report.pdf')
+    await ada.post(`${exchangeUrl()}/seen`)
+    expect((await exchange(ada)).subpoenas.served[0].seen).toBe(true)
+    expect((await exchange(bo)).subpoenas.served[0].seen).toBe(false)
+
+    const overview = (await prof.get(`${caseUrl()}/exchange/overview`)).body.overview
+    expect(overview.activity).toMatchObject({ subpoenasServed: 1, subpoenasWaiting: 0 })
+  })
+
+  it('takes a quash with its reason, and produces nothing', async () => {
+    await toExchange()
+    await serve(cy, 'Mercy Hospital', "All of Ramirez's medical records, ever.")
+    const s = (await exchange(cy)).subpoenas.served[0]
+    const res = await prof.post(`${subpoenasUrl()}/${s.id}/answer`).send({ outcome: 'quashed', response: 'Overbroad.', materialIds: [photos] })
+    expect(res.status).toBe(200)
+    expect(res.body.subpoena).toMatchObject({ outcome: 'quashed', response: 'Overbroad.', documents: [] })
+    expect((await cy.get(myCaseUrl())).body.workspace.materials.map((m: { filename: string }) => m.filename)).not.toContain(
+      'Harness photos.pdf',
+    )
+  })
+
+  it("isn't offered when the case leaves subpoenas out", async () => {
+    await prof.put(`${caseUrl()}/exchange`).send({ ...SETTINGS, subpoenas: { enabled: false, limit: 3, days: 14 } })
+    await toExchange()
+    expect((await exchange(ada)).subpoenas).toBeNull()
+    expect((await serve(ada, 'Mercy Hospital')).status).toBe(409)
   })
 })

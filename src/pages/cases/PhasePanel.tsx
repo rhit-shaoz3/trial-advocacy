@@ -149,7 +149,7 @@ function ExchangePhaseDialog({
       title: 'Initial disclosure forms close',
       detail: 'Each student sees how their picks compare with yours.',
     },
-    { icon: <Send />, title: 'Requests open', detail: 'Teams can send interrogatories and requests for admission.' },
+    { icon: <Send />, title: 'Requests open', detail: 'Teams can serve subpoenas, and send interrogatories and requests for admission.' },
   ].filter((c): c is { icon: ReactElement; title: string; detail: string } => Boolean(c))
 
   return (

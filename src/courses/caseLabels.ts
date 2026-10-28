@@ -1,4 +1,4 @@
-import type { CasePhase, MaterialAudience } from './types'
+import type { CasePhase, MaterialAudience, MaterialSource } from './types'
 
 /** How the instructor sees who an item is for. */
 export const AUDIENCE_LABEL: Record<MaterialAudience, string> = {
@@ -6,6 +6,12 @@ export const AUDIENCE_LABEL: Record<MaterialAudience, string> = {
   plaintiff: 'Plaintiff only',
   defense: 'Defense only',
   instructor: 'Instructors only',
+}
+
+/** Where a case file came from. */
+export const SOURCE_LABEL: Record<MaterialSource, string> = {
+  instructor: 'Instructor Uploaded',
+  subpoena: 'Subpoena Response',
 }
 
 /** The broad kinds of file in a case file, in the order they're listed. */

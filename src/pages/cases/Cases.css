@@ -1589,3 +1589,75 @@ a.case-row:hover {
     margin-top: 0;
   }
 }
+
+/* Filtering the case file by where each file came from */
+.source-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.source-chip:hover {
+  border-color: var(--border-strong);
+}
+
+.source-chip[aria-pressed='true'] {
+  border-color: var(--ws-navy);
+  background: var(--ws-navy);
+  color: var(--surface);
+}
+
+.source-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.source-count {
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--subtle);
+  color: var(--fg-soft);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.source-chip[aria-pressed='true'] .source-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+}
+
+.source-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.source-instructor {
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+}
+
+.source-subpoena {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}

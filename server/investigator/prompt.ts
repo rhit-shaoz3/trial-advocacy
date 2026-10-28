@@ -58,19 +58,15 @@ const tidy = (text: string) => text.replace(/\n{3,}/g, '\n\n').trim()
 
 const asList = (facts: string[]) => facts.map((fact) => ({ fact }))
 
+/**
+ * The investigator's system prompt: the same for every team in a case world
+ * (the team comes in `buildTeamBlock`), so the teams share one cached prompt.
+ */
 export function buildInvestigatorPrompt(ctx: InvestigatorContext, today = new Date()) {
   const names = partyNames(ctx.caseTitle, ctx.parties)
-  const role = partyRole(ctx.side)
-  const own = role === 'plaintiff' ? names.plaintiff : names.defendant
-  const opposing = role === 'plaintiff' ? names.defendant : names.plaintiff
   const prompt = render({
     investigator_name: ctx.investigatorName,
     investigator_title: INVESTIGATOR_TITLE,
-    requesting_side: role,
-    requesting_party_name: own,
-    requesting_team_name: `Team ${ctx.teamNumber}`,
-    opposing_party_name: opposing,
-    opposing_party_is_organization: isOrganization(opposing),
     // Every case is civil for now.
     is_criminal: false,
     is_prosecution: false,
@@ -80,11 +76,7 @@ export function buildInvestigatorPrompt(ctx: InvestigatorContext, today = new Da
     case_summary: ctx.caseSummary,
     in_world_date: formatCaseDate(ctx.inWorldDate ?? today.toISOString().slice(0, 10)),
     key_disputed_issues: ctx.disputedIssues || undefined,
-    documents: ctx.documents.map((d) => ({
-      title: d.title,
-      team_has_access: d.teamHasAccess ? 'yes' : 'no',
-      content: d.content.trim(),
-    })),
+    documents: ctx.documents.map((d) => ({ title: d.title, content: d.content.trim() })),
     witnesses: ctx.witnesses.map((w) => ({
       name: w.name,
       title: w.role || 'role not stated',
@@ -96,4 +88,24 @@ export function buildInvestigatorPrompt(ctx: InvestigatorContext, today = new Da
   })
   const notes = ctx.instructions.trim()
   return `${tidy(prompt)}${notes ? `\n\n# Notes from the instructor for this case\n\nFollow these too, within the rules above:\n\n${notes}` : ''}\n`
+}
+
+/**
+ * Who's asking, at the top of the team's latest assignment: its side and
+ * party, the opposing party, and the case files it already has.
+ */
+export function buildTeamBlock(ctx: InvestigatorContext) {
+  const names = partyNames(ctx.caseTitle, ctx.parties)
+  const role = partyRole(ctx.side)
+  const own = role === 'plaintiff' ? names.plaintiff : names.defendant
+  const opposing = role === 'plaintiff' ? names.defendant : names.plaintiff
+  const has = ctx.documents.filter((d) => d.teamHasAccess).map((d) => `- ${d.title}`)
+  return [
+    '<your_team>',
+    `You work for the attorneys for the ${role}, ${own} (Team ${ctx.teamNumber}).`,
+    `Opposing party: ${opposing}${isOrganization(opposing) ? ' (an organization)' : ''}`,
+    'Case files your team already has:',
+    ...(has.length ? has : ['- None']),
+    '</your_team>',
+  ].join('\n')
 }

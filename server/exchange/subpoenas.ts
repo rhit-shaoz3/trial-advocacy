@@ -18,9 +18,10 @@ import { parseSubpoenaResponse, type SubpoenaContext } from './subpoenaPrompt.ts
 // organization (a hospital, a regulator, the ride's maker) for documents, ESI,
 // tangible things, or an inspection of premises. In the background the AI
 // drafts the recipient's response from the whole case file; the instructor
-// reviews it on the Review page and approves it (the response becomes a case
-// file of the team's case world, shared with the team along with any existing
-// files it produces), has it redrafted, or denies the subpoena. The team sees
+// reviews it on the Review page and approves it (the existing case files it
+// produces are shared with the team; otherwise the response becomes a case file
+// of the team's case world, shared with the team), has it redrafted, or denies
+// the subpoena. The team sees
 // nothing until then. The other team in the case world gets notice of each
 // subpoena (FRCP 45(a)(4)), but not what came back.
 
@@ -469,16 +470,19 @@ export async function openSubpoenaCount(courseId: string) {
 const fileName = (title: string) => `${title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()}.txt`
 
 /**
- * Approves the response, as drafted or as the instructor edited it: it
- * becomes a case file of the team's case world, shared with the team along
- * with the existing files the draft produced, and the team is notified.
+ * Approves the response. When the draft produces existing case files, the
+ * team gets just those files. Otherwise the response, as drafted or as the
+ * instructor edited it, becomes a case file of the team's case world (a
+ * subpoena response, which later witnesses and subpoenas in that world read),
+ * shared with the team. Either way the team is notified.
  */
 export async function approveSubpoena(courseId: string, id: string, userId: string, text: string) {
   const subpoena = await findCourseSubpoena(courseId, id)
   if (subpoena.respondedAt) throw new HttpError(409, 'This subpoena has already been answered.')
   if (subpoena.status !== 'open') throw new HttpError(409, 'Wait for the draft response first.')
-  const response = text.trim()
-  if (!response) throw new HttpError(400, 'Write the response, or deny the subpoena.')
+  const existingOnly = subpoena.existing.length > 0
+  const response = existingOnly ? '' : text.trim()
+  if (!existingOnly && !response) throw new HttpError(400, 'Write the response, or deny the subpoena.')
   if (response.length > MAX_RESPONSE_LENGTH) throw new HttpError(400, `Keep the response to ${MAX_RESPONSE_LENGTH} characters.`)
   const { rows: worldRows } = await pool.query<{ matchupId: string | null; teamId: string }>(
     'SELECT matchup_id AS "matchupId", team_id AS "teamId" FROM subpoenas WHERE id = $1',
@@ -486,40 +490,50 @@ export async function approveSubpoena(courseId: string, id: string, userId: stri
   )
   const { matchupId, teamId } = worldRows[0]
 
-  const title = `Response of ${subpoena.recipient} to subpoena (Team ${subpoena.teamNumber})`
-  const materialId = randomUUID()
-  const storageKey = `cases/${subpoena.caseId}/${materialId}`
-  const data = Buffer.from(response, 'utf8')
-  await storage.put(storageKey, data, 'text/plain')
+  // A new response file, unless the draft answers with existing ones.
+  const created = existingOnly
+    ? null
+    : (() => {
+        const title = `Response of ${subpoena.recipient} to subpoena (Team ${subpoena.teamNumber})`
+        const materialId = randomUUID()
+        return { title, materialId, storageKey: `cases/${subpoena.caseId}/${materialId}`, data: Buffer.from(response, 'utf8') }
+      })()
+  if (created) await storage.put(created.storageKey, created.data, 'text/plain')
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     const { rows } = await client.query<{ id: string }>(
       `UPDATE subpoenas SET outcome = 'responded', status = 'answered', response = $2, responded_at = now(), responded_by = $3
        WHERE id = $1 AND responded_at IS NULL AND status = 'open' RETURNING id`,
-      [id, response, userId],
+      [id, response || null, userId],
     )
     if (!rows[0]) throw new HttpError(409, 'This subpoena has already been answered.')
-    await createMaterial(
-      {
-        id: materialId,
-        caseId: subpoena.caseId,
-        audience: 'instructor',
-        filename: fileName(title),
-        description: title,
-        contentType: 'text/plain',
-        sizeBytes: data.length,
-        storageKey,
-        uploadedBy: userId,
-        matchupId,
-      },
-      client,
-    )
-    // The text is the file, so later witnesses and subpoenas read it at once.
-    await client.query(`UPDATE case_materials SET text_status = 'ready', text_content = $2 WHERE id = $1`, [materialId, response])
-    // Later subpoenas for the same thing reuse it (see earlierResponses).
-    await client.query('UPDATE subpoenas SET response_material_id = $2 WHERE id = $1', [id, materialId])
-    const produced = [materialId, ...subpoena.existing.map((d) => d.materialId)]
+    if (created) {
+      await createMaterial(
+        {
+          id: created.materialId,
+          caseId: subpoena.caseId,
+          audience: 'instructor',
+          filename: fileName(created.title),
+          description: created.title,
+          contentType: 'text/plain',
+          sizeBytes: created.data.length,
+          storageKey: created.storageKey,
+          uploadedBy: userId,
+          matchupId,
+          source: 'subpoena',
+        },
+        client,
+      )
+      // The text is the file, so later witnesses and subpoenas read it at once.
+      await client.query(`UPDATE case_materials SET text_status = 'ready', text_content = $2 WHERE id = $1`, [
+        created.materialId,
+        response,
+      ])
+      // Later subpoenas for the same thing reuse it (see earlierResponses).
+      await client.query('UPDATE subpoenas SET response_material_id = $2 WHERE id = $1', [id, created.materialId])
+    }
+    const produced = [...(created ? [created.materialId] : []), ...subpoena.existing.map((d) => d.materialId)]
     for (const [position, material] of produced.entries()) {
       await client.query('INSERT INTO subpoena_documents (subpoena_id, material_id, position) VALUES ($1, $2, $3)', [
         id,
@@ -531,7 +545,7 @@ export async function approveSubpoena(courseId: string, id: string, userId: stri
     await client.query('COMMIT')
   } catch (err) {
     await client.query('ROLLBACK')
-    await storage.delete([storageKey]).catch(() => {})
+    if (created) await storage.delete([created.storageKey]).catch(() => {})
     throw err
   } finally {
     client.release()

@@ -6,13 +6,17 @@ import { formatCaseDate, partyNames, partyRole } from '../witness/profile.ts'
 import type { SettledFacts } from '../witness/prompt.ts'
 import type { SubpoenaType } from './exchange.ts'
 
-// The system prompt for drafting one subpoena's response: templates/
+// Drafting one subpoena's response. The system prompt, templates/
 // subpoena-response.md (the recipient's instructions, the whole case file,
-// and the facts it may not contradict), filled in for one subpoena, plus the
-// instructor's notes when they ask for a new draft.
+// and the facts it may not contradict), is the same for every subpoena in a
+// case world, so it's cached once for all of them. The subpoena itself, which
+// files the team has, earlier responses to reuse, and the instructor's notes
+// for a new draft are the user message, templates/subpoena-request.md.
 
-// A Windows checkout (core.autocrlf) has a CRLF template; the prompt is the same everywhere.
-const TEMPLATE = readFileSync(new URL('./templates/subpoena-response.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+// A Windows checkout (core.autocrlf) has CRLF templates; the prompt is the same everywhere.
+const readTemplate = (name: string) => readFileSync(new URL(`./templates/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const SYSTEM_TEMPLATE = readTemplate('subpoena-response.md')
+const REQUEST_TEMPLATE = readTemplate('subpoena-request.md')
 
 export interface SubpoenaDocument {
   /** The case file's id (not sent to the model). */
@@ -73,7 +77,7 @@ export interface SubpoenaContext {
 }
 
 /** Case documents arrive verbatim, so Mustache's HTML escaping is off (the template asks for this). */
-const render = (view: object) => Mustache.render(TEMPLATE, view, {}, { escape: (text: string) => text })
+const render = (template: string, view: object) => Mustache.render(template, view, {}, { escape: (text: string) => text })
 
 /** Removes the blank runs left behind by comments and false sections. */
 const tidy = (text: string) => text.replace(/\n{3,}/g, '\n\n').trim()
@@ -90,13 +94,10 @@ const TYPE_TEXT: Record<SubpoenaType, string> = {
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
-/** The user turn: the system prompt holds the whole subpoena. */
-export const SUBPOENA_USER_MESSAGE = 'Prepare the response.'
-
+/** The system prompt: the same for every subpoena in the case world, so they share one cache. */
 export function buildSubpoenaPrompt(ctx: SubpoenaContext, today = new Date()) {
   const names = partyNames(ctx.caseTitle, ctx.parties)
-  const role = partyRole(ctx.side)
-  const prompt = render({
+  const prompt = render(SYSTEM_TEMPLATE, {
     // Every case is civil for now.
     is_criminal: false,
     is_prosecution: false,
@@ -106,6 +107,20 @@ export function buildSubpoenaPrompt(ctx: SubpoenaContext, today = new Date()) {
     case_summary: ctx.caseSummary,
     in_world_date: formatCaseDate(today.toISOString().slice(0, 10)),
     key_disputed_issues: ctx.disputedIssues || undefined,
+    documents: ctx.documents.map((d) => ({ title: d.title, content: d.content.trim() })),
+    important_facts: asList([...ctx.importantFacts.plaintiff, ...ctx.importantFacts.defense]),
+    accepted_facts: asList(ctx.settled.accepted),
+    denied_facts: asList(ctx.settled.denied),
+  })
+  return `${tidy(prompt)}\n`
+}
+
+/** The user message: this subpoena, what the team has, earlier responses to reuse, and the reviewer's notes. */
+export function buildSubpoenaMessage(ctx: SubpoenaContext) {
+  const names = partyNames(ctx.caseTitle, ctx.parties)
+  const role = partyRole(ctx.side)
+  const message = render(REQUEST_TEMPLATE, {
+    is_criminal: false,
     requesting_side: role,
     requesting_party_name: role === 'plaintiff' ? names.plaintiff : names.defendant,
     recipient_name: ctx.recipient,
@@ -116,14 +131,7 @@ export function buildSubpoenaPrompt(ctx: SubpoenaContext, today = new Date()) {
     requests_tangible_things: ctx.requestType === 'tangible_things',
     requests_inspection: ctx.requestType === 'inspection',
     request_text: ctx.records.trim(),
-    documents: ctx.documents.map((d) => ({
-      title: d.title,
-      team_has_access: d.teamHasAccess ? 'yes' : 'no',
-      content: d.content.trim(),
-    })),
-    important_facts: asList([...ctx.importantFacts.plaintiff, ...ctx.importantFacts.defense]),
-    accepted_facts: asList(ctx.settled.accepted),
-    denied_facts: asList(ctx.settled.denied),
+    team_documents: ctx.documents.filter((d) => d.teamHasAccess).map((d) => ({ title: d.title })),
     world_subpoenas: ctx.worldSubpoenas.map((w) => ({
       recipient: w.recipient,
       type: TYPE_TEXT[w.requestType],
@@ -145,7 +153,7 @@ export function buildSubpoenaPrompt(ctx: SubpoenaContext, today = new Date()) {
       : '',
     ctx.instructions.trim(),
   ].filter(Boolean)
-  return `${tidy(prompt)}${notes.length ? `\n\n# Notes from the reviewer for this response\n\nFollow these too, within the rules above:\n\n${notes.join('\n\n')}` : ''}\n`
+  return `${tidy(message)}${notes.length ? `\n\n# Notes from the reviewer for this response\n\nFollow these too, within the rules above:\n\n${notes.join('\n\n')}` : ''}\n`
 }
 
 export interface ParsedSubpoenaResponse {

@@ -5,7 +5,7 @@ import { listMaterialTexts } from '../courses/caseContent.ts'
 import { pool } from '../db/pool.ts'
 import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 import { questionWeight } from './exchange.ts'
-import { buildSubpoenaPrompt, type SubpoenaContext } from './subpoenaPrompt.ts'
+import { buildSubpoenaMessage, buildSubpoenaPrompt, type SubpoenaContext } from './subpoenaPrompt.ts'
 import { subpoenasSettled } from './subpoenas.ts'
 
 let prof: request.Agent
@@ -395,9 +395,13 @@ describe('subpoenas', () => {
     const access = Object.fromEntries(asked[0].documents.map((d) => [d.title, d.teamHasAccess]))
     expect(access).toMatchObject({ 'Harness photos.pdf': true, 'Gate log.pdf': false })
     const prompt = buildSubpoenaPrompt(asked[0])
-    expect(prompt).toContain('You play Mercy Hospital')
-    expect(prompt).toContain('<document title="Gate log.pdf" team_has_access="no">')
-    expect(prompt).not.toContain('{{')
+    const message = buildSubpoenaMessage(asked[0])
+    expect(message).toContain('Directed to: Mercy Hospital')
+    expect(prompt).toContain('<document title="Gate log.pdf">')
+    // The team has its own files, not the defense's gate log.
+    expect(message).toContain('- Harness photos.pdf')
+    expect(message).not.toContain('- Gate log.pdf')
+    expect(prompt + message).not.toContain('{{')
 
     // Notice only for the other team, and nothing yet for the team that served it.
     expect((await exchange(cy)).subpoenas.notices).toEqual([
@@ -432,37 +436,51 @@ describe('subpoenas', () => {
     ])
     expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(1)
 
-    const approve = (response: string) => prof.post(`${subpoenasUrl()}/${s.id}/approve`).send({ response })
-    expect((await approve(' ')).status).toBe(400)
-    const done = await approve(`${RESPONSE}\nEdited.`)
+    // Answered with the existing file: the team gets that file and nothing else.
+    const before = (await pool.query<{ n: number }>('SELECT count(*)::int AS n FROM case_materials WHERE case_id = $1', [caseId])).rows[0].n
+    const approve = (id: string, response: string) => prof.post(`${subpoenasUrl()}/${id}/approve`).send({ response })
+    const done = await approve(s.id, 'ignored')
     expect(done.status).toBe(200)
-    const responseFile = done.body.subpoena.documents[0]
     expect(done.body.subpoena).toMatchObject({
       outcome: 'responded',
       status: 'answered',
       respondedBy: 'Prof. Ruiz',
-      documents: [
-        { materialId: expect.any(String), title: 'Response of Mercy Hospital to subpoena (Team 1)' },
-        { materialId: gateLog, title: 'Gate log.pdf' },
-      ],
+      response: null,
+      documents: [{ materialId: gateLog, title: 'Gate log.pdf' }],
     })
-    expect((await approve('Again.')).status).toBe(409)
+    expect((await pool.query<{ n: number }>('SELECT count(*)::int AS n FROM case_materials WHERE case_id = $1', [caseId])).rows[0].n).toBe(before)
+    expect((await approve(s.id, 'Again.')).status).toBe(409)
     expect((await prof.get(subpoenasUrl())).body.subpoenas).toEqual([])
     expect((await prof.get(`${subpoenasUrl()}?status=completed`)).body.subpoenas).toHaveLength(1)
+    expect((await exchange(ada)).subpoenas.served[0]).toMatchObject({ outcome: 'responded', response: null, seen: false })
+    expect((await ada.get(myCaseUrl())).body.workspace.materials.map((m: { filename: string }) => m.filename)).toContain('Gate log.pdf')
 
-    const back = (await exchange(ada)).subpoenas.served[0]
-    expect(back).toMatchObject({ outcome: 'responded', response: `${RESPONSE}\nEdited.`, seen: false })
+    // Nothing in the case answers this one, so the response becomes a subpoena response file.
+    recipientWrites(RESPONSE)
+    await serve(ada, 'Mercy Hospital', 'Billing records for June 10.')
+    await subpoenasSettled()
+    const billing = (await prof.get(subpoenasUrl())).body.subpoenas[0]
+    expect((await approve(billing.id, ' ')).status).toBe(400)
+    const sent = await approve(billing.id, `${RESPONSE}\nEdited.`)
+    const responseFile = sent.body.subpoena.documents[0]
+    expect(sent.body.subpoena).toMatchObject({
+      response: `${RESPONSE}\nEdited.`,
+      documents: [{ materialId: expect.any(String), title: 'Response of Mercy Hospital to subpoena (Team 1)' }],
+    })
     const files = (await ada.get(myCaseUrl())).body.workspace.materials.map((m: { filename: string }) => m.filename)
-    expect(files).toEqual(expect.arrayContaining(['Gate log.pdf', 'Response of Mercy Hospital to subpoena (Team 1).txt']))
+    expect(files).toContain('Response of Mercy Hospital to subpoena (Team 1).txt')
     expect((await cy.get(myCaseUrl())).body.workspace.materials.map((m: { filename: string }) => m.filename)).not.toContain(
       'Response of Mercy Hospital to subpoena (Team 1).txt',
     )
     const text = await ada.get(`${myCaseUrl()}/materials/${responseFile.materialId}/text`)
     expect(text.body).toEqual({ status: 'ready', text: `${RESPONSE}\nEdited.` })
+    const listed = (await prof.get(`${caseUrl()}/materials`)).body.materials as { id: string; source: string; worldNumber: number | null }[]
+    expect(listed.find((m) => m.id === responseFile.materialId)).toMatchObject({ source: 'subpoena', worldNumber: 1 })
+    expect(listed.find((m) => m.id === gateLog)).toMatchObject({ source: 'instructor', worldNumber: null })
 
-    // The response belongs to this case world: later prompts there read it, other worlds' don't.
+    // The AI reads every instructor file, and this world's subpoena responses only.
     const world = (await pool.query<{ id: string }>('SELECT matchup_id AS id FROM subpoenas WHERE id = $1', [s.id])).rows[0].id
-    expect((await listMaterialTexts(caseId, world)).map((m) => m.id)).toContain(responseFile.materialId)
+    expect((await listMaterialTexts(caseId, world)).map((m) => m.id)).toEqual(expect.arrayContaining([gateLog, responseFile.materialId]))
     expect((await listMaterialTexts(caseId)).map((m) => m.id)).not.toContain(responseFile.materialId)
     await serve(ada, 'Atlas Coaster Co.')
     await subpoenasSettled()
@@ -472,7 +490,7 @@ describe('subpoenas', () => {
     expect((await exchange(ada)).subpoenas.served[1].seen).toBe(true)
     expect((await exchange(bo)).subpoenas.served[1].seen).toBe(false)
     const overview = (await prof.get(`${caseUrl()}/exchange/overview`)).body.overview
-    expect(overview.activity).toMatchObject({ subpoenasServed: 2, subpoenasWaiting: 1 })
+    expect(overview.activity).toMatchObject({ subpoenasServed: 3, subpoenasWaiting: 1 })
   })
 
   it("redrafts with the instructor's notes, as a new file when asked, and retries a failed draft", async () => {
@@ -496,7 +514,7 @@ describe('subpoenas', () => {
     await prof.post(`${subpoenasUrl()}/${failed.id}/redraft`).send({ instructions: 'Only June 2019.', createNew: true })
     await subpoenasSettled()
     expect(asked[0]).toMatchObject({ instructions: 'Only June 2019.', createNew: true })
-    expect(buildSubpoenaPrompt(asked[0])).toContain("Don't produce any existing case document")
+    expect(buildSubpoenaMessage(asked[0])).toContain("Don't produce any existing case document")
     // Asked for a new file, so existing ones it names anyway aren't produced.
     expect((await prof.get(subpoenasUrl())).body.subpoenas[0]).toMatchObject({
       status: 'open',

@@ -181,7 +181,7 @@ describe('LaunchPanel', () => {
 })
 
 describe('MaterialsSection', () => {
-  it('lists files with their file type and audience, which can be changed in place', async () => {
+  it('lists files with their source, file type and audience, which can be changed in place', async () => {
     const updateMaterial = vi.fn().mockResolvedValue({ ...factPattern, audience: 'plaintiff' })
     const onChange = vi.fn()
     const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" onChange={onChange} />, {
@@ -192,8 +192,8 @@ describe('MaterialsSection', () => {
     // The name opens the viewer; the icon beside it downloads.
     await screen.findByRole('button', { name: 'Fact pattern.pdf' })
     expect(screen.getByRole('link', { name: 'Download Fact pattern.pdf' })).toHaveAttribute('href', '/download/c1/k1/m1')
-    expect(screen.getByText('244 KB · Read first.')).toBeInTheDocument()
-    expect(screen.getByRole('cell', { name: 'PDF' })).toBeInTheDocument()
+    expect(screen.getByText('PDF · 244 KB · Read first.')).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Instructor Uploaded' })).toBeInTheDocument()
     // No initial file yet: say how to choose one.
     expect(screen.getByRole('note')).toHaveTextContent('No initial file yet, so the case can’t launch.')
 
@@ -203,6 +203,45 @@ describe('MaterialsSection', () => {
       description: 'Read first.',
     })
     expect(onChange).toHaveBeenCalled()
+  })
+
+  it('filters the files by source', async () => {
+    const response: CaseMaterial = {
+      ...factPattern,
+      id: 'm9',
+      filename: 'Response of Mercy to subpoena (Team 1).txt',
+      contentType: 'text/plain',
+      audience: 'instructor',
+      source: 'subpoena',
+      worldNumber: 1,
+    }
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, {
+      listMaterials: vi.fn().mockResolvedValue([factPattern, response]),
+    })
+    const filter = await screen.findByRole('group', { name: 'Show files by source' })
+    expect(within(filter).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'All2',
+      'Instructor Uploaded1',
+      'Subpoena Response1',
+    ])
+    expect(within(filter).getByRole('button', { name: /All/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('cell', { name: 'Subpoena Response · World A' })).toBeInTheDocument()
+
+    await user.click(within(filter).getByRole('button', { name: /Subpoena Response/ }))
+    expect(screen.queryByRole('button', { name: 'Fact pattern.pdf' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Response of Mercy to subpoena (Team 1).txt' })).toBeInTheDocument()
+
+    await user.click(within(filter).getByRole('button', { name: /Instructor Uploaded/ }))
+    expect(screen.getByRole('button', { name: 'Fact pattern.pdf' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Response of Mercy/ })).not.toBeInTheDocument()
+  })
+
+  it('says when no files have a source yet', async () => {
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, {
+      listMaterials: vi.fn().mockResolvedValue([factPattern]),
+    })
+    await user.click(await screen.findByRole('button', { name: /Subpoena Response/ }))
+    expect(screen.getByText('No files of this source yet.')).toBeInTheDocument()
   })
 
   it('makes a file the initial file, which everyone sees, and keeps new files to instructors', async () => {

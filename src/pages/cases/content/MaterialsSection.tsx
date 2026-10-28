@@ -2,9 +2,11 @@ import { Fragment, useEffect, useRef, useState, type ChangeEvent, type DragEvent
 import { Download, TriangleAlert, Upload, X } from 'lucide-react'
 import { FileViewer } from '../../../components/FileViewer'
 import { useCourseService } from '../../../courses/CourseServiceContext'
-import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate } from '../../../courses/caseLabels'
+import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate, SOURCE_LABEL } from '../../../courses/caseLabels'
 import {
   MATERIAL_AUDIENCES,
+  MATERIAL_SOURCES,
+  type MaterialSource,
   type CaseMaterial,
   type CaseTeams,
   type MaterialAudience,
@@ -40,6 +42,9 @@ const defaultLabel = (filename: string) => filename.replace(/\.[^.]+$/, '') || f
 /** The audience select's extra choice: instructors only, plus the worlds and teams picked. */
 const SPECIFIC = 'specific'
 
+/** Where a file came from (files from before sources were recorded are the instructor's). */
+const sourceOf = (m: CaseMaterial): MaterialSource => m.source ?? 'instructor'
+
 /**
  * The case file: the pieces of the fact pattern (documents, images, audio,
  * video), each shown to everyone in the case, only to one side, or only to
@@ -59,6 +64,9 @@ export function MaterialsSection({
   const service = useCourseService()
   const fileInput = useRef<HTMLInputElement>(null)
   const [materials, setMaterials] = useState<CaseMaterial[] | null>(null)
+  /** Which files the table shows, by where they came from; null for all. */
+  const [sourceFilter, setSourceFilter] = useState<MaterialSource | null>(null)
+  const shown = (materials ?? []).filter((m) => !sourceFilter || sourceOf(m) === sourceFilter)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
@@ -360,7 +368,7 @@ export function MaterialsSection({
       ) : materials.length === 0 ? (
         <p className="muted">No files uploaded yet. Start with the fact pattern.</p>
       ) : (
-        <div className="table-scroll">
+        <>
           {!materials.some((m) => m.initial) && (
             <p className="phase-warning materials-no-initial" role="note">
               <TriangleAlert aria-hidden="true" />
@@ -368,130 +376,155 @@ export function MaterialsSection({
               team starts from, such as the complaint.
             </p>
           )}
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">File</th>
-                <th scope="col">Type</th>
-                <th scope="col">Visible to</th>
-                <th scope="col">AI text</th>
-                <th scope="col">Added</th>
-                <th scope="col">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {materials.map((m) => (
-                <Fragment key={m.id}>
+          <div className="source-filter" role="group" aria-label="Show files by source">
+            {[null, ...MATERIAL_SOURCES].map((source) => (
+              <button
+                key={source ?? 'all'}
+                type="button"
+                className="source-chip"
+                aria-pressed={sourceFilter === source}
+                onClick={() => setSourceFilter(source)}
+              >
+                {source ? SOURCE_LABEL[source] : 'All'}
+                <span className="source-count">
+                  {source ? materials.filter((m) => sourceOf(m) === source).length : materials.length}
+                </span>
+              </button>
+            ))}
+          </div>
+          {shown.length === 0 ? (
+            <p className="muted">No files of this source yet.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td>
-                      <button
-                        type="button"
-                        className="link-button content-file-open"
-                        title={`Open ${m.filename} in the viewer`}
-                        onClick={() => setViewing(m)}
-                      >
-                        {m.filename}
-                      </button>
-                      <a
-                        className="content-file-download"
-                        href={service.materialDownloadUrl(courseId, caseId, m.id)}
-                        download
-                        aria-label={`Download ${m.filename}`}
-                        title="Download"
-                      >
-                        <Download aria-hidden="true" />
-                      </a>
-                      <small className="muted content-meta">
-                        {formatSize(m.sizeBytes)}
-                        {m.description && ` · ${m.description}`}
-                      </small>
-                      {m.initial ? (
-                        <span className="badge badge-case-active badge-initial">Initial file</span>
-                      ) : m.worldNumber ? (
-                        // A subpoena response: only that world's AI witnesses and recipients read it.
-                        <span className="badge badge-initial">Subpoena response · World {worldLabel(m.worldNumber)}</span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="link-button content-meta"
-                          onClick={() => handleInitial(m)}
-                          aria-label={`Make ${m.filename} the initial file`}
-                        >
-                          Make initial file
-                        </button>
-                      )}
-                    </td>
-                    <td>{fileTypeLabel(m.contentType)}</td>
-                    <td>
-                      <select
-                        className="inline-select"
-                        value={m.audience}
-                        onChange={(e) => handleAudience(m, e.target.value as MaterialAudience | typeof SPECIFIC)}
-                        aria-label={`Who can see ${m.filename}`}
-                        // Every team starts from the initial file, so everyone sees it.
-                        disabled={m.initial}
-                        title={m.initial ? 'Every team sees the initial file.' : undefined}
-                      >
-                        {MATERIAL_AUDIENCES.map((a) => (
-                          <option key={a} value={a}>
-                            {AUDIENCE_LABEL[a]}
-                          </option>
-                        ))}
-                        {teams && <option value={SPECIFIC}>Specific worlds or teams…</option>}
-                      </select>
-                      {sharesLabel(teams, m.shares) && (
-                        <small className="share-chips">Also {sharesLabel(teams, m.shares)}</small>
-                      )}
-                      {teams && !m.initial && sharing !== m.id && (
-                        <button
-                          type="button"
-                          className="link-button content-meta"
-                          onClick={() => setSharing(m.id)}
-                          aria-label={`Share ${m.filename} with worlds or teams`}
-                        >
-                          Share with worlds or teams
-                        </button>
-                      )}
-                    </td>
-                    <td>
-                      <TextStatusCell
-                        material={m}
-                        textUrl={service.materialTextUrl(courseId, caseId, m.id)}
-                        retrying={retrying === m.id}
-                        onRetry={() => handleRetry(m)}
-                      />
-                    </td>
-                    <td>{shortDate(m.uploadedAt)}</td>
-                    <td className="cell-actions">
-                      <button
-                        type="button"
-                        className="btn-danger"
-                        onClick={() => handleDelete(m)}
-                        aria-label={`Delete ${m.filename}`}
-                      >
-                        Delete
-                      </button>
-                    </td>
+                    <th scope="col">File</th>
+                    <th scope="col">Source</th>
+                    <th scope="col">Visible to</th>
+                    <th scope="col">AI text</th>
+                    <th scope="col">Added</th>
+                    <th scope="col">
+                      <span className="visually-hidden">Actions</span>
+                    </th>
                   </tr>
-                  {sharing === m.id && teams && (
-                    <tr className="share-row">
-                      <td colSpan={6}>
-                        <SharePicker
-                          material={m}
-                          teams={teams}
-                          onSave={(shares) => handleShares(m, shares)}
-                          onCancel={() => setSharing(null)}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {shown.map((m) => (
+                    <Fragment key={m.id}>
+                      <tr>
+                        <td>
+                          <button
+                            type="button"
+                            className="link-button content-file-open"
+                            title={`Open ${m.filename} in the viewer`}
+                            onClick={() => setViewing(m)}
+                          >
+                            {m.filename}
+                          </button>
+                          <a
+                            className="content-file-download"
+                            href={service.materialDownloadUrl(courseId, caseId, m.id)}
+                            download
+                            aria-label={`Download ${m.filename}`}
+                            title="Download"
+                          >
+                            <Download aria-hidden="true" />
+                          </a>
+                          <small className="muted content-meta">
+                            {fileTypeLabel(m.contentType)} · {formatSize(m.sizeBytes)}
+                            {m.description && ` · ${m.description}`}
+                          </small>
+                          {m.initial ? (
+                            <span className="badge badge-case-active badge-initial">Initial file</span>
+                          ) : m.worldNumber ? null : (
+                            <button
+                              type="button"
+                              className="link-button content-meta"
+                              onClick={() => handleInitial(m)}
+                              aria-label={`Make ${m.filename} the initial file`}
+                            >
+                              Make initial file
+                            </button>
+                          )}
+                        </td>
+                        <td>
+                          {/* A subpoena response: only that world's AI witnesses and recipients read it. */}
+                          <span className={`source-badge source-${sourceOf(m)}`}>
+                            {SOURCE_LABEL[sourceOf(m)]}
+                            {m.worldNumber ? ` · World ${worldLabel(m.worldNumber)}` : ''}
+                          </span>
+                        </td>
+                        <td>
+                          <select
+                            className="inline-select"
+                            value={m.audience}
+                            onChange={(e) => handleAudience(m, e.target.value as MaterialAudience | typeof SPECIFIC)}
+                            aria-label={`Who can see ${m.filename}`}
+                            // Every team starts from the initial file, so everyone sees it.
+                            disabled={m.initial}
+                            title={m.initial ? 'Every team sees the initial file.' : undefined}
+                          >
+                            {MATERIAL_AUDIENCES.map((a) => (
+                              <option key={a} value={a}>
+                                {AUDIENCE_LABEL[a]}
+                              </option>
+                            ))}
+                            {teams && <option value={SPECIFIC}>Specific worlds or teams…</option>}
+                          </select>
+                          {sharesLabel(teams, m.shares) && (
+                            <small className="share-chips">Also {sharesLabel(teams, m.shares)}</small>
+                          )}
+                          {teams && !m.initial && sharing !== m.id && (
+                            <button
+                              type="button"
+                              className="link-button content-meta"
+                              onClick={() => setSharing(m.id)}
+                              aria-label={`Share ${m.filename} with worlds or teams`}
+                            >
+                              Share with worlds or teams
+                            </button>
+                          )}
+                        </td>
+                        <td>
+                          <TextStatusCell
+                            material={m}
+                            textUrl={service.materialTextUrl(courseId, caseId, m.id)}
+                            retrying={retrying === m.id}
+                            onRetry={() => handleRetry(m)}
+                          />
+                        </td>
+                        <td>{shortDate(m.uploadedAt)}</td>
+                        <td className="cell-actions">
+                          <button
+                            type="button"
+                            className="btn-danger"
+                            onClick={() => handleDelete(m)}
+                            aria-label={`Delete ${m.filename}`}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                      {sharing === m.id && teams && (
+                        <tr className="share-row">
+                          <td colSpan={6}>
+                            <SharePicker
+                              material={m}
+                              teams={teams}
+                              onSave={(shares) => handleShares(m, shares)}
+                              onCancel={() => setSharing(null)}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
       {viewing && (
         <FileViewer

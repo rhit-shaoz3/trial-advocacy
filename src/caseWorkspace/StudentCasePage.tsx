@@ -88,7 +88,11 @@ export function StudentCasePage() {
     setExchange((prev) =>
       prev && {
         ...prev,
-        subpoenas: prev.subpoenas && { ...prev.subpoenas, served: prev.subpoenas.served.map((s) => ({ ...s, seen: true })) },
+        subpoenas: prev.subpoenas && {
+          ...prev.subpoenas,
+          served: prev.subpoenas.served.map((s) => ({ ...s, seen: true })),
+          notices: prev.subpoenas.notices.map((n) => ({ ...n, seen: true })),
+        },
         interrogatories: prev.interrogatories && {
           ...prev.interrogatories,
           requests: prev.interrogatories.requests.map((r) => ({ ...r, seen: true })),

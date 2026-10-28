@@ -43,12 +43,11 @@ const STEP_HINT: Record<ExchangeStep, string> = {
 
 type Part = 'subpoenas' | 'interrogatories' | 'rfas'
 
-const PART_COPY: Record<Part, { limit: string; limitHint: string; unit: string; daysHint: string }> = {
+const PART_COPY: Record<Part, { limit: string; limitHint: string; unit: string; daysHint?: string }> = {
   subpoenas: {
     limit: 'Subpoenas per team',
     limitHint: 'Each team can send this many over the whole case.',
     unit: 'subpoenas',
-    daysHint: 'How long the recipient has to respond. Students see the due date on the subpoena.',
   },
   interrogatories: {
     limit: 'Questions per team',
@@ -436,17 +435,20 @@ function PartForm({
           onChange={(limit) => onChange({ ...value, limit })}
         />
       </SettingRow>
-      <SettingRow label="Time to respond" hint={copy.daysHint}>
-        <Stepper
-          label="Days to respond"
-          value={value.days}
-          unit="days"
-          min={1}
-          max={365}
-          disabled={!value.enabled}
-          onChange={(days) => onChange({ ...value, days })}
-        />
-      </SettingRow>
+      {/* Subpoenas go to the instructor, who answers on the Review page, so there's no deadline to set. */}
+      {part !== 'subpoenas' && (
+        <SettingRow label="Time to respond" hint={copy.daysHint ?? ''}>
+          <Stepper
+            label="Days to respond"
+            value={value.days}
+            unit="days"
+            min={1}
+            max={365}
+            disabled={!value.enabled}
+            onChange={(days) => onChange({ ...value, days })}
+          />
+        </SettingRow>
+      )}
       {part === 'subpoenas' && value.types && (
         <SubpoenaTypes types={value.types} disabled={!value.enabled} onChange={(types) => onChange({ ...value, types } as PartSettings)} />
       )}

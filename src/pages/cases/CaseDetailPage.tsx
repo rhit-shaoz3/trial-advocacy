@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Copy, Pencil, Share2 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import { investigatorOf, type CourseCase } from '../../courses/types'
@@ -228,18 +228,6 @@ function CaseDetail() {
                 <h1>{courseCase.title}</h1>
                 <p className="muted">
                   <CaseStatusBadge status={courseCase.status} /> {STATUS_HINT[courseCase.status]}
-                  {' · '}
-                  <button type="button" className="link-button" onClick={() => setEditing(true)}>
-                    Edit case
-                  </button>
-                  {' · '}
-                  <button type="button" className="link-button" onClick={() => setCopying('duplicate')}>
-                    Duplicate
-                  </button>
-                  {' · '}
-                  <button type="button" className="link-button" onClick={() => setCopying('share')}>
-                    Share
-                  </button>
                 </p>
                 {courseCase.copiedFrom && (
                   <p className="muted case-copied-from">
@@ -252,6 +240,29 @@ function CaseDetail() {
                     <strong>Note to students:</strong> {courseCase.instructorNote}
                   </p>
                 )}
+              </div>
+              <div className="case-actions" role="toolbar" aria-label="Case actions">
+                <button type="button" className="case-action" onClick={() => setEditing(true)} aria-label="Edit case" title="Edit case">
+                  <Pencil aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="case-action"
+                  onClick={() => setCopying('duplicate')}
+                  aria-label="Duplicate case"
+                  title="Duplicate case"
+                >
+                  <Copy aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="case-action"
+                  onClick={() => setCopying('share')}
+                  aria-label="Share case"
+                  title="Share case"
+                >
+                  <Share2 aria-hidden="true" />
+                </button>
               </div>
             </header>
           )}

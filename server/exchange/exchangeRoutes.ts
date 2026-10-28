@@ -250,7 +250,7 @@ async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
   }
   const subpoenas = async (p: SubpoenaSettings): Promise<StudentSubpoenas | null> => {
     if (!p.enabled) return null
-    const [served, notices] = await Promise.all([teamSubpoenas(ctx.caseId, ctx.teamId, ctx.userId), subpoenaNotices(ctx.caseId, ctx.teamId)])
+    const [served, notices] = await Promise.all([teamSubpoenas(ctx.caseId, ctx.teamId, ctx.userId), subpoenaNotices(ctx.caseId, ctx.teamId, ctx.userId)])
     return { types: p.types, limit: p.limit, days: p.days, used: served.length, remaining: Math.max(0, p.limit - served.length), served, notices }
   }
   const numbers = await teamNumbers(ctx)

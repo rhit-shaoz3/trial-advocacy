@@ -653,6 +653,8 @@ export interface SubpoenaNotice {
   requestType: SubpoenaType
   records: string
   sentAt: string
+  /** Whether this student has seen the notice. */
+  seen: boolean
 }
 
 /** A team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */

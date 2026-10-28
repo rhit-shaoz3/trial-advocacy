@@ -11,6 +11,7 @@ import { cleanFacts, toRows } from '../factRows'
 import { ImportantFactsField } from '../ImportantFactsField'
 import { TeamsSection } from '../TeamsSection'
 import './CaseSetupFlow.css'
+import '../copyCase.css'
 import { PartyFields } from '../CaseForm'
 import { titleParties } from '../../../courses/worldLabel'
 import { DictationTextarea } from '../../../components/Dictation'
@@ -131,6 +132,12 @@ export function CaseSetupFlow({
             Copied{courseCase.copiedFrom ? ` from ${courseCase.copiedFrom.title}${courseCase.copiedFrom.owner ? ` · ${courseCase.copiedFrom.owner}` : ''}` : ''}
             . The details, facts, files, witnesses, and investigator came with it; put this class&rsquo;s students into teams
             and worlds, then launch it when you&rsquo;re ready.
+          </p>
+        )}
+        {courseCase?.copySetup && (
+          <p className="copy-files-note setup-copied" role="note">
+            <strong>Every case file is &ldquo;Instructors only&rdquo;</strong> in this copy, except the starting file. Before
+            you launch, check who should see each file on the Case file tab.
           </p>
         )}
         <nav aria-label="Setup steps">

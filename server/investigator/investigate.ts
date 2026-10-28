@@ -12,11 +12,20 @@ export const INVESTIGATOR_EFFORT = 'high'
 /** The longest assignment a team can send. */
 export const MAX_ASSIGNMENT_LENGTH = 4000
 
+/**
+ * Thinking counts toward this, and at high effort it can take most of 16K
+ * tokens on a large case file before the report starts, so there's room for
+ * both; a limit this size needs a streamed request.
+ */
+export const INVESTIGATOR_MAX_TOKENS = 64000
+
 /** The only part of the client this needs, so tests can pass a fake. */
 export interface ReportClient {
   beta: {
     messages: {
-      create(params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming): Promise<Anthropic.Beta.Messages.BetaMessage>
+      stream(params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming): {
+        finalMessage(): Promise<Anthropic.Beta.Messages.BetaMessage>
+      }
     }
   }
 }
@@ -34,7 +43,7 @@ export function buildInvestigationRequest(
 ): Anthropic.Beta.Messages.MessageCreateParamsNonStreaming {
   return {
     model,
-    max_tokens: 16000,
+    max_tokens: INVESTIGATOR_MAX_TOKENS,
     // Adaptive thinking: the model decides how much to reason; effort caps it.
     thinking: { type: 'adaptive' },
     output_config: { effort: INVESTIGATOR_EFFORT },
@@ -59,7 +68,7 @@ export function buildInvestigationRequest(
 
 /** The investigator's report: the text, exactly as he wrote it. */
 export async function investigate(client: ReportClient, input: InvestigationInput): Promise<string> {
-  const response = await client.beta.messages.create(buildInvestigationRequest(input))
+  const response = await client.beta.messages.stream(buildInvestigationRequest(input)).finalMessage()
   if (response.stop_reason === 'refusal') throw new Error('The investigator declined this assignment. Try rewording it.')
   if (response.stop_reason === 'max_tokens') throw new Error('The investigator’s report was cut off.')
   const text = response.content

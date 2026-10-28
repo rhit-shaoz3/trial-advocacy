@@ -19,6 +19,7 @@ import {
   Lock,
   Mail,
   MessageSquare,
+  Megaphone,
   ScrollText,
   Search,
   Share2,
@@ -169,12 +170,24 @@ export function CaseWorkspaceView({
   const toRespond = exchangeRequests.filter((r) => r.direction === 'received' && !r.respondedAt).length
   /** Answers to the team's subpoenas that this student hasn't read. */
   const newAnswers = exchange?.subpoenas?.served.filter((sp) => sp.respondedAt && !sp.seen) ?? []
+  /** Subpoenas the other team served that this student hasn't seen notice of. */
+  const newNotices = exchange?.subpoenas?.notices.filter((n) => n.seen === false) ?? []
   // Being on the Reviews, Investigator, or Information exchange tab marks what's there read, however the student got there.
   useEffect(() => {
     if (tab === 'reviews' && unseen > 0) onOpenReviews?.()
     if (tab === 'investigator' && unseenReports > 0) onOpenInvestigator?.()
-    if (tab === 'exchange' && newResponses.length + newAnswers.length > 0) onOpenExchange?.()
-  }, [tab, unseen, unseenReports, onOpenReviews, onOpenInvestigator, newResponses.length, newAnswers.length, onOpenExchange])
+    if (tab === 'exchange' && newResponses.length + newAnswers.length + newNotices.length > 0) onOpenExchange?.()
+  }, [
+    tab,
+    unseen,
+    unseenReports,
+    onOpenReviews,
+    onOpenInvestigator,
+    newResponses.length,
+    newAnswers.length,
+    newNotices.length,
+    onOpenExchange,
+  ])
   const { case: c, team, world, materials, witnesses, tasks } = workspace
   // Null outside the app (the instructor's preview, tests); the form's signature is then left blank.
   const auth = useContext(AuthContext)
@@ -192,7 +205,7 @@ export function CaseWorkspaceView({
     { id: 'case-file', label: 'Case file', count: materials.length + reports.length },
     { id: 'witnesses', label: 'Witnesses', count: witnesses.length },
     ...(exchange
-      ? [{ id: 'exchange' as const, label: 'Information exchange', count: toRespond + newResponses.length + newAnswers.length }]
+      ? [{ id: 'exchange' as const, label: 'Information exchange', count: toRespond + newResponses.length + newAnswers.length + newNotices.length }]
       : []),
     ...(investigator ? [{ id: 'investigator' as const, label: 'Investigator', count: unseenReports }] : []),
     { id: 'tasks', label: 'Tasks', count: openTasks.length },
@@ -254,6 +267,21 @@ export function CaseWorkspaceView({
               label: 'See answer',
               onClick: () => {
                 setExchangeFocus({ kind: 'subpoenas', id: newAnswers[0].id })
+                setTab('exchange')
+              },
+            }}
+          />
+        )}
+        {newNotices.length > 0 && tab !== 'exchange' && (
+          <Toast
+            icon={<Megaphone />}
+            title={`Team ${newNotices[0].teamNumber} served a subpoena on ${newNotices[0].recipient}${
+              newNotices.length > 1 ? ` (and ${newNotices.length - 1} more)` : ''
+            }`}
+            action={{
+              label: 'See notice',
+              onClick: () => {
+                setExchangeFocus({ kind: 'subpoenas', id: newNotices[0].id })
                 setTab('exchange')
               },
             }}

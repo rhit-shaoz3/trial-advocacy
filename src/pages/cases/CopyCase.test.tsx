@@ -74,10 +74,11 @@ describe('duplicating and sharing a case', () => {
       duplicateCase,
     })
 
-    await user.click(await screen.findByRole('button', { name: 'Duplicate' }))
+    await user.click(await screen.findByRole('button', { name: 'Duplicate case' }))
     const dialog = await screen.findByRole('dialog', { name: 'Duplicate this case' })
     const title = within(dialog).getByRole('textbox', { name: 'Title' })
     expect(title).toHaveValue('Winston v. Thrillville (copy)')
+    expect(within(dialog).getByRole('note')).toHaveTextContent('Every case file goes back to “Instructors only” in the copy, except the starting file.')
     // Another class keeps the title as it is.
     await user.selectOptions(await within(dialog).findByRole('combobox', { name: 'Class' }), 'c2')
     expect(title).toHaveValue('Winston v. Thrillville')
@@ -90,6 +91,8 @@ describe('duplicating and sharing a case', () => {
     expect(screen.getByText(/Copied from Winston v\. Thrillville · Prof\. Ruiz/)).toBeInTheDocument()
     const steps = screen.getByRole('navigation', { name: 'Setup steps' })
     expect(within(steps).getAllByRole('button').map((b) => b.textContent)).toEqual(['1Teams', 'Case worlds'])
+    // A reminder to look the files over.
+    expect(screen.getByRole('note')).toHaveTextContent('Every case file is “Instructors only” in this copy, except the starting file.')
     // It opens on the teams.
     expect(screen.getByText('Step 1 of 2')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Teams' })).toBeInTheDocument()
@@ -102,7 +105,7 @@ describe('duplicating and sharing a case', () => {
       .mockResolvedValueOnce({ toName: 'Prof. Kim', toEmail: 'kim@example.com' })
     const { user } = renderAt('/courses/c1/cases/k1', { getCase: vi.fn().mockResolvedValue(winston), shareCase })
 
-    await user.click(await screen.findByRole('button', { name: 'Share' }))
+    await user.click(await screen.findByRole('button', { name: 'Share case' }))
     const dialog = await screen.findByRole('dialog', { name: 'Share Winston v. Thrillville' })
     await user.type(within(dialog).getByRole('textbox', { name: 'Instructor’s email' }), 'stu@example.com')
     await user.click(within(dialog).getByRole('button', { name: 'Share' }))

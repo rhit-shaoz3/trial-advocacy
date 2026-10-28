@@ -187,6 +187,7 @@ export function SubpoenasSection({
                     </small>
                     <span className="ex-notice-records">{n.records}</span>
                   </span>
+                  {n.seen === false && <span className="cw-badge cw-badge-new">New</span>}
                 </li>
               ))}
             </ul>

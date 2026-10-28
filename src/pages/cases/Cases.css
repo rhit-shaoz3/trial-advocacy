@@ -1475,3 +1475,49 @@ a.case-row:hover {
   margin: 0.25rem 0 0;
   font-size: 0.85rem;
 }
+
+/* Edit, duplicate, and share, at the top right of a case */
+.case-header {
+  align-items: flex-start;
+}
+
+.case-actions {
+  display: flex;
+  flex: none;
+  gap: 0.4rem;
+  margin-top: 1.4rem;
+}
+
+.case-action {
+  display: inline-grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ws-navy);
+  cursor: pointer;
+}
+
+.case-action svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.case-action:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.case-action:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .case-actions {
+    margin-top: 0;
+  }
+}

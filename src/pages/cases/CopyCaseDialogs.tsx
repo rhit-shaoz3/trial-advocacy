@@ -114,6 +114,10 @@ export function DuplicateCaseDialog({
           <input type="checkbox" checked={includeTasks} onChange={(e) => setIncludeTasks(e.target.checked)} />
           Include the tasks (without their due dates)
         </label>
+        <p className="copy-files-note" role="note">
+          <strong>Every case file goes back to &ldquo;Instructors only&rdquo;</strong> in the copy, except the starting file.
+          Before you launch it, check who should see each file on its Case file tab.
+        </p>
         <p className="muted">Next you&rsquo;ll put the class&rsquo;s students into teams and worlds.</p>
         {error && (
           <p className="form-error" role="alert">

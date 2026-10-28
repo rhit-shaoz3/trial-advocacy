@@ -75,6 +75,8 @@ export interface SubpoenaNotice {
   requestType: SubpoenaType
   records: string
   sentAt: Date
+  /** Whether this student has seen the notice. */
+  seen: boolean
 }
 
 // Shape sent to the client; matches `CourseSubpoena` in src/courses/types.ts.
@@ -141,13 +143,14 @@ export async function teamSubpoenas(caseId: string, teamId: string, userId: stri
 }
 
 /** Notice of the subpoenas the other team in this team's case world has served, newest first. */
-export async function subpoenaNotices(caseId: string, teamId: string): Promise<SubpoenaNotice[]> {
+export async function subpoenaNotices(caseId: string, teamId: string, userId: string): Promise<SubpoenaNotice[]> {
   const { rows } = await pool.query<SubpoenaNotice>(
-    `SELECT s.id, s.team_number AS "teamNumber", s.recipient, s.request_type AS "requestType", s.records, s.sent_at AS "sentAt"
+    `SELECT s.id, s.team_number AS "teamNumber", s.recipient, s.request_type AS "requestType", s.records, s.sent_at AS "sentAt",
+            EXISTS (SELECT 1 FROM subpoena_seen x WHERE x.subpoena_id = s.id AND x.user_id = $3) AS seen
      FROM subpoenas s JOIN matchup_teams me ON me.matchup_id = s.matchup_id AND me.team_id = $2
      WHERE s.case_id = $1 AND s.team_id <> $2
      ORDER BY s.sent_at DESC`,
-    [caseId, teamId],
+    [caseId, teamId, userId],
   )
   return rows
 }
@@ -206,11 +209,17 @@ export async function serveSubpoena(ctx: TeamContext, part: SubpoenaSettings, in
   return id
 }
 
-/** Marks the answers to the team's subpoenas as read by this student. */
+/**
+ * Marks the answers to the team's subpoenas, and the notices of the other
+ * team's, as read by this student.
+ */
 export async function markSubpoenasSeen(caseId: string, teamId: string, userId: string) {
   await pool.query(
     `INSERT INTO subpoena_seen (subpoena_id, user_id)
-     SELECT id, $3 FROM subpoenas WHERE case_id = $1 AND team_id = $2 AND responded_at IS NOT NULL
+     SELECT s.id, $3 FROM subpoenas s
+     WHERE s.case_id = $1
+       AND ((s.team_id = $2 AND s.responded_at IS NOT NULL)
+            OR (s.team_id <> $2 AND s.matchup_id IN (SELECT matchup_id FROM matchup_teams WHERE team_id = $2)))
      ON CONFLICT DO NOTHING`,
     [caseId, teamId, userId],
   )

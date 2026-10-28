@@ -248,11 +248,16 @@ export function CaseDetailPage() {
           {courseCase.status === 'draft' && (
             <LaunchPanel
               courseId={courseId}
-              caseId={courseCase.id}
+              courseCase={courseCase}
               refreshKey={checksKey}
               onLaunched={(launched) => {
                 setCourseCase(launched)
                 workspace?.reloadHome()
+              }}
+              onCaseChange={setCourseCase}
+              onGoToTab={(to) => {
+                selectTab(to)
+                document.getElementById('case-tab-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
             />
           )}

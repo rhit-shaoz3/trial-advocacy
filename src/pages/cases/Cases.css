@@ -68,7 +68,8 @@
 }
 
 .case-form .case-facts-list input,
-.setup-form .case-facts-list input {
+.setup-form .case-facts-list input,
+.launch-facts .case-facts-list input {
   flex: 1;
   min-width: 0;
 }
@@ -510,21 +511,88 @@ a.case-row:hover {
   font-size: 0.88rem;
 }
 
-.launch-checks li {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
+.launch-body {
+  flex: 1 1 26rem;
+  min-width: 0;
+}
+
+.launch-checks > li {
+  display: grid;
+  gap: 0.35rem;
   color: var(--fg-soft);
 }
 
-.launch-checks svg {
+.launch-check-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* The fix for an unmet item: a link to the right tab, or a control right here. */
+.launch-fix {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.launch-checks .launch-fix svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: currentColor;
+}
+
+.launch-check-hint {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.launch-checks li > .launch-check-hint,
+.launch-initial,
+.launch-facts {
+  margin-left: 1.5rem;
+}
+
+.launch-initial {
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+}
+
+.launch-initial select {
+  max-width: 100%;
+}
+
+.launch-facts {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--subtle);
+}
+
+.materials-no-initial {
+  margin: 0 0 0.75rem;
+}
+
+.launch-facts-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.launch-check-line > svg {
   flex: none;
   width: 1.05rem;
   height: 1.05rem;
   color: var(--muted);
 }
 
-.launch-checks .launch-ok svg {
+.launch-ok .launch-check-line > svg {
   color: var(--success);
 }
 

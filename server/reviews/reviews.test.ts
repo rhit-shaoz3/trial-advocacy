@@ -30,6 +30,8 @@ const interview = () => `${myCaseUrl()}/witnesses/${witnessId}/interview`
 
 /** What the fake AI was asked, and what it answers next. */
 let profiles: WitnessProfile[]
+/** The conversation so far that the fake AI was given with each question. */
+let transcripts: { question: string; reply: string }[][]
 let factInputs: NewFactsInput[]
 let nextFacts: (string | NewFact)[] | Error
 
@@ -70,10 +72,12 @@ beforeEach(async () => {
   await prof.put(`${caseUrl()}/phase`).send({ phase: 'deposition' })
 
   profiles = []
+  transcripts = []
   factInputs = []
   nextFacts = []
   ai.askWitness = async (options) => {
     profiles.push(structuredClone(options.profile))
+    transcripts.push(structuredClone(options.transcript))
     return { reply: 'I was on break.', objection: null, answer: 'I was on break.', model: 'fake', usage: {} as never }
   }
   ai.findNewFacts = async (input) => {
@@ -236,6 +240,19 @@ describe('rulings bind later interviews', () => {
     await eve.post(`${interview()}/end`)
     await reviewsSettled()
     expect(factInputs.at(-1)!.settled).toEqual({ accepted: ['Case fact.'], denied: ['Case lie.'] })
+  })
+})
+
+describe('each case world has its own witness', () => {
+  it("starting from the same setup, and never hearing another world's conversations", async () => {
+    await ada.post(`${interview()}/questions`).send({ question: 'Where were you at 3?' })
+    await ada.post(`${interview()}/questions`).send({ question: 'And at 3:05?' })
+    // World A's second question comes with its first; World B's first comes with nothing.
+    expect(transcripts.at(-1)!.map((t) => t.question)).toEqual(['Where were you at 3?'])
+    await eve.post(`${interview()}/questions`).send({ question: 'Where were you at 3?' })
+    expect(transcripts.at(-1)).toEqual([])
+    // Same deposition, files, and persona in both worlds.
+    expect(profiles.at(-1)).toEqual(profiles[0])
   })
 })
 

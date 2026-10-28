@@ -67,6 +67,9 @@ describe('creating', () => {
       setupCompletedAt: null,
       investigator: { enabled: true, name: 'John Hastings', instructions: '' },
       exchangeReady: false,
+      // Made from scratch, not copied.
+      copySetup: false,
+      copiedFrom: null,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     })

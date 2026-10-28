@@ -32,6 +32,7 @@ import { applyDisclosures, requestsOpen } from '../exchange/exchange.ts'
 import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
 import { finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
+import { duplicateCase, shareCase } from './caseCopy.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -245,6 +246,28 @@ caseRouter.put('/investigator', async (req, res) => {
  * deposition. Leaving the introduction phase shares the instructor's initial
  * disclosures with both sides; going back to it takes them back.
  */
+/**
+ * Copies the case into a class the instructor teaches (this one or another):
+ * `{ courseId, includeTasks, title }`. The copy is a draft whose setup is its
+ * teams and worlds.
+ */
+caseRouter.post('/duplicate', async (req, res) => {
+  const body = req.body as Record<string, unknown> | undefined
+  const courseId = readString(body, 'courseId') || req.course!.id
+  if (!isUuid(courseId)) throw new HttpError(404, 'Class not found.')
+  const title = readString(body, 'title').trim()
+  if (title.length > MAX_TITLE_LENGTH) throw new HttpError(400, `Keep the title to ${MAX_TITLE_LENGTH} characters.`)
+  const copy = await duplicateCase(req.courseCase!.id, req.user!.id, courseId, { includeTasks: body?.includeTasks !== false, title })
+  res.status(201).json({ case: copy, courseId })
+})
+
+/** Shares the case with another instructor, by email: `{ email, includeTasks }`. They accept or decline it. */
+caseRouter.post('/share', async (req, res) => {
+  const body = req.body as Record<string, unknown> | undefined
+  const share = await shareCase(req.courseCase!.id, req.user!.id, readString(body, 'email'), body?.includeTasks !== false)
+  res.status(201).json({ share })
+})
+
 caseRouter.put('/phase', async (req, res) => {
   const phase = readString(req.body, 'phase') as CasePhase
   const current = req.courseCase!

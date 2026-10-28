@@ -1470,3 +1470,8 @@ a.case-row:hover {
 .suggest-note {
   margin: 0 0 1rem;
 }
+
+.case-copied-from {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+}

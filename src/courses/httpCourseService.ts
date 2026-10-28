@@ -102,6 +102,38 @@ export const httpCourseService: CourseService = {
     await apiRequest(casePath(courseId, caseId), { method: 'DELETE' })
   },
 
+  async duplicateCase(courseId, caseId, { targetCourseId, includeTasks, title }) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/duplicate`, {
+      method: 'POST',
+      body: JSON.stringify({ courseId: targetCourseId, includeTasks, title }),
+    })
+    return { courseId: body.courseId, case: body.case }
+  },
+
+  async shareCase(courseId, caseId, email, includeTasks) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ email, includeTasks }),
+    })
+    return body.share
+  },
+
+  async listSharedCases() {
+    return (await apiRequest('/courses/shared-cases')).shares
+  },
+
+  async acceptSharedCase(shareId, courseId) {
+    const body = await apiRequest(`/courses/shared-cases/${encodeURIComponent(shareId)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ courseId }),
+    })
+    return { courseId: body.courseId, case: body.case }
+  },
+
+  async declineSharedCase(shareId) {
+    await apiRequest(`/courses/shared-cases/${encodeURIComponent(shareId)}/decline`, { method: 'POST' })
+  },
+
   async reachSetupStep(courseId, caseId, step) {
     const body = await apiRequest(`${casePath(courseId, caseId)}/setup`, { method: 'PUT', body: JSON.stringify({ step }) })
     return body.case

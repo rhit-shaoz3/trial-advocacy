@@ -62,6 +62,10 @@ export interface CourseCase {
   investigator: InvestigatorSettings
   /** Whether the information exchange setup is finished (so students see it, and the case has its phase). */
   exchangeReady: boolean
+  /** A copy whose guided setup is just its teams and worlds, until finished. */
+  copySetup: boolean
+  /** The case it was copied from, and whose it was; null for a case made from scratch. */
+  copiedFrom: { title: string; owner: string | null } | null
   createdAt: Date
   updatedAt: Date
 }
@@ -97,6 +101,9 @@ const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "ins
                     'instructions', investigator_instructions) AS investigator,
   EXISTS (SELECT 1 FROM information_exchange ie
           WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
+  copy_setup AS "copySetup",
+  CASE WHEN copied_from_title IS NULL THEN NULL
+       ELSE json_build_object('title', copied_from_title, 'owner', copied_from_name) END AS "copiedFrom",
   created_at AS "createdAt", updated_at AS "updatedAt"`
 
 /** Oldest first, so the term's first case stays on top. */
@@ -171,10 +178,10 @@ export async function reachSetupStep(courseId: string, id: string, step: SetupSt
   return rows[0] ?? null
 }
 
-/** Finishes the guided setup (once; finishing again keeps the first time). */
+/** Finishes the guided setup (once; finishing again keeps the first time); a copy's too. */
 export async function completeSetup(courseId: string, id: string) {
   const { rows } = await pool.query<CourseCase>(
-    `UPDATE cases SET setup_completed_at = coalesce(setup_completed_at, now())
+    `UPDATE cases SET setup_completed_at = coalesce(setup_completed_at, now()), copy_setup = false
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [courseId, id],

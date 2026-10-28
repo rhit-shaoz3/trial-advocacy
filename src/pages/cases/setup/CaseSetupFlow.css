@@ -327,3 +327,9 @@
 .setup-done-note {
   font-size: 0.82rem;
 }
+
+.setup-copied {
+  max-width: 48rem;
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.9rem;
+}

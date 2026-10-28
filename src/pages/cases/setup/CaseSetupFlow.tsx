@@ -40,6 +40,9 @@ const STEP_HINT: Record<SetupStep, string> = {
   tasks: 'Assign the work each team does, with due dates.',
 }
 
+/** A copied case's setup: everything else came with it. */
+const COPY_STEPS: readonly SetupStep[] = ['teams', 'worlds']
+
 /** The steps with their own form; the rest show one of the case page's sections. */
 const OWN_HEADING: SetupStep[] = ['details', 'facts']
 
@@ -69,18 +72,21 @@ export function CaseSetupFlow({
   onExit(to: SetupExit): void
 }) {
   const service = useCourseService()
-  const furthest = courseCase ? SETUP_STEPS.indexOf(courseCase.setupStep ?? 'details') : 0
-  const [step, setStep] = useState<SetupStep>(SETUP_STEPS[furthest])
+  // A copied case comes with everything but its teams and worlds.
+  const steps: readonly SetupStep[] = courseCase?.copySetup ? COPY_STEPS : SETUP_STEPS
+  const furthest = courseCase ? Math.max(0, steps.indexOf(courseCase.setupStep ?? 'details')) : 0
+  // A copy opens on its teams (both of its steps can be reached from the start).
+  const [step, setStep] = useState<SetupStep>(courseCase?.copySetup ? steps[0] : steps[furthest])
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [finished, setFinished] = useState(false)
 
-  const index = SETUP_STEPS.indexOf(step)
-  const last = index === SETUP_STEPS.length - 1
+  const index = steps.indexOf(step)
+  const last = index === steps.length - 1
 
   function go(to: SetupStep) {
-    setDirection(SETUP_STEPS.indexOf(to) < index ? 'back' : 'forward')
+    setDirection(steps.indexOf(to) < index ? 'back' : 'forward')
     setError(null)
     setStep(to)
   }
@@ -97,7 +103,7 @@ export function CaseSetupFlow({
         setFinished(true)
         return
       }
-      const next = SETUP_STEPS[index + 1]
+      const next = steps[index + 1]
       if (SETUP_STEPS.indexOf(next) > SETUP_STEPS.indexOf(saved.setupStep ?? 'details')) {
         saved = await service.reachSetupStep(courseId, saved.id, next)
       }
@@ -113,13 +119,20 @@ export function CaseSetupFlow({
 
   if (finished && courseCase) return <SetupDone title={courseCase.title} onExit={onExit} />
 
-  const reached = SETUP_STEPS.slice(0, Math.max(furthest, index) + 1)
+  const reached = steps.slice(0, Math.max(furthest, index) + 1)
 
   return (
     <div className="setup">
       <header className="setup-header">
-        <span className="ws-eyebrow">New case</span>
+        <span className="ws-eyebrow">{courseCase?.copySetup ? 'Copied case' : 'New case'}</span>
         <h1>{courseCase?.title || 'Set up a case'}</h1>
+        {courseCase?.copySetup && (
+          <p className="muted setup-copied">
+            Copied{courseCase.copiedFrom ? ` from ${courseCase.copiedFrom.title}${courseCase.copiedFrom.owner ? ` · ${courseCase.copiedFrom.owner}` : ''}` : ''}
+            . The details, facts, files, witnesses, and investigator came with it; put this class&rsquo;s students into teams
+            and worlds, then launch it when you&rsquo;re ready.
+          </p>
+        )}
         <nav aria-label="Setup steps">
           <ol className="setup-steps">
             {reached.map((s, i) => (
@@ -145,7 +158,7 @@ export function CaseSetupFlow({
       <div key={step} className={`setup-body setup-slide-${direction}`}>
         <div className="setup-intro">
           <span className="setup-count">
-            Step {index + 1} of {SETUP_STEPS.length}
+            Step {index + 1} of {steps.length}
           </span>
           {/* The later steps reuse the case page's sections, which bring their own heading. */}
           {OWN_HEADING.includes(step) && <h2>{STEP_LABEL[step]}</h2>}

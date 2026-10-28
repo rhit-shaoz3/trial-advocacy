@@ -1,0 +1,42 @@
+/* Duplicating and sharing a case, and accepting a shared one. */
+.copy-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.copy-form p {
+  margin: 0;
+}
+
+.copy-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--fg-soft);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.copy-form input[type='text'],
+.copy-form input[type='email'],
+.copy-form select {
+  min-height: 2.6rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.copy-form .copy-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 400;
+}
+
+.copy-what {
+  font-size: 0.88rem;
+}

@@ -227,6 +227,8 @@ export interface CaseMaterial {
   initial: boolean
   /** Case worlds and teams the file is shared with, on top of its audience. */
   shares?: MaterialShares
+  /** The one case world the file belongs to (a subpoena response), by number; null or missing for every world's. */
+  worldNumber?: number | null
 }
 
 export interface MaterialShares {
@@ -489,6 +491,15 @@ export interface PartSettings {
   days: number
 }
 
+/** What a subpoena can ask for (the boxes on the federal form, AO 88B). */
+export const SUBPOENA_TYPES = ['documents', 'esi', 'tangible_things', 'inspection'] as const
+export type SubpoenaType = (typeof SUBPOENA_TYPES)[number]
+
+/** Subpoenas' settings, plus the kinds of request the instructor allows. */
+export interface SubpoenaSettings extends PartSettings {
+  types: SubpoenaType[]
+}
+
 /** The firm a side's teams work for, and the senior partner who signs their welcome email. */
 export interface Firm {
   firm: string
@@ -499,7 +510,7 @@ export interface ExchangeSettings {
   /** Null until the instructor finishes the setup; students see nothing until then. */
   setupCompletedAt: string | null
   disclosures: { enabled: boolean; materialIds: string[]; witnessIds: string[] }
-  subpoenas: PartSettings
+  subpoenas: SubpoenaSettings
   interrogatories: PartSettings
   rfas: PartSettings
   firms: Record<Side, Firm>
@@ -590,8 +601,8 @@ export interface StudentPart {
   requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
 }
 
-/** How the instructor, as the recipient, answered a subpoena. */
-export type SubpoenaOutcome = 'complied' | 'quashed'
+/** How the instructor answered a subpoena: sent the recipient's response, or denied it. */
+export type SubpoenaOutcome = 'responded' | 'denied'
 
 /** A case file produced in answer to a subpoena. */
 export interface ProducedDocument {
@@ -603,11 +614,15 @@ export interface ProducedDocument {
 export interface TeamSubpoena {
   id: string
   recipient: string
+  /** Who the recipient is and how they connect to the case. */
+  recipientDescription: string
+  requestType: SubpoenaType
   records: string
   sentBy: string | null
   sentAt: string
   dueAt: string
   outcome: SubpoenaOutcome | null
+  /** The response document, or the instructor's note on a denial. */
   response: string | null
   respondedAt: string | null
   documents: ProducedDocument[]
@@ -620,12 +635,15 @@ export interface SubpoenaNotice {
   id: string
   teamNumber: number
   recipient: string
+  requestType: SubpoenaType
   records: string
   sentAt: string
 }
 
 /** A team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */
 export interface StudentSubpoenas {
+  /** What the team may ask for. */
+  types: SubpoenaType[]
   limit: number
   days: number
   used: number
@@ -634,21 +652,44 @@ export interface StudentSubpoenas {
   notices: SubpoenaNotice[]
 }
 
-/** A subpoena as the instructor answers it on the Review page. */
+/** Where the AI's draft of a subpoena's response stands. */
+export type SubpoenaStatus = 'drafting' | 'open' | 'failed' | 'answered'
+
+/** A subpoena as the instructor reviews it on the Review page. */
 export interface CourseSubpoena extends Omit<TeamSubpoena, 'seen'> {
   caseId: string
   caseTitle: string
+  parties: { plaintiff: string; defendant: string }
+  /** The requesting side's firm, for the subpoena form. */
+  firm: Firm
   worldNumber: number
   teamNumber: number
   side: Side
   team: string[]
   respondedBy: string | null
+  status: SubpoenaStatus
+  /** The AI's draft of the recipient's response. */
+  draft: string | null
+  /** Whether the AI thinks a court would likely quash or modify the subpoena. */
+  flag: 'quash' | 'modify' | null
+  /** Existing case files the draft produces; `producedToTeam` when one is an earlier subpoena response. */
+  existing: (ProducedDocument & { producedToTeam: number | null })[]
+  /** Another case world's response the draft adapts, to compare with. */
+  basedOn: (ProducedDocument & { worldNumber: number }) | null
+  /** Files the draft named that match no case file. */
+  unknownTitles: string[]
+  /** The instructor's notes for the latest draft. */
+  instructions: string
+  createNew: boolean
+  error: string | null
 }
 
-export interface SubpoenaAnswer {
-  outcome: SubpoenaOutcome
-  response: string
-  materialIds: string[]
+/** What the student fills in to serve a subpoena. */
+export interface SubpoenaInput {
+  recipient: string
+  recipientDescription: string
+  requestType: SubpoenaType
+  records: string
 }
 
 /** A team's information exchange. */
@@ -929,15 +970,19 @@ export interface CourseService {
   /** Sends a set to the other team, one question or request per item. */
   sendExchangeRequest(courseId: string, caseId: string, kind: ExchangeKind, items: string[]): Promise<StudentExchange>
   respondToExchangeRequest(courseId: string, caseId: string, requestId: string, responses: ItemResponse[]): Promise<StudentExchange>
-  /** Serves a subpoena for records on a person or organization. */
-  serveSubpoena(courseId: string, caseId: string, recipient: string, records: string): Promise<StudentExchange>
+  /** Serves a subpoena on a person or organization. */
+  serveSubpoena(courseId: string, caseId: string, subpoena: SubpoenaInput): Promise<StudentExchange>
   /** Marks the responses to the team's sets, and the answers to its subpoenas, as read. */
   markExchangeSeen(courseId: string, caseId: string): Promise<void>
   // The instructor's review panel.
   /** Subpoenas waiting for the instructor's answer (soonest due first), or answered ones. */
   listSubpoenas(courseId: string, status: 'open' | 'completed'): Promise<CourseSubpoena[]>
-  /** Answers a subpoena, once; produced files are shared with the team. */
-  answerSubpoena(courseId: string, subpoenaId: string, answer: SubpoenaAnswer): Promise<CourseSubpoena>
+  /** Sends the team the response (as drafted or edited); it and the files it produces are shared with the team. */
+  approveSubpoena(courseId: string, subpoenaId: string, response: string): Promise<CourseSubpoena>
+  /** Denies a subpoena, with an optional note for the team. */
+  denySubpoena(courseId: string, subpoenaId: string, note: string): Promise<CourseSubpoena>
+  /** Has the AI draft the response again (also retries a failed draft); `createNew` asks for a new file. */
+  redraftSubpoena(courseId: string, subpoenaId: string, options: { instructions: string; createNew: boolean }): Promise<CourseSubpoena>
   listReviews(courseId: string, status: 'open' | 'completed'): Promise<InterviewReview[]>
   decideFact(courseId: string, reviewId: string, factId: string, decision: FactDecision): Promise<InterviewReview>
   /** Allows (or not) the team to have a case file the investigator found. */

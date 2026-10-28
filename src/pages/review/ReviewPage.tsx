@@ -75,6 +75,8 @@ export function ReviewPage() {
   // The AI lists a conversation's facts (or investigates, or writes a team's
   // report) in the background; check back until it's done.
   const working = reviews?.some((r) => r.status === 'summarizing' || r.status === 'finalizing') ?? false
+  // Subpoena responses are drafted in the background too.
+  const drafting = subpoenas?.some((s) => s.status === 'drafting') ?? false
   const reloadHome = workspace?.reloadHome
   useEffect(() => {
     if (!working) return
@@ -92,6 +94,16 @@ export function ReviewPage() {
     }, POLL_MS)
     return () => clearInterval(timer)
   }, [service, courseId, tab, working, reloadHome])
+  useEffect(() => {
+    if (!drafting) return
+    const timer = setInterval(() => {
+      service
+        .listSubpoenas(courseId, tab)
+        .then(setSubpoenas)
+        .catch(() => {}) // keep the current list; the next tick tries again
+    }, POLL_MS)
+    return () => clearInterval(timer)
+  }, [service, courseId, tab, drafting])
 
   function selectTab(next: Tab) {
     setParams((prev) => {
@@ -131,6 +143,11 @@ export function ReviewPage() {
     }
   }
 
+  /** A subpoena whose response is being redrafted, in place. */
+  function replaceSubpoena(updated: CourseSubpoena) {
+    setSubpoenas((prev) => prev?.map((s) => (s.id === updated.id ? updated : s)) ?? null)
+  }
+
   /** An answered subpoena leaves To review; the waiting count follows from the server. */
   function answered(subpoena: CourseSubpoena) {
     setSubpoenas((prev) => prev?.filter((s) => s.id !== subpoena.id) ?? null)
@@ -151,7 +168,7 @@ export function ReviewPage() {
             When a team ends an interview, the new facts the AI witness added come here, and so does every
             background investigator report before the team sees it. Rule on each fact as the judge: it stands or
             it doesn&rsquo;t, for that team&rsquo;s case world or for every world. Subpoenas teams serve come here
-            too, for you to answer as the recipient.
+            too, with the AI&rsquo;s draft of the recipient&rsquo;s response for you to send, change, or deny.
           </p>
         </div>
       </div>
@@ -199,7 +216,12 @@ export function ReviewPage() {
               <ul className="review-list" aria-label={tab === 'open' ? 'Subpoenas to answer' : 'Answered subpoenas'}>
                 {subpoenas.map((s) => (
                   <li key={s.id}>
-                    <SubpoenaCard courseId={courseId} subpoena={s} onAnswer={tab === 'open' ? answered : undefined} />
+                    <SubpoenaCard
+                      courseId={courseId}
+                      subpoena={s}
+                      onAnswer={tab === 'open' ? answered : undefined}
+                      onChange={replaceSubpoena}
+                    />
                   </li>
                 ))}
               </ul>

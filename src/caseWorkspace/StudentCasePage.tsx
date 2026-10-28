@@ -10,6 +10,7 @@ import type {
   ItemResponse,
   ReviewResult,
   StudentExchange,
+  SubpoenaInput,
 } from '../courses/types'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import { caseTab } from './caseTabs'
@@ -78,8 +79,8 @@ export function StudentCasePage() {
     await afterExchange(await service.respondToExchangeRequest(courseId, caseId, requestId, responses))
   }
 
-  async function serveSubpoena(recipient: string, records: string) {
-    setExchange(await service.serveSubpoena(courseId, caseId, recipient, records))
+  async function serveSubpoena(subpoena: SubpoenaInput) {
+    setExchange(await service.serveSubpoena(courseId, caseId, subpoena))
   }
 
   /** Opening the Information exchange tab marks the other team's responses, and subpoena answers, read. */

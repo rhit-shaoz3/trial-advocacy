@@ -10,6 +10,7 @@ import {
   type MaterialAudience,
   type MaterialShares,
 } from '../../../courses/types'
+import { worldLabel } from '../../../courses/worldLabel'
 import { sharesLabel } from './shares'
 import { SharePicker } from './SharePicker'
 
@@ -401,6 +402,9 @@ export function MaterialsSection({
                       </small>
                       {m.initial ? (
                         <span className="badge badge-case-active badge-initial">Initial file</span>
+                      ) : m.worldNumber ? (
+                        // A subpoena response: only that world's AI witnesses and recipients read it.
+                        <span className="badge badge-initial">Subpoena response · World {worldLabel(m.worldNumber)}</span>
                       ) : (
                         <button
                           type="button"

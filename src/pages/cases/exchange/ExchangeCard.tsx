@@ -4,7 +4,7 @@ import { ArrowRight, CheckCheck, CircleHelp, Clock, Lock, Pencil, ScrollText, Sh
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { worldLabel } from '../../../courses/worldLabel'
 import type { CourseCase, ExchangeOverview, ExchangeSettings } from '../../../courses/types'
-import { partSummary } from './exchangeLabels'
+import { partSummary, subpoenaSummary } from './exchangeLabels'
 import './exchange.css'
 
 const PARTS = [
@@ -254,7 +254,7 @@ export function ExchangeCard({
           </li>
           <li>
             <strong>Subpoenas</strong>
-            <small>{settings.subpoenas.enabled ? partSummary(settings.subpoenas, 'subpoenas') : 'Not included'}</small>
+            <small>{settings.subpoenas.enabled ? subpoenaSummary(settings.subpoenas) : 'Not included'}</small>
           </li>
         </ul>
       )}

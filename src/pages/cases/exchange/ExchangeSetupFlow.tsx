@@ -9,9 +9,12 @@ import type {
   ExchangeSettingsInput,
   PartSettings,
   Side,
+  SubpoenaType,
 } from '../../../courses/types'
+import { SUBPOENA_TYPES } from '../../../courses/types'
+import { SUBPOENA_TYPE_HINT, SUBPOENA_TYPE_LABEL } from '../../../courses/subpoenaForm'
 import { WelcomeEmail } from '../../../caseWorkspace/exchange/WelcomeEmail'
-import { SIDE_LABEL, partSummary } from './exchangeLabels'
+import { SIDE_LABEL, partSummary, subpoenaSummary } from './exchangeLabels'
 import '../setup/CaseSetupFlow.css'
 import './exchange.css'
 
@@ -30,7 +33,7 @@ const STEP_LABEL: Record<ExchangeStep, string> = {
 const STEP_HINT: Record<ExchangeStep, string> = {
   disclosures:
     'Pick what each side must disclose to the other. Each student makes their own picks during the introduction phase; your picks are the answer key, shared with everyone when you move to information exchange.',
-  subpoenas: 'Teams use subpoenas to get records they don’t have.',
+  subpoenas: 'Teams subpoena records, data, objects, or a site visit from people and organizations outside their files.',
   interrogatories: 'Written questions one team sends the other, answered in writing.',
   rfas: 'Statements one team asks the other to admit or deny, so settled facts don’t have to be proven at trial.',
   email:
@@ -45,7 +48,7 @@ const PART_COPY: Record<Part, { limit: string; limitHint: string; unit: string; 
     limit: 'Subpoenas per team',
     limitHint: 'Each team can send this many over the whole case.',
     unit: 'subpoenas',
-    daysHint: 'How long the other side has to produce the records. Students see the due date on their task.',
+    daysHint: 'How long the recipient has to respond. Students see the due date on the subpoena.',
   },
   interrogatories: {
     limit: 'Questions per team',
@@ -409,7 +412,16 @@ function SettingRow({ label, hint, children }: { label: string; hint: string; ch
   )
 }
 
-function PartForm({ part, value, onChange }: { part: Part; value: PartSettings; onChange(v: PartSettings): void }) {
+function PartForm({
+  part,
+  value,
+  onChange,
+}: {
+  part: Part
+  /** Subpoenas' settings also have the kinds of request allowed. */
+  value: PartSettings & { types?: SubpoenaType[] }
+  onChange(v: PartSettings): void
+}) {
   const copy = PART_COPY[part]
   return (
     <div className={value.enabled ? 'exchange-settings' : 'exchange-settings exchange-off'}>
@@ -435,13 +447,51 @@ function PartForm({ part, value, onChange }: { part: Part; value: PartSettings; 
           onChange={(days) => onChange({ ...value, days })}
         />
       </SettingRow>
+      {part === 'subpoenas' && value.types && (
+        <SubpoenaTypes types={value.types} disabled={!value.enabled} onChange={(types) => onChange({ ...value, types } as PartSettings)} />
+      )}
       {part === 'subpoenas' && (
         <p className="muted exchange-note">
-          Teams serve subpoenas on people and organizations from the information exchange phase on. You answer each one
-          on the Review page, as its recipient: produce case files, or quash it.
+          Teams serve subpoenas on people and organizations from the information exchange phase on. The AI drafts each
+          recipient&rsquo;s response from the case file, and you review it on the Review page before the team sees it.
         </p>
       )}
     </div>
+  )
+}
+
+/** Which kinds of request subpoenas can make; at least one stays ticked. */
+function SubpoenaTypes({ types, disabled, onChange }: { types: SubpoenaType[]; disabled: boolean; onChange(types: SubpoenaType[]): void }) {
+  const flip = (type: SubpoenaType, on: boolean) => onChange(SUBPOENA_TYPES.filter((t) => (t === type ? on : types.includes(t))))
+  return (
+    <fieldset className="exchange-setting exchange-types" disabled={disabled}>
+      <div>
+        <legend>
+          <strong>What can teams subpoena?</strong>
+        </legend>
+        <p className="muted">Teams choose one of these for each subpoena.</p>
+      </div>
+      <div className="exchange-type-list">
+        {SUBPOENA_TYPES.map((t) => {
+          const checked = types.includes(t)
+          return (
+            <label key={t} className="exchange-type">
+              <input
+                type="checkbox"
+                checked={checked}
+                // The last kind left can't be unticked; turn subpoenas off instead.
+                disabled={checked && types.length === 1}
+                onChange={(e) => flip(t, e.target.checked)}
+              />
+              <span>
+                {SUBPOENA_TYPE_LABEL[t]}
+                <small className="muted">{SUBPOENA_TYPE_HINT[t]}</small>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }
 
@@ -547,7 +597,7 @@ function ReviewStep({
       summary: `${picked('plaintiff')} · ${picked('defense')}`,
       included: settings.disclosures.enabled,
     },
-    { step: 'subpoenas', title: 'Subpoenas', summary: partSummary(settings.subpoenas, 'subpoenas'), included: settings.subpoenas.enabled },
+    { step: 'subpoenas', title: 'Subpoenas', summary: subpoenaSummary(settings.subpoenas), included: settings.subpoenas.enabled },
     {
       step: 'interrogatories',
       title: 'Interrogatories',

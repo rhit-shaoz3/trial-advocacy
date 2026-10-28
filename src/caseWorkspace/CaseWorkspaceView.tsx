@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
+import { AuthContext } from '../auth/AuthContext'
 import { MarkedTranscript } from '../components/MarkedTranscript'
 import type { CaseTab } from './caseTabs'
 import { Link } from 'react-router'
@@ -54,8 +55,9 @@ import {
   type ReviewTranscript,
   type Side,
   type StudentExchange,
+  type SubpoenaInput,
 } from '../courses/types'
-import { sideLabel, worldLabel } from '../courses/worldLabel'
+import { sideLabel, titleParties, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
 import { FileViewer, type ViewableFile } from '../components/FileViewer'
 import { PhaseSteps } from '../components/PhaseSteps'
@@ -134,7 +136,7 @@ export function CaseWorkspaceView({
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
   onSendRequest?(kind: ExchangeKind, items: string[]): Promise<void>
   onRespondToRequest?(requestId: string, responses: ItemResponse[]): Promise<void>
-  onServeSubpoena?(recipient: string, records: string): Promise<void>
+  onServeSubpoena?(subpoena: SubpoenaInput): Promise<void>
   /** Called when the student opens the Information exchange tab, to mark the responses and subpoena answers read. */
   onOpenExchange?(): void
   /** The tab to open on, as when a notice links straight to a report. */
@@ -174,6 +176,8 @@ export function CaseWorkspaceView({
     if (tab === 'exchange' && newResponses.length + newAnswers.length > 0) onOpenExchange?.()
   }, [tab, unseen, unseenReports, onOpenReviews, onOpenInvestigator, newResponses.length, newAnswers.length, onOpenExchange])
   const { case: c, team, world, materials, witnesses, tasks } = workspace
+  // Null outside the app (the instructor's preview, tests); the form's signature is then left blank.
+  const auth = useContext(AuthContext)
   const initialFile = materials.find((m) => m.initial)
   const byCategory = FILE_CATEGORIES.map((category) => ({
     category,
@@ -241,7 +245,11 @@ export function CaseWorkspaceView({
         {newAnswers.length > 0 && tab !== 'exchange' && (
           <Toast
             icon={<ScrollText />}
-            title={`${newAnswers[0].recipient} answered your subpoena${newAnswers.length > 1 ? ` (and ${newAnswers.length - 1} more)` : ''}`}
+            title={`${
+              newAnswers[0].outcome === 'denied'
+                ? `Your subpoena to ${newAnswers[0].recipient} was denied`
+                : `${newAnswers[0].recipient} responded to your subpoena`
+            }${newAnswers.length > 1 ? ` (and ${newAnswers.length - 1} more)` : ''}`}
             action={{
               label: 'See answer',
               onClick: () => {
@@ -514,6 +522,11 @@ export function CaseWorkspaceView({
             onSend={c.status === 'active' ? onSendRequest : undefined}
             onRespond={c.status === 'active' ? onRespondToRequest : undefined}
             onServeSubpoena={c.status === 'active' ? onServeSubpoena : undefined}
+            subpoenaForm={{
+              caseId: c.id,
+              parties: c.parties?.plaintiff && c.parties.defendant ? c.parties : titleParties(c.title),
+              attorney: auth?.user?.name || auth?.user?.email || null,
+            }}
             onOpenDocument={(id) => {
               const file = materials.find((m) => m.id === id)
               if (file) openMaterial(file)

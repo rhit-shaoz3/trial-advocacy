@@ -514,10 +514,10 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ responses }) })).exchange
   },
 
-  async serveSubpoena(courseId, caseId, recipient, records) {
+  async serveSubpoena(courseId, caseId, subpoena) {
     const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/subpoenas`, {
       method: 'POST',
-      body: JSON.stringify({ recipient, records }),
+      body: JSON.stringify(subpoena),
     })
     return body.exchange
   },
@@ -530,9 +530,19 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${coursePath(courseId)}/subpoenas?status=${status}`)).subpoenas
   },
 
-  async answerSubpoena(courseId, subpoenaId, answer) {
-    const path = `${coursePath(courseId)}/subpoenas/${encodeURIComponent(subpoenaId)}/answer`
-    return (await apiRequest(path, { method: 'POST', body: JSON.stringify(answer) })).subpoena
+  async approveSubpoena(courseId, subpoenaId, response) {
+    const path = `${coursePath(courseId)}/subpoenas/${encodeURIComponent(subpoenaId)}/approve`
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ response }) })).subpoena
+  },
+
+  async denySubpoena(courseId, subpoenaId, note) {
+    const path = `${coursePath(courseId)}/subpoenas/${encodeURIComponent(subpoenaId)}/deny`
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ note }) })).subpoena
+  },
+
+  async redraftSubpoena(courseId, subpoenaId, options) {
+    const path = `${coursePath(courseId)}/subpoenas/${encodeURIComponent(subpoenaId)}/redraft`
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify(options) })).subpoena
   },
 
   async listReviews(courseId, status) {

@@ -160,10 +160,10 @@ async function summarize(id: string) {
     const review = rows[0]
     if (!review) return // deleted meanwhile
 
-    let materials = await listMaterialTexts(review.caseId)
+    let materials = await listMaterialTexts(review.caseId, review.matchupId)
     if (materials.some((m) => m.textStatus === 'pending')) {
       await finishPendingTranscriptions(materials)
-      materials = await listMaterialTexts(review.caseId)
+      materials = await listMaterialTexts(review.caseId, review.matchupId)
     }
     const facts = await ai.findNewFacts({
       caseName: review.caseTitle,

@@ -4,6 +4,8 @@ import { finalizeReport, type FinalizeInput } from '../investigator/finalize.ts'
 import { investigate, type InvestigationInput } from '../investigator/investigate.ts'
 import { findNewFacts, type NewFact, type NewFactsInput } from '../witness/newFacts.ts'
 import { suggestWitnesses, type SuggestInput, type WitnessSuggestion } from '../witness/suggest.ts'
+import { respondToSubpoena } from '../exchange/subpoenaResponse.ts'
+import type { SubpoenaContext } from '../exchange/subpoenaPrompt.ts'
 import { transcribeFile, type FileToTranscribe } from './transcribe.ts'
 
 /**
@@ -35,6 +37,8 @@ export const ai = {
   investigate: (input: InvestigationInput): Promise<string> => investigate(anthropic(), input),
   /** The investigator's report as the team gets it, without whatever the instructor turned down. */
   finalizeReport: (input: FinalizeInput): Promise<string> => finalizeReport(anthropic(), input),
+  /** A subpoena's response as its recipient drafts it, tag lines and all, for the instructor to review. */
+  respondToSubpoena: (context: SubpoenaContext): Promise<string> => respondToSubpoena(anthropic(), context),
   /** Who the complaint suggests will testify, for the instructor to pick from. */
   suggestWitnesses: (input: SuggestInput): Promise<WitnessSuggestion[]> => suggestWitnesses(anthropic(), input),
 }

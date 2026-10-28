@@ -22,6 +22,15 @@ export interface PartSettings {
   days: number
 }
 
+/** What a subpoena can ask for (the boxes on the federal form, AO 88B). */
+export const SUBPOENA_TYPES = ['documents', 'esi', 'tangible_things', 'inspection'] as const
+export type SubpoenaType = (typeof SUBPOENA_TYPES)[number]
+
+/** Subpoenas' settings, plus the kinds of request the instructor allows. */
+export interface SubpoenaSettings extends PartSettings {
+  types: SubpoenaType[]
+}
+
 /** The firm a side's teams work for, and the senior partner who signs their welcome email. */
 export interface Firm {
   firm: string
@@ -33,7 +42,7 @@ export interface ExchangeSettings {
   /** When the instructor finished the setup; students see nothing until then. */
   setupCompletedAt: Date | null
   disclosures: { enabled: boolean; materialIds: string[]; witnessIds: string[] }
-  subpoenas: PartSettings
+  subpoenas: SubpoenaSettings
   interrogatories: PartSettings
   rfas: PartSettings
   firms: Record<Side, Firm>
@@ -49,7 +58,7 @@ export const DAYS_RANGE = { min: 1, max: 365 }
 
 export const DEFAULT_SETTINGS: SettingsInput = {
   disclosures: { enabled: true },
-  subpoenas: { enabled: true, limit: 3, days: 14 },
+  subpoenas: { enabled: true, limit: 3, days: 14, types: [...SUBPOENA_TYPES] },
   interrogatories: { enabled: true, limit: 25, days: 30 },
   rfas: { enabled: true, limit: 25, days: 30 },
   firms: { plaintiff: { firm: '', partner: '' }, defense: { firm: '', partner: '' } },
@@ -72,7 +81,8 @@ const SETTINGS_COLUMNS = `setup_completed_at AS "setupCompletedAt",
                              WHERE d.case_id = ie.case_id AND d.material_id IS NOT NULL), '[]'),
     'witnessIds', coalesce((SELECT json_agg(d.witness_id) FROM disclosure_items d
                             WHERE d.case_id = ie.case_id AND d.witness_id IS NOT NULL), '[]')) AS disclosures,
-  json_build_object('enabled', subpoenas_enabled, 'limit', subpoena_limit, 'days', subpoena_days) AS subpoenas,
+  json_build_object('enabled', subpoenas_enabled, 'limit', subpoena_limit, 'days', subpoena_days,
+    'types', to_json(subpoena_types)) AS subpoenas,
   json_build_object('enabled', interrogatories_enabled, 'limit', interrogatory_limit, 'days', interrogatory_days)
     AS interrogatories,
   json_build_object('enabled', rfas_enabled, 'limit', rfa_limit, 'days', rfa_days) AS rfas,
@@ -93,13 +103,14 @@ export async function saveSettings(caseId: string, s: SettingsInput) {
   await pool.query(
     `INSERT INTO information_exchange (case_id, disclosures_enabled, subpoenas_enabled, subpoena_limit, subpoena_days,
        interrogatories_enabled, interrogatory_limit, interrogatory_days, rfas_enabled, rfa_limit, rfa_days,
-       plaintiff_firm, plaintiff_partner, defense_firm, defense_partner)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       plaintiff_firm, plaintiff_partner, defense_firm, defense_partner, subpoena_types)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      ON CONFLICT (case_id) DO UPDATE SET
        disclosures_enabled = $2, subpoenas_enabled = $3, subpoena_limit = $4, subpoena_days = $5,
        interrogatories_enabled = $6, interrogatory_limit = $7, interrogatory_days = $8,
        rfas_enabled = $9, rfa_limit = $10, rfa_days = $11,
-       plaintiff_firm = $12, plaintiff_partner = $13, defense_firm = $14, defense_partner = $15, updated_at = now()`,
+       plaintiff_firm = $12, plaintiff_partner = $13, defense_firm = $14, defense_partner = $15,
+       subpoena_types = $16, updated_at = now()`,
     [
       caseId,
       s.disclosures.enabled,
@@ -116,6 +127,7 @@ export async function saveSettings(caseId: string, s: SettingsInput) {
       s.firms.plaintiff.partner,
       s.firms.defense.firm,
       s.firms.defense.partner,
+      s.subpoenas.types,
     ],
   )
   return getSettings(caseId)

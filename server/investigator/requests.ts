@@ -159,10 +159,10 @@ async function loadRequest(id: string) {
 
 /** Everything the investigator gets for one team's request: the case file, the facts that stand, and who's asking. */
 async function investigatorContext(request: RequestRow): Promise<InvestigatorContext> {
-  let materials = await listMaterialTexts(request.caseId)
+  let materials = await listMaterialTexts(request.caseId, request.matchupId)
   if (materials.some((m) => m.textStatus === 'pending')) {
     await finishPendingTranscriptions(materials)
-    materials = await listMaterialTexts(request.caseId)
+    materials = await listMaterialTexts(request.caseId, request.matchupId)
   }
   const [visible, witnesses, settled] = await Promise.all([
     listMaterialsFor(request.caseId, { side: request.side, teamId: request.teamId, matchupId: request.matchupId }),

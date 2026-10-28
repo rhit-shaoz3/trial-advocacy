@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BookOpen, CheckCheck, CircleHelp, Lock, ScrollText, Users } from 'lucide-react'
-import type { DisclosurePick, ExchangeKind, ItemResponse, StudentExchange } from '../../courses/types'
+import type { CaseParties, DisclosurePick, ExchangeKind, ItemResponse, StudentExchange, SubpoenaInput } from '../../courses/types'
 import { DisclosuresSection } from './DisclosuresSection'
 import { RequestsSection } from './RequestsSection'
 import { SubpoenasSection } from './SubpoenasSection'
@@ -30,6 +30,7 @@ export function ExchangePanel({
   onRespond,
   onServeSubpoena,
   onOpenDocument,
+  subpoenaForm,
   focus,
   now = new Date(),
 }: {
@@ -38,9 +39,11 @@ export function ExchangePanel({
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
   onSend?(kind: ExchangeKind, items: string[]): Promise<void>
   onRespond?(requestId: string, responses: ItemResponse[]): Promise<void>
-  onServeSubpoena?(recipient: string, records: string): Promise<void>
+  onServeSubpoena?(subpoena: SubpoenaInput): Promise<void>
   /** Opens a case file produced in answer to a subpoena. */
   onOpenDocument?(materialId: string): void
+  /** The case and student, for filling in the subpoena form. */
+  subpoenaForm: { caseId: string; parties: CaseParties; attorney: string | null }
   /** A request or subpoena to open on, as when a notice links to its answer. */
   focus?: { kind: ExchangeKind | 'subpoenas'; id: string } | null
   now?: Date
@@ -144,6 +147,7 @@ export function ExchangePanel({
         {section === 'subpoenas' && exchange.subpoenas && (
           <SubpoenasSection
             part={exchange.subpoenas}
+            form={{ ...subpoenaForm, side: exchange.side, firm: exchange.firm }}
             open={exchange.requestsOpen}
             opponentNumber={exchange.opponentNumber}
             onServe={onServeSubpoena}

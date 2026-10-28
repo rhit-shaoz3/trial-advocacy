@@ -23,7 +23,7 @@ const courseCase: CourseCase = {
 const settings: ExchangeSettings = {
   setupCompletedAt: null,
   disclosures: { enabled: true, materialIds: [], witnessIds: [] },
-  subpoenas: { enabled: true, limit: 3, days: 14 },
+  subpoenas: { enabled: true, limit: 3, days: 14, types: ['documents', 'esi', 'tangible_things', 'inspection'] },
   interrogatories: { enabled: true, limit: 25, days: 30 },
   rfas: { enabled: true, limit: 25, days: 30 },
   firms: { plaintiff: { firm: '', partner: '' }, defense: { firm: '', partner: '' } },
@@ -63,11 +63,20 @@ describe('ExchangeSetupFlow', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(service.saveDisclosures).toHaveBeenCalledWith('c1', 'k1', { materialIds: ['m1'], witnessIds: ['w1'] })
 
-    // Subpoenas: turned off with the small Include switch.
+    // Subpoenas: limited to documents and ESI (the last kind can't be unticked), then turned off with the Include switch.
     expect(await screen.findByRole('heading', { level: 2, name: 'Subpoenas' })).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: /Tangible things/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Inspection of premises/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Electronically stored information/ }))
+    expect(screen.getByRole('checkbox', { name: /Physical documents/ })).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: /Electronically stored information/ }))
     await user.click(screen.getByRole('switch', { name: 'Include subpoenas' }))
     await user.click(screen.getByRole('button', { name: 'Next' }))
-    expect(service.saveExchangeSettings).toHaveBeenLastCalledWith('c1', 'k1', expect.objectContaining({ subpoenas: { enabled: false, limit: 3, days: 14 } }))
+    expect(service.saveExchangeSettings).toHaveBeenLastCalledWith(
+      'c1',
+      'k1',
+      expect.objectContaining({ subpoenas: { enabled: false, limit: 3, days: 14, types: ['documents', 'esi'] } }),
+    )
 
     // Interrogatories: a lower limit.
     await screen.findByRole('heading', { level: 2, name: 'Interrogatories' })

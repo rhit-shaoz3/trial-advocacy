@@ -24,6 +24,7 @@ import {
   saveSettings,
   sendRequest,
   setDisclosures,
+  SUBPOENA_TYPES,
   submitDisclosures,
   usedCount,
   type DisclosureOption,
@@ -35,6 +36,8 @@ import {
   type ItemResponse,
   type PartSettings,
   type SettingsInput,
+  type SubpoenaSettings,
+  type SubpoenaType,
   type TeamContext,
 } from './exchange.ts'
 import {
@@ -64,6 +67,17 @@ function readPart(body: unknown, key: string, label: string, withLimits: boolean
   return { enabled: part.enabled, limit: whole(part.limit, LIMIT_RANGE, 'limit'), days: whole(part.days, DAYS_RANGE, 'days to respond') }
 }
 
+/** The kinds of request a subpoena may make; all of them when not given. */
+function readSubpoenaTypes(body: unknown): SubpoenaType[] {
+  const types = (field(body, 'subpoenas') as Record<string, unknown> | undefined)?.types
+  if (types === undefined) return [...SUBPOENA_TYPES]
+  if (!Array.isArray(types) || !types.every((t) => (SUBPOENA_TYPES as readonly unknown[]).includes(t))) {
+    throw new HttpError(400, 'Choose what subpoenas can ask for from the list.')
+  }
+  if (types.length === 0) throw new HttpError(400, 'Choose at least one thing subpoenas can ask for.')
+  return SUBPOENA_TYPES.filter((t) => types.includes(t))
+}
+
 function readFirm(body: unknown, side: Side): Firm {
   const firm = (field(body, 'firms') as Record<string, unknown> | undefined)?.[side]
   const firmName = readString(firm, 'firm').trim()
@@ -78,7 +92,7 @@ function readFirm(body: unknown, side: Side): Firm {
 function readSettings(body: unknown): SettingsInput {
   return {
     disclosures: { enabled: readPart(body, 'disclosures', 'initial disclosures', false).enabled },
-    subpoenas: readPart(body, 'subpoenas', 'subpoenas', true),
+    subpoenas: { ...readPart(body, 'subpoenas', 'subpoenas', true), types: readSubpoenaTypes(body) },
     interrogatories: readPart(body, 'interrogatories', 'interrogatories', true),
     rfas: readPart(body, 'rfas', 'requests for admission', true),
     firms: { plaintiff: readFirm(body, 'plaintiff'), defense: readFirm(body, 'defense') },
@@ -139,6 +153,8 @@ export interface StudentPart {
 
 /** The team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */
 export interface StudentSubpoenas {
+  /** What the team may ask for. */
+  types: SubpoenaType[]
   limit: number
   days: number
   used: number
@@ -232,10 +248,10 @@ async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
         .map((r) => ({ ...r, direction: r.fromTeam.id === ctx.teamId ? 'sent' : 'received' })),
     }
   }
-  const subpoenas = async (p: PartSettings): Promise<StudentSubpoenas | null> => {
+  const subpoenas = async (p: SubpoenaSettings): Promise<StudentSubpoenas | null> => {
     if (!p.enabled) return null
     const [served, notices] = await Promise.all([teamSubpoenas(ctx.caseId, ctx.teamId, ctx.userId), subpoenaNotices(ctx.caseId, ctx.teamId)])
-    return { limit: p.limit, days: p.days, used: served.length, remaining: Math.max(0, p.limit - served.length), served, notices }
+    return { types: p.types, limit: p.limit, days: p.days, used: served.length, remaining: Math.max(0, p.limit - served.length), served, notices }
   }
   const numbers = await teamNumbers(ctx)
   return {
@@ -341,13 +357,21 @@ myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
   res.json({ exchange: await studentExchange(ctx) })
 })
 
-/** Serves a subpoena: `{ recipient, records }`, who it's for and the records wanted. */
+/**
+ * Serves a subpoena: `{ recipient, recipientDescription, requestType, records }`,
+ * who it's for and who they are, what kind of request, and what it wants.
+ */
 myExchangeRouter.post('/subpoenas', async (req, res) => {
   const ctx = await requireStudentContext(req)
   if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Subpoenas open in the information exchange phase.')
   const settings = await getSettings(ctx.caseId)
   if (!settings.subpoenas.enabled) throw new HttpError(409, "This case doesn't include subpoenas.")
-  await serveSubpoena(ctx, settings.subpoenas, readString(req.body, 'recipient'), readString(req.body, 'records'))
+  await serveSubpoena(ctx, settings.subpoenas, {
+    recipient: readString(req.body, 'recipient'),
+    recipientDescription: readString(req.body, 'recipientDescription'),
+    requestType: readString(req.body, 'requestType'),
+    records: readString(req.body, 'records'),
+  })
   res.status(201).json({ exchange: await studentExchange(ctx) })
 })
 

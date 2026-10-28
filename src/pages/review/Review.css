@@ -303,12 +303,12 @@
   padding-left: 1.25rem;
 }
 
-.review-subpoena-complied {
+.review-subpoena-responded {
   background: var(--tint-green-bg);
   color: var(--tint-green-fg);
 }
 
-.review-subpoena-quashed {
+.review-subpoena-denied {
   background: var(--tint-rose-bg);
   color: var(--tint-rose-fg);
 }
@@ -361,4 +361,123 @@
   width: 100%;
   font: inherit;
   font-weight: 400;
+}
+
+.review-subpoena-form-view {
+  margin-top: 1rem;
+}
+
+.review-subpoena-form-view > summary {
+  cursor: pointer;
+  color: var(--ws-navy);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.review-subpoena-form-view[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+.review-subpoena-form-view > p {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+}
+
+.review-subpoena-flag {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.review-subpoena-flag svg {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.review-subpoena-files ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--link);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.review-file-chip:hover {
+  background: var(--surface-hover);
+}
+
+.review-file-chip svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.review-subpoena-draft {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.review-subpoena-draft p,
+.review-subpoena-response textarea {
+  max-height: 28rem;
+  overflow: auto;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+
+.review-subpoena-response textarea {
+  box-sizing: border-box;
+  max-height: none;
+  resize: vertical;
+}
+
+.review-subpoena-notes {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.review-subpoena-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.review-subpoena-based {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--tint-blue-fg);
+  border-radius: 0.5rem;
+  background: var(--tint-blue-bg);
+}
+
+.review-subpoena-based p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.review-subpoena-files li small {
+  margin-left: 0.35rem;
+  font-size: 0.8rem;
 }

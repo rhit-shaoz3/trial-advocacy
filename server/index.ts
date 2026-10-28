@@ -1,5 +1,6 @@
 import { app } from './app.ts'
 import { port } from './config.ts'
+import { resumeSubpoenas } from './exchange/subpoenas.ts'
 import { resumeInvestigations } from './investigator/requests.ts'
 import { endExpiredInterviews } from './witness/interviews.ts'
 
@@ -8,6 +9,7 @@ app.listen(port, () => {
 })
 
 resumeInvestigations().catch((err) => console.error('Could not resume investigations:', err))
+resumeSubpoenas().catch((err) => console.error('Could not resume subpoena drafts:', err))
 
 // Team interviews end an hour after their first question; this catches the
 // ones nobody comes back to, so they still reach the instructor for review.

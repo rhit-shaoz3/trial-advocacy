@@ -542,10 +542,9 @@ CREATE TABLE IF NOT EXISTS exchange_seen (
 );
 
 -- A subpoena a team serves on a person or organization for records, from the
--- information exchange phase on. The instructor answers it on the Review page
--- by `due_at`: complied (a response, and any case files produced, which are
--- shared with the team) or quashed (with the reason). The other team in the
--- case world gets notice of it, but not what was produced.
+-- information exchange phase on, answered by `due_at` (see the drafting
+-- columns below). The other team in the case world gets notice of it, but not
+-- what was produced.
 CREATE TABLE IF NOT EXISTS subpoenas (
   id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
@@ -583,6 +582,59 @@ CREATE TABLE IF NOT EXISTS subpoena_seen (
   seen_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (subpoena_id, user_id)
 );
+
+-- Subpoenas ask for one kind of thing (the boxes on the federal form, AO 88B),
+-- and the instructor chooses which kinds a case allows.
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS subpoena_types text[] NOT NULL
+  DEFAULT '{documents,esi,tangible_things,inspection}';
+ALTER TABLE information_exchange DROP CONSTRAINT IF EXISTS information_exchange_subpoena_types_check;
+ALTER TABLE information_exchange ADD CONSTRAINT information_exchange_subpoena_types_check
+  CHECK (cardinality(subpoena_types) > 0
+         AND subpoena_types <@ '{documents,esi,tangible_things,inspection}'::text[]);
+
+-- The AI drafts each subpoena's response as the recipient, and the instructor
+-- reviews the draft before the team sees anything:
+-- drafting -> open (the draft is ready to review) -> answered, or failed.
+-- The instructor approves (the response becomes a case file shared with the
+-- team, with any existing files the draft produced) or denies it.
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS request_type text NOT NULL DEFAULT 'documents'
+  CHECK (request_type IN ('documents', 'esi', 'tangible_things', 'inspection'));
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS recipient_description text NOT NULL DEFAULT '';
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'open'
+  CHECK (status IN ('drafting', 'open', 'failed', 'answered'));
+-- The draft, with its tag lines taken off; `flag` is whether the AI thinks a
+-- court would quash or modify the subpoena.
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS draft text;
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS flag text CHECK (flag IN ('quash', 'modify'));
+-- Titles the draft named as existing files that matched no case file.
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS unknown_titles text[] NOT NULL DEFAULT '{}';
+-- The instructor's notes for the latest redraft, and whether it must create a
+-- new file rather than produce existing ones.
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS instructions text NOT NULL DEFAULT '';
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS create_new boolean NOT NULL DEFAULT false;
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS error text;
+UPDATE subpoenas SET status = 'answered' WHERE responded_at IS NOT NULL AND status <> 'answered';
+ALTER TABLE subpoenas DROP CONSTRAINT IF EXISTS subpoenas_outcome_check;
+UPDATE subpoenas SET outcome = 'responded' WHERE outcome = 'complied';
+UPDATE subpoenas SET outcome = 'denied' WHERE outcome = 'quashed';
+ALTER TABLE subpoenas ADD CONSTRAINT subpoenas_outcome_check CHECK (outcome IN ('responded', 'denied'));
+
+-- The existing case files a draft produces (by reference), in its order.
+CREATE TABLE IF NOT EXISTS subpoena_existing (
+  subpoena_id uuid    NOT NULL REFERENCES subpoenas (id) ON DELETE CASCADE,
+  material_id uuid    NOT NULL REFERENCES case_materials (id) ON DELETE CASCADE,
+  position    integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (subpoena_id, material_id)
+);
+
+-- The case file an approved response became, and the other world's response
+-- a draft adapted (the drafter reuses earlier responses to the same request).
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS response_material_id uuid REFERENCES case_materials (id) ON DELETE SET NULL;
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS based_on_material_id uuid REFERENCES case_materials (id) ON DELETE SET NULL;
+
+-- A case file that belongs to one case world, like a subpoena response: only
+-- that world's witnesses, investigators and subpoena recipients read it.
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS matchup_id uuid REFERENCES matchups (id) ON DELETE CASCADE;
 
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (

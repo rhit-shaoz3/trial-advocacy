@@ -5,7 +5,7 @@ import { shortDate } from '../../../courses/caseLabels'
 import { worldLabel } from '../../../courses/worldLabel'
 import type { CourseCase, ExchangeKind, ExchangeRequest, ExchangeSettings } from '../../../courses/types'
 import type { ExchangeStep } from './ExchangeSetupFlow'
-import { KIND_LABEL, SIDE_LABEL, partSummary } from './exchangeLabels'
+import { KIND_LABEL, SIDE_LABEL, partSummary, subpoenaSummary } from './exchangeLabels'
 import './exchange.css'
 
 const ADMISSION: Record<'agree' | 'disagree' | 'partial', string> = {
@@ -190,7 +190,7 @@ export function ExchangeTab({
                     ? `${settings.disclosures.materialIds.length + settings.disclosures.witnessIds.length} items`
                     : 'Not included',
                 ],
-                ['subpoenas', 'Subpoenas', settings.subpoenas.enabled ? partSummary(settings.subpoenas, 'subpoenas') : 'Not included'],
+                ['subpoenas', 'Subpoenas', settings.subpoenas.enabled ? subpoenaSummary(settings.subpoenas) : 'Not included'],
                 [
                   'interrogatories',
                   'Interrogatories',

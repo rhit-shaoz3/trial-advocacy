@@ -1,0 +1,248 @@
+/* A subpoena laid out like the federal form (SubpoenaForm). It's a sheet of
+   paper, so it stays black on white in every theme; the team's entries are
+   in blue ink. */
+
+.sf-page {
+  --sf-ink: #1a1a1a;
+  --sf-fill: #1d3f8f;
+  --sf-rule: #1a1a1a;
+  box-sizing: border-box;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.75rem 2rem 1.5rem;
+  border: 1px solid var(--border-strong, #c7ccd0);
+  border-radius: 0.25rem;
+  background: #ffffff;
+  color: var(--sf-ink);
+  font-family: 'Times New Roman', Times, var(--ws-serif, serif);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.sf-page p {
+  margin: 0;
+}
+
+.sf-filled {
+  color: var(--sf-fill);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.88rem;
+}
+
+.sf-blank {
+  display: inline-block;
+  min-width: 8rem;
+}
+
+.sf-line {
+  border-bottom: 1px solid var(--sf-rule);
+  min-height: 1.4em;
+  padding: 0 0.15rem;
+}
+
+.sf-inline {
+  display: inline-block;
+  min-width: 9rem;
+}
+
+.sf-form-id {
+  padding-bottom: 0.3rem;
+  border-bottom: 3px double var(--sf-rule);
+  font-size: 0.68rem;
+}
+
+.sf-court {
+  margin: 0.9rem 0 1rem;
+  text-align: center;
+}
+
+.sf-court h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-variant: small-caps;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.sf-court p {
+  font-size: 0.82rem;
+}
+
+.sf-caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.sf-parties small,
+.sf-to small,
+.sf-sign small {
+  display: block;
+  font-size: 0.72rem;
+  font-style: italic;
+  text-align: center;
+}
+
+.sf-v {
+  margin: 0.35rem 0 !important;
+  text-align: center;
+}
+
+.sf-brace {
+  line-height: 1.15;
+}
+
+.sf-title {
+  margin: 1.1rem 0 0.9rem;
+  font-size: 0.85rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.sf-to {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.5rem;
+  align-items: end;
+}
+
+.sf-to small {
+  grid-column: 2;
+}
+
+.sf-command {
+  margin-top: 0.9rem;
+}
+
+.sf-box {
+  display: inline-grid;
+  place-items: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-right: 0.35rem;
+  border: 1px solid var(--sf-rule);
+  color: var(--sf-fill);
+  font-family: system-ui, sans-serif;
+  font-size: 0.7rem;
+  line-height: 1;
+  vertical-align: -0.1rem;
+}
+
+.sf-kind {
+  margin-top: 0.5rem !important;
+  font-weight: 600;
+}
+
+.sf-records {
+  margin: 0.35rem 0 0 !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+p.sf-blank.sf-records {
+  display: block;
+  border-bottom: 1px solid var(--sf-rule);
+}
+
+.sf-where {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  margin: 0.6rem 0 0;
+  border: 1px solid var(--sf-rule);
+}
+
+.sf-where div {
+  min-height: 2.4rem;
+  padding: 0.25rem 0.4rem;
+}
+
+.sf-where div + div {
+  border-left: 1px solid var(--sf-rule);
+}
+
+.sf-where dt {
+  display: inline;
+}
+
+.sf-where dd {
+  display: inline;
+  margin: 0 0 0 0.3rem;
+}
+
+.sf-rules {
+  margin-top: 1rem !important;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--sf-rule);
+  text-indent: 2rem;
+}
+
+.sf-sign {
+  margin-top: 0.8rem;
+}
+
+.sf-signatures {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: end;
+  margin-top: 0.6rem;
+}
+
+.sf-clerk-head {
+  margin-bottom: 0.9rem !important;
+  font-style: italic;
+}
+
+.sf-signature {
+  font-style: italic;
+}
+
+.sf-or {
+  padding-bottom: 1.4rem;
+}
+
+.sf-attorney {
+  margin-top: 1rem !important;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--sf-rule);
+}
+
+.sf-notice {
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--sf-rule);
+}
+
+.sf-notice h5 {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .sf-page {
+    padding: 1.1rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .sf-caption,
+  .sf-signatures {
+    grid-template-columns: 1fr;
+  }
+
+  .sf-brace,
+  .sf-or {
+    display: none;
+  }
+
+  .sf-where {
+    grid-template-columns: 1fr;
+  }
+
+  .sf-where div + div {
+    border-left: 0;
+    border-top: 1px solid var(--sf-rule);
+  }
+}

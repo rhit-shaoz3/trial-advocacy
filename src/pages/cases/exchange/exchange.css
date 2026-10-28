@@ -947,3 +947,54 @@
   place-items: center;
   text-decoration: none;
 }
+
+/* What subpoenas can ask for */
+.exchange-types {
+  align-items: flex-start;
+  margin: 0;
+  padding-inline: 0;
+  border-width: 0 0 1px;
+}
+
+.exchange-types legend {
+  float: left;
+  padding: 0;
+}
+
+.exchange-types legend + p {
+  clear: left;
+}
+
+.exchange-type-list {
+  display: grid;
+  flex: none;
+  gap: 0.55rem;
+  width: min(22rem, 55%);
+}
+
+.exchange-type {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.exchange-type input {
+  margin-top: 0.2rem;
+}
+
+.exchange-type small {
+  display: block;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .exchange-types {
+    flex-direction: column;
+  }
+
+  .exchange-type-list {
+    width: 100%;
+  }
+}

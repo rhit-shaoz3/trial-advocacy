@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../../courses/CourseServiceContext'
-import type { CourseService, FactDecision, InterviewReview } from '../../courses/types'
+import type { CourseService, CourseSubpoena, FactDecision, InterviewReview } from '../../courses/types'
 import { fakeCourseService } from '../../test/fakeCourseService'
 import { ReviewPage } from './ReviewPage'
 
@@ -206,15 +206,19 @@ describe('ReviewPage', () => {
 })
 
 describe('ReviewPage: subpoenas', () => {
-  const subpoena = {
+  const subpoena: CourseSubpoena = {
     id: 's1',
     caseId: 'k1',
     caseTitle: 'Rivera v. Thrill Park',
+    parties: { plaintiff: 'Ana Rivera', defendant: 'Thrill Park' },
+    firm: { firm: 'Hale & Whitford LLP', partner: 'Margaret Hale' },
     worldNumber: 1,
     teamNumber: 3,
-    side: 'plaintiff' as const,
+    side: 'plaintiff',
     team: ['Ada Lawyer'],
     recipient: 'Mercy Hospital',
+    recipientDescription: 'Where Ana was treated.',
+    requestType: 'documents',
     records: 'ER records for June 10.',
     sentBy: 'Ada Lawyer',
     sentAt: '2026-10-28T12:00:00Z',
@@ -224,35 +228,89 @@ describe('ReviewPage: subpoenas', () => {
     respondedAt: null,
     respondedBy: null,
     documents: [],
+    status: 'open',
+    draft: 'RESPONSE OF MERCY HOSPITAL TO SUBPOENA',
+    flag: null,
+    existing: [],
+    basedOn: null,
+    unknownTitles: [],
+    instructions: '',
+    createNew: false,
+    error: null,
   }
-  const files = [
-    { id: 'm0', filename: 'Complaint.pdf', description: '', initial: true, audience: 'all' },
-    { id: 'm1', filename: 'er.pdf', description: 'ER chart', initial: false, audience: 'instructor' },
-  ]
 
-  it('answers by producing files, or quashes with a reason', async () => {
-    const answerSubpoena = vi.fn().mockResolvedValue({ ...subpoena, outcome: 'complied', respondedAt: '2026-10-30T12:00:00Z' })
+  it('edits and sends a new response, with the AI\u2019s warning', async () => {
+    const approveSubpoena = vi.fn().mockResolvedValue({ ...subpoena, status: 'answered', outcome: 'responded', respondedAt: '2026-10-30T12:00:00Z' })
     const { user } = renderPage({
-      listSubpoenas: vi.fn().mockResolvedValue([subpoena]),
-      listMaterials: vi.fn().mockResolvedValue(files),
-      answerSubpoena,
+      listSubpoenas: vi.fn().mockResolvedValue([{ ...subpoena, flag: 'modify' }]),
+      approveSubpoena,
     })
 
     const card = await screen.findByRole('article', { name: 'Subpoena to Mercy Hospital' })
     expect(card).toHaveTextContent('World A · Plaintiff · Team 3 (Ada Lawyer)')
-    expect(card).toHaveTextContent('ER records for June 10.')
-    const send = within(card).getByRole('button', { name: 'Send answer' })
-    expect(send).toBeDisabled()
-
-    await user.click(within(card).getByRole('radio', { name: 'Quash' }))
-    expect(send).toBeDisabled()
-    await user.click(within(card).getByRole('radio', { name: 'Comply' }))
-    // The initial file isn't offered: every team has it.
-    const er = await within(card).findByRole('checkbox', { name: /ER chart/ })
-    expect(within(card).queryByRole('checkbox', { name: /Complaint/ })).not.toBeInTheDocument()
-    await user.click(er)
-    await user.click(send)
-    expect(answerSubpoena).toHaveBeenCalledWith('c1', 's1', { outcome: 'complied', response: '', materialIds: ['m1'] })
+    expect(card).toHaveTextContent('The AI thinks a court would likely modify this subpoena')
+    expect(within(card).getByRole('article', { name: 'Subpoena form' })).toHaveTextContent('ER records for June 10.')
+    const response = within(card).getByRole('textbox', { name: /Mercy Hospital’s response/ })
+    expect(response).toHaveValue('RESPONSE OF MERCY HOSPITAL TO SUBPOENA')
+    await user.type(response, '{enter}Edited.')
+    await user.click(within(card).getByRole('button', { name: 'Approve and send' }))
+    expect(approveSubpoena).toHaveBeenCalledWith('c1', 's1', 'RESPONSE OF MERCY HOSPITAL TO SUBPOENA\nEdited.')
     expect(screen.queryByRole('article', { name: 'Subpoena to Mercy Hospital' })).not.toBeInTheDocument()
+  })
+
+  it('offers an existing file, opens it, and can ask for a new one instead', async () => {
+    const withFile = { ...subpoena, existing: [{ materialId: 'm1', title: 'ER chart', producedToTeam: 4 }] }
+    const redraftSubpoena = vi.fn().mockResolvedValue({ ...withFile, status: 'drafting' })
+    const { user } = renderPage({
+      listSubpoenas: vi.fn().mockResolvedValue([withFile]),
+      listMaterials: vi.fn().mockResolvedValue([
+        { id: 'm1', filename: 'er.pdf', description: 'ER chart', contentType: 'application/pdf', sizeBytes: 10, initial: false, audience: 'instructor' },
+      ]),
+      redraftSubpoena,
+    })
+
+    const card = await screen.findByRole('article', { name: 'Subpoena to Mercy Hospital' })
+    expect(within(card).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(within(card).getByRole('button', { name: 'Respond with this file' })).toBeEnabled()
+    // The other team's earlier response to the same request.
+    expect(card).toHaveTextContent('This asks for what an earlier subpoena already got.')
+    expect(card).toHaveTextContent('Produced to Team 4 earlier')
+    await user.click(within(card).getByRole('button', { name: 'ER chart' }))
+    expect(await screen.findByRole('dialog', { name: 'ER chart' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    await user.click(within(card).getByRole('button', { name: 'Create a new file instead' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Create a new file' })
+    await user.type(within(dialog).getByRole('textbox'), 'June only.')
+    await user.click(within(dialog).getByRole('button', { name: 'Submit' }))
+    expect(redraftSubpoena).toHaveBeenCalledWith('c1', 's1', { instructions: 'June only.', createNew: true })
+    expect(await within(card).findByText('Drafting Mercy Hospital’s response…')).toBeInTheDocument()
+  })
+
+  it('denies with a note', async () => {
+    const denySubpoena = vi.fn().mockResolvedValue({ ...subpoena, status: 'answered', outcome: 'denied', respondedAt: '2026-10-30T12:00:00Z' })
+    const { user } = renderPage({ listSubpoenas: vi.fn().mockResolvedValue([subpoena]), denySubpoena })
+    const card = await screen.findByRole('article', { name: 'Subpoena to Mercy Hospital' })
+    await user.click(within(card).getByRole('button', { name: 'Deny' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Deny this subpoena?' })
+    await user.type(within(dialog).getByRole('textbox'), 'Overbroad.')
+    await user.click(within(dialog).getByRole('button', { name: 'Deny subpoena' }))
+    expect(denySubpoena).toHaveBeenCalledWith('c1', 's1', 'Overbroad.')
+    expect(screen.queryByRole('article', { name: 'Subpoena to Mercy Hospital' })).not.toBeInTheDocument()
+  })
+
+  it("shows which other world's response a draft adapts, to compare", async () => {
+    const { user } = renderPage({
+      listSubpoenas: vi.fn().mockResolvedValue([{ ...subpoena, basedOn: { materialId: 'm7', title: 'Response of Mercy Hospital to subpoena (Team 1)', worldNumber: 2 } }]),
+      listMaterials: vi.fn().mockResolvedValue([
+        { id: 'm7', filename: 'r.txt', description: 'Response of Mercy Hospital to subpoena (Team 1)', contentType: 'text/plain', sizeBytes: 10, initial: false, audience: 'instructor' },
+      ]),
+    })
+    const card = await screen.findByRole('article', { name: 'Subpoena to Mercy Hospital' })
+    expect(card).toHaveTextContent('Adapted from World B’s response to the same request')
+    // Still a draft to edit, not a file to send.
+    expect(within(card).getByRole('button', { name: 'Approve and send' })).toBeEnabled()
+    await user.click(within(card).getByRole('button', { name: 'Response of Mercy Hospital to subpoena (Team 1)' }))
+    expect(await screen.findByRole('dialog', { name: 'Response of Mercy Hospital to subpoena (Team 1)' })).toBeInTheDocument()
   })
 })

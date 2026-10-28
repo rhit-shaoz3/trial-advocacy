@@ -1119,3 +1119,85 @@
 .ex-produced .cw-section-sub {
   margin: 0;
 }
+
+.ex-subpoena-compose {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 1100px) {
+  .ex-subpoena-compose {
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.ex-subpoena-preview {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.ex-subpoena-preview .ex-subtitle {
+  margin: 0;
+}
+
+.ex-fixed-type {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 0.5rem;
+  font-weight: 400;
+}
+
+.ex-fixed-type small,
+.ex-type-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.ex-subpoena-served {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ex-subpoena-served > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ex-subpoena-served[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+.ex-subpoena-response {
+  max-height: 32rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+}
+
+.teach-types {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+}
+
+.teach-types li {
+  padding: 0.5rem 0.7rem;
+  border-left: 3px solid var(--tint-amber-fg);
+  border-radius: 0.25rem;
+  background: var(--tint-amber-bg);
+}
+
+.teach-types strong {
+  display: block;
+  color: var(--fg);
+}

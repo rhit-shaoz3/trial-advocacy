@@ -116,12 +116,14 @@ export async function loadProfile(
   courseCase: Parameters<typeof buildProfile>[0] & { id: string },
   witness: Witness,
   settledFacts?: SettledFacts,
+  /** The case world, whose own files the witness reads too. */
+  matchupId: string | null = null,
 ) {
   if (!witness.depositionMaterialId) throw new WitnessNotReadyError(`Choose ${witness.name}'s deposition file.`)
-  let materials = await listMaterialTexts(courseCase.id)
+  let materials = await listMaterialTexts(courseCase.id, matchupId)
   if (materials.some((m) => m.textStatus === 'pending')) {
     await finishPendingTranscriptions(materials)
-    materials = await listMaterialTexts(courseCase.id)
+    materials = await listMaterialTexts(courseCase.id, matchupId)
   }
   const otherDepositionIds = new Set(
     (await listWitnesses(courseCase.id))

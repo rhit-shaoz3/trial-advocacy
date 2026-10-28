@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { StudentExchange, StudentPart } from '../../courses/types'
+import type { StudentExchange, StudentPart, StudentSubpoenas } from '../../courses/types'
 import { ExchangePanel } from './ExchangePanel'
 
 const now = new Date('2026-11-01T12:00:00Z')
@@ -48,7 +48,14 @@ const set = {
 
 function renderPanel(exchange: StudentExchange, handlers: Partial<Parameters<typeof ExchangePanel>[0]> = {}) {
   const user = userEvent.setup()
-  render(<ExchangePanel exchange={exchange} now={now} {...handlers} />)
+  render(
+    <ExchangePanel
+      exchange={exchange}
+      now={now}
+      subpoenaForm={{ caseId: 'c1', parties: { plaintiff: 'Elena Ramirez', defendant: 'Thrillville Parks' }, attorney: 'Ada Lawyer' }}
+      {...handlers}
+    />,
+  )
   return user
 }
 
@@ -190,7 +197,8 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
 })
 
 describe('ExchangePanel: subpoenas', () => {
-  const subpoenas = {
+  const subpoenas: StudentSubpoenas = {
+    types: ['documents', 'esi'],
     limit: 3,
     days: 14,
     used: 1,
@@ -199,18 +207,29 @@ describe('ExchangePanel: subpoenas', () => {
       {
         id: 's1',
         recipient: 'Mercy Hospital',
+        recipientDescription: 'The hospital that treated Elena.',
+        requestType: 'documents' as const,
         records: 'ER records for June 10.',
         sentBy: 'Ada Lawyer',
         sentAt: '2026-10-28T12:00:00Z',
         dueAt: '2026-11-11T12:00:00Z',
-        outcome: 'complied' as const,
-        response: 'Enclosed.',
+        outcome: 'responded' as const,
+        response: 'RESPONSE OF MERCY HOSPITAL TO SUBPOENA',
         respondedAt: '2026-10-30T12:00:00Z',
         documents: [{ materialId: 'm9', title: 'ER chart' }],
         seen: false,
       },
     ],
-    notices: [{ id: 's2', teamNumber: 2, recipient: 'Atlas Coaster Co.', records: 'Maintenance logs, 2018–2019.', sentAt: '2026-10-29T12:00:00Z' }],
+    notices: [
+      {
+        id: 's2',
+        teamNumber: 2,
+        recipient: 'Atlas Coaster Co.',
+        requestType: 'esi',
+        records: 'Maintenance logs, 2018–2019.',
+        sentAt: '2026-10-29T12:00:00Z',
+      },
+    ],
   }
   const open = { ...base, phase: 'information_exchange' as const, requestsOpen: true, disclosures: null, subpoenas }
 
@@ -221,7 +240,7 @@ describe('ExchangePanel: subpoenas', () => {
     expect(screen.getByText('Subpoenas open in the information exchange phase.')).toBeInTheDocument()
   })
 
-  it('serves one, and shows the answer, the produced files, and notice of the other team’s', async () => {
+  it('serves one on the federal form, and shows the response, the produced files, and notice of the other team’s', async () => {
     const onServeSubpoena = vi.fn().mockResolvedValue(undefined)
     const onOpenDocument = vi.fn()
     const user = renderPanel(open, { onServeSubpoena, onOpenDocument })
@@ -233,10 +252,17 @@ describe('ExchangePanel: subpoenas', () => {
     const notices = screen.getByRole('heading', { name: 'Notices from Team 2' }).closest('section')!
     expect(notices).toHaveTextContent('To Atlas Coaster Co.')
     expect(notices).toHaveTextContent('Maintenance logs, 2018–2019.')
+    expect(notices).toHaveTextContent('Electronically stored information · Served by Team 2')
 
     await user.click(screen.getByRole('button', { name: /To Mercy Hospital/ }))
     expect(screen.getByRole('heading', { name: 'Subpoena to Mercy Hospital' })).toBeInTheDocument()
-    expect(screen.getByText('Enclosed.')).toBeInTheDocument()
+    expect(screen.getByText('Response received')).toBeInTheDocument()
+    expect(screen.getByText('RESPONSE OF MERCY HOSPITAL TO SUBPOENA')).toBeInTheDocument()
+    // What they served, on the form, to look back at.
+    const served = screen.getByRole('article', { name: 'Subpoena form' })
+    expect(served).toHaveTextContent('Elena Ramirez')
+    expect(served).toHaveTextContent('ER records for June 10.')
+    expect(served).toHaveTextContent('/s/ Ada Lawyer')
     await user.click(screen.getByRole('button', { name: /ER chart/ }))
     expect(onOpenDocument).toHaveBeenCalledWith('m9')
 
@@ -245,8 +271,55 @@ describe('ExchangePanel: subpoenas', () => {
     const serve = screen.getByRole('button', { name: 'Serve subpoena' })
     expect(serve).toBeDisabled()
     await user.type(screen.getByLabelText('To'), 'Lincoln Ride Safety Board')
-    await user.type(screen.getByLabelText('Records to produce'), 'Inspection reports for Atlas Adventure, 2017–2019.')
+    await user.type(screen.getByLabelText('Who they are'), 'The state agency that inspects rides.')
+    await user.type(screen.getByLabelText('What you want'), 'Inspection reports for Atlas Adventure, 2017–2019.')
+    expect(serve).toBeDisabled()
+    // Only the kinds the case allows.
+    const kind = screen.getByLabelText('Type of request')
+    expect(within(kind).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Choose one…',
+      'Physical documents',
+      'Electronically stored information',
+    ])
+    await user.selectOptions(kind, 'esi')
+    // The form fills in as they write.
+    const form = screen.getByRole('article', { name: 'Subpoena form' })
+    expect(form).toHaveTextContent('Elena Ramirez')
+    expect(form).toHaveTextContent('Thrillville Parks')
+    expect(form).toHaveTextContent('Lincoln Ride Safety Board')
+    expect(form).toHaveTextContent('Electronically stored information')
+    expect(form).toHaveTextContent('Inspection reports for Atlas Adventure, 2017–2019.')
+    expect(form).toHaveTextContent('Hale & Whitford LLP')
     await user.click(serve)
-    expect(onServeSubpoena).toHaveBeenCalledWith('Lincoln Ride Safety Board', 'Inspection reports for Atlas Adventure, 2017–2019.')
+    expect(onServeSubpoena).toHaveBeenCalledWith({
+      recipient: 'Lincoln Ride Safety Board',
+      recipientDescription: 'The state agency that inspects rides.',
+      requestType: 'esi',
+      records: 'Inspection reports for Atlas Adventure, 2017–2019.',
+    })
+  })
+
+  it('fixes the kind of request when the case allows only one', async () => {
+    const onServeSubpoena = vi.fn().mockResolvedValue(undefined)
+    const user = renderPanel({ ...open, subpoenas: { ...subpoenas, types: ['inspection'] } }, { onServeSubpoena })
+    await user.click(screen.getByRole('button', { name: /Subpoenas/ }))
+    await user.click(screen.getByRole('button', { name: 'Serve a subpoena' }))
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.getByText('Inspection of premises', { selector: 'strong' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('To'), 'Thrillville Parks')
+    await user.type(screen.getByLabelText('What to inspect'), 'The Atlas platform.')
+    expect(screen.getByRole('img', { name: 'Checked' }).closest('.sf-command')).toHaveTextContent('Inspection of Premises')
+    await user.click(screen.getByRole('button', { name: 'Serve subpoena' }))
+    expect(onServeSubpoena).toHaveBeenCalledWith(expect.objectContaining({ requestType: 'inspection', records: 'The Atlas platform.' }))
+  })
+
+  it('tells the team when a subpoena was denied', async () => {
+    const denied = { ...subpoenas.served[0], outcome: 'denied' as const, response: 'Overbroad.', documents: [] }
+    const user = renderPanel({ ...open, subpoenas: { ...subpoenas, served: [denied] } })
+    await user.click(screen.getByRole('button', { name: /Subpoenas/ }))
+    const row = screen.getByRole('button', { name: /To Mercy Hospital/ })
+    expect(row).toHaveTextContent('Denied')
+    await user.click(row)
+    expect(screen.getByText('Your subpoena was denied').parentElement).toHaveTextContent('Overbroad.')
   })
 })

@@ -5,11 +5,12 @@
 
 export const DEFAULT_MODEL = 'claude-haiku-5-5'
 
-export type AiStep = 'witness' | 'investigator' | 'transcribe' | 'review' | 'eval'
+export type AiStep = 'witness' | 'investigator' | 'subpoena' | 'transcribe' | 'review' | 'eval'
 
 const STEP_VARIABLE: Record<AiStep, string> = {
   witness: 'CLAUDE_WITNESS_MODEL',
   investigator: 'CLAUDE_INVESTIGATOR_MODEL',
+  subpoena: 'CLAUDE_SUBPOENA_MODEL',
   transcribe: 'CLAUDE_TRANSCRIBE_MODEL',
   review: 'CLAUDE_REVIEW_MODEL',
   eval: 'CLAUDE_EVAL_MODEL',

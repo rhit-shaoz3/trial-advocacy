@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { BookOpen, Check, Clock, ListChecks, Lock, MessageSquare, Sparkles, TriangleAlert } from 'lucide-react'
 import { Modal } from '../../components/Modal'
-import { FEDERAL, type PartSettings } from '../../courses/types'
+import { SUBPOENA_TYPE_LABEL } from '../../courses/subpoenaForm'
+import { FEDERAL, type PartSettings, type SubpoenaType } from '../../courses/types'
 
 export type TeachTopic = 'disclosures' | 'subpoenas' | 'interrogatories' | 'rfas'
 
@@ -17,7 +18,7 @@ export function TeachMe({
 }: {
   topic: TeachTopic
   /** The case's limit and days to respond, to compare with the federal rule. */
-  part?: Pick<PartSettings, 'limit' | 'days'> | null
+  part?: (Pick<PartSettings, 'limit' | 'days'> & { types?: SubpoenaType[] }) | null
   onClose(): void
 }) {
   const close = (
@@ -73,34 +74,76 @@ export function TeachMe({
   }
 
   if (topic === 'subpoenas') {
+    const allowed = part?.types?.map((t) => SUBPOENA_TYPE_LABEL[t].toLowerCase())
     return (
       <Modal eyebrow="Teach me · FRCP 45" title="What is a subpoena?" icon={<BookOpen />} onClose={onClose} footer={close}>
         <div className="teach">
           <p>
-            A subpoena orders a person or organization to produce documents or other things they hold, or to testify
-            (FRCP 45(a)(1)). Unlike interrogatories, it can reach people who aren&rsquo;t parties to the case: a hospital,
-            a state safety board, the company that built the ride.
+            A subpoena is a court order, issued by the clerk or signed by an attorney, that makes a person or organization
+            produce what they hold or let you inspect their property (FRCP 45(a)). Its big advantage: it reaches people who
+            aren&rsquo;t parties to the case, like a hospital, a phone carrier, a state safety board, or the company that
+            built the ride. To get documents from the other party, you&rsquo;d normally use a request for production under
+            FRCP 34 instead; a subpoena to a party gets the same scope and objections.
           </p>
+          <h3>What you can ask for</h3>
+          <ul className="teach-types">
+            <li>
+              <strong>Documents</strong> Paper and scanned records: files, logs, letters, reports.
+            </li>
+            <li>
+              <strong>Electronically stored information (ESI)</strong> Email, texts, databases, video. Say what form you want
+              (native files, PDFs, a spreadsheet); otherwise the recipient picks a reasonably usable one (FRCP 45(e)(1)).
+            </li>
+            <li>
+              <strong>Tangible things</strong> Objects, like a broken part or a device, made available to inspect. Testing
+              them is work for an expert.
+            </li>
+            <li>
+              <strong>Inspection of premises</strong> Entry onto land or a building to inspect, measure, survey, and
+              photograph it (FRCP 45(a)(1)(A)(iii)).
+            </li>
+          </ul>
           <div className="teach-rules">
+            <Rule icon={<ListChecks />} big="Relevant and proportional" detail="to a claim or defense, like all discovery (FRCP 26(b)(1))" />
             <Rule icon={<MessageSquare />} big="Notice first" detail="to every other party before it’s served (FRCP 45(a)(4))" />
             <Rule icon={<Clock />} big="14 days" detail="for the recipient to object, if compliance is due later (FRCP 45(d)(2)(B))" />
           </div>
-          {part && <Differs text={`Your team can serve ${part.limit} subpoenas, and each recipient has ${part.days} days to answer.`} />}
+          {part && (
+            <Differs
+              text={`Your team can serve ${part.limit} ${part.limit === 1 ? 'subpoena' : 'subpoenas'}, and each recipient has ${part.days} days to respond.${
+                allowed && allowed.length < 4 ? ` In this case you can ask only for ${allowed.join(' or ')}.` : ''
+              } Deposition witnesses don’t need one; they’re subpoenaed behind the scenes.`}
+            />
+          )}
           <h3>How litigators use them</h3>
           <Tips
             tips={[
-              'Get records the other side doesn’t have, or won’t hand over: medical charts, inspection reports, maintenance logs.',
-              'Name the recipient exactly, and describe the records narrowly: who, what, and which dates.',
-              'Check first whether the records will come through disclosures or interrogatories.',
+              'Medical and billing records from a hospital or doctor, to prove (or test) injuries and damages. Expect HIPAA conditions, like a protective order.',
+              'Phone records from a carrier: who called whom, and when. Carriers never produce the content of texts or calls to a private party (the Stored Communications Act).',
+              'Business records: maintenance and inspection logs, incident reports, training files, timesheets, surveillance footage.',
+              'Bank and employment records, for damages, motive, or where someone was.',
+              'A site inspection, to measure distances and sight lines and photograph the scene for trial.',
+            ]}
+          />
+          <h3>Strategies</h3>
+          <Tips
+            tips={[
+              'Pick the right custodian: the person or organization most likely to hold the original record.',
+              'Number each request, define your terms, and give a date range tied to the events in the case.',
+              'Ask narrowly. “All documents relating to the ride” invites objections, a narrowed production, or a motion to quash.',
+              'Check first whether the record already came through disclosures, interrogatories, or the investigator.',
+              'Remember the other side gets notice, and can use what comes back too.',
             ]}
           />
           <Fact icon={<TriangleAlert />}>
-            A court must quash a subpoena that asks for privileged material or puts an undue burden on the recipient
-            (FRCP 45(d)(3)). &ldquo;Every record you have&rdquo; is the classic way to get quashed.
+            A court must quash or modify a subpoena that asks for privileged material or puts an undue burden on the
+            recipient (FRCP 45(d)(3)), and may protect trade secrets. Recipients can withhold privileged items, listing them in
+            a privilege log (FRCP 45(e)(2)).
           </Fact>
           <p className="teach-note">
-            In this course, your instructor answers each subpoena as its recipient: with the records, or by quashing it.
-            The other team sees that you served it, but not what came back.
+            In this course, the recipient&rsquo;s response is drafted from the case file, and your instructor reviews it
+            before your team sees it. Your instructor can also deny a subpoena. The other team sees that you served it, but
+            not what came back.
           </p>
         </div>
       </Modal>

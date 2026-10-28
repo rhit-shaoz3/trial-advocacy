@@ -257,7 +257,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
   const transcript = await listTurns(interviewId)
   let reply
   try {
-    const profile = await loadProfile(ctx.courseCase, ctx.witness, await settledFacts(ctx.courseCase.id, ctx.matchupId))
+    const profile = await loadProfile(ctx.courseCase, ctx.witness, await settledFacts(ctx.courseCase.id, ctx.matchupId), ctx.matchupId)
     const settings = depositionSettings(profile, ctx.witness, ctx.owner.side)
     reply = await ai.askWitness({
       profile,

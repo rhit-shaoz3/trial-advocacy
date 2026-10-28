@@ -66,6 +66,8 @@ describe('case materials', () => {
       textError: null,
       initial: false,
       shares: { matchupIds: [], teamIds: [] },
+      // Every case world's file, not one world's own (like a subpoena response).
+      worldNumber: null,
     })
     const photo = (await upload('scene.JPG', { audience: 'plaintiff' })).body.material
     expect(photo).toMatchObject({ audience: 'plaintiff', contentType: 'image/jpeg' })

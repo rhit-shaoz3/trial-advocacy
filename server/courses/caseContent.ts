@@ -49,6 +49,8 @@ export interface CaseMaterial {
   /** The file every team starts from; always shared with everyone. */
   initial: boolean
   shares: MaterialShares
+  /** The case world the file belongs to (like a subpoena response), by number; null for every world's files. */
+  worldNumber: number | null
 }
 
 export interface Witness {
@@ -89,7 +91,8 @@ const MATERIAL_COLUMNS = `id, audience, filename, description, content_type AS "
     'matchupIds', coalesce((SELECT json_agg(s.matchup_id) FROM material_shares s
                             WHERE s.material_id = case_materials.id AND s.matchup_id IS NOT NULL), '[]'),
     'teamIds', coalesce((SELECT json_agg(s.team_id) FROM material_shares s
-                         WHERE s.material_id = case_materials.id AND s.team_id IS NOT NULL), '[]')) AS shares`
+                         WHERE s.material_id = case_materials.id AND s.team_id IS NOT NULL), '[]')) AS shares,
+  (SELECT w.number FROM matchups w WHERE w.id = case_materials.matchup_id) AS "worldNumber"`
 
 /**
  * SQL for "this viewer can see the file": its audience is theirs, or it's
@@ -178,11 +181,13 @@ export async function createMaterial(input: {
   sizeBytes: number
   storageKey: string
   uploadedBy: string
-}) {
-  const { rows } = await pool.query<CaseMaterial>(
+  /** The case world the file belongs to; leave out for a file every world shares. */
+  matchupId?: string | null
+}, db: Pick<PoolClient, 'query'> = pool) {
+  const { rows } = await db.query<CaseMaterial>(
     `INSERT INTO case_materials
-       (id, case_id, audience, filename, description, content_type, size_bytes, storage_key, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (id, case_id, audience, filename, description, content_type, size_bytes, storage_key, uploaded_by, matchup_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING ${MATERIAL_COLUMNS}`,
     [
       input.id,
@@ -194,6 +199,7 @@ export async function createMaterial(input: {
       input.sizeBytes,
       input.storageKey,
       input.uploadedBy,
+      input.matchupId ?? null,
     ],
   )
   return rows[0]
@@ -233,7 +239,8 @@ export async function setInitialMaterial(caseId: string, id: string | null): Pro
     await client.query('UPDATE case_materials SET initial = false WHERE case_id = $1 AND initial', [caseId])
     if (id) {
       const { rows } = await client.query<{ deposition: boolean }>(
-        `UPDATE case_materials m SET initial = true, audience = 'all' WHERE m.case_id = $1 AND m.id = $2
+        // One case world's own file (a subpoena response) can't be every team's starting file.
+        `UPDATE case_materials m SET initial = true, audience = 'all' WHERE m.case_id = $1 AND m.id = $2 AND m.matchup_id IS NULL
          RETURNING EXISTS (SELECT 1 FROM case_witnesses w WHERE w.deposition_material_id = m.id) AS deposition`,
         [caseId, id],
       )
@@ -357,12 +364,17 @@ export interface MaterialText {
   initial: boolean
 }
 
-/** Every file in a case with its transcription, for building an AI witness's prompt. */
-export async function listMaterialTexts(caseId: string) {
+/**
+ * Every file in a case with its transcription, for building an AI's prompt:
+ * the files every world shares, plus those of this case world (like its
+ * subpoena responses); with no world, only the shared ones.
+ */
+export async function listMaterialTexts(caseId: string, matchupId: string | null = null) {
   const { rows } = await pool.query<MaterialText>(
     `SELECT id, audience, filename, description, text_status AS "textStatus", text_content AS text, initial
-     FROM case_materials WHERE case_id = $1 ORDER BY uploaded_at, filename`,
-    [caseId],
+     FROM case_materials WHERE case_id = $1 AND (matchup_id IS NULL OR matchup_id = $2)
+     ORDER BY uploaded_at, filename`,
+    [caseId, matchupId],
   )
   return rows
 }

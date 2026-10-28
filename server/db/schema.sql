@@ -658,6 +658,14 @@ CREATE TABLE IF NOT EXISTS case_shares (
 
 CREATE INDEX IF NOT EXISTS case_shares_to_idx ON case_shares (to_user_id);
 
+-- Where a case file came from: uploaded by the instructor, or a subpoena
+-- response approved in one case world. The AI reads every instructor file,
+-- and only the requesting team's own world's subpoena responses.
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'instructor'
+  CHECK (source IN ('instructor', 'subpoena'));
+UPDATE case_materials SET source = 'subpoena'
+  WHERE source <> 'subpoena' AND id IN (SELECT response_material_id FROM subpoenas WHERE response_material_id IS NOT NULL);
+
 -- Login sessions, in the format connect-pg-simple expects.
 CREATE TABLE IF NOT EXISTS session (
   sid    varchar      PRIMARY KEY,

@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { describe, expect, it, vi } from 'vitest'
 import { buildFinalizeRequest, finalizeReport, stripTags, type EditClient } from './finalize.ts'
 import { buildInvestigationRequest, matchTitles, parseReport } from './investigate.ts'
-import { buildInvestigatorPrompt, isOrganization, type InvestigatorContext } from './prompt.ts'
+import { buildInvestigatorPrompt, buildTeamBlock, isOrganization, type InvestigatorContext } from './prompt.ts'
 
 const context: InvestigatorContext = {
   investigatorName: 'Nora Vance',
@@ -38,17 +38,19 @@ RECORDS REQUESTED
 </review>`
 
 describe('the investigator prompt', () => {
-  it('fills in the case, the team, and what the team has', () => {
+  it('fills in the case, the same for every team in the world', () => {
     const prompt = buildInvestigatorPrompt(context)
 
     expect(prompt).toContain('You are Nora Vance, a licensed private investigator.')
-    expect(prompt).toContain('the attorneys for the plaintiff, Rivera (Team 3)')
-    expect(prompt).toContain('Contact the opposing party, Northstar Transit, directly.')
-    // Northstar Transit is a company, so its employees are off-limits too.
-    expect(prompt).toContain('Interview current employees of Northstar Transit.')
+    expect(prompt).toContain('starts with a <your_team> block that says which team you work for')
+    expect(prompt).toContain('Contact the opposing party (named in <your_team>) directly.')
+    expect(prompt).toContain('Interview current employees of the opposing party, when it')
     expect(prompt).toContain('Today\'s date, in the world of the case, is March 15, 2026.')
-    expect(prompt).toContain('<document title="Fact pattern" team_has_access="yes">')
-    expect(prompt).toContain('<document title="Maintenance log" team_has_access="no">')
+    expect(prompt).toContain('<document title="Fact pattern">')
+    expect(prompt).toContain('<document title="Maintenance log">')
+    // Nothing about the asking team, so both teams share one cached prompt.
+    expect(prompt).not.toMatch(/Team 3|Rivera \(|team_has_access/)
+    expect(buildInvestigatorPrompt({ ...context, side: 'defense', teamNumber: 4, documents: context.documents.map((d) => ({ ...d, teamHasAccess: true })) })).toBe(prompt)
     expect(prompt).toContain('- Marcus Okafor, Bus driver (side: defendant)')
     expect(prompt).toContain('- The light was green.\n- A pedestrian stepped out.')
     expect(prompt).toContain('- A neighbor says she heard a horn.')
@@ -68,6 +70,20 @@ describe('the investigator prompt', () => {
     expect(prompt).toContain('report it as done on the next such day')
     // Records that need legal process get their own list in the review block.
     expect(prompt).toContain('RECORDS REQUESTED\n- One record per line')
+  })
+
+  it('tells him which team he works for, its opponent, and what it has', () => {
+    expect(buildTeamBlock(context)).toBe(
+      [
+        '<your_team>',
+        'You work for the attorneys for the plaintiff, Rivera (Team 3).',
+        // Northstar Transit is a company, so its employees are off-limits too.
+        'Opposing party: Northstar Transit (an organization)',
+        'Case files your team already has:',
+        '- Fact pattern',
+        '</your_team>',
+      ].join('\n'),
+    )
   })
 
   it("adds the instructor's own instructions at the end", () => {
@@ -94,7 +110,10 @@ describe('an investigation request', () => {
       { role: 'user', content: 'Find witnesses.' },
       { role: 'assistant', content: 'I found Ann Lee.' },
       // The new assignment carries a reminder to end with the review block.
-      { role: 'user', content: 'Assignment from Team 3:\n\nTalk to Ann Lee again.\n\nReport back, ending with your <review> block.' },
+      {
+        role: 'user',
+        content: `${buildTeamBlock(context)}\n\nAssignment from Team 3:\n\nTalk to Ann Lee again.\n\nReport back, ending with your <review> block.`,
+      },
     ])
     const system = request.system as Anthropic.Beta.Messages.BetaTextBlockParam[]
     expect(system[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })

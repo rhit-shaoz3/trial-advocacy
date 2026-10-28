@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { modelFor } from '../ai/models.ts'
 import { hasServerFallback } from '../witness/deposition.ts'
-import { buildInvestigatorPrompt, type InvestigatorContext } from './prompt.ts'
+import { buildInvestigatorPrompt, buildTeamBlock, type InvestigatorContext } from './prompt.ts'
 
 // One assignment to the background investigator: the team's earlier
 // assignments and (reviewed) reports as the conversation so far, then the new
@@ -49,8 +49,8 @@ export function buildInvestigationRequest(
     output_config: { effort: INVESTIGATOR_EFFORT },
     // As for the witness: a safety decline retries on the fallback model where there is one.
     ...(hasServerFallback(model) && { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
-    // The case file is the bulk of the prompt and the same for the team's
-    // next assignment, so it's cached for an hour.
+    // The case file is the bulk of the prompt and the same for every team in
+    // the case world (the team comes with its assignment), so it's cached for an hour.
     system: [{ type: 'text', text: buildInvestigatorPrompt(input.context), cache_control: { type: 'ephemeral', ttl: '1h' } }],
     messages: [
       ...input.history.flatMap((turn): Anthropic.Beta.Messages.BetaMessageParam[] => [
@@ -60,7 +60,7 @@ export function buildInvestigationRequest(
       // A reminder right where he answers: without the review block, nothing gets ruled on.
       {
         role: 'user',
-        content: `Assignment from Team ${input.context.teamNumber}:\n\n${input.assignment}\n\nReport back, ending with your <review> block.`,
+        content: `${buildTeamBlock(input.context)}\n\nAssignment from Team ${input.context.teamNumber}:\n\n${input.assignment}\n\nReport back, ending with your <review> block.`,
       },
     ],
   }

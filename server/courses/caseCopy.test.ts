@@ -129,6 +129,10 @@ describe('duplicating a case', () => {
       ['Photos.txt', 'instructor', false, 'ready'],
     ])
     expect(files.every((f) => f.shares.teamIds.length === 0)).toBe(true)
+    // Only the instructor's own files come along, still marked as theirs.
+    expect((await pool.query<{ source: string }>('SELECT DISTINCT source FROM case_materials WHERE case_id = $1', [copy.id])).rows).toEqual([
+      { source: 'instructor' },
+    ])
     const byName = Object.fromEntries(files.map((f) => [f.filename, f.id]))
     expect((await prof.get(`${copyUrl}/materials/${byName['Elena deposition.txt']}/text`)).text).toBe('Elena testified.')
     await transcriptionsSettled()

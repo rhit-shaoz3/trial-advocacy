@@ -244,7 +244,13 @@ export interface CaseMaterial {
   shares?: MaterialShares
   /** The one case world the file belongs to (a subpoena response), by number; null or missing for every world's. */
   worldNumber?: number | null
+  /** Where it came from; missing means the instructor uploaded it. */
+  source?: MaterialSource
 }
+
+/** Where a case file came from: the instructor's upload, or a subpoena response approved in one case world. */
+export const MATERIAL_SOURCES = ['instructor', 'subpoena'] as const
+export type MaterialSource = (typeof MATERIAL_SOURCES)[number]
 
 export interface MaterialShares {
   matchupIds: string[]

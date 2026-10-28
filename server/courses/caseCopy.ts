@@ -53,10 +53,10 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
       [sourceCaseId, newCaseId, targetCourseId, title, sourceRows[0].owner],
     )
 
-    // Case files, but not one world's own (a subpoena response).
+    // The instructor's case files, not files generated in play (a world's subpoena responses).
     const { rows: materials } = await client.query<{ id: string; storageKey: string | null }>(
       `SELECT id, storage_key AS "storageKey" FROM case_materials
-       WHERE case_id = $1 AND matchup_id IS NULL ORDER BY uploaded_at`,
+       WHERE case_id = $1 AND source = 'instructor' AND matchup_id IS NULL ORDER BY uploaded_at`,
       [sourceCaseId],
     )
     const materialIds = new Map<string, string>()
@@ -71,9 +71,9 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
       // The text the AI read comes along, so nothing is read again.
       await client.query(
         `INSERT INTO case_materials (id, case_id, audience, filename, description, content_type, size_bytes, data,
-           storage_key, uploaded_by, uploaded_at, text_status, text_content, text_error, initial)
+           storage_key, uploaded_by, uploaded_at, text_status, text_content, text_error, initial, source)
          SELECT $2, $3, CASE WHEN initial THEN 'all' ELSE 'instructor' END, filename, description, content_type,
-           size_bytes, data, $4, $5, uploaded_at, text_status, text_content, text_error, initial
+           size_bytes, data, $4, $5, uploaded_at, text_status, text_content, text_error, initial, source
          FROM case_materials WHERE id = $1`,
         [m.id, id, newCaseId, key, actorId],
       )

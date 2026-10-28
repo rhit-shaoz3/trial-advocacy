@@ -19,6 +19,10 @@ export type MaterialAudience = (typeof MATERIAL_AUDIENCES)[number]
 /** Whether a file's transcription for the AI witnesses is running, done, failed, or not needed. */
 export type TextStatus = 'pending' | 'ready' | 'failed' | 'none'
 
+/** Where a case file came from: the instructor's upload, or a subpoena response approved in one case world. */
+export const MATERIAL_SOURCES = ['instructor', 'subpoena'] as const
+export type MaterialSource = (typeof MATERIAL_SOURCES)[number]
+
 /** The audiences someone on `side` can see; with no side yet, only shared items. */
 export const visibleTo = (side: Side | null): Audience[] => (side ? ['all', side] : ['all'])
 
@@ -51,6 +55,7 @@ export interface CaseMaterial {
   shares: MaterialShares
   /** The case world the file belongs to (like a subpoena response), by number; null for every world's files. */
   worldNumber: number | null
+  source: MaterialSource
 }
 
 export interface Witness {
@@ -92,7 +97,7 @@ const MATERIAL_COLUMNS = `id, audience, filename, description, content_type AS "
                             WHERE s.material_id = case_materials.id AND s.matchup_id IS NOT NULL), '[]'),
     'teamIds', coalesce((SELECT json_agg(s.team_id) FROM material_shares s
                          WHERE s.material_id = case_materials.id AND s.team_id IS NOT NULL), '[]')) AS shares,
-  (SELECT w.number FROM matchups w WHERE w.id = case_materials.matchup_id) AS "worldNumber"`
+  (SELECT w.number FROM matchups w WHERE w.id = case_materials.matchup_id) AS "worldNumber", source`
 
 /**
  * SQL for "this viewer can see the file": its audience is theirs, or it's
@@ -183,11 +188,13 @@ export async function createMaterial(input: {
   uploadedBy: string
   /** The case world the file belongs to; leave out for a file every world shares. */
   matchupId?: string | null
+  /** The instructor's upload unless said otherwise. */
+  source?: MaterialSource
 }, db: Pick<PoolClient, 'query'> = pool) {
   const { rows } = await db.query<CaseMaterial>(
     `INSERT INTO case_materials
-       (id, case_id, audience, filename, description, content_type, size_bytes, storage_key, uploaded_by, matchup_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       (id, case_id, audience, filename, description, content_type, size_bytes, storage_key, uploaded_by, matchup_id, source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING ${MATERIAL_COLUMNS}`,
     [
       input.id,
@@ -200,6 +207,7 @@ export async function createMaterial(input: {
       input.storageKey,
       input.uploadedBy,
       input.matchupId ?? null,
+      input.source ?? 'instructor',
     ],
   )
   return rows[0]
@@ -365,14 +373,15 @@ export interface MaterialText {
 }
 
 /**
- * Every file in a case with its transcription, for building an AI's prompt:
- * the files every world shares, plus those of this case world (like its
- * subpoena responses); with no world, only the shared ones.
+ * The case file an AI reads, with each file's transcription: every file the
+ * instructor uploaded, plus the subpoena responses approved in this case world
+ * only (never another world's); with no world, only the instructor's files.
  */
 export async function listMaterialTexts(caseId: string, matchupId: string | null = null) {
   const { rows } = await pool.query<MaterialText>(
     `SELECT id, audience, filename, description, text_status AS "textStatus", text_content AS text, initial
-     FROM case_materials WHERE case_id = $1 AND (matchup_id IS NULL OR matchup_id = $2)
+     FROM case_materials
+     WHERE case_id = $1 AND (source = 'instructor' OR (source = 'subpoena' AND matchup_id = $2))
      ORDER BY uploaded_at, filename`,
     [caseId, matchupId],
   )

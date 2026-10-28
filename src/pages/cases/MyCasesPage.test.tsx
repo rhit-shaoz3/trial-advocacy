@@ -54,6 +54,7 @@ describe('MyCasesPage', () => {
     expect(rivera).toHaveTextContent('Case worldB')
     expect(rivera).toHaveTextContent('OppositionCy Advocate')
     expect(rivera).not.toHaveTextContent(/\byou\b/i)
+    expect(rivera).not.toHaveTextContent('A rollercoaster stalls.')
     expect(within(rivera).getByText('Active')).toBeInTheDocument()
     expect(within(rivera).getByRole('link')).toHaveAttribute('href', '/courses/c1/cases/k1')
     expect(screen.getByRole('listitem', { name: 'State v. Hale' })).toHaveTextContent('PairingNot assigned yet')

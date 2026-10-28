@@ -126,11 +126,6 @@ a.case-row:hover {
   font: 400 1.3rem var(--ws-serif);
 }
 
-.case-row-summary {
-  margin: 0.4rem 0 0.5rem;
-  overflow-wrap: anywhere;
-}
-
 .case-back {
   display: inline-flex;
   align-items: center;
@@ -148,13 +143,6 @@ a.case-row:hover {
 
 .case-back:hover {
   text-decoration: underline;
-}
-
-.course-header .case-summary {
-  max-width: 48rem;
-  margin-top: 0.75rem;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
 }
 
 /* Draft and active reuse the roster's Pending / Joined colors. */

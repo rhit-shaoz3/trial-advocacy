@@ -225,7 +225,6 @@ export function CaseDetailPage() {
                     Edit case
                   </button>
                 </p>
-                {courseCase.summary && <p className="case-summary">{courseCase.summary}</p>}
                 {courseCase.instructorNote && (
                   <p className="case-note">
                     <strong>Note to students:</strong> {courseCase.instructorNote}

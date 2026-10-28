@@ -340,6 +340,8 @@ describe('course workspace', () => {
     expect(rivera).toHaveTextContent('Case world D')
     expect(rivera).toHaveTextContent('Role: Defendant')
     expect(rivera).toHaveTextContent('5 participants')
+    // No case description on the card.
+    expect(rivera).not.toHaveTextContent('A rollercoaster stalls.')
     // No task progress bar; four avatars and a count of the rest.
     expect(within(rivera).queryByRole('progressbar')).not.toBeInTheDocument()
     expect(rivera).toHaveTextContent('+1')

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import { caseOverview } from '../../courses/caseLabels'
 import type { CourseCase } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { CaseStatusBadge } from './CaseStatusBadge'
@@ -70,7 +69,6 @@ export function CasesPage() {
                   <CaseStatusBadge status={c.status} />
                   {c.setupCompletedAt === null && <span className="badge badge-setup">Setup unfinished</span>}
                 </div>
-                {c.summary && <p className="case-row-summary">{caseOverview(c.summary)}</p>}
                 <small className="muted">Created {formatDate(c.createdAt)}</small>
               </Link>
             </li>

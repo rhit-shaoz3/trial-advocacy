@@ -54,7 +54,8 @@ describe('CasesPage', () => {
     expect(service.listCases).toHaveBeenCalledWith('c1')
     expect(link).toHaveAttribute('href', '/courses/c1/cases/k1')
     expect(link).toHaveTextContent('Draft')
-    expect(link).toHaveTextContent('A rollercoaster stalls mid-loop.')
+    // The list stays compact: no case description.
+    expect(link).not.toHaveTextContent('A rollercoaster stalls mid-loop.')
     expect(screen.getByRole('link', { name: /State v. Hale/ })).toHaveTextContent('Active')
   })
 
@@ -124,7 +125,7 @@ describe('CaseDetailPage', () => {
     expect(await screen.findByRole('heading', { name: 'Rivera v. Thrill Park' })).toBeInTheDocument()
     expect(service.getCase).toHaveBeenCalledWith('c1', 'k1')
     expect(screen.getByText('Draft')).toBeInTheDocument()
-    expect(screen.getByText('A rollercoaster stalls mid-loop.')).toBeInTheDocument()
+    expect(screen.queryByText('A rollercoaster stalls mid-loop.')).not.toBeInTheDocument()
     expect(await screen.findByRole('region', { name: 'Teams' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Case worlds' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'All cases' })).toHaveAttribute('href', '/courses/c1/cases')

@@ -15,7 +15,7 @@ import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
 import { PhaseSteps } from '../components/PhaseSteps'
 import { Toast, Toasts } from '../components/Toasts'
-import { PHASE_LABEL, caseOverview, shortDate } from '../courses/caseLabels'
+import { PHASE_LABEL, shortDate } from '../courses/caseLabels'
 import { sideLabel, worldLabel } from '../courses/worldLabel'
 import {
   calendarDaysUntil,
@@ -265,7 +265,6 @@ function CaseCard({ caseSummary: c, href }: { caseSummary: CaseSummary; href: st
           {subtitle && <p>{subtitle}</p>}
         </div>
       </div>
-      <p className="ws-case-summary">{caseOverview(c.summary)}</p>
 
       {c.phase && c.phases && c.status === 'active' && (
         <div className="ws-case-phase">

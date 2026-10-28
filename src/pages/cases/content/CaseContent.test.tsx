@@ -46,33 +46,109 @@ afterEach(() => {
 
 describe('LaunchPanel', () => {
   const checks = [
+    { key: 'importantFacts', ok: true, message: 'Important facts: 1 for the plaintiff, 1 for the defense.' },
     { key: 'paired', ok: true, message: 'All 4 students are on a team.' },
     { key: 'matched', ok: true, message: '1 case world is set up.' },
-    { key: 'caseFile', ok: false, message: 'Upload the case file.' },
+    { key: 'caseFile', ok: false, message: 'Choose the initial file every team starts from.' },
   ] as const
 
-  it('lists what is missing and only launches when everything is ready', async () => {
-    renderWith(<LaunchPanel courseId="c1" caseId="k1" refreshKey={0} onLaunched={vi.fn()} />, {
-      getLaunchChecks: vi.fn().mockResolvedValue(checks),
+  const draft = {
+    id: 'k1',
+    title: 'Rivera v. Thrill Park',
+    summary: 'A harness opened.',
+    status: 'draft',
+    phase: 'introduction',
+    instructorNote: '',
+    inWorldDate: null,
+    disputedIssues: '',
+    importantFacts: { plaintiff: [], defense: [] },
+    createdAt: '2026-10-01T15:00:00.000Z',
+    updatedAt: '2026-10-01T15:00:00.000Z',
+  } as CourseCase
+
+  function renderPanel(overrides: Partial<CourseService>, props: { onLaunched?(): void; onCaseChange?(): void; onGoToTab?(): void } = {}) {
+    const handlers = { onLaunched: vi.fn(), onCaseChange: vi.fn(), onGoToTab: vi.fn(), ...props }
+    const rendered = renderWith(<LaunchPanel courseId="c1" courseCase={draft} refreshKey={0} {...handlers} />, {
+      listMaterials: vi.fn().mockResolvedValue([factPattern]),
+      ...overrides,
     })
+    return { ...rendered, ...handlers }
+  }
+
+  it('lists what is missing and only launches when everything is ready', async () => {
+    renderPanel({ getLaunchChecks: vi.fn().mockResolvedValue(checks) })
 
     const list = await screen.findByRole('list', { name: 'Launch checklist' })
-    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+    const items = within(list).getAllByRole('listitem')
+    expect(items.map((li) => li.textContent?.split(/(?<=\.)/)[0])).toEqual([
+      'Important facts: 1 for the plaintiff, 1 for the defense.',
       'All 4 students are on a team.',
       '1 case world is set up.',
-      'Upload the case file.',
+      'Choose the initial file every team starts from.',
     ])
     expect(screen.getByRole('button', { name: 'Launch case worlds' })).toBeDisabled()
+  })
+
+  it('adds the important facts right in the checklist, explaining what they are', async () => {
+    const saved = { ...draft, importantFacts: { plaintiff: ['The bar never locked.'], defense: ['She had her phone out.'] } }
+    const getLaunchChecks = vi.fn().mockResolvedValue([{ key: 'importantFacts', ok: false, message: 'Add at least one important fact for each side.' }])
+    const { user, service, onCaseChange } = renderPanel({ getLaunchChecks, updateCase: vi.fn().mockResolvedValue(saved) })
+
+    expect(await screen.findByText(/The AI witnesses never contradict them, and students never see them/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Add important facts' }))
+    const form = screen.getByRole('form', { name: 'Important facts' })
+    await user.type(within(form).getByRole('textbox', { name: 'Plaintiff fact 1' }), 'The bar never locked.')
+    await user.click(within(form).getByRole('button', { name: 'Save facts' }))
+    expect(within(form).getByRole('alert')).toHaveTextContent('List at least one important fact for the defense.')
+
+    await user.type(within(form).getByRole('textbox', { name: 'Defense fact 1' }), 'She had her phone out.')
+    await user.click(within(form).getByRole('button', { name: 'Save facts' }))
+    expect(service.updateCase).toHaveBeenCalledWith('c1', 'k1', {
+      title: 'Rivera v. Thrill Park',
+      summary: 'A harness opened.',
+      status: 'draft',
+      importantFacts: saved.importantFacts,
+    })
+    expect(onCaseChange).toHaveBeenCalledWith(saved)
+    await waitFor(() => expect(getLaunchChecks).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('form', { name: 'Important facts' })).not.toBeInTheDocument()
+  })
+
+  it('chooses the initial file from the uploaded ones, or sends the instructor to upload one', async () => {
+    const getLaunchChecks = vi.fn().mockResolvedValue(checks)
+    const { user, service } = renderPanel({ getLaunchChecks, setInitialMaterial: vi.fn().mockResolvedValue([{ ...factPattern, initial: true }]) })
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Initial file' }), 'm1')
+    expect(service.setInitialMaterial).toHaveBeenCalledWith('c1', 'k1', 'm1')
+    await waitFor(() => expect(getLaunchChecks).toHaveBeenCalledTimes(2))
+  })
+
+  it('points to the right tab for uploads, teams, and worlds', async () => {
+    const { user, onGoToTab } = renderPanel({
+      listMaterials: vi.fn().mockResolvedValue([]),
+      getLaunchChecks: vi.fn().mockResolvedValue([
+        { key: 'paired', ok: false, message: 'Pair students into teams.' },
+        { key: 'caseFile', ok: false, message: 'Choose the initial file every team starts from.' },
+      ]),
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Upload files on the Case file tab' }))
+    expect(onGoToTab).toHaveBeenLastCalledWith('materials')
+    await user.click(screen.getByRole('button', { name: 'Go to Teams & worlds' }))
+    expect(onGoToTab).toHaveBeenLastCalledWith('teams')
   })
 
   it('launches after confirming', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const launched = { id: 'k1', status: 'active' }
     const onLaunched = vi.fn()
-    const { user, service } = renderWith(<LaunchPanel courseId="c1" caseId="k1" refreshKey={0} onLaunched={onLaunched} />, {
-      getLaunchChecks: vi.fn().mockResolvedValue(checks.map((c) => ({ ...c, ok: true }))),
-      launchCase: vi.fn().mockResolvedValue(launched),
-    })
+    const { user, service } = renderPanel(
+      {
+        getLaunchChecks: vi.fn().mockResolvedValue(checks.map((c) => ({ ...c, ok: true }))),
+        launchCase: vi.fn().mockResolvedValue(launched),
+      },
+      { onLaunched },
+    )
 
     await user.click(await screen.findByRole('button', { name: 'Launch case worlds' }))
 
@@ -88,10 +164,13 @@ describe('LaunchPanel', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), addEventListener() {}, removeEventListener() {} }))
     const onLaunched = vi.fn()
-    const { user } = renderWith(<LaunchPanel courseId="c1" caseId="k1" refreshKey={0} onLaunched={onLaunched} />, {
-      getLaunchChecks: vi.fn().mockResolvedValue(checks.map((c) => ({ ...c, ok: true }))),
-      launchCase: vi.fn().mockResolvedValue({ id: 'k1', status: 'active' }),
-    })
+    const { user } = renderPanel(
+      {
+        getLaunchChecks: vi.fn().mockResolvedValue(checks.map((c) => ({ ...c, ok: true }))),
+        launchCase: vi.fn().mockResolvedValue({ id: 'k1', status: 'active' }),
+      },
+      { onLaunched },
+    )
 
     await user.click(await screen.findByRole('button', { name: 'Launch case worlds' }))
     const started = Date.now()
@@ -115,6 +194,8 @@ describe('MaterialsSection', () => {
     expect(screen.getByRole('link', { name: 'Download Fact pattern.pdf' })).toHaveAttribute('href', '/download/c1/k1/m1')
     expect(screen.getByText('PDF · 244 KB · Read first.')).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'Instructor Uploaded' })).toBeInTheDocument()
+    // No initial file yet: say how to choose one.
+    expect(screen.getByRole('note')).toHaveTextContent('No initial file yet, so the case can’t launch.')
 
     await user.selectOptions(screen.getByLabelText('Who can see Fact pattern.pdf'), 'Plaintiff only')
     expect(updateMaterial).toHaveBeenCalledWith('c1', 'k1', 'm1', {

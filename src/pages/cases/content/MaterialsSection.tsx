@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
-import { Download, Upload, X } from 'lucide-react'
+import { Download, TriangleAlert, Upload, X } from 'lucide-react'
 import { FileViewer } from '../../../components/FileViewer'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate, SOURCE_LABEL } from '../../../courses/caseLabels'
@@ -369,6 +369,13 @@ export function MaterialsSection({
         <p className="muted">No files uploaded yet. Start with the fact pattern.</p>
       ) : (
         <>
+          {!materials.some((m) => m.initial) && (
+            <p className="phase-warning materials-no-initial" role="note">
+              <TriangleAlert aria-hidden="true" />
+              No initial file yet, so the case can&rsquo;t launch. Click &ldquo;Make initial file&rdquo; under the file every
+              team starts from, such as the complaint.
+            </p>
+          )}
           <div className="source-filter" role="group" aria-label="Show files by source">
             {[null, ...MATERIAL_SOURCES].map((source) => (
               <button

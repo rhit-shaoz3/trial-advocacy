@@ -533,23 +533,31 @@ export const httpCourseService: CourseService = {
     return body.exchange
   },
 
-  async sendExchangeRequest(courseId, caseId, kind, items) {
+  async sendExchangeRequest(courseId, caseId, kind, items, checkId) {
     const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/requests`, {
       method: 'POST',
-      body: JSON.stringify({ kind, items }),
+      body: JSON.stringify({ kind, items, checkId }),
     })
     return body.exchange
   },
 
-  async respondToExchangeRequest(courseId, caseId, requestId, responses) {
+  async respondToExchangeRequest(courseId, caseId, requestId, responses, checkId) {
     const path = `${myCasePath(courseId, caseId)}/exchange/requests/${encodeURIComponent(requestId)}/responses`
-    return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ responses }) })).exchange
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ responses, checkId }) })).exchange
   },
 
-  async serveSubpoena(courseId, caseId, subpoena) {
+  async checkDiscovery(courseId, caseId, input) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/check`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+    return body.check
+  },
+
+  async serveSubpoena(courseId, caseId, subpoena, checkId) {
     const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/subpoenas`, {
       method: 'POST',
-      body: JSON.stringify(subpoena),
+      body: JSON.stringify({ ...subpoena, checkId }),
     })
     return body.exchange
   },

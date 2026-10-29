@@ -4,12 +4,28 @@ import { DictationTextarea } from '../../components/Dictation'
 import { SubpoenaForm } from '../../components/SubpoenaForm'
 import { shortDate } from '../../courses/caseLabels'
 import { SUBPOENA_TYPE_HINT, SUBPOENA_TYPE_LABEL } from '../../courses/subpoenaForm'
-import type { CaseParties, Firm, Side, StudentSubpoenas, SubpoenaInput, SubpoenaType, TeamSubpoena } from '../../courses/types'
+import type {
+  CaseParties,
+  CheckInput,
+  DiscoveryCheck,
+  Firm,
+  Side,
+  StudentSubpoenas,
+  SubpoenaInput,
+  SubpoenaType,
+  TeamSubpoena,
+} from '../../courses/types'
+import { AiCheck } from './AiCheck'
 import { Meter, SubHead } from './RequestsSection'
 
 const MAX_RECIPIENT = 200
 const MAX_DESCRIPTION = 1000
 const MAX_RECORDS = 4000
+const MAX_JUSTIFICATION = 2000
+
+/** What the Justification field asks. */
+export const JUSTIFICATION_PROMPT =
+  'Imagine the person/company you\u2019re requesting information from files a motion to quash or modify the subpoena. When the judge asks you to justify the validity, relevance, and proportionality of your request, what would you say?'
 
 /** What the subpoena form needs besides the team's own fields. */
 export interface SubpoenaFormContext {
@@ -36,6 +52,7 @@ export function SubpoenasSection({
   open,
   opponentNumber,
   onServe,
+  onCheck,
   onOpenDocument,
   onTeach,
   initialSubpoenaId,
@@ -47,7 +64,9 @@ export function SubpoenasSection({
   open: boolean
   opponentNumber: number
   /** Leave out to make it read-only (a closed case). */
-  onServe?(subpoena: SubpoenaInput): Promise<void>
+  onServe?(subpoena: SubpoenaInput, checkId?: string): Promise<void>
+  /** Has the AI check the draft before it's served; leave out to serve without one. */
+  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   /** Opens a produced case file in the viewer. */
   onOpenDocument?(materialId: string): void
   onTeach(): void
@@ -65,10 +84,11 @@ export function SubpoenasSection({
       <Compose
         part={part}
         form={form}
-        onServe={async (subpoena) => {
-          await onServe(subpoena)
+        onServe={async (subpoena, checkId) => {
+          await onServe(subpoena, checkId)
           back()
         }}
+        onCheck={onCheck}
         onBack={back}
         onTeach={onTeach}
       />
@@ -214,12 +234,14 @@ function Compose({
   part,
   form,
   onServe,
+  onCheck,
   onBack,
   onTeach,
 }: {
   part: StudentSubpoenas
   form: SubpoenaFormContext
-  onServe(subpoena: SubpoenaInput): Promise<void>
+  onServe(subpoena: SubpoenaInput, checkId?: string): Promise<void>
+  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   onBack(): void
   onTeach(): void
 }) {
@@ -227,23 +249,17 @@ function Compose({
   const [recipientDescription, setRecipientDescription] = useState('')
   const [requestType, setRequestType] = useState<SubpoenaType | ''>(part.types.length === 1 ? part.types[0] : '')
   const [records, setRecords] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const ready = Boolean(recipient.trim() && records.trim() && requestType)
+  const [justification, setJustification] = useState('')
+  const ready = Boolean(recipient.trim() && records.trim() && requestType && justification.trim())
   // The date it would be due if served now, for the form.
   const [dueIfServedNow] = useState(() => new Date(Date.now() + part.days * 86_400_000).toISOString())
-
-  async function serve() {
-    if (!requestType) return
-    setBusy(true)
-    setError(null)
-    try {
-      await onServe({ recipient: recipient.trim(), recipientDescription: recipientDescription.trim(), requestType, records: records.trim() })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setBusy(false)
-    }
-  }
+  const subpoena = (): SubpoenaInput => ({
+    recipient: recipient.trim(),
+    recipientDescription: recipientDescription.trim(),
+    requestType: requestType as SubpoenaType,
+    records: records.trim(),
+    justification: justification.trim(),
+  })
 
   return (
     <section className="cw-card ex-section" aria-label="New subpoena">
@@ -326,6 +342,16 @@ function Compose({
               onChange={(e) => setRecords(e.target.value)}
             />
           </label>
+          <label className="ex-reason">
+            Justification
+            <span className="ex-justification-hint">{JUSTIFICATION_PROMPT}</span>
+            <DictationTextarea
+              value={justification}
+              rows={5}
+              maxLength={MAX_JUSTIFICATION}
+              onChange={(e) => setJustification(e.target.value)}
+            />
+          </label>
         </div>
         <div className="ex-subpoena-preview">
           <h3 className="ex-subtitle">Your subpoena</h3>
@@ -339,21 +365,22 @@ function Compose({
           />
         </div>
       </div>
-      <div className="ex-footer">
-        <span className="cw-section-sub">
-          <Clock aria-hidden="true" className="ex-inline" /> The recipient has {plural(part.days, 'day')} to respond. The other
-          team gets notice.
-        </span>
-        <button type="button" className="ws-btn ws-btn-primary" onClick={serve} disabled={busy || !ready}>
-          <Send aria-hidden="true" />
-          {busy ? 'Serving…' : 'Serve subpoena'}
-        </button>
-      </div>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      <AiCheck
+        info={
+          <>
+            <Clock aria-hidden="true" className="ex-inline" /> The recipient has {plural(part.days, 'day')} to respond. The
+            other team gets notice.
+          </>
+        }
+        ready={ready}
+        draftKey={JSON.stringify([recipient, recipientDescription, requestType, records, justification].map((t) => t.trim()))}
+        onCheck={onCheck && (() => onCheck({ kind: 'subpoena', mode: 'draft', draft: subpoena() }))}
+        onSubmit={(checkId) => onServe(subpoena(), checkId)}
+        submitIcon={<Send aria-hidden="true" />}
+        submitLabel="Serve subpoena"
+        busyLabel="Serving…"
+        anywayLabel="Serve anyway"
+      />
     </section>
   )
 }
@@ -397,6 +424,11 @@ function ReadSubpoena({
           servedAt={s.sentAt}
           dueAt={s.dueAt}
         />
+        {s.justification && (
+          <p className="ex-justification">
+            <strong>Your justification:</strong> {s.justification}
+          </p>
+        )}
       </details>
       {!s.respondedAt ? (
         <p className="cw-empty">Waiting for {s.recipient} to respond.</p>

@@ -23,6 +23,7 @@ beforeEach(() => {
   // Edits nothing; tests that check the edit swap in their own.
   ai.finalizeReport = async (input) => input.body
   ai.suggestWitnesses = async () => []
+  ai.reviewDiscovery = async () => ({ tag: 'LOOKS_GOOD', feedback: 'Nice work.' })
   ai.respondToSubpoena = async () => {
     throw new Error('This test did not set up a fake subpoena recipient.')
   }

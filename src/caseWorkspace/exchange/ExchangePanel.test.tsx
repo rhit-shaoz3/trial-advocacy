@@ -125,7 +125,8 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
     expect(screen.getByRole('status')).toHaveTextContent("You're out of interrogatories. Your team has used all 3.")
 
     await user.click(screen.getByRole('button', { name: 'Send to Team 2' }))
-    expect(onSend).toHaveBeenCalledWith('interrogatories', ['Was it replaced, (a) when and (b) by whom?', 'Who inspected it?'])
+    // Without the AI check (no onCheck), it's sent as it is.
+    expect(onSend).toHaveBeenCalledWith('interrogatories', ['Was it replaced, (a) when and (b) by whom?', 'Who inspected it?'], undefined)
   })
 
   it('greys out writing more once the team is out', async () => {
@@ -162,7 +163,7 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
     expect(onRespond).toHaveBeenCalledWith('r1', [
       expect.objectContaining({ position: 1, admission: 'agree' }),
       expect.objectContaining({ position: 2, admission: 'partial', agreePart: 'It was closed.', disagreePart: 'It never latched.' }),
-    ])
+    ], undefined)
   })
 
   it('opens straight to a response when a notice links to it', () => {
@@ -275,6 +276,7 @@ describe('ExchangePanel: subpoenas', () => {
     await user.type(screen.getByLabelText('To'), 'Lincoln Ride Safety Board')
     await user.type(screen.getByLabelText('Who they are'), 'The state agency that inspects rides.')
     await user.type(screen.getByLabelText('What you want'), 'Inspection reports for Atlas Adventure, 2017–2019.')
+    await user.type(screen.getByLabelText(/^Justification/), 'The board inspected the ride the week before.')
     expect(serve).toBeDisabled()
     // Only the kinds the case allows.
     const kind = screen.getByLabelText('Type of request')
@@ -298,7 +300,8 @@ describe('ExchangePanel: subpoenas', () => {
       recipientDescription: 'The state agency that inspects rides.',
       requestType: 'esi',
       records: 'Inspection reports for Atlas Adventure, 2017–2019.',
-    })
+      justification: 'The board inspected the ride the week before.',
+    }, undefined)
   })
 
   it('fixes the kind of request when the case allows only one', async () => {
@@ -310,9 +313,10 @@ describe('ExchangePanel: subpoenas', () => {
     expect(screen.getByText('Inspection of premises', { selector: 'strong' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('To'), 'Thrillville Parks')
     await user.type(screen.getByLabelText('What to inspect'), 'The Atlas platform.')
+    await user.type(screen.getByLabelText(/^Justification/), 'Sight lines.')
     expect(screen.getByRole('img', { name: 'Checked' }).closest('.sf-command')).toHaveTextContent('Inspection of Premises')
     await user.click(screen.getByRole('button', { name: 'Serve subpoena' }))
-    expect(onServeSubpoena).toHaveBeenCalledWith(expect.objectContaining({ requestType: 'inspection', records: 'The Atlas platform.' }))
+    expect(onServeSubpoena).toHaveBeenCalledWith(expect.objectContaining({ requestType: 'inspection', records: 'The Atlas platform.' }), undefined)
   })
 
   it('tells the team when a subpoena was denied', async () => {

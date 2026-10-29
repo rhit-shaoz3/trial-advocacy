@@ -40,9 +40,11 @@ import {
   type SubpoenaType,
   type TeamContext,
 } from './exchange.ts'
+import { runCheck, submissionCheck, type CheckDraft } from './discoveryChecks.ts'
 import {
   markSubpoenasSeen,
   serveSubpoena,
+  subpoenaType,
   subpoenaNotices,
   teamSubpoenas,
   type SubpoenaNotice,
@@ -330,19 +332,22 @@ myExchangeRouter.post('/requests', async (req, res) => {
   if (!EXCHANGE_KINDS.includes(kind)) throw new HttpError(400, 'Choose interrogatories or requests for admission.')
   const settings = await getSettings(ctx.caseId)
   if (!settings[kind].enabled) throw new HttpError(409, "This case doesn't include that kind of request.")
-  const items = field(req.body, 'items')
-  if (!Array.isArray(items) || items.some((t) => typeof t !== 'string')) throw new HttpError(400, 'Send one question per line.')
-  await sendRequest(ctx, kind, settings[kind], items as string[])
+  const items = readItems(req.body)
+  const check = await submissionCheck(ctx, field(req.body, 'checkId'), { kind, mode: 'draft', items })
+  await sendRequest(ctx, kind, settings[kind], items, check)
   res.status(201).json({ exchange: await studentExchange(ctx) })
 })
 
-/** The team's responses to a set it received: `{ responses: [{ position, answer, objection, admission, agreePart, disagreePart }] }`. */
-myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
-  const ctx = await requireStudentContext(req)
-  if (!isUuid(req.params.requestId)) throw new HttpError(404, 'Request not found.')
-  const raw = field(req.body, 'responses')
+function readItems(body: unknown) {
+  const items = field(body, 'items')
+  if (!Array.isArray(items) || items.some((t) => typeof t !== 'string')) throw new HttpError(400, 'Send one question per line.')
+  return items as string[]
+}
+
+function readResponses(body: unknown): ItemResponse[] {
+  const raw = field(body, 'responses')
   if (!Array.isArray(raw)) throw new HttpError(400, 'Send a response for each item.')
-  const responses: ItemResponse[] = raw.map((r) => {
+  return raw.map((r) => {
     const admission = readString(r, 'admission')
     return {
       position: Number(field(r, 'position')),
@@ -353,25 +358,82 @@ myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
       disagreePart: readString(r, 'disagreePart'),
     }
   })
-  await respondToRequest(ctx, req.params.requestId, responses)
+}
+
+const readSubpoena = (body: unknown, settings: SubpoenaSettings) => ({
+  recipient: readString(body, 'recipient'),
+  recipientDescription: readString(body, 'recipientDescription'),
+  requestType: subpoenaType(readString(body, 'requestType'), settings),
+  records: readString(body, 'records'),
+  justification: readString(body, 'justification'),
+})
+
+/**
+ * Has the discovery mentor check a draft before it's sent: `{ kind, mode,
+ * requestId, draft }`. A subpoena's `draft` is the subpoena; a set's is `{
+ * items }`; answers (mode answer, with the set's `requestId`) are `{
+ * responses }`. Returns `{ check: { id, tag, feedback } }`; send the `id` with
+ * the submission.
+ */
+myExchangeRouter.post('/check', async (req, res) => {
+  const ctx = await requireStudentContext(req)
+  if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Requests open in the information exchange phase.')
+  const settings = await getSettings(ctx.caseId)
+  const kind = readString(req.body, 'kind')
+  const mode = readString(req.body, 'mode')
+  const draftBody = field(req.body, 'draft')
+  let draft: CheckDraft
+  if (kind === 'subpoena') {
+    if (!settings.subpoenas.enabled) throw new HttpError(409, "This case doesn't include subpoenas.")
+    const subpoena = readSubpoena(draftBody, settings.subpoenas)
+    if (!subpoena.recipient.trim() || !subpoena.records.trim()) throw new HttpError(400, 'Fill in who the subpoena is for and what you want first.')
+    draft = { kind, mode: 'draft', subpoena }
+  } else if (EXCHANGE_KINDS.includes(kind as ExchangeKind)) {
+    if (!settings[kind as ExchangeKind].enabled) throw new HttpError(409, "This case doesn't include that kind of request.")
+    if (mode === 'answer') {
+      const requestId = readString(req.body, 'requestId')
+      if (!isUuid(requestId)) throw new HttpError(404, 'Request not found.')
+      draft = { kind: kind as ExchangeKind, mode: 'answer', requestId, responses: readResponses(draftBody) }
+    } else {
+      const items = readItems(draftBody)
+      if (!items.some((t) => t.trim())) throw new HttpError(400, 'Write at least one question first.')
+      draft = { kind: kind as ExchangeKind, mode: 'draft', items }
+    }
+  } else throw new HttpError(400, 'Choose what to check.')
+  res.json({ check: await runCheck(ctx, draft) })
+})
+
+/** The team's responses to a set it received: `{ responses: [{ position, answer, objection, admission, agreePart, disagreePart }] }`. */
+myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
+  const ctx = await requireStudentContext(req)
+  const requestId = req.params.requestId
+  if (!isUuid(requestId)) throw new HttpError(404, 'Request not found.')
+  const responses = readResponses(req.body)
+  const { rows } = await pool.query<{ kind: ExchangeKind }>('SELECT kind FROM exchange_requests WHERE id = $1 AND case_id = $2', [
+    requestId,
+    ctx.caseId,
+  ])
+  const check = rows[0]
+    ? await submissionCheck(ctx, field(req.body, 'checkId'), { kind: rows[0].kind, mode: 'answer', requestId, responses })
+    : null
+  await respondToRequest(ctx, requestId, responses, check)
   res.json({ exchange: await studentExchange(ctx) })
 })
 
 /**
- * Serves a subpoena: `{ recipient, recipientDescription, requestType, records }`,
- * who it's for and who they are, what kind of request, and what it wants.
+ * Serves a subpoena: `{ recipient, recipientDescription, requestType, records,
+ * justification, checkId }`: who it's for and who they are, what kind of
+ * request, what it wants, how the team would justify it to the judge, and the
+ * discovery mentor's check before it (optional).
  */
 myExchangeRouter.post('/subpoenas', async (req, res) => {
   const ctx = await requireStudentContext(req)
   if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Subpoenas open in the information exchange phase.')
   const settings = await getSettings(ctx.caseId)
   if (!settings.subpoenas.enabled) throw new HttpError(409, "This case doesn't include subpoenas.")
-  await serveSubpoena(ctx, settings.subpoenas, {
-    recipient: readString(req.body, 'recipient'),
-    recipientDescription: readString(req.body, 'recipientDescription'),
-    requestType: readString(req.body, 'requestType'),
-    records: readString(req.body, 'records'),
-  })
+  const subpoena = readSubpoena(req.body, settings.subpoenas)
+  const check = await submissionCheck(ctx, field(req.body, 'checkId'), { kind: 'subpoena', mode: 'draft', subpoena })
+  await serveSubpoena(ctx, settings.subpoenas, subpoena, check)
   res.status(201).json({ exchange: await studentExchange(ctx) })
 })
 

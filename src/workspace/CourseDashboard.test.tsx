@@ -356,17 +356,6 @@ describe('course workspace', () => {
     expect(screen.getByRole('region', { name: 'Summary' })).toHaveTextContent('2Active cases')
   })
 
-  it('opens placeholder pages from the sidebar', async () => {
-    const { user } = renderCourse(
-      fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(emptyHome) }),
-    )
-
-    await user.click(await screen.findByRole('link', { name: 'Resource library' }))
-
-    expect(screen.getByRole('heading', { name: 'Resource library' })).toBeInTheDocument()
-    expect(screen.getByText('This page is coming soon.')).toBeInTheDocument()
-  })
-
   it('fills in sample data with ?sample in development, and says so', async () => {
     renderCourse(
       fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue(emptyHome) }),
@@ -425,13 +414,13 @@ describe('reviews on the dashboard', () => {
     expect(within(screen.getByRole('navigation', { name: 'Course' })).getByRole('link', { name: 'Review' })).toBeInTheDocument()
   })
 
-  it('tells a student when their interviews have been reviewed, and keeps their resource library', async () => {
+  it('tells a student when their interviews have been reviewed, with no Review or resource library in their nav', async () => {
     renderCourse(fakeCourseService({ getCourseHome: vi.fn().mockResolvedValue({ ...emptyHome, newReviewResults: 1 }) }))
 
     expect(await screen.findByText('New review results')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open my cases' })).toHaveAttribute('href', '/courses/c1/cases')
     const nav = screen.getByRole('navigation', { name: 'Course' })
-    expect(within(nav).getByRole('link', { name: 'Resource library' })).toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'Resource library' })).not.toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: /Review/ })).not.toBeInTheDocument()
   })
 

@@ -71,16 +71,16 @@ export function StudentCasePage() {
     await afterExchange(await service.submitDisclosures(courseId, caseId, picks, heldBackReason))
   }
 
-  async function sendRequest(kind: ExchangeKind, items: string[]) {
-    setExchange(await service.sendExchangeRequest(courseId, caseId, kind, items))
+  async function sendRequest(kind: ExchangeKind, items: string[], checkId?: string) {
+    setExchange(await service.sendExchangeRequest(courseId, caseId, kind, items, checkId))
   }
 
-  async function respondToRequest(requestId: string, responses: ItemResponse[]) {
-    await afterExchange(await service.respondToExchangeRequest(courseId, caseId, requestId, responses))
+  async function respondToRequest(requestId: string, responses: ItemResponse[], checkId?: string) {
+    await afterExchange(await service.respondToExchangeRequest(courseId, caseId, requestId, responses, checkId))
   }
 
-  async function serveSubpoena(subpoena: SubpoenaInput) {
-    setExchange(await service.serveSubpoena(courseId, caseId, subpoena))
+  async function serveSubpoena(subpoena: SubpoenaInput, checkId?: string) {
+    setExchange(await service.serveSubpoena(courseId, caseId, subpoena, checkId))
   }
 
   /** Opening the Information exchange tab marks the other team's responses, and subpoena answers, read. */
@@ -202,6 +202,7 @@ export function StudentCasePage() {
             onSendRequest={sendRequest}
             onRespondToRequest={respondToRequest}
             onServeSubpoena={serveSubpoena}
+            onCheckDiscovery={(input) => service.checkDiscovery(courseId, caseId, input)}
             onOpenExchange={openExchange}
             initialTab={initialTab}
           />

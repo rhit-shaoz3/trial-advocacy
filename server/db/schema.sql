@@ -709,3 +709,42 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_done_at timestamp
 UPDATE case_materials SET text_status = 'pending', text_error = NULL
  WHERE text_status = 'none'
    AND content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+-- A subpoena's justification: what the requesting team would tell the judge
+-- about its validity, relevance, and proportionality on a motion to quash or
+-- modify. The recipient weighs it, and the instructor sees it.
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS justification text NOT NULL DEFAULT '';
+
+-- The discovery mentor's checks on a team's draft (a subpoena, a set of
+-- interrogatories or requests for admission, or answers to a set), before
+-- the team sends it. `content_hash` is what was checked, so a submission can
+-- tell whether it's the draft the mentor saw or was edited since.
+CREATE TABLE IF NOT EXISTS discovery_checks (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id      uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  kind         text        NOT NULL CHECK (kind IN ('subpoena', 'interrogatories', 'rfas')),
+  mode         text        NOT NULL CHECK (mode IN ('draft', 'answer')),
+  request_id   uuid        REFERENCES exchange_requests (id) ON DELETE CASCADE,
+  content_hash text        NOT NULL,
+  tag          text        NOT NULL CHECK (tag IN ('LOOKS_GOOD', 'SMALL_EDITS', 'NEEDS_IMPROVEMENT')),
+  feedback     text        NOT NULL,
+  checked_by   uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS discovery_checks_team_idx ON discovery_checks (team_id);
+
+-- The last check before a submission, for the instructor: its tag and
+-- feedback, and whether the submission is the draft that was checked (false:
+-- edited after). Null tag: sent without a check. On a set, check_* is the
+-- sending team's and response_check_* the answering team's.
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS check_tag text;
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS check_feedback text;
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS check_current boolean NOT NULL DEFAULT false;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS check_tag text;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS check_feedback text;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS check_current boolean NOT NULL DEFAULT false;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_tag text;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_feedback text;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_current boolean NOT NULL DEFAULT false;

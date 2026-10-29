@@ -12,6 +12,7 @@ import type {
   ProducedDocument,
 } from "../../courses/types";
 import { ROLE_LABEL, worldLabel } from "../../courses/worldLabel";
+import { CheckSummary } from "../../components/CheckSummary";
 
 const dateTime = (iso: string) =>
   new Date(iso).toLocaleString("en-US", {
@@ -161,7 +162,13 @@ export function SubpoenaCard({
           servedAt={s.sentAt}
           dueAt={s.dueAt}
         />
+        {s.justification && (
+          <p className="review-subpoena-justification">
+            <strong>Justification:</strong> {s.justification}
+          </p>
+        )}
       </details>
+      <CheckSummary label={`${team}'s AI check before serving:`} check={s.check} />
 
       {answered ? (
         <div className="review-subpoena-answer">

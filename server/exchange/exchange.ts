@@ -398,10 +398,25 @@ const REQUEST_JOINS = `FROM exchange_requests r
   LEFT JOIN users su ON su.id = r.sent_by
   LEFT JOIN users ru ON ru.id = r.responded_by`
 
-/** Every set in the case, for the instructor's read-only view: newest first. */
+/** A team's last discovery-mentor check before it sent a set, or its answers; null when it didn't check. */
+export interface RequestCheck {
+  tag: string
+  feedback: string
+  current: boolean
+}
+
+const CHECK_JSON = (prefix: string) => `CASE WHEN r.${prefix}check_tag IS NULL THEN NULL
+  ELSE json_build_object('tag', r.${prefix}check_tag, 'feedback', r.${prefix}check_feedback, 'current', r.${prefix}check_current) END`
+
+/**
+ * Every set in the case, for the instructor's read-only view: newest first,
+ * with each team's last check before sending it (`check`) and answering it
+ * (`responseCheck`). Students never see these.
+ */
 export async function listCaseRequests(caseId: string) {
-  const { rows } = await pool.query<ExchangeRequest>(
-    `SELECT ${REQUEST_COLUMNS} ${REQUEST_JOINS} WHERE r.case_id = $1 ORDER BY r.sent_at DESC`,
+  const { rows } = await pool.query<ExchangeRequest & { check: RequestCheck | null; responseCheck: RequestCheck | null }>(
+    `SELECT ${REQUEST_COLUMNS}, ${CHECK_JSON('')} AS "check", ${CHECK_JSON('response_')} AS "responseCheck"
+     ${REQUEST_JOINS} WHERE r.case_id = $1 ORDER BY r.sent_at DESC`,
     [caseId],
   )
   return rows
@@ -462,7 +477,13 @@ export const MAX_ITEMS_PER_SET = 50
  * would take the team past its limit (partners sending at once are checked
  * one after the other).
  */
-export async function sendRequest(ctx: TeamContext, kind: ExchangeKind, part: PartSettings, texts: string[]) {
+export async function sendRequest(
+  ctx: TeamContext,
+  kind: ExchangeKind,
+  part: PartSettings,
+  texts: string[],
+  check: RequestCheck | null = null,
+) {
   const items = texts.map((t) => t.trim()).filter(Boolean)
   if (items.length === 0) throw new HttpError(400, 'Write at least one question.')
   if (items.length > MAX_ITEMS_PER_SET) throw new HttpError(400, `Send at most ${MAX_ITEMS_PER_SET} in one set.`)
@@ -481,9 +502,10 @@ export async function sendRequest(ctx: TeamContext, kind: ExchangeKind, part: Pa
       throw new HttpError(409, left <= 0 ? `Your team is out of ${noun}.` : `Your team has only ${left} ${noun} left.`)
     }
     const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO exchange_requests (case_id, kind, from_team_id, to_team_id, sent_by, due_at)
-       VALUES ($1, $2, $3, $4, $5, now() + make_interval(days => $6)) RETURNING id`,
-      [ctx.caseId, kind, ctx.teamId, ctx.opponentTeamId, ctx.userId, part.days],
+      `INSERT INTO exchange_requests (case_id, kind, from_team_id, to_team_id, sent_by, due_at,
+         check_tag, check_feedback, check_current)
+       VALUES ($1, $2, $3, $4, $5, now() + make_interval(days => $6), $7, $8, $9) RETURNING id`,
+      [ctx.caseId, kind, ctx.teamId, ctx.opponentTeamId, ctx.userId, part.days, check?.tag ?? null, check?.feedback ?? null, check?.current ?? false],
     )
     await client.query(
       `INSERT INTO exchange_items (request_id, position, text, weight)
@@ -515,7 +537,12 @@ export interface ItemResponse {
  * once. Interrogatories need an answer (or objection) each; requests for
  * admission need agree, disagree, or partial (with both parts filled in).
  */
-export async function respondToRequest(ctx: TeamContext, requestId: string, responses: ItemResponse[]) {
+export async function respondToRequest(
+  ctx: TeamContext,
+  requestId: string,
+  responses: ItemResponse[],
+  check: RequestCheck | null = null,
+) {
   const { rows } = await pool.query<{ kind: ExchangeKind; respondedAt: Date | null; count: number }>(
     `SELECT r.kind, r.responded_at AS "respondedAt", (SELECT count(*)::int FROM exchange_items i WHERE i.request_id = r.id) AS count
      FROM exchange_requests r WHERE r.id = $1 AND r.case_id = $2 AND r.to_team_id = $3`,
@@ -545,8 +572,10 @@ export async function respondToRequest(ctx: TeamContext, requestId: string, resp
   try {
     await client.query('BEGIN')
     const { rowCount } = await client.query(
-      `UPDATE exchange_requests SET responded_at = now(), responded_by = $2 WHERE id = $1 AND responded_at IS NULL`,
-      [requestId, ctx.userId],
+      `UPDATE exchange_requests SET responded_at = now(), responded_by = $2,
+         response_check_tag = $3, response_check_feedback = $4, response_check_current = $5
+       WHERE id = $1 AND responded_at IS NULL`,
+      [requestId, ctx.userId, check?.tag ?? null, check?.feedback ?? null, check?.current ?? false],
     )
     if (rowCount !== 1) throw new HttpError(409, 'Your team already responded to this set.')
     for (let position = 1; position <= request.count; position++) {

@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { BookOpen, CheckCheck, CircleHelp, Lock, ScrollText, Users } from 'lucide-react'
-import type { CaseParties, DisclosurePick, ExchangeKind, ItemResponse, StudentExchange, SubpoenaInput } from '../../courses/types'
+import type {
+  CaseParties,
+  CheckInput,
+  DiscoveryCheck,
+  DisclosurePick,
+  ExchangeKind,
+  ItemResponse,
+  StudentExchange,
+  SubpoenaInput,
+} from '../../courses/types'
 import { DisclosuresSection } from './DisclosuresSection'
 import { RequestsSection } from './RequestsSection'
 import { SubpoenasSection } from './SubpoenasSection'
@@ -29,6 +38,7 @@ export function ExchangePanel({
   onSend,
   onRespond,
   onServeSubpoena,
+  onCheck,
   onOpenDocument,
   subpoenaForm,
   focus,
@@ -37,9 +47,11 @@ export function ExchangePanel({
   exchange: StudentExchange
   /** Leave these out to make it read-only (a closed case). */
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
-  onSend?(kind: ExchangeKind, items: string[]): Promise<void>
-  onRespond?(requestId: string, responses: ItemResponse[]): Promise<void>
-  onServeSubpoena?(subpoena: SubpoenaInput): Promise<void>
+  onSend?(kind: ExchangeKind, items: string[], checkId?: string): Promise<void>
+  onRespond?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
+  onServeSubpoena?(subpoena: SubpoenaInput, checkId?: string): Promise<void>
+  /** "Check with AI" before sending; leave out to send without it. */
+  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   /** Opens a case file produced in answer to a subpoena. */
   onOpenDocument?(materialId: string): void
   /** The case and student, for filling in the subpoena form. */
@@ -153,6 +165,7 @@ export function ExchangePanel({
             open={exchange.requestsOpen}
             opponentNumber={exchange.opponentNumber}
             onServe={onServeSubpoena}
+            onCheck={onCheck}
             onOpenDocument={onOpenDocument}
             onTeach={() => setTeach('subpoenas')}
             initialSubpoenaId={focus?.kind === 'subpoenas' ? focus.id : undefined}
@@ -167,8 +180,9 @@ export function ExchangePanel({
             open={exchange.requestsOpen}
             opponentNumber={exchange.opponentNumber}
             opponentSide={OTHER_SIDE[exchange.side]}
-            onSend={onSend && ((items) => onSend(section, items))}
+            onSend={onSend && ((items, checkId) => onSend(section, items, checkId))}
             onRespond={onRespond}
+            onCheck={onCheck}
             onTeach={() => setTeach(section)}
             initialRequestId={focus?.kind === section ? focus.id : undefined}
             now={now}

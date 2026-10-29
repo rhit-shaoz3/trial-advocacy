@@ -16,8 +16,17 @@ import {
   X,
 } from 'lucide-react'
 import { dueLabel, shortDate } from '../../courses/caseLabels'
-import { questionWeight, type ExchangeKind, type ExchangeRequest, type ItemResponse, type StudentPart } from '../../courses/types'
+import {
+  questionWeight,
+  type CheckInput,
+  type DiscoveryCheck,
+  type ExchangeKind,
+  type ExchangeRequest,
+  type ItemResponse,
+  type StudentPart,
+} from '../../courses/types'
 import { DictationTextarea } from '../../components/Dictation'
+import { AiCheck } from './AiCheck'
 
 type TeamRequest = StudentPart['requests'][number]
 
@@ -74,6 +83,7 @@ export function RequestsSection({
   opponentSide,
   onSend,
   onRespond,
+  onCheck,
   onTeach,
   initialRequestId,
   now = new Date(),
@@ -85,8 +95,10 @@ export function RequestsSection({
   opponentNumber: number
   opponentSide: string
   /** Leave out to make it read-only (a closed case). */
-  onSend?(items: string[]): Promise<void>
-  onRespond?(requestId: string, responses: ItemResponse[]): Promise<void>
+  onSend?(items: string[], checkId?: string): Promise<void>
+  onRespond?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
+  /** Has the AI check a draft (a set, or answers) before it's sent; leave out to send without one. */
+  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   onTeach(): void
   /** A request to open on (read), as when a notice links to its response. */
   initialRequestId?: string
@@ -107,10 +119,11 @@ export function RequestsSection({
         kind={kind}
         part={part}
         to={`Team ${opponentNumber} (${opponentSide})`}
-        onSend={async (items) => {
-          await onSend(items)
+        onSend={async (items, checkId) => {
+          await onSend(items, checkId)
           back()
         }}
+        onCheck={onCheck && ((items) => onCheck({ kind, mode: 'draft', draft: { items } }))}
         onBack={back}
         onTeach={onTeach}
       />
@@ -121,10 +134,11 @@ export function RequestsSection({
       <Respond
         kind={kind}
         request={request}
-        onRespond={async (responses) => {
-          await onRespond(request.id, responses)
+        onRespond={async (responses, checkId) => {
+          await onRespond(request.id, responses, checkId)
           setView({ mode: 'read', id: request.id })
         }}
+        onCheck={onCheck && ((responses) => onCheck({ kind, mode: 'answer', requestId: request.id, draft: { responses } }))}
         onBack={back}
         onTeach={onTeach}
         now={now}
@@ -335,21 +349,21 @@ function Compose({
   part,
   to,
   onSend,
+  onCheck,
   onBack,
   onTeach,
 }: {
   kind: ExchangeKind
   part: StudentPart
   to: string
-  onSend(items: string[]): Promise<void>
+  onSend(items: string[], checkId?: string): Promise<void>
+  onCheck?(items: string[]): Promise<DiscoveryCheck>
   onBack(): void
   onTeach(): void
 }) {
   const copy = COPY[kind]
   const [lines, setLines] = useState<string[]>([''])
   const [focus, setFocus] = useState(0)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const refs = useRef<(HTMLTextAreaElement | null)[]>([])
   const weightOf = (t: string) => (kind === 'interrogatories' ? questionWeight(t) : 1)
   const filled = lines.filter((l) => l.trim())
@@ -376,17 +390,7 @@ function Compose({
     }
   }
 
-  async function send() {
-    setBusy(true)
-    setError(null)
-    try {
-      await onSend(filled.map((l) => l.trim()))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setBusy(false)
-    }
-  }
-
+  const items = () => filled.map((l) => l.trim())
   const over = left < 0
   return (
     <section className="cw-card ex-section" aria-label={`New ${copy.many}`}>
@@ -476,21 +480,23 @@ function Compose({
           <span className="cw-section-sub">or press Return</span>
         )}
       </div>
-      <div className="ex-footer">
-        <span className="cw-section-sub">
-          <Clock aria-hidden="true" className="ex-inline" /> {to.split(' (')[0]} has {plural(part.days, 'day')} to respond once
-          they receive it.
-        </span>
-        <button type="button" className="ws-btn ws-btn-primary" onClick={send} disabled={busy || filled.length === 0 || over}>
-          <Send aria-hidden="true" />
-          {busy ? 'Sending…' : `Send to ${to.split(' (')[0]}`}
-        </button>
-      </div>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      <AiCheck
+        info={
+          <>
+            <Clock aria-hidden="true" className="ex-inline" /> {to.split(' (')[0]} has {plural(part.days, 'day')} to respond
+            once they receive it.
+          </>
+        }
+        ready={filled.length > 0}
+        blocked={over}
+        draftKey={JSON.stringify(items())}
+        onCheck={onCheck && (() => onCheck(items()))}
+        onSubmit={(checkId) => onSend(items(), checkId)}
+        submitIcon={<Send aria-hidden="true" />}
+        submitLabel={`Send to ${to.split(' (')[0]}`}
+        busyLabel="Sending…"
+        anywayLabel="Send anyway"
+      />
     </section>
   )
 }
@@ -503,21 +509,21 @@ function Respond({
   kind,
   request,
   onRespond,
+  onCheck,
   onBack,
   onTeach,
   now,
 }: {
   kind: ExchangeKind
   request: TeamRequest
-  onRespond(responses: ItemResponse[]): Promise<void>
+  onRespond(responses: ItemResponse[], checkId?: string): Promise<void>
+  onCheck?(responses: ItemResponse[]): Promise<DiscoveryCheck>
   onBack(): void
   onTeach(): void
   now: Date
 }) {
   const copy = COPY[kind]
   const [drafts, setDrafts] = useState<Draft[]>(() => request.items.map(() => ({ ...EMPTY })))
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const set = (i: number, patch: Partial<Draft>) => setDrafts((d) => d.map((x, j) => (j === i ? { ...x, ...patch } : x)))
   const done = (d: Draft) =>
     kind === 'interrogatories'
@@ -525,16 +531,7 @@ function Respond({
       : d.admission !== null && (d.admission !== 'partial' || (d.agreePart.trim() !== '' && d.disagreePart.trim() !== ''))
   const answered = drafts.filter(done).length
 
-  async function submit() {
-    setBusy(true)
-    setError(null)
-    try {
-      await onRespond(request.items.map((item, i) => ({ position: item.position, ...drafts[i] })))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setBusy(false)
-    }
-  }
+  const responses = () => request.items.map((item, i) => ({ position: item.position, ...drafts[i] }))
 
   return (
     <section className="cw-card ex-section" aria-label={`Respond to ${copy.many}`}>
@@ -631,20 +628,17 @@ function Respond({
           )
         })}
       </ol>
-      <div className="ex-footer">
-        <span className="cw-section-sub">
-          {answered} of {request.items.length} answered
-        </span>
-        <button type="button" className="ws-btn ws-btn-primary" onClick={submit} disabled={busy || answered < request.items.length}>
-          <Send aria-hidden="true" />
-          {busy ? 'Sending…' : 'Send responses'}
-        </button>
-      </div>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      <AiCheck
+        info={`${answered} of ${request.items.length} answered`}
+        ready={answered === request.items.length}
+        draftKey={JSON.stringify(drafts)}
+        onCheck={onCheck && (() => onCheck(responses()))}
+        onSubmit={(checkId) => onRespond(responses(), checkId)}
+        submitIcon={<Send aria-hidden="true" />}
+        submitLabel="Send responses"
+        busyLabel="Sending…"
+        anywayLabel="Send responses anyway"
+      />
     </section>
   )
 }

@@ -57,6 +57,8 @@ import {
   type Side,
   type StudentExchange,
   type SubpoenaInput,
+  type CheckInput,
+  type DiscoveryCheck,
 } from '../courses/types'
 import { sideLabel, titleParties, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
@@ -107,6 +109,7 @@ export function CaseWorkspaceView({
   onSendRequest,
   onRespondToRequest,
   onServeSubpoena,
+  onCheckDiscovery,
   onOpenExchange,
   initialTab = 'overview',
   loadText,
@@ -135,9 +138,11 @@ export function CaseWorkspaceView({
   /** The team's information exchange; leave out (the preview, or not set up) to hide its tab. */
   exchange?: StudentExchange | null
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
-  onSendRequest?(kind: ExchangeKind, items: string[]): Promise<void>
-  onRespondToRequest?(requestId: string, responses: ItemResponse[]): Promise<void>
-  onServeSubpoena?(subpoena: SubpoenaInput): Promise<void>
+  onSendRequest?(kind: ExchangeKind, items: string[], checkId?: string): Promise<void>
+  onRespondToRequest?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
+  onServeSubpoena?(subpoena: SubpoenaInput, checkId?: string): Promise<void>
+  /** "Check with AI" before sending discovery; leave out (the preview) to send without it. */
+  onCheckDiscovery?(input: CheckInput): Promise<DiscoveryCheck>
   /** Called when the student opens the Information exchange tab, to mark the responses and subpoena answers read. */
   onOpenExchange?(): void
   /** The tab to open on, as when a notice links straight to a report. */
@@ -550,6 +555,7 @@ export function CaseWorkspaceView({
             onSend={c.status === 'active' ? onSendRequest : undefined}
             onRespond={c.status === 'active' ? onRespondToRequest : undefined}
             onServeSubpoena={c.status === 'active' ? onServeSubpoena : undefined}
+            onCheck={c.status === 'active' ? onCheckDiscovery : undefined}
             subpoenaForm={{
               caseId: c.id,
               parties: c.parties?.plaintiff && c.parties.defendant ? c.parties : titleParties(c.title),

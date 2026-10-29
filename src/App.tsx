@@ -53,7 +53,6 @@ function App() {
         />
         <Route path="cases/:caseId/witnesses/:witnessId" element={<InterviewPage />} />
         <Route path="calendar" element={<CalendarPage />} />
-        <Route path="resources" element={<ComingSoon title="Resource library" />} />
         {isInstructor && <Route path="review" element={<ReviewPage />} />}
         {isInstructor && <Route path="manage" element={<CoursePage />} />}
         <Route

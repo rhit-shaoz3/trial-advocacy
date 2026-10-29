@@ -98,6 +98,7 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     sendExchangeRequest: vi.fn(),
     respondToExchangeRequest: vi.fn(),
     serveSubpoena: vi.fn(),
+    checkDiscovery: vi.fn().mockResolvedValue({ id: 'chk1', tag: 'LOOKS_GOOD', feedback: '' }),
     markExchangeSeen: vi.fn().mockResolvedValue(undefined),
     listSubpoenas: vi.fn().mockResolvedValue([]),
     approveSubpoena: vi.fn(),

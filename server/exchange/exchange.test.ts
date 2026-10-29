@@ -7,6 +7,7 @@ import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFi
 import { questionWeight } from './exchange.ts'
 import { buildSubpoenaMessage, buildSubpoenaPrompt, type SubpoenaContext } from './subpoenaPrompt.ts'
 import { subpoenasSettled } from './subpoenas.ts'
+import { buildMentorPrompt, type MentorContext, type MentorTag } from './mentorPrompt.ts'
 
 let prof: request.Agent
 let ada: request.Agent // plaintiff, Team 1
@@ -311,7 +312,14 @@ describe('subpoenas', () => {
   const serve = (agent: request.Agent, recipient: string, records = 'All records of the June 10 visit.', more: object = {}) =>
     agent
       .post(`${exchangeUrl()}/subpoenas`)
-      .send({ recipient, recipientDescription: 'The hospital that treated Ramirez.', requestType: 'documents', records, ...more })
+      .send({
+        recipient,
+        recipientDescription: 'The hospital that treated Ramirez.',
+        requestType: 'documents',
+        records,
+        justification: 'Her treatment records go to damages, and only the hospital has them.',
+        ...more,
+      })
   const asked: SubpoenaContext[] = []
   const recipientWrites = (text: string) => {
     asked.length = 0
@@ -613,5 +621,151 @@ describe('subpoenas', () => {
     await toExchange()
     expect((await exchange(ada)).subpoenas).toBeNull()
     expect((await serve(ada, 'Mercy Hospital')).status).toBe(409)
+  })
+})
+
+describe('checking with AI', () => {
+  const subpoena = {
+    recipient: 'Mercy Hospital',
+    recipientDescription: 'Where Ramirez was treated.',
+    requestType: 'documents',
+    records: 'ER records for June 10.',
+    justification: 'They go to damages, and only the hospital has them.',
+  }
+  let seen: MentorContext[]
+  let replies: { tag: MentorTag; feedback: string }[]
+
+  beforeEach(async () => {
+    await setUp()
+    seen = []
+    replies = []
+    ai.reviewDiscovery = async (context) => {
+      seen.push(structuredClone(context))
+      return replies.shift() ?? { tag: 'LOOKS_GOOD', feedback: 'Nice.' }
+    }
+  })
+
+  const check = (agent: request.Agent, body: object) => agent.post(`${exchangeUrl()}/check`).send(body)
+
+  it('needs a justification for a subpoena', async () => {
+    await toExchange()
+    const res = await ada.post(`${exchangeUrl()}/subpoenas`).send({ ...subpoena, justification: ' ' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toBe("Say how you'd justify this subpoena to the judge.")
+  })
+
+  it('reviews a subpoena with only what the team can see, and the recipient rules favorably on a Looks good', async () => {
+    await toExchange()
+    replies.push({ tag: 'NEEDS_IMPROVEMENT', feedback: 'Request 1: How far back do you need?' })
+    const first = await check(ada, { kind: 'subpoena', mode: 'draft', draft: subpoena })
+    expect(first.status).toBe(200)
+    expect(first.body.check).toEqual({ id: expect.any(String), tag: 'NEEDS_IMPROVEMENT', feedback: 'Request 1: How far back do you need?' })
+
+    const context = seen[0]
+    expect(context).toMatchObject({
+      kind: 'subpoena',
+      mode: 'draft',
+      side: 'plaintiff',
+      subpoenaRecipient: 'Mercy Hospital (Where Ramirez was treated.)',
+      subpoenaTypes: 'documents',
+      draft: 'ER records for June 10.',
+      goal: 'They go to damages, and only the hospital has them.',
+    })
+    // The plaintiff's own files and what was disclosed to it; the defense's undisclosed ones aren't in the case file it sees.
+    const titles = context.documents.map((d) => d.title)
+    expect(titles).toContain('Harness photos.pdf')
+    expect(titles).toContain('Incident report.pdf')
+    expect(buildMentorPrompt(context)).not.toContain(sampleFacts.defense[0])
+
+    // Edited after the first check, checked again, and served as checked.
+    const better = { ...subpoena, records: 'ER records for June 10 to 12.' }
+    const second = await check(ada, { kind: 'subpoena', mode: 'draft', draft: better })
+    let drafted: SubpoenaContext | undefined
+    ai.respondToSubpoena = async (ctx) => {
+      drafted = ctx
+      return 'RESPONSE'
+    }
+    await ada.post(`${exchangeUrl()}/subpoenas`).send({ ...better, checkId: second.body.check.id })
+    await subpoenasSettled()
+    expect(drafted).toMatchObject({ justification: subpoena.justification, mentorApproved: true })
+    expect(buildSubpoenaMessage(drafted!)).toContain("Don't tag it QUASH or MODIFY")
+    expect(buildSubpoenaMessage(drafted!)).toContain(`<justification>\n${subpoena.justification}\n</justification>`)
+    const [served] = (await prof.get(`/api/courses/${course.id}/subpoenas`)).body.subpoenas
+    expect(served).toMatchObject({ justification: subpoena.justification, check: { tag: 'LOOKS_GOOD', feedback: 'Nice.', current: true } })
+    // Students don't see the check.
+    expect((await exchange(ada)).subpoenas.served[0].check).toBeUndefined()
+  })
+
+  it('records a check as edited after, and ignores another team’s check', async () => {
+    await toExchange()
+    const checked = await check(ada, { kind: 'subpoena', mode: 'draft', draft: subpoena })
+    await ada.post(`${exchangeUrl()}/subpoenas`).send({ ...subpoena, records: 'Everything.', checkId: checked.body.check.id })
+    const cyChecked = await check(cy, { kind: 'subpoena', mode: 'draft', draft: subpoena })
+    const drafted: SubpoenaContext[] = []
+    ai.respondToSubpoena = async (ctx) => {
+      drafted.push(ctx)
+      return 'RESPONSE'
+    }
+    await bo.post(`${exchangeUrl()}/subpoenas`).send({ ...subpoena, checkId: cyChecked.body.check.id })
+    await subpoenasSettled()
+    const list = (await prof.get(`/api/courses/${course.id}/subpoenas`)).body.subpoenas
+    expect(list.map((s: { records: string; check: unknown }) => [s.records, s.check])).toEqual(
+      expect.arrayContaining([
+        ['Everything.', { tag: 'LOOKS_GOOD', feedback: 'Nice.', current: false }],
+        ['ER records for June 10.', null],
+      ]),
+    )
+    expect(drafted.every((d) => !d.mentorApproved)).toBe(true)
+  })
+
+  it('reviews interrogatories, and the answers to them, keeping each check for the instructor', async () => {
+    await toExchange()
+    replies.push({ tag: 'SMALL_EDITS', feedback: 'Interrogatory 1: Knowledge of what?' })
+    const items = ['Identify all persons with knowledge.', 'When was the harness last inspected?']
+    const sent = await check(ada, { kind: 'interrogatories', mode: 'draft', draft: { items } })
+    expect(sent.body.check.tag).toBe('SMALL_EDITS')
+    expect(seen[0]).toMatchObject({
+      kind: 'interrogatories',
+      mode: 'draft',
+      draft: '1. Identify all persons with knowledge.\n2. When was the harness last inspected?',
+      interrogatoryLimit: 5,
+      interrogatoriesServed: 0,
+    })
+    await ada.post(`${exchangeUrl()}/requests`).send({ kind: 'interrogatories', items, checkId: sent.body.check.id })
+
+    const set = (await exchange(cy)).interrogatories.requests[0]
+    const responses = [
+      { position: 1, answer: 'Tom Becker.', objection: false, admission: null, agreePart: '', disagreePart: '' },
+      { position: 2, answer: 'Overbroad.', objection: true, admission: null, agreePart: '', disagreePart: '' },
+    ]
+    const answered = await check(cy, { kind: 'interrogatories', mode: 'answer', requestId: set.id, draft: { responses } })
+    expect(seen[1]).toMatchObject({
+      mode: 'answer',
+      side: 'defense',
+      servedRequests: '1. Identify all persons with knowledge.\n2. When was the harness last inspected?',
+      draft: '1. Answer: Tom Becker.\n2. Objection: Overbroad.',
+    })
+    // The plaintiff's undisclosed photos stay out of the defense's review.
+    expect(seen[1].documents.map((d) => d.title)).toContain('Incident report.pdf')
+    expect(seen[1].documents.map((d) => d.title)).not.toContain('Harness photos.pdf')
+    await cy.post(`${exchangeUrl()}/requests/${set.id}/responses`).send({ responses, checkId: answered.body.check.id })
+
+    const [request] = (await prof.get(`${caseUrl()}/exchange/requests`)).body.requests
+    expect(request).toMatchObject({
+      check: { tag: 'SMALL_EDITS', feedback: 'Interrogatory 1: Knowledge of what?', current: true },
+      responseCheck: { tag: 'LOOKS_GOOD', current: true },
+    })
+    // The other team never sees either team's checks.
+    expect(JSON.stringify(await exchange(ada))).not.toContain('Knowledge of what?')
+  })
+
+  it('says so when the AI can’t check', async () => {
+    await toExchange()
+    ai.reviewDiscovery = async () => {
+      throw new Error('overloaded')
+    }
+    const res = await check(ada, { kind: 'rfas', mode: 'draft', draft: { items: ['Admit the harness was red.'] } })
+    expect(res.status).toBe(502)
+    expect(res.body.error).toMatch(/couldn’t check your draft/)
   })
 })

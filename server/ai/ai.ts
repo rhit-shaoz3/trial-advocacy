@@ -6,6 +6,8 @@ import { findNewFacts, type NewFact, type NewFactsInput } from '../witness/newFa
 import { suggestWitnesses, type SuggestInput, type WitnessSuggestion } from '../witness/suggest.ts'
 import { respondToSubpoena } from '../exchange/subpoenaResponse.ts'
 import type { SubpoenaContext } from '../exchange/subpoenaPrompt.ts'
+import { reviewDiscovery } from '../exchange/mentor.ts'
+import type { MentorContext, MentorTag } from '../exchange/mentorPrompt.ts'
 import { transcribeFile, type FileToTranscribe } from './transcribe.ts'
 
 /**
@@ -39,6 +41,8 @@ export const ai = {
   finalizeReport: (input: FinalizeInput): Promise<string> => finalizeReport(anthropic(), input),
   /** A subpoena's response as its recipient drafts it, tag lines and all, for the instructor to review. */
   respondToSubpoena: (context: SubpoenaContext): Promise<string> => respondToSubpoena(anthropic(), context),
+  /** The discovery mentor's tag and Socratic feedback on a team's draft requests or answers. */
+  reviewDiscovery: (context: MentorContext): Promise<{ tag: MentorTag; feedback: string }> => reviewDiscovery(anthropic(), context),
   /** Who the complaint suggests will testify, for the instructor to pick from. */
   suggestWitnesses: (input: SuggestInput): Promise<WitnessSuggestion[]> => suggestWitnesses(anthropic(), input),
 }

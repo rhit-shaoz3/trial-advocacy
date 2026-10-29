@@ -601,7 +601,34 @@ export interface ExchangeRequest {
   respondedAt: string | null
   respondedBy: string | null
   items: ExchangeItem[]
+  /** The instructor's view only: each team's last AI check before sending the set, and before answering it. */
+  check?: DiscoveryCheckRecord | null
+  responseCheck?: DiscoveryCheckRecord | null
 }
+
+/** What the discovery mentor (Check with AI) said about a draft. */
+export type CheckTag = 'LOOKS_GOOD' | 'SMALL_EDITS' | 'NEEDS_IMPROVEMENT'
+
+/** A check, as the student sees it right after asking. */
+export interface DiscoveryCheck {
+  id: string
+  tag: CheckTag
+  /** The mentor's feedback, without its tag line. */
+  feedback: string
+}
+
+/** The last check before a submission, for the instructor; `current` is false when it was edited after. */
+export interface DiscoveryCheckRecord {
+  tag: CheckTag
+  feedback: string
+  current: boolean
+}
+
+/** What to check: a subpoena, a set of interrogatories or RFAs, or the answers to one. */
+export type CheckInput =
+  | { kind: 'subpoena'; mode: 'draft'; draft: SubpoenaInput }
+  | { kind: ExchangeKind; mode: 'draft'; draft: { items: string[] } }
+  | { kind: ExchangeKind; mode: 'answer'; requestId: string; draft: { responses: ItemResponse[] } }
 
 export interface ItemResponse {
   position: number
@@ -639,6 +666,8 @@ export interface TeamSubpoena {
   recipientDescription: string
   requestType: SubpoenaType
   records: string
+  /** What the team would tell the judge on a motion to quash or modify; blank for older subpoenas. */
+  justification?: string
   sentBy: string | null
   sentAt: string
   dueAt: string
@@ -705,6 +734,8 @@ export interface CourseSubpoena extends Omit<TeamSubpoena, 'seen'> {
   instructions: string
   createNew: boolean
   error: string | null
+  /** The team's last AI check before serving it; null when it wasn't checked. */
+  check?: DiscoveryCheckRecord | null
 }
 
 /** What the student fills in to serve a subpoena. */
@@ -713,6 +744,8 @@ export interface SubpoenaInput {
   recipientDescription: string
   requestType: SubpoenaType
   records: string
+  /** What the team would tell the judge on a motion to quash or modify. */
+  justification: string
 }
 
 /** A team's information exchange. */
@@ -1004,10 +1037,19 @@ export interface CourseService {
   /** The student's own initial disclosures, once. */
   submitDisclosures(courseId: string, caseId: string, picks: DisclosurePick[], heldBackReason: string): Promise<StudentExchange>
   /** Sends a set to the other team, one question or request per item. */
-  sendExchangeRequest(courseId: string, caseId: string, kind: ExchangeKind, items: string[]): Promise<StudentExchange>
-  respondToExchangeRequest(courseId: string, caseId: string, requestId: string, responses: ItemResponse[]): Promise<StudentExchange>
+  /** `checkId`: the AI check before it, if there was one. */
+  sendExchangeRequest(courseId: string, caseId: string, kind: ExchangeKind, items: string[], checkId?: string): Promise<StudentExchange>
+  respondToExchangeRequest(
+    courseId: string,
+    caseId: string,
+    requestId: string,
+    responses: ItemResponse[],
+    checkId?: string,
+  ): Promise<StudentExchange>
+  /** Has the discovery mentor check a draft before it's sent. */
+  checkDiscovery(courseId: string, caseId: string, input: CheckInput): Promise<DiscoveryCheck>
   /** Serves a subpoena on a person or organization. */
-  serveSubpoena(courseId: string, caseId: string, subpoena: SubpoenaInput): Promise<StudentExchange>
+  serveSubpoena(courseId: string, caseId: string, subpoena: SubpoenaInput, checkId?: string): Promise<StudentExchange>
   /** Marks the responses to the team's sets, and the answers to its subpoenas, as read. */
   markExchangeSeen(courseId: string, caseId: string): Promise<void>
   // The instructor's review panel.

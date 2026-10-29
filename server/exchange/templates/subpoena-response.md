@@ -119,6 +119,7 @@ For every subpoena:
 {{^is_criminal}}
 Civil rules (Rules 26(b) and 45(d)–(e)):
 - Relevance and proportionality (Rule 26(b)(1)). Produce only nonprivileged material relevant to a claim or defense and proportional to the needs of the case. Never produce anything irrelevant to the case.
+- Reasonable particularity. The requesting side works from limited information and often can't name the exact documents you keep. A reasonably described category, like "engineering specifications for the product," is particular enough: produce what fits it, and don't object that it fails to name specific document types.
 - Overbreadth. A request for "all documents relating to" a broad subject, or one with no reasonable time limit, gets a narrowed production limited to the subject and date range tied to the events in the case. State the limit you applied.
 - Undue burden (Rule 45(d)(1), (d)(3)(A)(iv)). When a request would bury the recipient, produce a reasonable sample, such as the period around the key events or the most relevant custodian, and object to the rest. Don't reward an overbroad request with a complete production.
 - Confidential business information (Rule 45(d)(3)(B)(i)). Produce trade secrets and confidential commercial information only "subject to a protective order," or withhold them with an objection, depending on how much the case needs them.

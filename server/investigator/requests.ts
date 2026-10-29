@@ -5,6 +5,7 @@ import type { Side } from '../courses/matchups.ts'
 import { finishPendingTranscriptions } from '../courses/materialText.ts'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
+import { queueGrouping } from '../reviews/grouping.ts'
 import { settledFacts } from '../reviews/reviews.ts'
 import { MAX_ASSIGNMENT_LENGTH, matchTitles, parseReport } from './investigate.ts'
 import type { InvestigatorContext } from './prompt.ts'
@@ -15,6 +16,9 @@ import type { InvestigatorContext } from './prompt.ts'
 // its new facts and the case files he'd unlock. Once the instructor has ruled,
 // the AI writes the clean report the team gets, the allowed files are shared
 // with the team, and the rulings bind later interviews and investigations.
+// In review lite mode the report skips the instructor: its facts stand for the
+// team's world and its files are allowed (marked `auto`), and the team can
+// flag either for the instructor.
 
 /** Who's sending: the student's team, in its case world. */
 export interface InvestigationContext {
@@ -38,8 +42,10 @@ export interface Investigation {
   completedAt: Date | null
   /** The clean report, once completed. */
   report: string | null
-  /** Files this report unlocked for the team (attached to it, and in the case file). */
-  unlocked: { id: string; title: string; filename: string; contentType: string; sizeBytes: number }[]
+  /** Files this report unlocked for the team (attached to it, and in the case file); `auto` when review lite allowed them. */
+  unlocked: { id: string; title: string; filename: string; contentType: string; sizeBytes: number; auto: boolean }[]
+  /** The facts the report turned up that stand, once completed, for flagging the ones decided automatically. */
+  facts: { id: string; text: string; auto: boolean }[]
   /** Whether this student has read the report. */
   seen: boolean
 }
@@ -55,10 +61,13 @@ export async function teamInvestigations(caseId: string, teamId: string, userId:
             CASE WHEN r.status = 'completed' THEN coalesce((
               SELECT json_agg(json_build_object('id', m.id, 'title', coalesce(nullif(m.description, ''), m.filename),
                                                 'filename', m.filename, 'contentType', m.content_type,
-                                                'sizeBytes', m.size_bytes)
+                                                'sizeBytes', m.size_bytes, 'auto', d.auto)
                               ORDER BY d.position)
               FROM review_documents d JOIN case_materials m ON m.id = d.material_id
               WHERE d.review_id = r.id AND d.decision = 'allow'), '[]') ELSE '[]' END AS unlocked,
+            CASE WHEN r.status = 'completed' THEN coalesce((
+              SELECT json_agg(json_build_object('id', f.id, 'text', f.text, 'auto', f.auto) ORDER BY f.position)
+              FROM review_facts f WHERE f.review_id = r.id AND f.decision LIKE 'accept%'), '[]') ELSE '[]' END AS facts,
             EXISTS (SELECT 1 FROM review_seen s WHERE s.review_id = r.id AND s.user_id = $3) AS seen
      FROM interview_reviews r
      WHERE r.case_id = $1 AND r.team_id = $2 AND r.kind = 'investigation'
@@ -121,8 +130,10 @@ async function advance(id: string) {
     `SELECT status FROM interview_reviews WHERE id = $1 AND kind = 'investigation'`,
     [id],
   )
-  if (rows[0]?.status === 'summarizing') await investigateRequest(id)
-  else if (rows[0]?.status === 'finalizing') await finalizeRequest(id)
+  if (rows[0]?.status === 'summarizing') {
+    // In review lite the report goes straight on to the team.
+    if ((await investigateRequest(id)) === 'finalizing') await finalizeRequest(id)
+  } else if (rows[0]?.status === 'finalizing') await finalizeRequest(id)
 }
 
 interface RequestRow {
@@ -139,6 +150,7 @@ interface RequestRow {
   importantFacts: ImportantFacts
   investigatorName: string
   instructions: string
+  lite: boolean
 }
 
 async function loadRequest(id: string) {
@@ -149,7 +161,8 @@ async function loadRequest(id: string) {
             json_build_object('plaintiff', c.plaintiff_name, 'defendant', c.defendant_name) AS parties,
             c.disputed_issues AS "disputedIssues",
             json_build_object('plaintiff', c.plaintiff_key_facts, 'defense', c.defense_key_facts) AS "importantFacts",
-            c.investigator_name AS "investigatorName", c.investigator_instructions AS instructions
+            c.investigator_name AS "investigatorName", c.investigator_instructions AS instructions,
+            c.review_mode = 'lite' AS lite
      FROM interview_reviews r JOIN cases c ON c.id = r.case_id
      WHERE r.id = $1`,
     [id],
@@ -208,11 +221,15 @@ async function fail(id: string, err: unknown, what: string) {
   await pool.query(`UPDATE interview_reviews SET status = 'failed', error = $2 WHERE id = $1`, [id, error]).catch(() => {})
 }
 
-/** Asks the investigator for his report and lays it out for the instructor's review; never throws. */
-async function investigateRequest(id: string) {
+/**
+ * Asks the investigator for his report and lays it out for the instructor's
+ * review, or in review lite rules on it at once; returns the review's new
+ * status. Never throws.
+ */
+async function investigateRequest(id: string): Promise<'open' | 'finalizing' | null> {
   try {
     const request = await loadRequest(id)
-    if (!request) return // deleted meanwhile
+    if (!request) return null // deleted meanwhile
     const context = await investigatorContext(request)
     const text = await ai.investigate({
       context,
@@ -228,24 +245,33 @@ async function investigateRequest(id: string) {
       await client.query('BEGIN')
       await client.query('DELETE FROM review_facts WHERE review_id = $1', [id])
       await client.query('DELETE FROM review_documents WHERE review_id = $1', [id])
+      // Review lite: his facts stand for this world only, and his files are allowed.
+      const lite = request.lite
       for (const [position, fact] of parsed.facts.entries()) {
-        await client.query('INSERT INTO review_facts (review_id, position, text) VALUES ($1, $2, $3)', [id, position, fact])
+        await client.query(
+          `INSERT INTO review_facts (review_id, position, text, decision, decided_at, auto)
+           VALUES ($1, $2, $3, CASE WHEN $4 THEN 'accept_world' END, CASE WHEN $4 THEN now() END, $4)`,
+          [id, position, fact, lite],
+        )
       }
       for (const [position, doc] of unlock.entries()) {
-        await client.query('INSERT INTO review_documents (review_id, material_id, position) VALUES ($1, $2, $3)', [
-          id,
-          doc.id,
-          position,
-        ])
+        await client.query(
+          `INSERT INTO review_documents (review_id, material_id, position, decision, auto)
+           VALUES ($1, $2, $3, CASE WHEN $4 THEN 'allow' END, $4)`,
+          [id, doc.id, position, lite],
+        )
       }
-      // Every report waits for the instructor, even with nothing to rule on.
+      // Otherwise every report waits for the instructor, even with nothing to rule on.
+      const status = lite ? 'finalizing' : 'open'
       await client.query(
         `UPDATE interview_reviews
-         SET report = $2, records_requested = $3, review_block_missing = $4, error = NULL, status = 'open'
+         SET report = $2, records_requested = $3, review_block_missing = $4, error = NULL, status = $5
          WHERE id = $1`,
-        [id, parsed.body, parsed.records, !parsed.hasReviewBlock],
+        [id, parsed.body, parsed.records, !parsed.hasReviewBlock, status],
       )
       await client.query('COMMIT')
+      if (status === 'open') queueGrouping(request.caseId)
+      return status
     } catch (err) {
       await client.query('ROLLBACK')
       throw err
@@ -254,6 +280,7 @@ async function investigateRequest(id: string) {
     }
   } catch (err) {
     await fail(id, err, 'get the investigator’s report')
+    return null
   }
 }
 
@@ -291,9 +318,13 @@ async function finalizeRequest(id: string) {
         for (const doc of docs.filter((d) => d.decision === 'allow')) {
           await shareMaterialWithTeam(doc.materialId, request.teamId, client)
         }
+        // A file the instructor took back after all (from a student's flag, say).
+        for (const doc of docs.filter((d) => d.decision !== 'allow')) {
+          await client.query('DELETE FROM material_shares WHERE material_id = $1 AND team_id = $2', [doc.materialId, request.teamId])
+        }
       }
       await client.query(
-        `UPDATE interview_reviews SET final_report = $2, status = 'completed', completed_at = now(), error = NULL
+        `UPDATE interview_reviews SET final_report = $2, status = 'completed', completed_at = coalesce(completed_at, now()), error = NULL
          WHERE id = $1`,
         [id, finalReport],
       )

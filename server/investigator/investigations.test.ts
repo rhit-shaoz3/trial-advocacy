@@ -186,7 +186,7 @@ describe('asking the investigator', () => {
     const [review] = await openReviews()
     expect(review).toMatchObject({ status: 'open', reviewBlockMissing: true, facts: [] })
     // The file is offered to allow, and its name is out of the report text.
-    expect(review.documents).toEqual([{ materialId: maintenanceLog, title: 'Maintenance log', decision: null }])
+    expect(review.documents).toEqual([{ materialId: maintenanceLog, title: 'Maintenance log', decision: null, auto: false }])
     expect(review.report).toBe('I found the brake records.')
   })
 
@@ -227,18 +227,17 @@ describe('asking the investigator', () => {
     ])
     // The fact pattern is already the team's, so only the two new files are proposed.
     expect(review.documents).toEqual([
-      { materialId: maintenanceLog, title: 'Maintenance log', decision: null },
-      { materialId: dispatchLog, title: 'Dispatch log', decision: null },
+      { materialId: maintenanceLog, title: 'Maintenance log', decision: null, auto: false },
+      { materialId: dispatchLog, title: 'Dispatch log', decision: null, auto: false },
     ])
 
     const reviewUrl = `/api/courses/${course.id}/reviews/${review.id}`
     await prof.put(`${reviewUrl}/facts/${review.facts[0].id}`).send({ decision: 'accept_world' })
     await prof.put(`${reviewUrl}/facts/${review.facts[1].id}`).send({ decision: 'deny_case' })
-    await prof.put(`${reviewUrl}/documents/${maintenanceLog}`).send({ decision: 'allow' })
-    const early = await prof.post(`${reviewUrl}/complete`)
-    expect(early.body.error).toBe('Decide on every file first.')
-    await prof.put(`${reviewUrl}/documents/${dispatchLog}`).send({ decision: 'deny' })
-    const finished = await prof.post(`${reviewUrl}/complete`)
+    const early = await prof.put(`${reviewUrl}/documents/${maintenanceLog}`).send({ decision: 'allow' })
+    expect(early.body.review.status).toBe('open')
+    // The last call finishes the review.
+    const finished = await prof.put(`${reviewUrl}/documents/${dispatchLog}`).send({ decision: 'deny' })
     expect(finished.body.review.status).toBe('finalizing')
     // Finished is finished for the instructor: it's in Completed and off the count while the team's report is written.
     expect(await openReviews()).toEqual([])
@@ -253,8 +252,9 @@ describe('asking the investigator', () => {
       status: 'completed',
       report: '1. I photographed the corner.\n2. The maintenance log shows the brakes were serviced March 1.',
       unlocked: [
-        { id: maintenanceLog, title: 'Maintenance log', filename: 'Maintenance log.pdf', contentType: 'application/pdf', sizeBytes: expect.any(Number) },
+        { id: maintenanceLog, title: 'Maintenance log', filename: 'Maintenance log.pdf', contentType: 'application/pdf', sizeBytes: expect.any(Number), auto: false },
       ],
+      facts: [{ id: review.facts[0].id, text: 'A traffic camera is mounted on the northeast corner.', auto: false }],
       seen: false,
     })
     const materials = (await plaintiff.get(myCaseUrl())).body.workspace.materials.map((m: { id: string }) => m.id)
@@ -299,5 +299,50 @@ describe('asking the investigator', () => {
     await investigationsSettled()
     const [open] = await openReviews()
     expect(open.status).toBe('open')
+  })
+})
+
+describe('review lite', () => {
+  it("sends the report straight to the team, its facts standing for the world; a flagged file can be taken back", async () => {
+    await prof.put(`${caseUrl()}/review-mode`).send({ reviewMode: 'lite' })
+    await toInvestigate()
+    ai.investigate = async () => REPORT
+    await sendAndWait(plaintiff, 'Check the corner and the bus records.')
+
+    // Nothing for the instructor to review.
+    expect(await openReviews()).toEqual([])
+    const [done] = (await plaintiff.get(`${myCaseUrl()}/investigator`)).body.investigations
+    expect(done.status).toBe('completed')
+    expect(done.unlocked.map((u: { id: string; auto: boolean }) => [u.id, u.auto])).toEqual([
+      [maintenanceLog, true],
+      [dispatchLog, true],
+    ])
+    expect(done.facts.map((f: { auto: boolean }) => f.auto)).toEqual([true, true])
+    const [review] = (await prof.get(`/api/courses/${course.id}/reviews?status=completed`)).body.reviews
+    // Never for every world.
+    expect(review.facts.map((f: { decision: string }) => f.decision)).toEqual(['accept_world', 'accept_world'])
+
+    // The team flags the dispatch log; the instructor takes it back, and the report is rewritten without it.
+    let edit: FinalizeInput | undefined
+    ai.finalizeReport = async (input) => {
+      edit = input
+      return 'Rewritten.'
+    }
+    const flagged = await plaintiff
+      .post(`${myCaseUrl()}/flags`)
+      .send({ kind: 'document', targetId: dispatchLog, reviewId: review.id, reason: 'This is the defense’s internal log.' })
+    expect(flagged.status).toBe(201)
+    const [flag] = (await prof.get(`/api/courses/${course.id}/reviews`)).body.flags
+    expect(flag).toMatchObject({ kind: 'document', materialId: dispatchLog, teamNumber: 1, review: { id: review.id } })
+    const resolved = await prof.post(`/api/courses/${course.id}/reviews/flags/${flag.id}/resolve`).send({ decision: 'deny' })
+    expect(resolved.status).toBe(200)
+    await investigationsSettled()
+    expect(edit).toMatchObject({ deniedTitles: ['Dispatch log'] })
+    const materials = (await plaintiff.get(myCaseUrl())).body.workspace.materials.map((m: { id: string }) => m.id)
+    expect(materials).toContain(maintenanceLog)
+    expect(materials).not.toContain(dispatchLog)
+    const [after] = (await plaintiff.get(`${myCaseUrl()}/investigator`)).body.investigations
+    expect(after).toMatchObject({ report: 'Rewritten.', unlocked: [{ id: maintenanceLog }] })
+    expect((await plaintiff.get(`${myCaseUrl()}/flags`)).body.flags).toMatchObject([{ status: 'resolved', resolution: 'changed' }])
   })
 })

@@ -709,3 +709,77 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_done_at timestamp
 UPDATE case_materials SET text_status = 'pending', text_error = NULL
  WHERE text_status = 'none'
    AND content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+-- The facts the AI read from the instructor's case files, for the instructor's
+-- running list of facts. `key` is the files they were read from (ids and text
+-- lengths), so they're read again when the files change.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS file_facts text[] NOT NULL DEFAULT '{}';
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS file_facts_key text;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS file_facts_status text NOT NULL DEFAULT 'none'
+  CHECK (file_facts_status IN ('none', 'working', 'ready', 'failed'));
+
+-- How the instructor reviews the case. all: every new fact, file, and subpoena
+-- response waits for the instructor. lite: the AI's calls stand at once (for
+-- the team's case world only), and students flag what they think is wrong.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS review_mode text NOT NULL DEFAULT 'all'
+  CHECK (review_mode IN ('all', 'lite'));
+
+-- Similar new facts from different reviews (two teams got the same thing out of
+-- a witness), for the instructor to rule on together. Ungrouping a group marks
+-- its facts so they're never grouped again.
+CREATE TABLE IF NOT EXISTS fact_groups (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id     uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  headline    text        NOT NULL,
+  differences text        NOT NULL DEFAULT '',
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS fact_groups_case_idx ON fact_groups (case_id);
+
+ALTER TABLE review_facts ADD COLUMN IF NOT EXISTS group_id uuid REFERENCES fact_groups (id) ON DELETE SET NULL;
+ALTER TABLE review_facts ADD COLUMN IF NOT EXISTS ungrouped boolean NOT NULL DEFAULT false;
+
+-- Calls made automatically in review lite mode, not by the instructor.
+ALTER TABLE review_facts ADD COLUMN IF NOT EXISTS auto boolean NOT NULL DEFAULT false;
+ALTER TABLE review_documents ADD COLUMN IF NOT EXISTS auto boolean NOT NULL DEFAULT false;
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS auto boolean NOT NULL DEFAULT false;
+
+-- A student's flag on something decided automatically (review lite): a fact
+-- that stands, a file the investigator gave the team, or a subpoena's answer
+-- (an appeal, when it was denied). It waits for the instructor, who keeps or
+-- changes the call. One open flag per thing.
+CREATE TABLE IF NOT EXISTS review_flags (
+  id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id        uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id        uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  kind           text        NOT NULL CHECK (kind IN ('fact', 'document', 'subpoena')),
+  review_fact_id uuid        REFERENCES review_facts (id) ON DELETE CASCADE,
+  review_id      uuid        REFERENCES interview_reviews (id) ON DELETE CASCADE,
+  material_id    uuid        REFERENCES case_materials (id) ON DELETE CASCADE,
+  subpoena_id    uuid        REFERENCES subpoenas (id) ON DELETE CASCADE,
+  reason         text        NOT NULL,
+  raised_by      uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  status         text        NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+  -- kept: the call stands; changed: the instructor changed it.
+  resolution     text        CHECK (resolution IN ('kept', 'changed')),
+  resolved_by    uuid        REFERENCES users (id) ON DELETE SET NULL,
+  resolved_at    timestamptz,
+  CHECK (kind <> 'fact' OR review_fact_id IS NOT NULL),
+  CHECK (kind <> 'document' OR (review_id IS NOT NULL AND material_id IS NOT NULL)),
+  CHECK (kind <> 'subpoena' OR subpoena_id IS NOT NULL)
+);
+
+CREATE INDEX IF NOT EXISTS review_flags_case_idx ON review_flags (case_id);
+CREATE UNIQUE INDEX IF NOT EXISTS review_flags_open_idx
+  ON review_flags (kind, coalesce(review_fact_id, subpoena_id, material_id), coalesce(review_id, subpoena_id))
+  WHERE status = 'open';
+
+-- Which students have read the instructor's answer to a flag.
+CREATE TABLE IF NOT EXISTS flag_seen (
+  flag_id uuid        NOT NULL REFERENCES review_flags (id) ON DELETE CASCADE,
+  user_id uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  seen_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (flag_id, user_id)
+);

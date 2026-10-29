@@ -12,8 +12,10 @@ import {
   findCase,
   listCases,
   reachSetupStep,
+  REVIEW_MODES,
   setCasePhase,
   setInvestigator,
+  setReviewMode,
   SETUP_STEPS,
   updateCase,
   type CaseFields,
@@ -21,6 +23,7 @@ import {
   type CaseStatus,
   type CourseCase,
   type ImportantFacts,
+  type ReviewMode,
   type SetupStep,
 } from './cases.ts'
 import { listStorageKeys, removeStoredFiles, setInstructorNote, setWitnessSettings } from './caseContent.ts'
@@ -33,6 +36,7 @@ import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
 import { finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 import { duplicateCase, shareCase } from './caseCopy.ts'
+import { caseFacts, refreshFileFacts } from '../reviews/caseFacts.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -238,6 +242,24 @@ caseRouter.put('/investigator', async (req, res) => {
     throw new HttpError(409, 'Move the case out of the investigate phase before turning off the investigator.')
   }
   res.json({ case: await setInvestigator(req.course!.id, req.courseCase!.id, { enabled: body.enabled, name, instructions }) })
+})
+
+/** `{ reviewMode }`: all (the instructor reviews everything) or lite (only what students flag). */
+caseRouter.put('/review-mode', async (req, res) => {
+  const mode = readString(req.body, 'reviewMode')
+  if (!REVIEW_MODES.includes(mode as ReviewMode)) throw new HttpError(400, 'Choose how to review this case.')
+  res.json({ case: await setReviewMode(req.course!.id, req.courseCase!.id, mode as ReviewMode) })
+})
+
+/** The case's running list of facts: from the case files, important facts, and what's settled for all worlds and each one. */
+caseRouter.get('/facts', async (req, res) => {
+  res.json({ facts: await caseFacts(req.courseCase!) })
+})
+
+/** Reads the facts from the case files again. */
+caseRouter.post('/facts/refresh', async (req, res) => {
+  refreshFileFacts(req.courseCase!.id, { force: true })
+  res.json({ facts: await caseFacts(req.courseCase!) })
 })
 
 /**

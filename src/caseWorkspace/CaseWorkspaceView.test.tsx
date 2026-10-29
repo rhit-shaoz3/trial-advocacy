@@ -384,6 +384,25 @@ describe('the background investigator', () => {
     expect(screen.queryByRole('form', { name: 'Email Nora Vance' })).not.toBeInTheDocument()
   })
 
+  it('doesn’t say the instructor reviews his reports in review lite', async () => {
+    const lite = { ...open, case: { ...open.case, reviewMode: 'lite' as const } }
+    const { user } = renderView({
+      workspace: lite,
+      investigations: [report({ status: 'working', report: null, completedAt: null, unlocked: [] })],
+      onSendInvestigation: vi.fn(),
+      reviews: [],
+    })
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+    const panel = screen.getByRole('tabpanel')
+    expect(panel).toHaveTextContent('His report comes back as soon as it’s written')
+    expect(panel).not.toHaveTextContent(/instructor review/)
+    expect(panel).toHaveTextContent('His reports come straight to you')
+
+    await user.click(screen.getByRole('tab', { name: 'Reviews' }))
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('If you think one is wrong, flag it for your instructor.')
+    expect(screen.getByRole('tabpanel')).not.toHaveTextContent('your instructor rules on')
+  })
+
   it('shows his reports above the email, with the files they unlocked', async () => {
     const { user } = renderView({
       workspace: open,

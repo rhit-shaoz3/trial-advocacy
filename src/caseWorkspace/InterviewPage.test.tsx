@@ -178,6 +178,17 @@ describe('InterviewPage: showing documents', () => {
 })
 
 describe('InterviewPage: ending for review', () => {
+  it('in review lite, says the new facts go to the Reviews tab, not to the instructor', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const asked = { ...empty, reviewLite: true, turns: [turn(0, 'Where were you?', 'On break.')] }
+    const endInterview = vi.fn().mockResolvedValue({ interview: { ...empty, reviewLite: true }, sentForReview: true })
+    const { user } = renderPage({ getInterview: vi.fn().mockResolvedValue(asked), endInterview })
+
+    await user.click(await screen.findByRole('button', { name: 'End interview' }))
+    expect(window.confirm).toHaveBeenCalledWith("End this interview? Its new facts go to the case's Reviews tab.")
+    expect(await screen.findByRole('status')).toHaveTextContent("Interview ended. Its new facts are in the case's Reviews tab")
+  })
+
   it('ends the team interview after confirming and says it went for review', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const asked = { ...empty, turns: [turn(0, 'Where were you?', 'On break.')] }

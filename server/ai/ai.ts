@@ -6,6 +6,7 @@ import { findNewFacts, type NewFact, type NewFactsInput } from '../witness/newFa
 import { suggestWitnesses, type SuggestInput, type WitnessSuggestion } from '../witness/suggest.ts'
 import { respondToSubpoena } from '../exchange/subpoenaResponse.ts'
 import type { SubpoenaContext } from '../exchange/subpoenaPrompt.ts'
+import { groupFacts, summarizeCaseFacts, type FactGroupProposal, type FileFactsInput, type PendingFact } from '../reviews/factsAi.ts'
 import { transcribeFile, type FileToTranscribe } from './transcribe.ts'
 
 /**
@@ -39,6 +40,10 @@ export const ai = {
   finalizeReport: (input: FinalizeInput): Promise<string> => finalizeReport(anthropic(), input),
   /** A subpoena's response as its recipient drafts it, tag lines and all, for the instructor to review. */
   respondToSubpoena: (context: SubpoenaContext): Promise<string> => respondToSubpoena(anthropic(), context),
+  /** The key facts in the instructor's case files, for their running list of facts. */
+  summarizeCaseFacts: (input: FileFactsInput): Promise<string[]> => summarizeCaseFacts(anthropic(), input),
+  /** Which pending new facts are alike enough to rule on together. */
+  groupFacts: (facts: PendingFact[]): Promise<FactGroupProposal[]> => groupFacts(anthropic(), facts),
   /** Who the complaint suggests will testify, for the instructor to pick from. */
   suggestWitnesses: (input: SuggestInput): Promise<WitnessSuggestion[]> => suggestWitnesses(anthropic(), input),
 }

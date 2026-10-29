@@ -100,6 +100,13 @@ export interface CaseParties {
   defendant: string
 }
 
+/**
+ * How the instructor reviews a case. all: every new fact, file, and subpoena
+ * response waits for them. lite: the AI's calls stand at once, for the team's
+ * case world only, and students flag what they think is wrong.
+ */
+export type ReviewMode = 'all' | 'lite'
+
 export interface CourseCase {
   id: string
   title: string
@@ -121,6 +128,8 @@ export interface CourseCase {
   setupCompletedAt?: string | null
   /** The background investigator; cases without the field have one, as John Hastings. */
   investigator?: InvestigatorSettings
+  /** How the instructor reviews the case; leaving it out means everything. */
+  reviewMode?: ReviewMode
   /** Whether the information exchange setup is finished (students see it, and the case has its phase). */
   exchangeReady?: boolean
   /** A copy whose guided setup is just its teams and worlds, until finished. */
@@ -340,6 +349,8 @@ export interface Interview {
   canAsk: boolean
   /** Why questions can't be asked, when they can't. */
   notice: string | null
+  /** Review lite: an ended interview's new facts stand without the instructor. */
+  reviewLite?: boolean
 }
 
 /**
@@ -377,7 +388,8 @@ export interface InterviewReview {
   error: string | null
   createdAt: string
   completedAt: string | null
-  facts: { id: string; text: string; decision: FactDecision | null }[]
+  /** `groupId`: ruled with a group of similar facts while open; `auto`: decided automatically (review lite). */
+  facts: { id: string; text: string; decision: FactDecision | null; groupId?: string | null; auto?: boolean }[]
   /** An investigation: what the team asked, and who sent it. */
   assignment?: string | null
   askedBy?: string | null
@@ -389,7 +401,101 @@ export interface InterviewReview {
   /** The investigator's report had no list of its new facts and files, so read it before finishing. */
   reviewBlockMissing?: boolean
   /** Case files the investigator would unlock for the team. */
-  documents?: { materialId: string; title: string; decision: DocumentDecision | null }[]
+  documents?: { materialId: string; title: string; decision: DocumentDecision | null; auto?: boolean }[]
+}
+
+/** Similar new facts from different reviews, to rule on together. */
+export interface FactGroup {
+  id: string
+  caseId: string
+  caseTitle: string
+  /** Who got what, e.g. "Teams 1 and 2, interviewing Paige, both got estimates of medical expenses." */
+  headline: string
+  /** How the facts differ; empty when they say the same thing. */
+  differences: string
+  createdAt: string
+  facts: { id: string; text: string; reviewId: string; teamNumber: number; worldNumber: number; source: string }[]
+  /** How many different worlds the facts are in. */
+  worlds: number
+}
+
+export type FlagKind = 'fact' | 'document' | 'subpoena'
+
+/** A student's flag on something decided automatically, waiting for the instructor. */
+export interface CourseFlag {
+  id: string
+  kind: FlagKind
+  caseId: string
+  caseTitle: string
+  teamNumber: number
+  worldNumber: number | null
+  raisedBy: string | null
+  reason: string
+  createdAt: string
+  factId: string | null
+  materialId: string | null
+  /** The review the flagged fact or file is in. */
+  review: InterviewReview | null
+  subpoena: CourseSubpoena | null
+}
+
+/** A flag as the team sees it. */
+export interface TeamFlag {
+  id: string
+  kind: FlagKind
+  /** The fact, file, or subpoena flagged. */
+  targetId: string
+  reviewId: string | null
+  reason: string
+  status: 'open' | 'resolved'
+  /** kept: the call stands; changed: the instructor changed it. */
+  resolution: 'kept' | 'changed' | null
+  createdAt: string
+  resolvedAt: string | null
+  seen: boolean
+}
+
+/** What a student flags: a fact, a file (with the report it came with), or a subpoena's answer. */
+export interface FlagInput {
+  kind: FlagKind
+  targetId: string
+  reviewId?: string
+  reason: string
+}
+
+/** How the instructor answers a flag: a fact's ruling, keeping a file or not, or keeping or reopening a subpoena. */
+export type FlagResolution = { decision: FactDecision } | { decision: DocumentDecision } | { action: 'keep' | 'reopen' }
+
+/** What waits on the Review page: reviews, groups of similar facts, and students' flags. */
+export interface ReviewQueue {
+  reviews: InterviewReview[]
+  groups: FactGroup[]
+  flags: CourseFlag[]
+}
+
+/** A fact the instructor (or review lite) ruled on, and where it came from. */
+export interface RuledFact {
+  text: string
+  source: string
+  auto: boolean
+}
+
+/** What's been ruled in one case world. */
+export interface WorldFacts {
+  matchupId: string
+  number: number
+  teams: { number: number; side: Side }[]
+  accepted: RuledFact[]
+  denied: RuledFact[]
+}
+
+/** A case's running list of facts, for the instructor. */
+export interface CaseFacts {
+  /** What the AI read from the instructor's case files. */
+  fileFacts: { status: 'none' | 'working' | 'ready' | 'failed'; facts: string[] }
+  important: ImportantFacts
+  allWorlds: { accepted: RuledFact[]; denied: RuledFact[] }
+  worlds: WorldFacts[]
 }
 
 /** A team's request to the background investigator, as the team sees it: never the draft or the rulings. */
@@ -404,7 +510,10 @@ export interface Investigation {
   /** The report, once it's back. */
   report: string | null
   /** Case files the report unlocked for the team, attached to it. */
-  unlocked: { id: string; title: string; filename: string; contentType: string; sizeBytes: number }[]
+  /** `auto`: allowed automatically (review lite), so the team can flag it. */
+  unlocked: { id: string; title: string; filename: string; contentType: string; sizeBytes: number; auto?: boolean }[]
+  /** The facts the report turned up that stand. */
+  facts?: { id: string; text: string; auto: boolean }[]
   seen: boolean
 }
 
@@ -438,6 +547,8 @@ export interface ReviewResult {
   completedAt: string
   accepted: string[]
   denied: string[]
+  /** Each fact; `auto` ones were decided automatically (review lite) and can be flagged. */
+  items?: { id: string; text: string; accepted: boolean; auto: boolean }[]
   /** Whether this student has opened the results. */
   seen: boolean
 }
@@ -477,6 +588,8 @@ export interface CaseWorkspace {
     phase: CasePhase
     instructorNote: string
     parties?: CaseParties
+    /** Leaving it out means the instructor reviews everything. */
+    reviewMode?: ReviewMode
   }
   team: MyCase['team']
   world: MyCase['world']
@@ -647,6 +760,8 @@ export interface TeamSubpoena {
   response: string | null
   respondedAt: string | null
   documents: ProducedDocument[]
+  /** Answered automatically (review lite), so the team can flag or appeal it. */
+  auto?: boolean
   /** Whether this student has read the answer. */
   seen: boolean
 }
@@ -1023,7 +1138,23 @@ export interface CourseService {
   decideFact(courseId: string, reviewId: string, factId: string, decision: FactDecision): Promise<InterviewReview>
   /** Allows (or not) the team to have a case file the investigator found. */
   decideDocument(courseId: string, reviewId: string, materialId: string, decision: DocumentDecision): Promise<InterviewReview>
+  /** Sends on a report with nothing to rule on; everything else finishes once ruled. */
   completeReview(courseId: string, reviewId: string): Promise<InterviewReview>
+  /** Everything waiting on the Review page. */
+  listReviewQueue(courseId: string): Promise<ReviewQueue>
+  /** Rules on every fact in a group, each for its own world (_world) or for every world (_case). */
+  decideFactGroup(courseId: string, groupId: string, decision: FactDecision): Promise<void>
+  /** Sends a group's facts back to their reviews, to rule on one by one. */
+  ungroupFacts(courseId: string, groupId: string): Promise<void>
+  resolveFlag(courseId: string, flagId: string, resolution: FlagResolution): Promise<void>
+  getCaseFacts(courseId: string, caseId: string): Promise<CaseFacts>
+  /** Has the AI read the facts from the case files again. */
+  refreshCaseFacts(courseId: string, caseId: string): Promise<CaseFacts>
+  setReviewMode(courseId: string, caseId: string, mode: ReviewMode): Promise<CourseCase>
+  /** The student's team's flags, with the instructor's answers. */
+  listMyFlags(courseId: string, caseId: string): Promise<TeamFlag[]>
+  raiseFlag(courseId: string, caseId: string, input: FlagInput): Promise<TeamFlag[]>
+  markFlagsSeen(courseId: string, caseId: string): Promise<void>
   retryReview(courseId: string, reviewId: string): Promise<InterviewReview>
   getReviewTranscript(courseId: string, reviewId: string): Promise<ReviewTranscript>
   /** One of the student's team's completed reviews, with what rests on denied facts struck out. */

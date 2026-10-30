@@ -2,68 +2,14 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { modelFor } from '../ai/models.ts'
 import type { FactsClient } from '../witness/newFacts.ts'
 
-// Two AI steps for the instructor's review: the facts in the case files (the
-// top of their running list of facts), and which pending new facts are alike
+// The AI step for the instructor's review: which pending new facts are alike
 // enough to rule on together.
-
-export const MAX_FILE_FACTS = 40
-
-export interface FileFactsInput {
-  caseName: string
-  documents: { title: string; content: string }[]
-}
-
-const FILE_FACTS_TOOL = 'report_case_facts'
-
-const FILE_FACTS_INSTRUCTIONS = `You help a law instructor run a practice case. Read the case files below and list the key facts they establish, for the instructor's quick reference while reviewing students' work.
-
-- One short sentence per fact, specific (names, dates, amounts, places), and making sense on its own.
-- Cover what matters to the dispute: what happened, who was involved, the timeline, injuries or losses, and what each document shows.
-- Only what the files say. Don't infer, argue, or add opinions.
-- At most ${MAX_FILE_FACTS} facts, in a sensible order (roughly chronological).
-
-Give your answer by calling the ${FILE_FACTS_TOOL} tool exactly once, and write nothing else.`
-
-const documentsBlock = (documents: FileFactsInput['documents']) =>
-  documents.map((d) => `<document title="${d.title}">\n${d.content.trim()}\n</document>`).join('\n')
-
-export function buildFileFactsRequest(input: FileFactsInput, model = modelFor('review')): Anthropic.Messages.MessageCreateParamsNonStreaming {
-  return {
-    model,
-    max_tokens: 4000,
-    system: FILE_FACTS_INSTRUCTIONS,
-    tools: [
-      {
-        name: FILE_FACTS_TOOL,
-        description: 'Report the key facts in the case files.',
-        input_schema: {
-          type: 'object',
-          properties: { facts: { type: 'array', items: { type: 'string' } } },
-          required: ['facts'],
-        },
-      },
-    ],
-    // As in newFacts.ts: some models refuse a forced tool call, so the instructions ask for it.
-    tool_choice: { type: 'auto' },
-    messages: [{ role: 'user', content: `Case: ${input.caseName}\n\n<case_documents>\n${documentsBlock(input.documents)}\n</case_documents>` }],
-  }
-}
 
 function toolInput(response: Anthropic.Messages.Message, name: string) {
   const call = response.content.find(
     (block): block is Anthropic.Messages.ToolUseBlock => block.type === 'tool_use' && block.name === name,
   )
   return (call?.input ?? null) as Record<string, unknown> | null
-}
-
-/** The key facts in the case files. */
-export async function summarizeCaseFacts(client: FactsClient, input: FileFactsInput): Promise<string[]> {
-  const value = toolInput(await client.messages.create(buildFileFactsRequest(input)), FILE_FACTS_TOOL)
-  if (!Array.isArray(value?.facts)) throw new Error('The case file summary came back without a list of facts.')
-  return value.facts
-    .map((f) => (typeof f === 'string' ? f.trim() : ''))
-    .filter(Boolean)
-    .slice(0, MAX_FILE_FACTS)
 }
 
 // Grouping ---------------------------------------------------------------------

@@ -1,24 +1,19 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import type { CaseFacts, CourseCase, ReviewMode, RuledFact, WorldFacts } from '../../courses/types'
 import { ROLE_LABEL, worldLabel } from '../../courses/worldLabel'
 
-/** How often the panel checks back while the AI reads the case files. */
-const POLL_MS = 5000
-
-const MODE_LABEL: Record<ReviewMode, string> = { all: 'Review everything', lite: 'Review lite' }
+/** What the Review lite switch does, on and off. */
 const MODE_HELP: Record<ReviewMode, string> = {
-  all: 'Every new fact, file, and subpoena response waits for you.',
-  lite: 'The AI’s calls stand at once, for the team’s world only. You see what students flag.',
+  all: 'Off: every new fact, file, and subpoena response waits for you.',
+  lite: 'On: the AI’s calls stand at once, for the team’s world only. You see what students flag.',
 }
 
 /**
- * The instructor's running list of facts for one case, beside the review
- * queue: what the case files say, the important facts for each side, what's
- * been ruled for every world, and a card for each world. Also where the
- * case's review mode is switched. `version` changes after each ruling, so the
- * list catches up.
+ * The instructor's running list of new facts for one case, beside the review
+ * queue: what's been ruled for every world, and a card for each world. Also
+ * where the case's Review lite switch is. `version` changes after each
+ * ruling, so the list catches up.
  */
 export function FactsPanel({
   courseId,
@@ -56,18 +51,6 @@ export function FactsPanel({
     }
   }, [service, courseId, caseId, version])
 
-  const reading = facts?.fileFacts.status === 'working'
-  useEffect(() => {
-    if (!reading) return
-    const timer = setInterval(() => {
-      service
-        .getCaseFacts(courseId, caseId)
-        .then(setFacts)
-        .catch(() => {}) // the next tick tries again
-    }, POLL_MS)
-    return () => clearInterval(timer)
-  }, [service, courseId, caseId, reading])
-
   async function act(run: () => Promise<void>) {
     setBusy(true)
     setError(null)
@@ -82,9 +65,9 @@ export function FactsPanel({
 
   if (!courseCase) return null
   return (
-    <aside className="facts-panel" aria-label="Facts">
+    <aside className="facts-panel" aria-label="New facts">
       <div className="facts-panel-head">
-        <h2>Facts</h2>
+        <h2>New facts</h2>
         {cases.length > 1 && (
           <label className="facts-case">
             <span className="visually-hidden">Case</span>
@@ -100,23 +83,25 @@ export function FactsPanel({
         {cases.length === 1 && <p className="ws-eyebrow">{courseCase.title}</p>}
       </div>
 
-      <div className="review-mode" role="group" aria-label={`How to review ${courseCase.title}`}>
-        {(['all', 'lite'] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            className="review-mode-option"
-            aria-pressed={mode === m}
-            disabled={busy}
-            onClick={() =>
-              mode !== m && act(async () => onCaseUpdate(await service.setReviewMode(courseId, courseCase.id, m)))
-            }
-          >
-            {MODE_LABEL[m]}
-          </button>
-        ))}
-      </div>
-      <p className="facts-help">{MODE_HELP[mode]}</p>
+      {/* A setting for the case, switched on or off. */}
+      <label className="review-lite">
+        <span>
+          <strong>Review lite</strong>
+          <small className="facts-help">{MODE_HELP[mode]}</small>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          className="switch"
+          checked={mode === 'lite'}
+          disabled={busy}
+          onChange={(e) => {
+            const next: ReviewMode = e.target.checked ? 'lite' : 'all'
+            void act(async () => onCaseUpdate(await service.setReviewMode(courseId, courseCase.id, next)))
+          }}
+          aria-label={`Review lite for ${courseCase.title}`}
+        />
+      </label>
 
       {error && (
         <p className="form-error" role="alert">
@@ -127,39 +112,6 @@ export function FactsPanel({
         !error && <p className="muted">Loading facts…</p>
       ) : (
         <>
-          <section className="facts-section" aria-label="From the case files">
-            <div className="facts-section-head">
-              <h3>From the case files</h3>
-              <button
-                type="button"
-                className="facts-refresh"
-                aria-label="Read the case files again"
-                title="Read the case files again"
-                disabled={busy || reading}
-                onClick={() => act(async () => setFacts(await service.refreshCaseFacts(courseId, caseId)))}
-              >
-                <RefreshCw aria-hidden="true" />
-              </button>
-            </div>
-            {reading ? (
-              <p className="muted" role="status">
-                Reading the case files…
-              </p>
-            ) : facts.fileFacts.status === 'failed' ? (
-              <p className="form-error">Couldn&rsquo;t read the case files. Try again.</p>
-            ) : (
-              <FactList facts={facts.fileFacts.facts} empty="No case files with text yet." />
-            )}
-          </section>
-
-          <section className="facts-section" aria-label="Important facts">
-            <h3>Important facts</h3>
-            <h4>Plaintiff</h4>
-            <FactList facts={facts.important.plaintiff} empty="None yet." />
-            <h4>Defense</h4>
-            <FactList facts={facts.important.defense} empty="None yet." />
-          </section>
-
           <section className="facts-section" aria-label="Ruled for all worlds">
             <h3>Ruled for all worlds</h3>
             <RuledLists accepted={facts.allWorlds.accepted} denied={facts.allWorlds.denied} />
@@ -186,18 +138,6 @@ const worldTitle = (w: WorldFacts) =>
   `World ${worldLabel(w.number)}${w.teams.length ? ' · ' : ''}${w.teams
     .map((t) => `Team ${t.number} (${ROLE_LABEL[t.side]})`)
     .join(' v. ')}`
-
-function FactList({ facts, empty }: { facts: string[]; empty: string }) {
-  return facts.length === 0 ? (
-    <p className="muted facts-empty">{empty}</p>
-  ) : (
-    <ul className="facts-list">
-      {facts.map((f, i) => (
-        <li key={i}>{f}</li>
-      ))}
-    </ul>
-  )
-}
 
 function RuledLists({ accepted, denied }: { accepted: RuledFact[]; denied: RuledFact[] }) {
   if (!accepted.length && !denied.length) return <p className="muted facts-empty">Nothing ruled yet.</p>

@@ -37,8 +37,6 @@ const review: InterviewReview = {
 }
 
 const facts: CaseFacts = {
-  fileFacts: { status: 'ready', facts: [] },
-  important: { plaintiff: [], defense: [] },
   allWorlds: { accepted: [], denied: [] },
   worlds: [],
 }
@@ -303,31 +301,34 @@ describe('ReviewPage: flags and the facts panel', () => {
     expect(service.resolveFlag).toHaveBeenCalledWith('c1', 'fl1', { decision: 'deny_world' })
   })
 
-  it('lists the case’s facts, and switches it to review lite', async () => {
+  it('lists the case’s new facts, and switches review lite on', async () => {
     const courseCase = { id: 'k1', title: 'Rivera v. Thrill Park', reviewMode: 'all' } as CourseCase
     const setReviewMode = vi.fn().mockResolvedValue({ ...courseCase, reviewMode: 'lite' })
     const { user } = renderPage({
       listCases: vi.fn().mockResolvedValue([courseCase]),
       getCaseFacts: vi.fn().mockResolvedValue({
         ...facts,
-        fileFacts: { status: 'ready', facts: ['The ride stopped at 3:02.'] },
-        important: { plaintiff: ['The lap bar light was red.'], defense: ['It passed inspection.'] },
         allWorlds: { accepted: [{ text: 'Torres was on break.', source: 'Interview of Elena Torres · Team 1', auto: false }], denied: [] },
         worlds: [{ matchupId: 'mu1', number: 1, teams: [{ number: 1, side: 'plaintiff' }, { number: 2, side: 'defense' }], accepted: [], denied: [] }],
       }),
       setReviewMode,
     })
 
-    const panel = await screen.findByRole('complementary', { name: 'Facts' })
-    expect(await within(panel).findByText('The ride stopped at 3:02.')).toBeInTheDocument()
-    expect(panel).toHaveTextContent('The lap bar light was red.')
-    expect(panel).toHaveTextContent('Torres was on break.')
+    const panel = await screen.findByRole('complementary', { name: 'New facts' })
+    expect(within(panel).getByRole('heading', { name: 'New facts' })).toBeInTheDocument()
+    expect(await within(panel).findByText('Torres was on break.')).toBeInTheDocument()
     expect(panel).toHaveTextContent('World A · Team 1 (Plaintiff) v. Team 2 (Defendant)')
-    expect(within(panel).getByRole('button', { name: 'Review everything' })).toHaveAttribute('aria-pressed', 'true')
+    // Only the new facts: not what the case files say, nor the important facts.
+    expect(panel).not.toHaveTextContent(/From the case files|Important facts/)
 
-    await user.click(within(panel).getByRole('button', { name: 'Review lite' }))
+    // Review lite is a switch: off, then turned on.
+    const lite = within(panel).getByRole('switch', { name: 'Review lite for Rivera v. Thrill Park' })
+    expect(lite).not.toBeChecked()
+    expect(panel).toHaveTextContent('Off: every new fact, file, and subpoena response waits for you.')
+    await user.click(lite)
     expect(setReviewMode).toHaveBeenCalledWith('c1', 'k1', 'lite')
-    expect(within(panel).getByRole('button', { name: 'Review lite' })).toHaveAttribute('aria-pressed', 'true')
+    expect(lite).toBeChecked()
+    expect(panel).toHaveTextContent('On: the AI’s calls stand at once')
   })
 })
 

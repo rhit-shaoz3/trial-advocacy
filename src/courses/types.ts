@@ -489,11 +489,8 @@ export interface WorldFacts {
   denied: RuledFact[]
 }
 
-/** A case's running list of facts, for the instructor. */
+/** A case's running list of new facts, for the instructor: what's ruled for all worlds, and in each. */
 export interface CaseFacts {
-  /** What the AI read from the instructor's case files. */
-  fileFacts: { status: 'none' | 'working' | 'ready' | 'failed'; facts: string[] }
-  important: ImportantFacts
   allWorlds: { accepted: RuledFact[]; denied: RuledFact[] }
   worlds: WorldFacts[]
 }
@@ -1148,8 +1145,6 @@ export interface CourseService {
   ungroupFacts(courseId: string, groupId: string): Promise<void>
   resolveFlag(courseId: string, flagId: string, resolution: FlagResolution): Promise<void>
   getCaseFacts(courseId: string, caseId: string): Promise<CaseFacts>
-  /** Has the AI read the facts from the case files again. */
-  refreshCaseFacts(courseId: string, caseId: string): Promise<CaseFacts>
   setReviewMode(courseId: string, caseId: string, mode: ReviewMode): Promise<CourseCase>
   /** The student's team's flags, with the instructor's answers. */
   listMyFlags(courseId: string, caseId: string): Promise<TeamFlag[]>

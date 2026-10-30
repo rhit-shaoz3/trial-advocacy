@@ -4,7 +4,6 @@ import { transcriptionsSettled } from '../courses/materialText.ts'
 import { subpoenasSettled } from '../exchange/subpoenas.ts'
 import { investigationsSettled } from '../investigator/requests.ts'
 import { reviewsSettled } from '../reviews/reviews.ts'
-import { fileFactsSettled } from '../reviews/caseFacts.ts'
 import { groupingSettled } from '../reviews/grouping.ts'
 import { witnessSuggestionsSettled } from '../witness/suggestions.ts'
 
@@ -25,7 +24,6 @@ beforeEach(() => {
   // Edits nothing; tests that check the edit swap in their own.
   ai.finalizeReport = async (input) => input.body
   ai.suggestWitnesses = async () => []
-  ai.summarizeCaseFacts = async () => []
   ai.groupFacts = async () => []
   ai.respondToSubpoena = async () => {
     throw new Error('This test did not set up a fake subpoena recipient.')
@@ -40,6 +38,5 @@ afterEach(async () => {
   await witnessSuggestionsSettled()
   await subpoenasSettled()
   await groupingSettled()
-  await fileFactsSettled()
   Object.assign(ai, real)
 })

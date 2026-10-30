@@ -710,13 +710,10 @@ UPDATE case_materials SET text_status = 'pending', text_error = NULL
  WHERE text_status = 'none'
    AND content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
--- The facts the AI read from the instructor's case files, for the instructor's
--- running list of facts. `key` is the files they were read from (ids and text
--- lengths), so they're read again when the files change.
-ALTER TABLE cases ADD COLUMN IF NOT EXISTS file_facts text[] NOT NULL DEFAULT '{}';
-ALTER TABLE cases ADD COLUMN IF NOT EXISTS file_facts_key text;
-ALTER TABLE cases ADD COLUMN IF NOT EXISTS file_facts_status text NOT NULL DEFAULT 'none'
-  CHECK (file_facts_status IN ('none', 'working', 'ready', 'failed'));
+-- The review panel no longer lists the facts the AI read from the case files.
+ALTER TABLE cases DROP COLUMN IF EXISTS file_facts;
+ALTER TABLE cases DROP COLUMN IF EXISTS file_facts_key;
+ALTER TABLE cases DROP COLUMN IF EXISTS file_facts_status;
 
 -- How the instructor reviews the case. all: every new fact, file, and subpoena
 -- response waits for the instructor. lite: the AI's calls stand at once (for

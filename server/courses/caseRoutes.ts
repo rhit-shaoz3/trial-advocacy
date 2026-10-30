@@ -36,7 +36,7 @@ import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
 import { finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 import { duplicateCase, shareCase } from './caseCopy.ts'
-import { caseFacts, refreshFileFacts } from '../reviews/caseFacts.ts'
+import { caseFacts } from '../reviews/caseFacts.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -251,14 +251,8 @@ caseRouter.put('/review-mode', async (req, res) => {
   res.json({ case: await setReviewMode(req.course!.id, req.courseCase!.id, mode as ReviewMode) })
 })
 
-/** The case's running list of facts: from the case files, important facts, and what's settled for all worlds and each one. */
+/** The case's running list of new facts: what's settled for all worlds and each one. */
 caseRouter.get('/facts', async (req, res) => {
-  res.json({ facts: await caseFacts(req.courseCase!) })
-})
-
-/** Reads the facts from the case files again. */
-caseRouter.post('/facts/refresh', async (req, res) => {
-  refreshFileFacts(req.courseCase!.id, { force: true })
   res.json({ facts: await caseFacts(req.courseCase!) })
 })
 

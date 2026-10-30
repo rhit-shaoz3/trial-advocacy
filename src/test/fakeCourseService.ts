@@ -112,12 +112,9 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     ungroupFacts: vi.fn().mockResolvedValue(undefined),
     resolveFlag: vi.fn().mockResolvedValue(undefined),
     getCaseFacts: vi.fn().mockResolvedValue({
-      fileFacts: { status: 'ready', facts: [] },
-      important: { plaintiff: [], defense: [] },
       allWorlds: { accepted: [], denied: [] },
       worlds: [],
     }),
-    refreshCaseFacts: vi.fn(),
     setReviewMode: vi.fn(),
     listMyFlags: vi.fn().mockResolvedValue([]),
     raiseFlag: vi.fn().mockResolvedValue([]),

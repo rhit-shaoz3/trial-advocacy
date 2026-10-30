@@ -6,7 +6,6 @@ import { pool } from '../db/pool.ts'
 import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 import type { NewFactsInput } from '../witness/newFacts.ts'
 import type { WitnessProfile } from '../witness/prompt.ts'
-import { fileFactsSettled } from './caseFacts.ts'
 import type { PendingFact } from './factsAi.ts'
 import { groupingSettled } from './grouping.ts'
 import { reviewsSettled } from './reviews.ts'
@@ -181,16 +180,7 @@ describe('grouping similar facts', () => {
 })
 
 describe('the running list of facts', () => {
-  it('lists the case files’ facts, the important facts, and what stands for all worlds and each', async () => {
-    let read = 0
-    ai.summarizeCaseFacts = async (input) => {
-      read++
-      return input.documents.map((d) => `${d.title} says something.`)
-    }
-    const first = (await prof.get(`${caseUrl()}/facts`)).body.facts
-    expect(first.fileFacts.status).toBe('working')
-    await fileFactsSettled()
-
+  it('lists the new facts that stand for all worlds and for each', async () => {
     await interviewAndEnd(ada, ['World fact.', 'Case fact.'])
     const [review] = (await prof.get(reviewsUrl())).body.reviews
     await decide(review.id, review.facts[0].id, 'accept_world')
@@ -198,8 +188,6 @@ describe('the running list of facts', () => {
 
     const { facts } = (await prof.get(`${caseUrl()}/facts`)).body
     expect(facts).toEqual({
-      fileFacts: { status: 'ready', facts: ['Accident log says something.', 'Torres deposition says something.'] },
-      important: sampleFacts,
       allWorlds: { accepted: [], denied: [{ text: 'Case fact.', source: 'Interview of Elena Torres · Team 1', auto: false }] },
       worlds: [
         {
@@ -215,11 +203,6 @@ describe('the running list of facts', () => {
         { matchupId: expect.any(String), number: 2, teams: expect.any(Array), accepted: [], denied: [] },
       ],
     })
-    // Read once; again only when the files change, or on request.
-    expect(read).toBe(1)
-    await prof.post(`${caseUrl()}/facts/refresh`)
-    await fileFactsSettled()
-    expect(read).toBe(2)
     expect((await ada.get(`${caseUrl()}/facts`)).status).toBe(404)
   })
 })

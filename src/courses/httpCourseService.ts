@@ -618,10 +618,6 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${casePath(courseId, caseId)}/facts`)).facts
   },
 
-  async refreshCaseFacts(courseId, caseId) {
-    return (await apiRequest(`${casePath(courseId, caseId)}/facts/refresh`, { method: 'POST' })).facts
-  },
-
   async setReviewMode(courseId, caseId, reviewMode) {
     return (await apiRequest(`${casePath(courseId, caseId)}/review-mode`, { method: 'PUT', body: JSON.stringify({ reviewMode }) })).case
   },

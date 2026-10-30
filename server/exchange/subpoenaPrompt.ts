@@ -90,8 +90,7 @@ const asList = (facts: string[]) => facts.map((fact) => ({ fact }))
 
 /** How a request's kind reads in the prompt. */
 const TYPE_TEXT: Record<SubpoenaType, string> = {
-  documents: 'documents',
-  esi: 'electronically stored information',
+  documents: 'physical documents or electronically stored information',
   tangible_things: 'tangible things',
   inspection: 'inspection of premises',
 }
@@ -131,7 +130,6 @@ export function buildSubpoenaMessage(ctx: SubpoenaContext) {
     recipient_description: ctx.recipientDescription || 'Not stated.',
     recipient_is_party: sameName(ctx.recipient, names.plaintiff) || sameName(ctx.recipient, names.defendant),
     requests_documents: ctx.requestType === 'documents',
-    requests_esi: ctx.requestType === 'esi',
     requests_tangible_things: ctx.requestType === 'tangible_things',
     requests_inspection: ctx.requestType === 'inspection',
     request_text: ctx.records.trim(),

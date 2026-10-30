@@ -21,6 +21,8 @@ import { caseInitials, greeting, longDate, timeAgo } from './format'
 import { StatCard } from './StatCard'
 import type { AttentionItem, AttentionTarget, CaseMonitor, DeadlineProgress, InstructorActivity } from './types'
 import { useWorkspace } from './useWorkspace'
+import { usePageTour } from '../tour/tourContext'
+import { INSTRUCTOR_COURSE } from '../tour/tours'
 import './workspace.css'
 
 
@@ -54,6 +56,7 @@ export function InstructorDashboard({ now = new Date() }: { now?: Date }) {
   const { user } = useAuth()
   const { home, search } = useWorkspace()
   const { stats, cases, attention, deadlines, activity } = home.instructor!
+  usePageTour(INSTRUCTOR_COURSE)
   const base = `/courses/${home.course.id}`
   const firstName = user?.name.split(/\s+/)[0] ?? ''
   const hrefFor = (target: AttentionTarget) =>

@@ -63,8 +63,8 @@ export const PALETTE_INFO: Record<
   },
   radioactive: {
     label: 'Radioactive',
-    description: 'Office green and lime on a chartreuse glow, with hot pink and electric cyan',
-    light: { sidebar: '#196a0b', page: '#f2ffbf', card: '#ffffff', button: '#196a0b' },
+    description: 'Office green and lime on a pale green-white, with hot pink and electric cyan',
+    light: { sidebar: '#196a0b', page: '#fafdf4', card: '#ffffff', button: '#196a0b' },
     dark: { sidebar: '#030702', page: '#050505', card: '#171717', button: '#196a0b' },
     accents: ['#ff2e93', '#00e5ff'],
   },

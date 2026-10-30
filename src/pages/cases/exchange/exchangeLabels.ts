@@ -30,13 +30,12 @@ export const partSummary = (part: PartSettings, unit: string) =>
 
 /** Short names for what subpoenas can ask for, for summaries. */
 export const SUBPOENA_TYPE_SHORT: Record<SubpoenaType, string> = {
-  documents: 'documents',
-  esi: 'ESI',
+  documents: 'documents/ESI',
   tangible_things: 'tangible things',
   inspection: 'inspections',
 }
 
-/** "3 subpoenas per team · documents and ESI only · AI feedback: 2 rounds" (no deadline: the instructor answers them). */
+/** "3 subpoenas per team · documents/ESI and tangible things only · AI feedback: 2 rounds" (no deadline: the instructor answers them). */
 export function subpoenaSummary(part: SubpoenaSettings) {
   const base = `${part.limit} subpoena${part.limit === 1 ? '' : 's'} per team`
   const ai = aiFeedbackSummary(part.aiFeedback)

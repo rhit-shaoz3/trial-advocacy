@@ -1,8 +1,8 @@
-/* Notifications in the upper right corner (Toasts). */
+/* Notifications in the upper right corner (Toasts), below the tour button. */
 
 .toasts {
   position: fixed;
-  top: 1rem;
+  top: 4rem;
   right: 1.25rem;
   z-index: 40;
   display: grid;

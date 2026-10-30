@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AuthContext } from '../auth/AuthContext'
 import { MarkedTranscript } from '../components/MarkedTranscript'
 import type { CaseTab } from './caseTabs'
@@ -70,6 +70,7 @@ import { ExchangePanel } from './exchange/ExchangePanel'
 import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
+import { useTourNavigator } from '../tour/tourContext'
 import './caseWorkspace.css'
 
 type Tab = CaseTab
@@ -219,6 +220,13 @@ export function CaseWorkspaceView({
     { id: 'tasks', label: 'Tasks', count: openTasks.length },
     ...(reviews ? [{ id: 'reviews' as const, label: 'Reviews', count: unseen }] : []),
   ]
+  // Guided tours open the tab a step is about (not in the instructor's preview, which has none).
+  const tabIds = tabs.map((t) => t.id).join(' ')
+  const tourNavigator = useMemo(
+    () => (workspace.preview ? null : { selectTab: (id: string) => tabIds.split(' ').includes(id) && setTab(id as Tab) }),
+    [workspace.preview, tabIds],
+  )
+  useTourNavigator(tourNavigator)
 
   return (
     <div className="cw">

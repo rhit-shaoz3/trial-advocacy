@@ -8,6 +8,8 @@ import { useCourseService } from '../../courses/CourseServiceContext'
 import type { CalendarEventInput, CalendarItem, CalendarKind } from '../../courses/types'
 import { useWorkspace } from '../../workspace/useWorkspace'
 import { dayKey, dayTitle, monthGrid, monthTitle } from './calendarDates'
+import { usePageTour } from '../../tour/tourContext'
+import { INSTRUCTOR_CALENDAR, STUDENT_CALENDAR } from '../../tour/tours'
 import './CalendarPage.css'
 
 const KIND_LABEL: Record<CalendarKind, string> = {
@@ -48,6 +50,7 @@ export function CalendarPage() {
   const [month, setMonth] = useState(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() }))
   const [adding, setAdding] = useState<string | null>(null)
   const [open, setOpen] = useState<CalendarItem | null>(null)
+  usePageTour(instructor ? INSTRUCTOR_CALENDAR : STUDENT_CALENDAR, { ready: items !== null })
 
   useEffect(() => {
     let cancelled = false

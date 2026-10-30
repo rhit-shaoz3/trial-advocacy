@@ -47,13 +47,25 @@
     gap: 0.25rem;
   }
 
-  .ws-sidebar .theme-toggle {
+  .ws-sidebar .theme-toggle,
+  .ws-corner .theme-toggle {
     margin: 0;
     padding: 0.4rem;
     border-color: transparent;
   }
 
-  .ws-sidebar .theme-toggle span {
+  /* On the navy top bar, like the buttons beside it. */
+  .ws-corner .theme-toggle {
+    background: transparent;
+    color: var(--on-brand-muted);
+  }
+
+  .ws-corner .theme-toggle:hover {
+    color: var(--on-brand);
+  }
+
+  .ws-sidebar .theme-toggle span,
+  .ws-corner .theme-toggle span {
     position: absolute;
     width: 1px;
     height: 1px;

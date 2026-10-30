@@ -207,6 +207,113 @@ a {
   }
 }
 
+/*
+ * Dropdowns, checkboxes, and radio buttons in the theme's colours rather than
+ * the browser's. `html` lifts these over a form's own `input` and `select`
+ * rules (sizes, padding, background), which would otherwise undo them; the
+ * form still sets a dropdown's padding, border, and colours.
+ */
+html select:not([multiple]):not([size]) {
+  padding-right: 2.2rem;
+  /* A chevron drawn in the theme's muted ink. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ws-muted) 50%),
+    linear-gradient(135deg, var(--ws-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.05rem) 52%,
+    calc(100% - 0.7rem) 52%;
+  background-size: 0.35rem 0.35rem;
+  background-repeat: no-repeat;
+  appearance: none;
+  cursor: pointer;
+}
+
+:where(select) {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.45rem;
+  background-color: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+}
+
+html select:hover:not(:disabled) {
+  border-color: var(--ws-muted);
+}
+
+html select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+html select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* The open list, where the browser lets it be styled. */
+select option {
+  background: var(--surface);
+  color: var(--ws-text);
+}
+
+html input[type='checkbox']:not(.switch),
+html input[type='radio'] {
+  flex: none;
+  box-sizing: border-box;
+  width: 1.1rem;
+  height: 1.1rem;
+  min-height: 0;
+  padding: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.3rem;
+  background: var(--surface) center / 0.75rem no-repeat;
+  vertical-align: -0.2em;
+  appearance: none;
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s;
+}
+
+html input[type='radio'] {
+  border-radius: 50%;
+}
+
+html input[type='checkbox']:not(.switch):hover:not(:disabled),
+html input[type='radio']:hover:not(:disabled) {
+  border-color: var(--button);
+}
+
+html input[type='checkbox']:not(.switch):checked {
+  border-color: var(--button);
+  background-color: var(--button);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5'/%3E%3C/svg%3E");
+}
+
+html input[type='checkbox']:not(.switch):indeterminate {
+  border-color: var(--button);
+  background-color: var(--button);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' stroke='white' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 6h6'/%3E%3C/svg%3E");
+}
+
+/* A radio button: a ring in the button colour, with the page showing through. */
+html input[type='radio']:checked {
+  border: 0.32rem solid var(--button);
+}
+
+html input[type='checkbox']:not(.switch):focus-visible,
+html input[type='radio']:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+html input[type='checkbox']:not(.switch):disabled,
+html input[type='radio']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* A checkbox drawn as a small switch */
 .switch {
   position: relative;

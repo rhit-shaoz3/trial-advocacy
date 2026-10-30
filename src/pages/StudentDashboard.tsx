@@ -4,6 +4,8 @@ import { CourseGrid } from '../components/CourseGrid'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { Course } from '../courses/types'
 import { longDate } from '../workspace/format'
+import { usePageTour } from '../tour/tourContext'
+import { STUDENT_HOME } from '../tour/tours'
 import './Dashboard.css'
 
 export function StudentDashboard() {
@@ -11,6 +13,7 @@ export function StudentDashboard() {
   const [courses, setCourses] = useState<Course[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [joinOpen, setJoinOpen] = useState(false)
+  usePageTour(STUDENT_HOME, { ready: courses !== null })
 
   useEffect(() => {
     let cancelled = false
@@ -38,7 +41,7 @@ export function StudentDashboard() {
           <p className="muted">Open a course to see your cases, deadlines, and team activity.</p>
         </div>
         {!joinOpen && (
-          <button type="button" className="btn-primary" onClick={() => setJoinOpen(true)}>
+          <button type="button" className="btn-primary" onClick={() => setJoinOpen(true)} data-tour="enroll">
             Enroll in course
           </button>
         )}

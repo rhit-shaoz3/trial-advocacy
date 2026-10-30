@@ -36,7 +36,7 @@ describe('the subpoena prompt', () => {
         ...context,
         side: 'plaintiff',
         recipient: 'Mercy General',
-        requestType: 'esi',
+        requestType: 'inspection',
         records: 'Bills.',
         documents: context.documents.map((d) => ({ ...d, teamHasAccess: false })),
         worldSubpoenas: [{ recipient: 'X', requestType: 'documents', records: 'Y', responseTitle: 'Z' }],
@@ -73,12 +73,12 @@ describe('the subpoena prompt', () => {
         { recipient: 'Mercy General', requestType: 'documents', records: '1. ER records\n2. Bills', responseTitle: 'Response of Mercy General to subpoena (Team 1)' },
       ],
       otherWorldResponses: [
-        { ref: 'R1', materialId: 'm9', recipient: 'Mercy General', requestType: 'esi', records: '1. ER records, June 2025.', response: 'RESPONSE OF MERCY GENERAL\nMG-000001' },
+        { ref: 'R1', materialId: 'm9', recipient: 'Mercy General', requestType: 'documents', records: '1. ER records, June 2025.', response: 'RESPONSE OF MERCY GENERAL\nMG-000001' },
       ],
     })
-    expect(message).toContain('- To Mercy General (documents), asking: 1. ER records 2. Bills\n  Response: "Response of Mercy General to subpoena (Team 1)"')
+    expect(message).toContain('- To Mercy General (physical documents or electronically stored information), asking: 1. ER records 2. Bills\n  Response: "Response of Mercy General to subpoena (Team 1)"')
     expect(message).toContain(
-      '<earlier_response ref="R1" recipient="Mercy General" type="electronically stored information">\n<request>\n1. ER records, June 2025.\n</request>\n<response>\nRESPONSE OF MERCY GENERAL\nMG-000001\n</response>\n</earlier_response>',
+      '<earlier_response ref="R1" recipient="Mercy General" type="physical documents or electronically stored information">\n<request>\n1. ER records, June 2025.\n</request>\n<response>\nRESPONSE OF MERCY GENERAL\nMG-000001\n</response>\n</earlier_response>',
     )
     expect(message).not.toContain('m9')
   })

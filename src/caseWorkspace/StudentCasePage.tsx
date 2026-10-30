@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../courses/CourseServiceContext'
@@ -20,6 +20,9 @@ import { caseTab } from './caseTabs'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
 import type { DraftActions } from './exchange/useDraft'
 import { FlagsContext, type FlagsContextValue } from './flagsContext'
+import { AuthContext } from '../auth/AuthContext'
+import { usePageTour } from '../tour/tourContext'
+import { phaseTourKey, pickCaseTour } from '../tour/tours'
 
 /** How often the page checks for an investigator report while one is on its way. */
 const INVESTIGATION_POLL_MS = 20000
@@ -46,9 +49,22 @@ export function StudentCasePage() {
   const [reviews, setReviews] = useState<ReviewResult[] | undefined>(undefined)
   const [investigations, setInvestigations] = useState<Investigation[] | undefined>(undefined)
   const [exchange, setExchange] = useState<StudentExchange | null>(null)
+  /** Whether the exchange has loaded (it's null too when not set up), so a tour finds its tab. */
+  const [exchangeLoaded, setExchangeLoaded] = useState(false)
   const [flags, setFlags] = useState<TeamFlag[]>([])
   const flagsMarked = useRef(false)
   const myCasesPath = `/courses/${courseId}/cases${workspace?.search ?? ''}`
+  // The case tour the first time in any case; after that, one per new phase.
+  const user = useContext(AuthContext)?.user
+  const phase = data?.case.phase
+  const status = data?.case.status
+  const caseSeen = Boolean(user?.toursSeen?.['student-case'])
+  const phaseSeen = Boolean(phase && user?.toursSeen?.[phaseTourKey(caseId, phase)])
+  const tours = useMemo(() => {
+    if (!phase || !status) return null
+    return pickCaseTour((key) => (key === 'student-case' ? caseSeen : phaseSeen), caseId, phase, status)
+  }, [caseId, phase, status, caseSeen, phaseSeen])
+  usePageTour(tours?.tour ?? null, { ready: Boolean(data) && exchangeLoaded, startWith: tours?.startWith ?? null })
 
   useEffect(() => {
     let cancelled = false
@@ -71,10 +87,12 @@ export function StudentCasePage() {
       .then((f) => !cancelled && setFlags(f))
       .catch(() => {}) // nor its flags
     setExchange(null)
+    setExchangeLoaded(false)
     service
       .getMyExchange(courseId, caseId)
       .then((e) => !cancelled && setExchange(e))
       .catch(() => {}) // nor its information exchange
+      .finally(() => !cancelled && setExchangeLoaded(true))
     return () => {
       cancelled = true
     }

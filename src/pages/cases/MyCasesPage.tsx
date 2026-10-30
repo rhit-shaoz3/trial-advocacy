@@ -5,6 +5,8 @@ import type { MyCase, MyTeamMember } from '../../courses/types'
 import { sideLabel, worldLabel } from '../../courses/worldLabel'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { CaseStatusBadge } from './CaseStatusBadge'
+import { usePageTour } from '../../tour/tourContext'
+import { STUDENT_CASES } from '../../tour/tours'
 import '../CoursePage.css'
 import './Cases.css'
 
@@ -47,6 +49,7 @@ export function MyCasesPage() {
   const workspace = useOutletContext<WorkspaceContext | undefined>()
   const [cases, setCases] = useState<MyCase[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  usePageTour(STUDENT_CASES, { ready: cases !== null && cases.length > 0 })
 
   useEffect(() => {
     let cancelled = false

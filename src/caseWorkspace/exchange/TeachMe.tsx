@@ -88,10 +88,8 @@ export function TeachMe({
           <h3>What you can ask for</h3>
           <ul className="teach-types">
             <li>
-              <strong>Documents</strong> Paper and scanned records: files, logs, letters, reports.
-            </li>
-            <li>
-              <strong>Electronically stored information (ESI)</strong> Email, texts, databases, video. Say what form you want
+              <strong>Physical documents or electronically stored information (ESI)</strong> Files, logs, letters, and
+              reports, on paper or electronic: email, texts, databases, video. For electronic data, say what form you want
               (native files, PDFs, a spreadsheet); otherwise the recipient picks a reasonably usable one (FRCP 45(e)(1)).
             </li>
             <li>

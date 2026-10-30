@@ -22,6 +22,8 @@ import { DepositionCard, InvestigatorCard } from './PhaseCards'
 import { ExchangeSetupFlow, type ExchangeStep } from './exchange/ExchangeSetupFlow'
 import { ExchangeTab } from './exchange/ExchangeTab'
 import { TeamsSection } from './TeamsSection'
+import { usePageTour } from '../../tour/tourContext'
+import { INSTRUCTOR_CASE } from '../../tour/tours'
 import '../CoursePage.css'
 import './Cases.css'
 
@@ -68,6 +70,8 @@ function CaseDetail() {
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  // Not over the guided setup or the exchange setup: the tour is about the finished page.
+  usePageTour(INSTRUCTOR_CASE, { ready: Boolean(courseCase) && !inSetup && !exchangeStep && !editing })
   const [copying, setCopying] = useState<'duplicate' | 'share' | null>(null)
   // Bumped whenever something the launch checklist depends on changes.
   const [checksKey, setChecksKey] = useState(0)

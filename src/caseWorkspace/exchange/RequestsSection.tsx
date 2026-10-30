@@ -188,7 +188,7 @@ export function RequestsSection({
             <p className="cw-section-sub">{copy.about}</p>
           </div>
           <div className="ex-head-actions">
-            <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach}>
+            <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach} data-tour="ex-teach">
               <BookOpen aria-hidden="true" />
               Teach me
             </button>
@@ -197,6 +197,7 @@ export function RequestsSection({
                 type="button"
                 className="ws-btn ws-btn-primary"
                 disabled={!canWrite}
+                data-tour="ex-write"
                 title={!open ? undefined : part.remaining === 0 ? `Your team has used all ${part.limit} ${copy.many}.` : undefined}
                 onClick={() => setView({ mode: 'compose' })}
               >
@@ -367,7 +368,7 @@ export function SubHead({
         </div>
         <div className="ex-head-actions">
           {aside}
-          <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach}>
+          <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach} data-tour="ex-teach">
             <BookOpen aria-hidden="true" />
             Teach me
           </button>

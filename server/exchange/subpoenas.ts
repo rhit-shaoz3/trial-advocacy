@@ -17,8 +17,8 @@ import type { MentorTag } from './mentorPrompt.ts'
 import { parseSubpoenaResponse, type SubpoenaContext } from './subpoenaPrompt.ts'
 
 // Subpoenas: from the information exchange phase on, a team serves a person or
-// organization (a hospital, a regulator, the ride's maker) for documents, ESI,
-// tangible things, or an inspection of premises. In the background the AI
+// organization (a hospital, a regulator, the ride's maker) for documents (paper or
+// electronic), tangible things, or an inspection of premises. In the background the AI
 // drafts the recipient's response from the whole case file; the instructor
 // reviews it on the Review page and approves it (the existing case files it
 // produces are shared with the team; otherwise the response becomes a case file
@@ -179,9 +179,12 @@ export interface SubpoenaInput {
   justification: string
 }
 
-/** The kind of request: as chosen, or the only one the case allows (the form doesn't ask then). */
+/**
+ * The kind of request: as chosen, or the only one the case allows (the form
+ * doesn't ask then). ESI, once its own kind, is part of documents now.
+ */
 export const subpoenaType = (requestType: string, part: SubpoenaSettings) =>
-  requestType || (part.types.length === 1 ? part.types[0] : '')
+  (requestType === 'esi' ? 'documents' : requestType) || (part.types.length === 1 ? part.types[0] : '')
 
 /**
  * Serves a subpoena, due `part.days` from now, and starts drafting its

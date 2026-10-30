@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { BookOpen, CheckCheck, CircleHelp, Lock, ScrollText, Users } from 'lucide-react'
 import type {
   CaseParties,
@@ -15,6 +15,7 @@ import { RequestsSection } from './RequestsSection'
 import { SubpoenasSection } from './SubpoenasSection'
 import { TeachMe, type TeachTopic } from './TeachMe'
 import type { DraftActions } from './useDraft'
+import { useTourNavigator } from '../../tour/tourContext'
 import './exchange.css'
 
 type Section = 'disclosures' | 'subpoenas' | ExchangeKind
@@ -126,6 +127,19 @@ export function ExchangePanel({
       parts[0]?.id,
   )
   const [teach, setTeach] = useState<TeachTopic | null>(null)
+  // Guided tours open the section a step is about.
+  const sectionIds = parts.map((p) => p.id).join(' ')
+  const tourNavigator = useMemo(
+    () => ({
+      selectSection: (id: string) => {
+        if (!sectionIds.split(' ').includes(id)) return
+        setSection(id as Section)
+        setPendingDraft(undefined)
+      },
+    }),
+    [sectionIds],
+  )
+  useTourNavigator(tourNavigator)
 
   if (parts.length === 0) {
     return (
@@ -143,6 +157,7 @@ export function ExchangePanel({
             key={p.id}
             type="button"
             className="ex-menu-item"
+            data-tour={`ex-menu-${p.id}`}
             aria-current={section === p.id ? 'page' : undefined}
             onClick={() => {
               setSection(p.id)

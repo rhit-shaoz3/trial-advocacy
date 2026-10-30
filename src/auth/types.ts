@@ -11,6 +11,11 @@ export interface User {
   theme: Palette
   /** Their profile picture, or null to show initials. */
   avatarUrl: string | null
+  /**
+   * The guided tours they've been shown: tour key -> when it first started.
+   * The server always sends it; without it, no tour starts on its own.
+   */
+  toursSeen?: Record<string, string>
   createdAt: string
 }
 
@@ -46,4 +51,6 @@ export interface AuthService {
   /** Replaces the profile picture with this (already cropped) PNG or JPEG. */
   uploadAvatar(image: Blob): Promise<User>
   removeAvatar(): Promise<User>
+  /** Remembers that a guided tour was shown (by its key), so it doesn't start on its own again. */
+  markTourSeen?(key: string): Promise<User>
 }

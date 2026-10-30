@@ -210,7 +210,7 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
 
 describe('ExchangePanel: subpoenas', () => {
   const subpoenas: StudentSubpoenas = {
-    types: ['documents', 'esi'],
+    types: ['documents', 'inspection'],
     drafts: [],
     limit: 3,
     days: 14,
@@ -238,7 +238,7 @@ describe('ExchangePanel: subpoenas', () => {
         id: 's2',
         teamNumber: 2,
         recipient: 'Atlas Coaster Co.',
-        requestType: 'esi',
+        requestType: 'inspection',
         records: 'Maintenance logs, 2018–2019.',
         sentAt: '2026-10-29T12:00:00Z',
         seen: false,
@@ -266,7 +266,7 @@ describe('ExchangePanel: subpoenas', () => {
     const notices = screen.getByRole('heading', { name: 'Notices from Team 2' }).closest('section')!
     expect(notices).toHaveTextContent('To Atlas Coaster Co.')
     expect(notices).toHaveTextContent('Maintenance logs, 2018–2019.')
-    expect(notices).toHaveTextContent('Electronically stored information · Served by Team 2')
+    expect(notices).toHaveTextContent('Inspection of premises · Served by Team 2')
     expect(notices).toHaveTextContent('New')
 
     await user.click(screen.getByRole('button', { name: /To Mercy Hospital/ }))
@@ -294,23 +294,23 @@ describe('ExchangePanel: subpoenas', () => {
     const kind = screen.getByLabelText('Type of request')
     expect(within(kind).getAllByRole('option').map((o) => o.textContent)).toEqual([
       'Choose one…',
-      'Physical documents',
-      'Electronically stored information',
+      'Physical documents or electronically stored information',
+      'Inspection of premises',
     ])
-    await user.selectOptions(kind, 'esi')
+    await user.selectOptions(kind, 'documents')
     // The form fills in as they write.
     const form = screen.getByRole('article', { name: 'Subpoena form' })
     expect(form).toHaveTextContent('Elena Ramirez')
     expect(form).toHaveTextContent('Thrillville Parks')
     expect(form).toHaveTextContent('Lincoln Ride Safety Board')
-    expect(form).toHaveTextContent('Electronically stored information')
+    expect(form).toHaveTextContent('Physical documents or electronically stored information')
     expect(form).toHaveTextContent('Inspection reports for Atlas Adventure, 2017–2019.')
     expect(form).toHaveTextContent('Hale & Whitford LLP')
     await user.click(serve)
     expect(onServeSubpoena).toHaveBeenCalledWith({
       recipient: 'Lincoln Ride Safety Board',
       recipientDescription: 'The state agency that inspects rides.',
-      requestType: 'esi',
+      requestType: 'documents',
       records: 'Inspection reports for Atlas Adventure, 2017–2019.',
       justification: 'The board inspected the ride the week before.',
     }, undefined, undefined)

@@ -369,7 +369,7 @@ describe('subpoenas', () => {
     const served = await serve(ada, 'Mercy Hospital')
     expect(served.status).toBe(201)
     expect(served.body.exchange.subpoenas).toMatchObject({
-      types: ['documents', 'esi', 'tangible_things', 'inspection'],
+      types: ['documents', 'tangible_things', 'inspection'],
       limit: 3,
       days: 14,
       used: 1,
@@ -399,9 +399,11 @@ describe('subpoenas', () => {
     const save = (types: unknown) => prof.put(`${caseUrl()}/exchange`).send({ ...SETTINGS, subpoenas: { ...SETTINGS.subpoenas, types } })
     expect((await save([])).status).toBe(400)
     expect((await save(['video'])).status).toBe(400)
-    expect((await save(['inspection', 'esi'])).body.settings.subpoenas.types).toEqual(['esi', 'inspection'])
+    // ESI is part of documents now.
+    expect((await save(['esi'])).status).toBe(400)
+    expect((await save(['inspection', 'tangible_things'])).body.settings.subpoenas.types).toEqual(['tangible_things', 'inspection'])
     await toExchange()
-    expect((await exchange(ada)).subpoenas.types).toEqual(['esi', 'inspection'])
+    expect((await exchange(ada)).subpoenas.types).toEqual(['tangible_things', 'inspection'])
     const refused = await serve(ada, 'Mercy Hospital')
     expect(refused.status).toBe(400)
     expect(refused.body.error).toBe("This case doesn't allow that kind of subpoena.")
@@ -729,7 +731,7 @@ describe('checking with AI', () => {
       mode: 'draft',
       side: 'plaintiff',
       subpoenaRecipient: 'Mercy Hospital (Where Ramirez was treated.)',
-      subpoenaTypes: 'documents',
+      subpoenaTypes: 'physical documents or electronically stored information (ESI)',
       draft: 'ER records for June 10.',
       goal: 'They go to damages, and only the hospital has them.',
     })

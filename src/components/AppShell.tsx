@@ -7,6 +7,7 @@ import { Avatar } from './Avatar'
 import { BrandIcon } from './BrandIcon'
 import './AppShell.css'
 import { ThemeToggle } from '../theme/ThemeToggle'
+import { TourButton } from '../tour/TourButton'
 
 export interface ShellNavItem {
   to: string
@@ -16,6 +17,8 @@ export interface ShellNavItem {
   end?: boolean
   /** A count shown beside the label, e.g. items waiting for review. */
   badge?: number
+  /** Marks the link for guided tours to point at: [data-tour="nav-<tourId>"]. */
+  tourId?: string
 }
 
 /**
@@ -65,8 +68,14 @@ export function AppShell({
 
         <nav aria-label={navLabel}>
           <span className="ws-nav-label">{navHeading}</span>
-          {nav.map(({ to, label, icon: Icon, end, badge }) => (
-            <NavLink key={label} to={to} end={end} aria-label={badge ? `${label}, ${badge} waiting` : undefined}>
+          {nav.map(({ to, label, icon: Icon, end, badge, tourId }) => (
+            <NavLink
+              key={label}
+              to={to}
+              end={end}
+              aria-label={badge ? `${label}, ${badge} waiting` : undefined}
+              data-tour={tourId ? `nav-${tourId}` : undefined}
+            >
               <Icon aria-hidden="true" />
               {label}
               {badge ? <span className="ws-nav-badge">{badge}</span> : null}
@@ -98,7 +107,13 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className="ws-main">{children}</div>
+      <div className="ws-main">
+        {/* The guided tour, in the page's upper right corner. */}
+        <div className="ws-corner">
+          <TourButton />
+        </div>
+        {children}
+      </div>
       {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} />}
     </div>
   )

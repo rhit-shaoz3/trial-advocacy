@@ -58,19 +58,20 @@ export function WorkspaceLayout() {
   const base = `/courses/${courseId}`
   const search = sample ? '?sample' : ''
   const nav: ShellNavItem[] = [
-    { to: `${base}${search}`, label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: `${base}${search}`, label: 'Dashboard', icon: LayoutDashboard, end: true, tourId: 'dashboard' },
     {
       to: `${base}/cases${search}`,
       label: isInstructor ? 'Cases' : 'My cases',
       icon: BriefcaseBusiness,
+      tourId: 'cases',
     },
-    { to: `${base}/calendar${search}`, label: 'Calendar', icon: CalendarDays },
+    { to: `${base}/calendar${search}`, label: 'Calendar', icon: CalendarDays, tourId: 'calendar' },
   ]
   if (isInstructor) {
     // Instructors judge the facts AI witnesses add.
     nav.push(
-      { to: `${base}/review${search}`, label: 'Review', icon: Gavel, badge: home?.reviewCount ?? 0 },
-      { to: `${base}/manage${search}`, label: 'Manage course', icon: Settings },
+      { to: `${base}/review${search}`, label: 'Review', icon: Gavel, badge: home?.reviewCount ?? 0, tourId: 'review' },
+      { to: `${base}/manage${search}`, label: 'Manage course', icon: Settings, tourId: 'manage' },
     )
   }
 

@@ -12,7 +12,7 @@
     recipient_name                    who the subpoena is directed to
     recipient_description             who they are and how they connect to the case
     recipient_is_party                true if the recipient is a party to the case
-    requests_documents, requests_esi, requests_tangible_things, requests_inspection
+    requests_documents, requests_tangible_things, requests_inspection
                                       true for each type the student requested (already limited to
                                       the types the instructor allows)
     request_text                      the subpoena's numbered requests, definitions, date ranges, and
@@ -36,11 +36,8 @@ About the recipient: {{recipient_description}}
 
 It asks for:
 {{#requests_documents}}
-- Documents
+- Physical documents or electronically stored information (ESI)
 {{/requests_documents}}
-{{#requests_esi}}
-- Electronically stored information (ESI)
-{{/requests_esi}}
 {{#requests_tangible_things}}
 - Tangible things
 {{/requests_tangible_things}}

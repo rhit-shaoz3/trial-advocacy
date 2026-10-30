@@ -6,6 +6,8 @@ import type { TaughtCourse } from '../courses/types'
 import { longDate } from '../workspace/format'
 import { CourseForm } from './course/CourseForm'
 import { SharedCases } from './SharedCases'
+import { usePageTour } from '../tour/tourContext'
+import { INSTRUCTOR_HOME } from '../tour/tours'
 import './Dashboard.css'
 
 function pluralize(count: number, noun: string) {
@@ -18,6 +20,7 @@ export function InstructorDashboard() {
   const [courses, setCourses] = useState<TaughtCourse[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  usePageTour(INSTRUCTOR_HOME, { ready: courses !== null })
 
   useEffect(() => {
     let cancelled = false
@@ -39,7 +42,7 @@ export function InstructorDashboard() {
           <p className="muted">Manage rosters and fact patterns, or create a course for a new term.</p>
         </div>
         {!createOpen && (
-          <button type="button" className="btn-primary" onClick={() => setCreateOpen(true)}>
+          <button type="button" className="btn-primary" onClick={() => setCreateOpen(true)} data-tour="create-course">
             Create course
           </button>
         )}

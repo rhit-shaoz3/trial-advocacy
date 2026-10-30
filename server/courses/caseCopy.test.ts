@@ -62,7 +62,7 @@ beforeEach(async () => {
   await prof.put(`${caseUrl()}/investigator`).send({ enabled: true, name: 'Rita Vance', instructions: 'Be terse.' })
   await prof.put(`${caseUrl()}/exchange`).send({
     disclosures: { enabled: true },
-    subpoenas: { enabled: true, limit: 2, days: 10, types: ['esi'] },
+    subpoenas: { enabled: true, limit: 2, days: 10, types: ['inspection'] },
     interrogatories: { enabled: true, limit: 5, days: 30, aiFeedback: { enabled: true, rounds: 4 } },
     rfas: { enabled: false, limit: 3, days: 14, aiFeedback: { enabled: false, rounds: null } },
     firms: { plaintiff: { firm: 'Hale LLP', partner: 'Margaret Hale' }, defense: { firm: 'Stone LLP', partner: 'Ray Stone' } },
@@ -164,7 +164,7 @@ describe('duplicating a case', () => {
     const exchange = (await prof.get(`${copyUrl}/exchange`)).body.settings
     expect(exchange).toMatchObject({
       setupCompletedAt: null,
-      subpoenas: { enabled: true, limit: 2, days: 10, types: ['esi'], aiFeedback: { enabled: true, rounds: 2 } },
+      subpoenas: { enabled: true, limit: 2, days: 10, types: ['inspection'], aiFeedback: { enabled: true, rounds: 2 } },
       interrogatories: { aiFeedback: { enabled: true, rounds: 4 } },
       rfas: { enabled: false, aiFeedback: { enabled: false, rounds: null } },
       firms: { plaintiff: { firm: 'Hale LLP' } },

@@ -10,6 +10,8 @@ import { ImportantFactsField } from './ImportantFactsField'
 import { cleanFacts, missingSide, SIDE_FACT_LABEL, toRows } from './factRows'
 import { titleParties } from '../../courses/worldLabel'
 import { DictationTextarea } from '../../components/Dictation'
+import { SuggestedNote } from '../../components/SuggestedNote'
+import { useCaseSuggestions, useSuggestedField } from './content/caseSuggestions'
 
 /**
  * The case title/summary form, with the most important facts for each side.
@@ -17,6 +19,7 @@ import { DictationTextarea } from '../../components/Dictation'
  * instructor change the status.
  */
 export function CaseForm({
+  courseId = '',
   initial,
   label,
   submitLabel,
@@ -25,6 +28,8 @@ export function CaseForm({
   onCancel,
   children,
 }: {
+  /** The course, for the AI's suggested note to students (edit form only). */
+  courseId?: string
   initial?: CourseCase
   /** Accessible name for the form, e.g. "New case". */
   label: string
@@ -42,7 +47,9 @@ export function CaseForm({
   const [plaintiffName, setPlaintiffName] = useState(initial?.parties?.plaintiff || titleParties(initial?.title).plaintiff)
   const [defendantName, setDefendantName] = useState(initial?.parties?.defendant || titleParties(initial?.title).defendant)
   const [status, setStatus] = useState<CourseCaseStatus>(initial?.status ?? 'draft')
-  const [note, setNote] = useState(initial?.instructorNote ?? '')
+  const suggestions = useCaseSuggestions(courseId, initial?.id ?? '')
+  const noteField = useSuggestedField(initial?.instructorNote ?? '', suggestions?.instructorNote)
+  const note = noteField.value
   const [plaintiffFacts, setPlaintiffFacts] = useState(() => toRows(initial?.importantFacts.plaintiff ?? []))
   const [defenseFacts, setDefenseFacts] = useState(() => toRows(initial?.importantFacts.defense ?? []))
   const [error, setError] = useState<string | null>(null)
@@ -127,11 +134,12 @@ export function CaseForm({
           Note to students (optional)
           <DictationTextarea
             value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Focus on what the inspection log reveals about notice."
+            onChange={(e) => noteField.setValue(e.target.value)}
+            placeholder="What students should focus on in this case"
             maxLength={2000}
             rows={2}
           />
+          {noteField.suggested && <SuggestedNote />}
         </label>
       )}
       <p className="muted case-form-hint">

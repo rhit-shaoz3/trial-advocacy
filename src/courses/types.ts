@@ -505,11 +505,24 @@ export interface CaseWorkspace {
 /** Interrogatories, or requests for admission (RFAs). */
 export type ExchangeKind = 'interrogatories' | 'rfas'
 
-/** One part of the exchange: whether it's included, each team's limit, and the days the other side has to respond. */
+/** Whether teams can check their drafts with the AI mentor, and how many checks one draft gets (null: unlimited). */
+export interface AiFeedbackSettings {
+  enabled: boolean
+  rounds: number | null
+}
+
+/** AI feedback until the instructor changes it: on, with two checks per draft. */
+export const DEFAULT_AI_FEEDBACK: AiFeedbackSettings = { enabled: true, rounds: 2 }
+
+/**
+ * One part of the exchange: whether it's included, each team's limit, the
+ * days the other side has to respond, and its AI feedback.
+ */
 export interface PartSettings {
   enabled: boolean
   limit: number
   days: number
+  aiFeedback: AiFeedbackSettings
 }
 
 /** What a subpoena can ask for (the boxes on the federal form, AO 88B). */
@@ -580,7 +593,7 @@ export interface DisclosurePick {
 export interface ExchangeItem {
   position: number
   text: string
-  /** How many it counts toward the limit: each lettered subpart of an interrogatory counts. */
+  /** How many it counts toward the limit: each lettered subpart or separate question in an interrogatory counts. */
   weight: number
   answer: string | null
   objection: boolean
@@ -601,6 +614,67 @@ export interface ExchangeRequest {
   respondedAt: string | null
   respondedBy: string | null
   items: ExchangeItem[]
+  /** The instructor's view only: each team's last AI check before sending the set, and before answering it. */
+  check?: DiscoveryCheckRecord | null
+  responseCheck?: DiscoveryCheckRecord | null
+}
+
+/** What the discovery mentor (Check with AI) said about a draft. */
+export type CheckTag = 'LOOKS_GOOD' | 'SMALL_EDITS' | 'NEEDS_IMPROVEMENT'
+
+/** A check, as the student sees it right after asking. */
+export interface DiscoveryCheck {
+  id: string
+  tag: CheckTag
+  /** The mentor's feedback, without its tag line. */
+  feedback: string
+  /** Which check of the same draft this is: 1 for the first. */
+  round?: number
+}
+
+/** A check as a draft keeps it: with the key of the draft it checked, to tell when it's been edited since. */
+export type KeyedCheck = DiscoveryCheck & { key: string }
+
+export type DraftKind = 'subpoena' | ExchangeKind
+
+/** A subpoena as typed so far: any field may be blank. */
+export interface SubpoenaDraftContent {
+  recipient: string
+  recipientDescription: string
+  requestType: SubpoenaType | ''
+  records: string
+  justification: string
+}
+
+export type DraftContent = SubpoenaDraftContent | { items: string[] }
+
+/** A new subpoena or set the team hasn't sent yet, shared by the team. */
+export interface DiscoveryDraft {
+  id: string
+  kind: DraftKind
+  content: DraftContent
+  /** The last AI check of the draft. */
+  lastCheck: KeyedCheck | null
+  updatedAt: string
+  /** Who saved it last. */
+  updatedBy: string | null
+}
+
+/** The last check before a submission, for the instructor; `current` is false when it was edited after. */
+export interface DiscoveryCheckRecord {
+  tag: CheckTag
+  feedback: string
+  current: boolean
+}
+
+/** What to check: a subpoena, a set of interrogatories or RFAs, or the answers to one. */
+export type CheckInput = (
+  | { kind: 'subpoena'; mode: 'draft'; draft: SubpoenaInput }
+  | { kind: ExchangeKind; mode: 'draft'; draft: { items: string[] } }
+  | { kind: ExchangeKind; mode: 'answer'; requestId: string; draft: { responses: ItemResponse[] } }
+) & {
+  /** A re-check of a draft: the check it follows, so the mentor reads its feedback and the round counts. */
+  previousCheckId?: string
 }
 
 export interface ItemResponse {
@@ -618,8 +692,15 @@ export interface StudentPart {
   days: number
   used: number
   remaining: number
-  /** `seen`: whether this student has read the response (for answered sets the team sent). */
-  requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
+  /**
+   * `seen`: whether this student has read the response (for answered sets the
+   * team sent); `checkRounds`: the team's AI checks of its answers to a received set.
+   */
+  requests: (ExchangeRequest & { seen: boolean; checkRounds?: number; direction: 'sent' | 'received' })[]
+  /** The team's unsent sets of this kind, newest first. */
+  drafts: DiscoveryDraft[]
+  /** Optional for responses from before AI feedback could be turned off: `DEFAULT_AI_FEEDBACK`. */
+  aiFeedback?: AiFeedbackSettings
 }
 
 /** How the instructor answered a subpoena: sent the recipient's response, or denied it. */
@@ -639,6 +720,8 @@ export interface TeamSubpoena {
   recipientDescription: string
   requestType: SubpoenaType
   records: string
+  /** What the team would tell the judge on a motion to quash or modify; blank for older subpoenas. */
+  justification?: string
   sentBy: string | null
   sentAt: string
   dueAt: string
@@ -673,6 +756,9 @@ export interface StudentSubpoenas {
   remaining: number
   served: TeamSubpoena[]
   notices: SubpoenaNotice[]
+  /** The team's unsent subpoenas, newest first. */
+  drafts: DiscoveryDraft[]
+  aiFeedback?: AiFeedbackSettings
 }
 
 /** Where the AI's draft of a subpoena's response stands. */
@@ -705,6 +791,8 @@ export interface CourseSubpoena extends Omit<TeamSubpoena, 'seen'> {
   instructions: string
   createNew: boolean
   error: string | null
+  /** The team's last AI check before serving it; null when it wasn't checked. */
+  check?: DiscoveryCheckRecord | null
 }
 
 /** What the student fills in to serve a subpoena. */
@@ -713,6 +801,8 @@ export interface SubpoenaInput {
   recipientDescription: string
   requestType: SubpoenaType
   records: string
+  /** What the team would tell the judge on a motion to quash or modify. */
+  justification: string
 }
 
 /** A team's information exchange. */
@@ -755,9 +845,14 @@ export interface ExchangeOverview {
   disclosed: { materials: string[]; witnesses: string[] }
 }
 
-/** How many questions an interrogatory counts as: one, or one per lettered subpart like "(a)". */
+/**
+ * How many questions an interrogatory counts as: one per lettered subpart like
+ * "(a)", or one per question mark, whichever is more ("??" counts once).
+ */
 export function questionWeight(text: string) {
-  return Math.max(1, (text.match(/\([a-z]\)/gi) ?? []).length)
+  const subparts = (text.match(/\([a-z]\)/gi) ?? []).length
+  const questions = (text.match(/\?(\s*\?)*/g) ?? []).length
+  return Math.max(1, subparts, questions)
 }
 
 /** Everything the UI needs from the courses backend. See `httpCourseService`. */
@@ -834,6 +929,17 @@ export interface WitnessSuggestion {
 }
 
 /** Where the suggested witnesses stand; matches `SuggestionsState` in server/witness/suggestions.ts. */
+/** Text the AI suggests for a case's own fields, from its initial file, for the instructor to keep or edit. */
+export interface CaseSuggestions {
+  disputedIssues: string
+  investigatorNotes: string
+  instructorNote: string
+  tasks: { title: string; description: string }[]
+}
+
+/** Where the case's suggested text stands: still being made, ready, or none to offer. */
+export type ContentSuggestions = { status: 'waiting' } | { status: 'ready'; suggestions: CaseSuggestions } | { status: 'none' }
+
 export type WitnessSuggestions =
   | { status: 'waiting'; reason: 'no-file' | 'no-parties' | 'reading' | 'thinking' }
   | { status: 'ready'; suggestions: WitnessSuggestion[] }
@@ -925,6 +1031,8 @@ export interface CourseService {
   getWitnessSuggestions(courseId: string, caseId: string): Promise<WitnessSuggestions>
   /** The instructor added some suggestions or skipped them: don't offer them again. */
   finishWitnessSuggestions(courseId: string, caseId: string): Promise<void>
+  /** Suggested text for the case's own fields, from its initial file. */
+  getContentSuggestions(courseId: string, caseId: string): Promise<ContentSuggestions>
   updateWitness(courseId: string, caseId: string, witnessId: string, input: WitnessInput): Promise<Witness>
   deleteWitness(courseId: string, caseId: string, witnessId: string): Promise<void>
   /** Gives the witness an uploaded (already cropped) picture in place of a design. */
@@ -1003,11 +1111,41 @@ export interface CourseService {
   getMyExchange(courseId: string, caseId: string): Promise<StudentExchange | null>
   /** The student's own initial disclosures, once. */
   submitDisclosures(courseId: string, caseId: string, picks: DisclosurePick[], heldBackReason: string): Promise<StudentExchange>
-  /** Sends a set to the other team, one question or request per item. */
-  sendExchangeRequest(courseId: string, caseId: string, kind: ExchangeKind, items: string[]): Promise<StudentExchange>
-  respondToExchangeRequest(courseId: string, caseId: string, requestId: string, responses: ItemResponse[]): Promise<StudentExchange>
+  /**
+   * Sends a set to the other team, one question or request per item. `checkId`: the AI check before
+   * it, if there was one; `draftId`: the draft it was written in, which sending deletes.
+   */
+  sendExchangeRequest(
+    courseId: string,
+    caseId: string,
+    kind: ExchangeKind,
+    items: string[],
+    checkId?: string,
+    draftId?: string,
+  ): Promise<StudentExchange>
+  respondToExchangeRequest(
+    courseId: string,
+    caseId: string,
+    requestId: string,
+    responses: ItemResponse[],
+    checkId?: string,
+  ): Promise<StudentExchange>
+  /** Has the discovery mentor check a draft before it's sent. */
+  checkDiscovery(courseId: string, caseId: string, input: CheckInput): Promise<DiscoveryCheck>
   /** Serves a subpoena on a person or organization. */
-  serveSubpoena(courseId: string, caseId: string, subpoena: SubpoenaInput): Promise<StudentExchange>
+  serveSubpoena(courseId: string, caseId: string, subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<StudentExchange>
+  /** Saves a new draft. `lastCheck` is kept by its id and key. */
+  createExchangeDraft(courseId: string, caseId: string, kind: DraftKind, content: DraftContent, lastCheck: KeyedCheck | null): Promise<DiscoveryDraft>
+  /** Saves over a draft. `keepalive` lets the save finish as the page closes. */
+  updateExchangeDraft(
+    courseId: string,
+    caseId: string,
+    draftId: string,
+    content: DraftContent,
+    lastCheck: KeyedCheck | null,
+    options?: { keepalive?: boolean },
+  ): Promise<DiscoveryDraft>
+  deleteExchangeDraft(courseId: string, caseId: string, draftId: string): Promise<void>
   /** Marks the responses to the team's sets, and the answers to its subpoenas, as read. */
   markExchangeSeen(courseId: string, caseId: string): Promise<void>
   // The instructor's review panel.

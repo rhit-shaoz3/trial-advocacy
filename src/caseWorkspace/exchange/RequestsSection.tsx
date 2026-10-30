@@ -16,8 +16,22 @@ import {
   X,
 } from 'lucide-react'
 import { dueLabel, shortDate } from '../../courses/caseLabels'
-import { questionWeight, type ExchangeKind, type ExchangeRequest, type ItemResponse, type StudentPart } from '../../courses/types'
+import {
+  DEFAULT_AI_FEEDBACK,
+  questionWeight,
+  type CheckInput,
+  type DiscoveryCheck,
+  type DiscoveryDraft,
+  type ExchangeKind,
+  type ExchangeRequest,
+  type ItemResponse,
+  type KeyedCheck,
+  type StudentPart,
+} from '../../courses/types'
 import { DictationTextarea } from '../../components/Dictation'
+import { AiCheck } from './AiCheck'
+import { DraftControls, DraftsList } from './Drafts'
+import { useDraft, type DraftActions } from './useDraft'
 
 type TeamRequest = StudentPart['requests'][number]
 
@@ -59,7 +73,7 @@ function timeLeft(iso: string, now: Date) {
   return days > 0 ? `${plural(days, 'day')} left` : `${plural(-days, 'day')} late`
 }
 
-type View = { mode: 'hub' } | { mode: 'compose' } | { mode: 'respond'; id: string } | { mode: 'read'; id: string }
+type View = { mode: 'hub' } | { mode: 'compose'; draft?: DiscoveryDraft } | { mode: 'respond'; id: string } | { mode: 'read'; id: string }
 
 /**
  * One kind of request (interrogatories, or requests for admission) as a team
@@ -74,8 +88,12 @@ export function RequestsSection({
   opponentSide,
   onSend,
   onRespond,
+  onCheck,
   onTeach,
   initialRequestId,
+  drafts,
+  initialDraftId,
+  onOpenDraft,
   now = new Date(),
 }: {
   kind: ExchangeKind
@@ -85,32 +103,50 @@ export function RequestsSection({
   opponentNumber: number
   opponentSide: string
   /** Leave out to make it read-only (a closed case). */
-  onSend?(items: string[]): Promise<void>
-  onRespond?(requestId: string, responses: ItemResponse[]): Promise<void>
+  /** `draftId`: the draft it was written in. */
+  onSend?(items: string[], checkId?: string, draftId?: string): Promise<void>
+  onRespond?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
+  /** Has the AI check a draft (a set, or answers) before it's sent; leave out to send without one. */
+  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   onTeach(): void
   /** A request to open on (read), as when a notice links to its response. */
   initialRequestId?: string
+  /** Saves and deletes the team's drafts; leave out to not keep drafts. */
+  drafts?: DraftActions
+  /** A draft to open on, as after a refresh. */
+  initialDraftId?: string
+  /** Called with the open draft's id, and null on leaving it. */
+  onOpenDraft?(draftId: string | null): void
   now?: Date
 }) {
-  const [view, setView] = useState<View>(
-    initialRequestId && part.requests.some((r) => r.id === initialRequestId)
-      ? { mode: 'read', id: initialRequestId }
-      : { mode: 'hub' },
-  )
+  const [view, setView] = useState<View>(() => {
+    const draft = initialDraftId ? part.drafts.find((d) => d.id === initialDraftId) : undefined
+    if (draft && onSend) return { mode: 'compose', draft }
+    return initialRequestId && part.requests.some((r) => r.id === initialRequestId) ? { mode: 'read', id: initialRequestId } : { mode: 'hub' }
+  })
   const request = view.mode === 'respond' || view.mode === 'read' ? part.requests.find((r) => r.id === view.id) : undefined
   const copy = COPY[kind]
   const back = () => setView({ mode: 'hub' })
+  // The instructor can turn AI feedback off for this part, or limit its rounds.
+  const ai = part.aiFeedback ?? DEFAULT_AI_FEEDBACK
+  const check = ai.enabled ? onCheck : undefined
 
   if (view.mode === 'compose' && onSend) {
     return (
       <Compose
+        key={view.draft?.id ?? 'new'}
         kind={kind}
         part={part}
         to={`Team ${opponentNumber} (${opponentSide})`}
-        onSend={async (items) => {
-          await onSend(items)
+        draft={view.draft}
+        actions={drafts}
+        onOpenDraft={onOpenDraft}
+        onSend={async (items, checkId, draftId) => {
+          await onSend(items, checkId, draftId)
           back()
         }}
+        onCheck={check && ((items, previousCheckId) => check({ kind, mode: 'draft', draft: { items }, previousCheckId }))}
+        rounds={ai.rounds}
         onBack={back}
         onTeach={onTeach}
       />
@@ -121,10 +157,12 @@ export function RequestsSection({
       <Respond
         kind={kind}
         request={request}
-        onRespond={async (responses) => {
-          await onRespond(request.id, responses)
+        onRespond={async (responses, checkId) => {
+          await onRespond(request.id, responses, checkId)
           setView({ mode: 'read', id: request.id })
         }}
+        onCheck={check && ((responses) => check({ kind, mode: 'answer', requestId: request.id, draft: { responses } }))}
+        rounds={ai.rounds}
         onBack={back}
         onTeach={onTeach}
         now={now}
@@ -186,6 +224,16 @@ export function RequestsSection({
           </div>
         )}
       </section>
+
+      {open && onSend && drafts && (
+        <DraftsList
+          drafts={part.drafts}
+          unit={[copy.sideLabel, `${copy.sideLabel}s`]}
+          onOpen={(draft) => setView({ mode: 'compose', draft })}
+          onDelete={drafts.remove}
+          now={now}
+        />
+      )}
 
       {open && (
         <section className="cw-card ex-section ex-to-respond" aria-labelledby={`ex-${kind}-respond`}>
@@ -334,22 +382,44 @@ function Compose({
   kind,
   part,
   to,
+  draft,
+  actions,
+  onOpenDraft,
   onSend,
+  onCheck,
+  rounds,
   onBack,
   onTeach,
 }: {
   kind: ExchangeKind
   part: StudentPart
   to: string
-  onSend(items: string[]): Promise<void>
+  /** The draft to carry on with. */
+  draft?: DiscoveryDraft
+  actions?: DraftActions
+  onOpenDraft?(draftId: string | null): void
+  onSend(items: string[], checkId?: string, draftId?: string): Promise<void>
+  onCheck?(items: string[], previousCheckId?: string): Promise<DiscoveryCheck>
+  /** How many checks one draft gets; null for unlimited. */
+  rounds: number | null
   onBack(): void
   onTeach(): void
 }) {
   const copy = COPY[kind]
-  const [lines, setLines] = useState<string[]>([''])
+  const [lines, setLines] = useState<string[]>(() => {
+    const saved = draft && 'items' in draft.content ? draft.content.items : []
+    return saved.length > 0 ? saved : ['']
+  })
+  const [lastCheck, setLastCheck] = useState<KeyedCheck | null>(draft?.lastCheck ?? null)
+  const empty = !lines.some((l) => l.trim())
+  const autosave = useDraft({ kind, initial: draft, content: { items: lines }, check: lastCheck, empty, actions })
+  // The open draft goes in the address, so a refresh comes back to it.
+  useEffect(() => {
+    if (!autosave.draftId) return
+    onOpenDraft?.(autosave.draftId)
+    return () => onOpenDraft?.(null)
+  }, [autosave.draftId, onOpenDraft])
   const [focus, setFocus] = useState(0)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const refs = useRef<(HTMLTextAreaElement | null)[]>([])
   const weightOf = (t: string) => (kind === 'interrogatories' ? questionWeight(t) : 1)
   const filled = lines.filter((l) => l.trim())
@@ -376,17 +446,7 @@ function Compose({
     }
   }
 
-  async function send() {
-    setBusy(true)
-    setError(null)
-    try {
-      await onSend(filled.map((l) => l.trim()))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setBusy(false)
-    }
-  }
-
+  const items = () => filled.map((l) => l.trim())
   const over = left < 0
   return (
     <section className="cw-card ex-section" aria-label={`New ${copy.many}`}>
@@ -395,7 +455,7 @@ function Compose({
         title={`${copy.title} to ${to}`}
         sub={
           kind === 'interrogatories'
-            ? 'One question per line. Each subpart, like (a) and (b), counts as its own question.'
+            ? 'One question per line. Each subpart, like (a) and (b), and each separate question mark counts as its own question.'
             : 'One statement per line, written so the other side can agree or disagree with it.'
         }
         onBack={onBack}
@@ -433,7 +493,7 @@ function Compose({
                 {weight > 1 && (
                   <p className="ex-warn">
                     <TriangleAlert aria-hidden="true" />
-                    Has {weight} subparts, so it counts as {weight} questions.
+                    Has {weight} subparts or questions, so it counts as {weight} questions.
                   </p>
                 )}
                 {focus === i && (
@@ -476,21 +536,42 @@ function Compose({
           <span className="cw-section-sub">or press Return</span>
         )}
       </div>
-      <div className="ex-footer">
-        <span className="cw-section-sub">
-          <Clock aria-hidden="true" className="ex-inline" /> {to.split(' (')[0]} has {plural(part.days, 'day')} to respond once
-          they receive it.
-        </span>
-        <button type="button" className="ws-btn ws-btn-primary" onClick={send} disabled={busy || filled.length === 0 || over}>
-          <Send aria-hidden="true" />
-          {busy ? 'Sending…' : `Send to ${to.split(' (')[0]}`}
-        </button>
-      </div>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      <AiCheck
+        info={
+          <>
+            <Clock aria-hidden="true" className="ex-inline" /> {to.split(' (')[0]} has {plural(part.days, 'day')} to respond
+            once they receive it.
+          </>
+        }
+        ready={filled.length > 0}
+        blocked={over}
+        draftKey={JSON.stringify(items())}
+        onCheck={onCheck && ((previousCheckId) => onCheck(items(), previousCheckId))}
+        rounds={rounds}
+        initialCheck={draft?.lastCheck}
+        onCheckChange={setLastCheck}
+        onSubmit={(checkId) => autosave.submit((draftId) => onSend(items(), checkId, draftId))}
+        extra={
+          actions && (
+            <DraftControls
+              status={autosave.status}
+              empty={empty}
+              onSave={async () => {
+                await autosave.flush()
+                onBack()
+              }}
+              onCancel={async () => {
+                await autosave.discard()
+                onBack()
+              }}
+            />
+          )
+        }
+        submitIcon={<Send aria-hidden="true" />}
+        submitLabel={`Send to ${to.split(' (')[0]}`}
+        busyLabel="Sending…"
+        anywayLabel="Send anyway"
+      />
     </section>
   )
 }
@@ -503,21 +584,24 @@ function Respond({
   kind,
   request,
   onRespond,
+  onCheck,
+  rounds,
   onBack,
   onTeach,
   now,
 }: {
   kind: ExchangeKind
   request: TeamRequest
-  onRespond(responses: ItemResponse[]): Promise<void>
+  onRespond(responses: ItemResponse[], checkId?: string): Promise<void>
+  /** Answers' checks are counted by the set, so there's no earlier check to name. */
+  onCheck?(responses: ItemResponse[]): Promise<DiscoveryCheck>
+  rounds: number | null
   onBack(): void
   onTeach(): void
   now: Date
 }) {
   const copy = COPY[kind]
   const [drafts, setDrafts] = useState<Draft[]>(() => request.items.map(() => ({ ...EMPTY })))
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const set = (i: number, patch: Partial<Draft>) => setDrafts((d) => d.map((x, j) => (j === i ? { ...x, ...patch } : x)))
   const done = (d: Draft) =>
     kind === 'interrogatories'
@@ -525,16 +609,7 @@ function Respond({
       : d.admission !== null && (d.admission !== 'partial' || (d.agreePart.trim() !== '' && d.disagreePart.trim() !== ''))
   const answered = drafts.filter(done).length
 
-  async function submit() {
-    setBusy(true)
-    setError(null)
-    try {
-      await onRespond(request.items.map((item, i) => ({ position: item.position, ...drafts[i] })))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setBusy(false)
-    }
-  }
+  const responses = () => request.items.map((item, i) => ({ position: item.position, ...drafts[i] }))
 
   return (
     <section className="cw-card ex-section" aria-label={`Respond to ${copy.many}`}>
@@ -631,20 +706,19 @@ function Respond({
           )
         })}
       </ol>
-      <div className="ex-footer">
-        <span className="cw-section-sub">
-          {answered} of {request.items.length} answered
-        </span>
-        <button type="button" className="ws-btn ws-btn-primary" onClick={submit} disabled={busy || answered < request.items.length}>
-          <Send aria-hidden="true" />
-          {busy ? 'Sending…' : 'Send responses'}
-        </button>
-      </div>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      <AiCheck
+        info={`${answered} of ${request.items.length} answered`}
+        ready={answered === request.items.length}
+        draftKey={JSON.stringify(drafts)}
+        onCheck={onCheck && (() => onCheck(responses()))}
+        rounds={rounds}
+        roundsUsed={request.checkRounds ?? 0}
+        onSubmit={(checkId) => onRespond(responses(), checkId)}
+        submitIcon={<Send aria-hidden="true" />}
+        submitLabel="Send responses"
+        busyLabel="Sending…"
+        anywayLabel="Send responses anyway"
+      />
     </section>
   )
 }

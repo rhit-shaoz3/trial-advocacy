@@ -17,6 +17,8 @@ import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { initialPicture, type PictureChoice } from './witnessPicture'
 import { WitnessPicturePicker } from './WitnessPicturePicker'
 import { DictationTextarea } from '../../../components/Dictation'
+import { SuggestedNote } from '../../../components/SuggestedNote'
+import { useCaseSuggestions, useSuggestedField } from './caseSuggestions'
 
 const BLANK: WitnessInput = {
   name: '',
@@ -234,7 +236,9 @@ function WitnessSettings({
   onSaved(updated: CourseCase): void
 }) {
   const service = useCourseService()
-  const [issues, setIssues] = useState(courseCase.disputedIssues)
+  const suggestions = useCaseSuggestions(courseId, courseCase.id)
+  const field = useSuggestedField(courseCase.disputedIssues, suggestions?.disputedIssues)
+  const issues = field.value
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null)
   const changed = issues.trim() !== courseCase.disputedIssues
@@ -250,7 +254,7 @@ function WitnessSettings({
         disputedIssues: issues,
       })
       onSaved(saved)
-      setIssues(saved.disputedIssues)
+      field.reset(saved.disputedIssues)
       setMessage({ error: false, text: 'Saved.' })
     } catch (err) {
       setMessage({ error: true, text: err instanceof Error ? err.message : 'Something went wrong.' })
@@ -265,11 +269,12 @@ function WitnessSettings({
         Issues the witnesses must leave disputed (optional)
         <DictationTextarea
           value={issues}
-          onChange={(e) => setIssues(e.target.value)}
-          placeholder="Whether the operator was at the controls when the train stopped; whether the lap bar was locked"
+          onChange={(e) => field.setValue(e.target.value)}
+          placeholder="The facts the witnesses mustn't settle, separated by semicolons"
           maxLength={2000}
           rows={2}
         />
+        {field.suggested && <SuggestedNote />}
       </label>
       <div className="panel-form-actions">
         <button type="submit" className="btn-secondary" disabled={saving || !changed}>
@@ -355,7 +360,7 @@ function WitnessForm({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Elena Torres"
+          placeholder="Full name, or a description like “The store manager”"
           maxLength={120}
           required
           autoFocus
@@ -367,7 +372,7 @@ function WitnessForm({
           type="text"
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          placeholder="Ride operator"
+          placeholder="Their job or title"
           maxLength={120}
         />
       </label>
@@ -386,7 +391,7 @@ function WitnessForm({
         <DictationTextarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Was at the ride controls when the train stopped."
+          placeholder="What they saw or did, in a sentence"
           maxLength={4000}
           rows={2}
         />
@@ -461,7 +466,7 @@ function WitnessForm({
           <DictationTextarea
             value={personaNotes}
             onChange={(e) => setPersonaNotes(e.target.value)}
-            placeholder="Has run rides for five years. Plain-spoken, loyal to the park, defensive about the ride's safety."
+            placeholder="How they come across: background, manner, loyalties"
             maxLength={4000}
             rows={3}
           />

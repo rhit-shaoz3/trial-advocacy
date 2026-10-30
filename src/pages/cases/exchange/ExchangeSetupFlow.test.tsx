@@ -23,9 +23,9 @@ const courseCase: CourseCase = {
 const settings: ExchangeSettings = {
   setupCompletedAt: null,
   disclosures: { enabled: true, materialIds: [], witnessIds: [] },
-  subpoenas: { enabled: true, limit: 3, days: 14, types: ['documents', 'esi', 'tangible_things', 'inspection'] },
-  interrogatories: { enabled: true, limit: 25, days: 30 },
-  rfas: { enabled: true, limit: 25, days: 30 },
+  subpoenas: { enabled: true, limit: 3, days: 14, types: ['documents', 'esi', 'tangible_things', 'inspection'], aiFeedback: { enabled: true, rounds: 2 } },
+  interrogatories: { enabled: true, limit: 25, days: 30, aiFeedback: { enabled: true, rounds: 2 } },
+  rfas: { enabled: true, limit: 25, days: 30, aiFeedback: { enabled: true, rounds: 2 } },
   firms: { plaintiff: { firm: '', partner: '' }, defense: { firm: '', partner: '' } },
 }
 
@@ -77,24 +77,45 @@ describe('ExchangeSetupFlow', () => {
     expect(service.saveExchangeSettings).toHaveBeenLastCalledWith(
       'c1',
       'k1',
-      expect.objectContaining({ subpoenas: { enabled: false, limit: 3, days: 14, types: ['documents', 'esi'] } }),
+      expect.objectContaining({
+        subpoenas: { enabled: false, limit: 3, days: 14, types: ['documents', 'esi'], aiFeedback: { enabled: true, rounds: 2 } },
+      }),
     )
 
-    // Interrogatories: a lower limit.
+    // Interrogatories: a lower limit, and unlimited AI feedback instead of the default two rounds.
     await screen.findByRole('heading', { level: 2, name: 'Interrogatories' })
     await user.click(screen.getByRole('button', { name: 'Fewer questions' }))
+    expect(screen.getByRole('combobox', { name: 'Rounds of feedback' })).toHaveDisplayValue('2 rounds per draft')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Rounds of feedback' }), 'Unlimited')
     await user.click(screen.getByRole('button', { name: 'Next' }))
-    expect(service.saveExchangeSettings).toHaveBeenLastCalledWith('c1', 'k1', expect.objectContaining({ interrogatories: { enabled: true, limit: 24, days: 30 } }))
+    expect(service.saveExchangeSettings).toHaveBeenLastCalledWith(
+      'c1',
+      'k1',
+      expect.objectContaining({ interrogatories: { enabled: true, limit: 24, days: 30, aiFeedback: { enabled: true, rounds: null } } }),
+    )
+
+    // Requests for admission: AI feedback off, which leaves nothing to limit.
+    await screen.findByRole('heading', { level: 2, name: 'Requests for admission' })
+    await user.click(screen.getByRole('switch', { name: 'AI feedback on requests for admission' }))
+    expect(screen.getByRole('combobox', { name: 'Rounds of feedback' })).toBeDisabled()
     // No reminders of the federal rules for the instructor.
     expect(screen.queryByText(/FRCP/)).not.toBeInTheDocument()
 
-    await user.click(await screen.findByRole('button', { name: 'Next' })) // requests for admission
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(service.saveExchangeSettings).toHaveBeenLastCalledWith(
+      'c1',
+      'k1',
+      expect.objectContaining({ rfas: { enabled: true, limit: 25, days: 30, aiFeedback: { enabled: false, rounds: 2 } } }),
+    )
     await user.type((await screen.findAllByRole('textbox', { name: 'Senior partner' }))[0], 'Margaret Hale')
     // The preview signs the email as Senior Partner.
     expect(screen.getByRole('article', { name: 'Email from Margaret Hale' })).toHaveTextContent('Senior Partner')
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
-    expect(await screen.findByRole('list', { name: 'Your choices' })).toHaveTextContent('Subpoenas')
+    const choices = await screen.findByRole('list', { name: 'Your choices' })
+    expect(choices).toHaveTextContent('Subpoenas')
+    expect(choices).toHaveTextContent('24 questions per team · 30 days to respond · AI feedback: unlimited')
+    expect(choices).toHaveTextContent('25 requests per team · 30 days to respond · No AI feedback')
     expect(screen.getByText('Teams won’t see this.')).toBeInTheDocument()
     // Both sides have disclosures, but the emails are missing names; finishing still works.
     const warnings = screen.getByLabelText('Before you finish')

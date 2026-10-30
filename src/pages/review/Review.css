@@ -481,3 +481,9 @@
   margin-left: 0.35rem;
   font-size: 0.8rem;
 }
+
+.review-subpoena-justification {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}

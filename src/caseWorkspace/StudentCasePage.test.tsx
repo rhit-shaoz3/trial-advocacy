@@ -1,9 +1,9 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
-import type { CaseWorkspace, CourseService } from '../courses/types'
+import type { CaseWorkspace, CourseService, StudentExchange } from '../courses/types'
 import { fakeCourseService } from '../test/fakeCourseService'
 import { StudentCasePage } from './StudentCasePage'
 
@@ -34,11 +34,11 @@ const workspace: CaseWorkspace = {
   preview: false,
 }
 
-function renderPage(overrides: Partial<CourseService>) {
+function renderPage(overrides: Partial<CourseService>, path = '/courses/c1/cases/k1') {
   const service = fakeCourseService(overrides)
   const user = userEvent.setup()
   render(
-    <MemoryRouter initialEntries={['/courses/c1/cases/k1']}>
+    <MemoryRouter initialEntries={[path]}>
       <CourseServiceContext.Provider value={service}>
         <Routes>
           <Route path="courses/:courseId/cases/:caseId" element={<StudentCasePage />} />
@@ -163,5 +163,58 @@ describe('StudentCasePage: review results', () => {
     await user.click(screen.getByText('Read the transcript'))
     expect(await screen.findByText(/reviewed before transcripts were marked/)).toBeInTheDocument()
   })
-})
 
+  describe('drafts', () => {
+    const exchange: StudentExchange = {
+      phase: 'information_exchange',
+      requestsOpen: true,
+      side: 'plaintiff',
+      teamNumber: 1,
+      opponentNumber: 2,
+      firm: { firm: 'Hale & Whitford LLP', partner: 'Margaret Hale' },
+      disclosures: null,
+      subpoenas: {
+        types: ['documents'],
+        limit: 3,
+        days: 14,
+        used: 0,
+        remaining: 3,
+        served: [],
+        notices: [],
+        drafts: [
+          {
+            id: 'd7',
+            kind: 'subpoena',
+            content: { recipient: 'Mercy Hospital', recipientDescription: '', requestType: 'documents', records: 'ER records.', justification: '' },
+            lastCheck: null,
+            updatedAt: '2026-10-31T15:00:00Z',
+            updatedBy: 'Bo Brief',
+          },
+        ],
+      },
+      interrogatories: { limit: 5, days: 14, used: 0, remaining: 5, requests: [], drafts: [] },
+      rfas: null,
+    }
+    const active = { ...workspace, case: { ...workspace.case, phase: 'information_exchange' as const } }
+
+    it('comes back to the open draft after a refresh', async () => {
+      renderPage(
+        { getMyCaseWorkspace: vi.fn().mockResolvedValue(active), getMyExchange: vi.fn().mockResolvedValue(exchange) },
+        '/courses/c1/cases/k1?tab=exchange&draft=d7',
+      )
+      expect(await screen.findByLabelText('To')).toHaveValue('Mercy Hospital')
+      expect(screen.getByLabelText('What you want')).toHaveValue('ER records.')
+    })
+
+    it('saves a new set as a draft and lists it for the team', async () => {
+      const { user, service } = renderPage({ getMyCaseWorkspace: vi.fn().mockResolvedValue(active), getMyExchange: vi.fn().mockResolvedValue(exchange) })
+      await user.click(await screen.findByRole('tab', { name: /Information exchange/ }))
+      await user.click(screen.getByRole('button', { name: /^Interrogatories/ }))
+      await user.click(screen.getByRole('button', { name: 'Write interrogatories' }))
+      await user.type(screen.getByLabelText('Question 1'), 'Who inspected it?')
+      await user.click(screen.getByRole('button', { name: 'Save as draft' }))
+      expect(service.createExchangeDraft).toHaveBeenCalledWith('c1', 'k1', 'interrogatories', { items: ['Who inspected it?'] }, null)
+      await waitFor(() => expect(screen.getByRole('region', { name: 'Drafts' })).toHaveTextContent('Who inspected it?'))
+    })
+  })
+})

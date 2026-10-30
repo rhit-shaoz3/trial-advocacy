@@ -3,6 +3,8 @@ import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { DEFAULT_INVESTIGATOR_NAME, INVESTIGATOR_AVATAR_URL, investigatorOf, type CourseCase } from '../../../courses/types'
 import { DictationTextarea } from '../../../components/Dictation'
+import { SuggestedNote } from '../../../components/SuggestedNote'
+import { useCaseSuggestions, useSuggestedField } from './caseSuggestions'
 
 /**
  * The case's background investigator, the same for every team: whether the
@@ -23,7 +25,9 @@ export function InvestigatorSection({
   const [initial, setInitial] = useState(() => investigatorOf(courseCase))
   const [enabled, setEnabled] = useState(initial.enabled)
   const [name, setName] = useState(initial.name)
-  const [instructions, setInstructions] = useState(initial.instructions)
+  const suggestions = useCaseSuggestions(courseId, courseCase.id)
+  const notes = useSuggestedField(initial.instructions, suggestions?.investigatorNotes)
+  const instructions = notes.value
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,6 +47,7 @@ export function InvestigatorSection({
       })
       setInitial(investigatorOf(updated))
       setName(investigatorOf(updated).name)
+      notes.reset(investigatorOf(updated).instructions)
       onSaved(updated)
       setSaved(true)
     } catch (err) {
@@ -97,14 +102,15 @@ export function InvestigatorSection({
           <DictationTextarea
             value={instructions}
             onChange={(e) => {
-              setInstructions(e.target.value)
+              notes.setValue(e.target.value)
               setSaved(false)
             }}
-            placeholder="Keep reports under a page. The bus company's former drivers are easy to find through the union hall."
+            placeholder="Anything he should know: what to stress, where to look, how long reports should be"
             maxLength={2000}
             rows={3}
             disabled={!enabled}
           />
+          {notes.suggested && <SuggestedNote />}
           <span className="muted field-hint">Sent with every request, alongside his standing instructions and the case file.</span>
         </label>
         <div className="panel-form-actions">

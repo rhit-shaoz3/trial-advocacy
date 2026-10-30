@@ -181,7 +181,7 @@ export function TeachMe({
           <Fact icon={<Sparkles />}>
             Spend your questions on facts you can&rsquo;t get elsewhere. Save open-ended &ldquo;why&rdquo; questions for
             depositions, and keep each question to one subject so it counts once: every lettered subpart, like (a) and (b),
-            counts as its own question.
+            and every separate question mark counts as its own question.
           </Fact>
         </div>
       </Modal>

@@ -1207,3 +1207,76 @@
   font-weight: 700;
   cursor: pointer;
 }
+
+/* Case file tab: the team's files as a table, sorted by the heading clicked. */
+.cw-table-scroll {
+  overflow-x: auto;
+}
+
+.cw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.cw-table th,
+.cw-table td {
+  padding: 0.65rem 0.6rem;
+  border-bottom: 1px solid var(--ws-row-line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.cw-table th {
+  color: var(--ws-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cw-table th:first-child,
+.cw-table td:first-child {
+  padding-left: 0;
+}
+
+.cw-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.cw-table td:not(:first-child) {
+  color: var(--ws-text);
+  white-space: nowrap;
+}
+
+.cw-table td.cw-table-download {
+  width: 1%;
+  padding-right: 0;
+}
+
+.cw-table-start {
+  align-self: flex-start;
+  margin-top: 0.2rem;
+}
+
+/* On a phone, the type and audience fold into the file's own line. */
+.cw-table-narrow {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .cw-table .cw-table-wide,
+  .cw-table .ws-icon-tile {
+    display: none;
+  }
+
+  .cw-table-narrow {
+    display: inline;
+  }
+
+  .cw-table th,
+  .cw-table td {
+    padding-inline: 0.4rem;
+  }
+}

@@ -12,6 +12,8 @@ import { findTeamWorld, settledFacts } from '../reviews/reviews.ts'
 import { storage } from '../storage/storage.ts'
 import { partyNames } from '../witness/profile.ts'
 import { SUBPOENA_TYPES, type Firm, type SubpoenaSettings, type SubpoenaType, type TeamContext } from './exchange.ts'
+import type { SubmissionCheck } from './discoveryChecks.ts'
+import type { MentorTag } from './mentorPrompt.ts'
 import { parseSubpoenaResponse, type SubpoenaContext } from './subpoenaPrompt.ts'
 
 // Subpoenas: from the information exchange phase on, a team serves a person or
@@ -37,6 +39,7 @@ export const MAX_RECORDS_LENGTH = 4000
 /** A response is a document; this leaves room for a month of bank records. */
 export const MAX_RESPONSE_LENGTH = 60000
 export const MAX_NOTE_LENGTH = 4000
+export const MAX_JUSTIFICATION_LENGTH = 2000
 
 /** A produced case file, by the title students see. */
 export interface ProducedDocument {
@@ -56,6 +59,8 @@ export interface TeamSubpoena {
   recipientDescription: string
   requestType: SubpoenaType
   records: string
+  /** What the team would tell the judge on a motion to quash or modify. */
+  justification: string
   sentBy: string | null
   sentAt: Date
   dueAt: Date
@@ -108,6 +113,8 @@ export interface CourseSubpoena extends Omit<TeamSubpoena, 'seen'> {
   instructions: string
   createNew: boolean
   error: string | null
+  /** The discovery mentor's last check before the team served it; null when it wasn't checked. */
+  check: { tag: MentorTag; feedback: string; current: boolean } | null
 }
 
 const TITLE = `coalesce(nullif(cm.description, ''), cm.filename)`
@@ -118,7 +125,7 @@ const filesOf = (table: string, as: string, extra = '') => `coalesce((SELECT jso
                   WHERE d.subpoena_id = s.id), '[]') AS ${as}`
 
 const COLUMNS = `s.id, s.recipient, s.recipient_description AS "recipientDescription", s.request_type AS "requestType",
-  s.records, su.name AS "sentBy", s.sent_at AS "sentAt", s.due_at AS "dueAt",
+  s.records, s.justification, su.name AS "sentBy", s.sent_at AS "sentAt", s.due_at AS "dueAt",
   s.outcome, s.response, s.responded_at AS "respondedAt", ${filesOf('subpoena_documents', 'documents')}`
 
 /** How many subpoenas a team has served (denied ones count too). */
@@ -161,26 +168,41 @@ export interface SubpoenaInput {
   recipientDescription: string
   requestType: string
   records: string
+  justification: string
 }
+
+/** The kind of request: as chosen, or the only one the case allows (the form doesn't ask then). */
+export const subpoenaType = (requestType: string, part: SubpoenaSettings) =>
+  requestType || (part.types.length === 1 ? part.types[0] : '')
 
 /**
  * Serves a subpoena, due `part.days` from now, and starts drafting its
  * response. Refused past the team's limit (partners serving at once are
  * checked in turn) or for a kind of request the case doesn't allow.
  */
-export async function serveSubpoena(ctx: TeamContext, part: SubpoenaSettings, input: SubpoenaInput) {
+export async function serveSubpoena(
+  ctx: TeamContext,
+  part: SubpoenaSettings,
+  input: SubpoenaInput,
+  check: SubmissionCheck | null = null,
+) {
   const to = input.recipient.trim()
   const about = input.recipientDescription.trim()
   const what = input.records.trim()
+  const why = input.justification.trim()
   if (!to) throw new HttpError(400, 'Say who the subpoena is for.')
   if (!what) throw new HttpError(400, 'Describe what you want.')
+  if (!why) throw new HttpError(400, "Say how you'd justify this subpoena to the judge.")
+  if (why.length > MAX_JUSTIFICATION_LENGTH) {
+    throw new HttpError(400, `Keep the justification to ${MAX_JUSTIFICATION_LENGTH} characters.`)
+  }
   if (to.length > MAX_RECIPIENT_LENGTH) throw new HttpError(400, `Keep the recipient to ${MAX_RECIPIENT_LENGTH} characters.`)
   if (about.length > MAX_DESCRIPTION_LENGTH) {
     throw new HttpError(400, `Keep who they are to ${MAX_DESCRIPTION_LENGTH} characters.`)
   }
   if (what.length > MAX_RECORDS_LENGTH) throw new HttpError(400, `Keep what you want to ${MAX_RECORDS_LENGTH} characters.`)
   // With one kind allowed, the form doesn't ask.
-  const type = (input.requestType || (part.types.length === 1 ? part.types[0] : '')) as SubpoenaType
+  const type = subpoenaType(input.requestType, part) as SubpoenaType
   if (!(SUBPOENA_TYPES as readonly string[]).includes(type)) throw new HttpError(400, 'Choose what the subpoena asks for.')
   if (!part.types.includes(type)) throw new HttpError(400, "This case doesn't allow that kind of subpoena.")
   const world = await findTeamWorld(ctx.teamId)
@@ -194,9 +216,28 @@ export async function serveSubpoena(ctx: TeamContext, part: SubpoenaSettings, in
     if (left <= 0) throw new HttpError(409, 'Your team is out of subpoenas.')
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO subpoenas (case_id, team_id, matchup_id, world_number, team_number, side, recipient,
-         recipient_description, request_type, records, sent_by, due_at, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now() + make_interval(days => $12), 'drafting') RETURNING id`,
-      [ctx.caseId, ctx.teamId, world.matchupId, world.worldNumber, world.teamNumber, world.side, to, about, type, what, ctx.userId, part.days],
+         recipient_description, request_type, records, sent_by, due_at, status, justification,
+         check_tag, check_feedback, check_current)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now() + make_interval(days => $12), 'drafting', $13,
+         $14, $15, $16) RETURNING id`,
+      [
+        ctx.caseId,
+        ctx.teamId,
+        world.matchupId,
+        world.worldNumber,
+        world.teamNumber,
+        world.side,
+        to,
+        about,
+        type,
+        what,
+        ctx.userId,
+        part.days,
+        why,
+        check?.tag ?? null,
+        check?.feedback ?? null,
+        check?.current ?? false,
+      ],
     )
     id = rows[0].id
     await client.query('COMMIT')
@@ -258,6 +299,9 @@ interface DraftRow {
   recipientDescription: string
   requestType: SubpoenaType
   records: string
+  justification: string
+  /** The discovery mentor found this exact subpoena proper. */
+  mentorApproved: boolean
   instructions: string
   createNew: boolean
   caseTitle: string
@@ -271,6 +315,7 @@ async function draftResponse(id: string) {
   const { rows } = await pool.query<DraftRow>(
     `SELECT s.id, s.case_id AS "caseId", s.team_id AS "teamId", s.matchup_id AS "matchupId", s.side, s.recipient,
             s.recipient_description AS "recipientDescription", s.request_type AS "requestType", s.records,
+            s.justification, (s.check_tag = 'LOOKS_GOOD' AND s.check_current) AS "mentorApproved",
             s.instructions, s.create_new AS "createNew",
             c.title AS "caseTitle", c.summary, c.disputed_issues AS "disputedIssues",
             json_build_object('plaintiff', c.plaintiff_name, 'defendant', c.defendant_name) AS parties,
@@ -348,6 +393,8 @@ async function subpoenaContext(row: DraftRow): Promise<SubpoenaContext> {
     recipientDescription: row.recipientDescription,
     requestType: row.requestType,
     records: row.records,
+    justification: row.justification,
+    mentorApproved: row.mentorApproved,
     documents: materials
       .filter((m) => m.textStatus === 'ready' && m.text)
       .map((m) => ({ id: m.id, title: m.description || m.filename, teamHasAccess: canSee.has(m.id), content: m.text! })),
@@ -429,7 +476,9 @@ const COURSE_SELECT = `
                                    'worldNumber', b.world_number)
           FROM subpoenas b JOIN case_materials bm ON bm.id = b.response_material_id
           WHERE b.response_material_id = s.based_on_material_id LIMIT 1) AS "basedOn",
-         s.unknown_titles AS "unknownTitles", s.instructions, s.create_new AS "createNew", s.error
+         s.unknown_titles AS "unknownTitles", s.instructions, s.create_new AS "createNew", s.error,
+         CASE WHEN s.check_tag IS NULL THEN NULL
+              ELSE json_build_object('tag', s.check_tag, 'feedback', s.check_feedback, 'current', s.check_current) END AS "check"
   FROM subpoenas s
   JOIN cases c ON c.id = s.case_id
   LEFT JOIN information_exchange ie ON ie.case_id = s.case_id

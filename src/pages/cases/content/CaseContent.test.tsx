@@ -205,6 +205,51 @@ describe('MaterialsSection', () => {
     expect(onChange).toHaveBeenCalled()
   })
 
+  it('puts the initial file first and the rest by name, sorts by the heading clicked, and shows only failed reading', async () => {
+    const file = (id: string, filename: string, uploadedAt: string, more: Partial<CaseMaterial> = {}): CaseMaterial => ({
+      ...factPattern,
+      id,
+      filename,
+      uploadedAt,
+      ...more,
+    })
+    const list = [
+      file('m1', 'zoning notes.pdf', '2026-10-03T12:00:00Z', { audience: 'all' }),
+      file('m2', 'Complaint.pdf', '2026-10-01T12:00:00Z', { initial: true, audience: 'all' }),
+      file('m3', 'Ambulance log.pdf', '2026-10-02T12:00:00Z', { audience: 'instructor', textStatus: 'failed', textError: 'Unreadable.' }),
+      file('m4', 'medical bills.pdf', '2026-10-04T12:00:00Z', { audience: 'plaintiff' }),
+    ]
+    const retryTranscription = vi.fn().mockResolvedValue({ ...list[2], textStatus: 'ready' })
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, {
+      listMaterials: vi.fn().mockResolvedValue(list),
+      retryTranscription,
+    })
+    await screen.findByRole('button', { name: 'Complaint.pdf' })
+    const names = () => screen.getAllByTitle(/^Open .* in the viewer$/).map((b) => b.textContent)
+    expect(names()).toEqual(['Complaint.pdf', 'Ambulance log.pdf', 'medical bills.pdf', 'zoning notes.pdf'])
+    expect(screen.getByRole('columnheader', { name: /^File/ })).toHaveAttribute('aria-sort', 'ascending')
+    // What the AI read is behind the scenes.
+    expect(screen.queryByRole('columnheader', { name: /AI text/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /View the text/ })).not.toBeInTheDocument()
+
+    // Dates newest first, then oldest first; the initial file stays on top.
+    await user.click(screen.getByRole('button', { name: /^Added/ }))
+    expect(names()).toEqual(['Complaint.pdf', 'medical bills.pdf', 'zoning notes.pdf', 'Ambulance log.pdf'])
+    expect(screen.getByRole('columnheader', { name: /^Added/ })).toHaveAttribute('aria-sort', 'descending')
+    await user.click(screen.getByRole('button', { name: /^Added/ }))
+    expect(names()).toEqual(['Complaint.pdf', 'Ambulance log.pdf', 'zoning notes.pdf', 'medical bills.pdf'])
+
+    // Words A to Z: "Everyone", "Instructors only", "Plaintiff only".
+    await user.click(screen.getByRole('button', { name: /^Visible to/ }))
+    expect(names()).toEqual(['Complaint.pdf', 'zoning notes.pdf', 'Ambulance log.pdf', 'medical bills.pdf'])
+
+    // Only a file the AI couldn't read says so, with a way to try again.
+    expect(screen.getAllByText(/couldn’t read this file/)).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: 'Read Ambulance log.pdf again' }))
+    expect(retryTranscription).toHaveBeenCalledWith('c1', 'k1', 'm3')
+    expect(screen.queryByText(/couldn’t read this file/)).not.toBeInTheDocument()
+  })
+
   it('filters the files by source', async () => {
     const response: CaseMaterial = {
       ...factPattern,
@@ -669,6 +714,82 @@ describe('TasksSection', () => {
     const item = await screen.findByRole('listitem', { name: 'Outline the deposition' })
     expect(item).toHaveTextContent('Plaintiff only')
     expect(item).toHaveTextContent('Due ')
+  })
+})
+
+describe('suggestions from the case file', () => {
+  const suggestions = {
+    disputedIssues: 'Whether Torres checked the lap bars',
+    investigatorNotes: 'Talk to the riders in the next car.',
+    instructorNote: 'Focus on the restart.',
+    tasks: [
+      { title: 'Outline the deposition', description: 'List the topics.' },
+      { title: 'Draft interrogatories', description: 'Five questions on maintenance.' },
+    ],
+  }
+  const ready = { getContentSuggestions: vi.fn().mockResolvedValue({ status: 'ready', suggestions }) }
+  const base: CourseCase = {
+    id: 'k1',
+    title: 'Rivera v. Thrill Park',
+    summary: '',
+    status: 'draft',
+    phase: 'introduction',
+    instructorNote: '',
+    inWorldDate: null,
+    disputedIssues: '',
+    importantFacts: { plaintiff: [], defense: [] },
+    investigator: { enabled: true, name: 'John Hastings', instructions: '' },
+    createdAt: '2026-10-01T15:00:00.000Z',
+    updatedAt: '2026-10-01T15:00:00.000Z',
+  }
+
+  it('writes the suggested notes into an empty field, saved only when the instructor saves', async () => {
+    const saveInvestigator = vi.fn().mockResolvedValue({ ...base, investigator: { ...base.investigator!, instructions: suggestions.investigatorNotes } })
+    const { user, service } = renderWith(<InvestigatorSection courseId="c1" courseCase={base} onSaved={vi.fn()} />, { ...ready, saveInvestigator })
+    const notes = screen.getByLabelText(/Instructions for the investigator/)
+    await waitFor(() => expect(notes).toHaveValue('Talk to the riders in the next car.'))
+    expect(service.getContentSuggestions).toHaveBeenCalledWith('c1', 'k1')
+    expect(screen.getByText(/Suggested from the case file/)).toBeInTheDocument()
+    expect(saveInvestigator).not.toHaveBeenCalled()
+    // Editing it makes it theirs.
+    await user.type(notes, ' Be brief.')
+    expect(screen.queryByText(/Suggested from the case file/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ instructions: 'Talk to the riders in the next car. Be brief.' }))
+  })
+
+  it('leaves saved text alone', async () => {
+    const saved = { ...base, investigator: { ...base.investigator!, instructions: 'Keep it short.' } }
+    renderWith(<InvestigatorSection courseId="c1" courseCase={saved} onSaved={vi.fn()} />, ready)
+    await waitFor(() => expect(ready.getContentSuggestions).toHaveBeenCalled())
+    expect(screen.getByLabelText(/Instructions for the investigator/)).toHaveValue('Keep it short.')
+    expect(screen.queryByText(/Suggested from the case file/)).not.toBeInTheDocument()
+  })
+
+  it('suggests the disputed issues', async () => {
+    const saveWitnessSettings = vi.fn().mockResolvedValue({ ...base, disputedIssues: suggestions.disputedIssues })
+    const { user } = renderWith(
+      <MemoryRouter>
+        <WitnessesSection courseId="c1" courseCase={base} onCaseChange={vi.fn()} />
+      </MemoryRouter>,
+      { ...ready, saveWitnessSettings, listMaterials: vi.fn().mockResolvedValue([]) },
+    )
+    const form = await screen.findByRole('form', { name: 'AI witness settings' })
+    await waitFor(() => expect(within(form).getByLabelText(/Issues the witnesses/)).toHaveValue('Whether Torres checked the lap bars'))
+    await user.click(within(form).getByRole('button', { name: 'Save settings' }))
+    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', { inWorldDate: null, disputedIssues: 'Whether Torres checked the lap bars' })
+  })
+
+  it('starts a new task as the next suggested one the case doesn’t have', async () => {
+    const existing = { id: 't1', title: 'Outline the deposition', description: '', dueAt: null, audience: 'all' as const }
+    const { user } = renderWith(<TasksSection courseId="c1" caseId="k1" />, { ...ready, listTasks: vi.fn().mockResolvedValue([existing]) })
+    await screen.findByRole('listitem', { name: 'Outline the deposition' })
+    await waitFor(() => expect(ready.getContentSuggestions).toHaveBeenCalled())
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+    const form = screen.getByRole('form', { name: 'New task' })
+    expect(within(form).getByLabelText('Title')).toHaveValue('Draft interrogatories')
+    expect(within(form).getByLabelText(/Details/)).toHaveValue('Five questions on maintenance.')
+    expect(within(form).getByText(/Suggested from the case file/)).toBeInTheDocument()
   })
 })
 

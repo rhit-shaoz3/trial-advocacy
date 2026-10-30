@@ -19,4 +19,10 @@ describe('modelFor', () => {
     expect(modelFor('witness', { WITNESS_MODEL: 'claude-sonnet-5-5', CLAUDE_WITNESS_MODEL: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
     expect(modelFor('review', { WITNESS_MODEL: 'claude-sonnet-5-5' })).toBe('claude-haiku-5-5')
   })
+
+  it('uses Sonnet for the discovery mentor, whatever CLAUDE_MODEL says, unless its own setting does', () => {
+    expect(modelFor('mentor', {})).toBe('claude-sonnet-5-5')
+    expect(modelFor('mentor', { CLAUDE_MODEL: 'claude-haiku-5-5' })).toBe('claude-sonnet-5-5')
+    expect(modelFor('mentor', { CLAUDE_MENTOR_MODEL: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
+  })
 })

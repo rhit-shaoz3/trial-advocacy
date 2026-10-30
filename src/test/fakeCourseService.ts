@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { CourseService } from '../courses/types'
+import type { CourseService, DraftContent, DraftKind, KeyedCheck } from '../courses/types'
 
 /** A CourseService whose methods are all mocks; by default every list is empty. */
 export function fakeCourseService(overrides: Partial<CourseService> = {}): CourseService {
@@ -51,6 +51,7 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     listWitnesses: vi.fn().mockResolvedValue([]),
     createWitness: vi.fn(),
     getWitnessSuggestions: vi.fn().mockResolvedValue({ status: 'done' }),
+    getContentSuggestions: vi.fn().mockResolvedValue({ status: 'none' }),
     finishWitnessSuggestions: vi.fn().mockResolvedValue(undefined),
     updateWitness: vi.fn(),
     deleteWitness: vi.fn().mockResolvedValue(undefined),
@@ -98,6 +99,24 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     sendExchangeRequest: vi.fn(),
     respondToExchangeRequest: vi.fn(),
     serveSubpoena: vi.fn(),
+    createExchangeDraft: vi.fn(async (_c: string, _k: string, kind: DraftKind, content: DraftContent, lastCheck: KeyedCheck | null) => ({
+      id: 'draft1',
+      kind,
+      content,
+      lastCheck,
+      updatedAt: '2026-10-01T12:00:00Z',
+      updatedBy: 'Ada Lawyer',
+    })),
+    updateExchangeDraft: vi.fn(async (_c: string, _k: string, id: string, content: DraftContent, lastCheck: KeyedCheck | null) => ({
+      id,
+      kind: 'subpoena' as DraftKind,
+      content,
+      lastCheck,
+      updatedAt: '2026-10-01T12:00:00Z',
+      updatedBy: 'Ada Lawyer',
+    })),
+    deleteExchangeDraft: vi.fn().mockResolvedValue(undefined),
+    checkDiscovery: vi.fn().mockResolvedValue({ id: 'chk1', tag: 'LOOKS_GOOD', feedback: '' }),
     markExchangeSeen: vi.fn().mockResolvedValue(undefined),
     listSubpoenas: vi.fn().mockResolvedValue([]),
     approveSubpoena: vi.fn(),

@@ -61,6 +61,10 @@ export interface SubpoenaContext {
   requestType: SubpoenaType
   /** The subpoena's requests, as the students wrote them. */
   records: string
+  /** What the requesting team would tell the judge about the subpoena's validity, relevance, and proportionality. */
+  justification?: string
+  /** The discovery mentor reviewed this exact subpoena under the same rules and found it proper. */
+  mentorApproved?: boolean
   /** Every case file with text in the team's case world, and whether the team has it. */
   documents: SubpoenaDocument[]
   importantFacts: ImportantFacts
@@ -131,6 +135,8 @@ export function buildSubpoenaMessage(ctx: SubpoenaContext) {
     requests_tangible_things: ctx.requestType === 'tangible_things',
     requests_inspection: ctx.requestType === 'inspection',
     request_text: ctx.records.trim(),
+    justification: ctx.justification?.trim() ?? '',
+    mentor_approved: ctx.mentorApproved === true,
     team_documents: ctx.documents.filter((d) => d.teamHasAccess).map((d) => ({ title: d.title })),
     world_subpoenas: ctx.worldSubpoenas.map((w) => ({
       recipient: w.recipient,

@@ -3,6 +3,8 @@ import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, dueLabel, fromLocalInput, toLocalInput } from '../../../courses/caseLabels'
 import { AUDIENCES, type Audience, type CaseTask, type TaskInput } from '../../../courses/types'
 import { DictationTextarea } from '../../../components/Dictation'
+import { SuggestedNote } from '../../../components/SuggestedNote'
+import { useCaseSuggestions } from './caseSuggestions'
 
 const BLANK: TaskInput = { title: '', description: '', dueAt: null, audience: 'all' }
 
@@ -14,6 +16,12 @@ export function TasksSection({ courseId, caseId }: { courseId: string; caseId: s
   const [error, setError] = useState<string | null>(null)
   /** The task being edited, 'new' for the add form, or null. */
   const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const suggestions = useCaseSuggestions(courseId, caseId)
+  // A new task starts as the first suggested one the case doesn't have yet.
+  const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+  const nextSuggestion = suggestions?.tasks.find((s) => !tasks?.some((t) => sameTitle(t.title, s.title)))
+  /** What the add form opened with: the suggestion at the time, so one arriving later doesn't wipe what's typed. */
+  const [adding, setAdding] = useState<{ title: string; description: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -54,7 +62,14 @@ export function TasksSection({ courseId, caseId }: { courseId: string; caseId: s
       <div className="section-header">
         <h2 id="tasks-heading">Tasks</h2>
         {editing !== 'new' && (
-          <button type="button" className="btn-primary" onClick={() => setEditing('new')}>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => {
+              setAdding(nextSuggestion ?? null)
+              setEditing('new')
+            }}
+          >
             Add task
           </button>
         )}
@@ -65,7 +80,13 @@ export function TasksSection({ courseId, caseId }: { courseId: string; caseId: s
       </p>
 
       {editing === 'new' && (
-        <TaskForm label="New task" initial={BLANK} onSave={handleSave} onCancel={() => setEditing(null)} />
+        <TaskForm
+          label="New task"
+          initial={adding ? { ...BLANK, ...adding } : BLANK}
+          suggested={Boolean(adding)}
+          onSave={handleSave}
+          onCancel={() => setEditing(null)}
+        />
       )}
       {error && (
         <p className="form-error" role="alert">
@@ -116,11 +137,14 @@ export function TasksSection({ courseId, caseId }: { courseId: string; caseId: s
 function TaskForm({
   label,
   initial,
+  suggested = false,
   onSave,
   onCancel,
 }: {
   label: string
   initial: TaskInput
+  /** The title and details are the AI's suggestion from the case file. */
+  suggested?: boolean
   /** Throw to show the error in the form. */
   onSave(input: TaskInput): Promise<void>
   onCancel(): void
@@ -152,7 +176,7 @@ function TaskForm({
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Prepare the ride operator's deposition outline"
+          placeholder="A task for the teams"
           maxLength={120}
           required
           autoFocus
@@ -177,11 +201,12 @@ function TaskForm({
         <DictationTextarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Draft an outline and list the exhibits you plan to introduce."
+          placeholder="What to do, and what to turn in"
           maxLength={4000}
           rows={2}
         />
       </label>
+      {suggested && title === initial.title && description === initial.description && <SuggestedNote />}
       <div className="panel-form-actions">
         <button type="submit" className="btn-primary" disabled={saving}>
           {saving ? 'Saving…' : 'Save task'}

@@ -6,9 +6,11 @@ import { findCase, type CasePhase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { findStudentTeamId, getStudentWorkspace } from '../courses/workspace.ts'
 import {
+  AI_ROUNDS_RANGE,
   compareDisclosures,
   completeExchangeSetup,
   DAYS_RANGE,
+  DEFAULT_AI_FEEDBACK,
   disclosureOptions,
   EXCHANGE_KINDS,
   exchangeOverview,
@@ -27,6 +29,7 @@ import {
   SUBPOENA_TYPES,
   submitDisclosures,
   usedCount,
+  type AiFeedbackSettings,
   type DisclosureOption,
   type DisclosureReview,
   type DisclosureSubmission,
@@ -40,9 +43,12 @@ import {
   type SubpoenaType,
   type TeamContext,
 } from './exchange.ts'
+import { runCheck, submissionCheck, type CheckDraft } from './discoveryChecks.ts'
+import { createDraft, deleteDraft, DRAFT_KINDS, listDrafts, updateDraft, type DiscoveryDraft, type DraftKind } from './drafts.ts'
 import {
   markSubpoenasSeen,
   serveSubpoena,
+  subpoenaType,
   subpoenaNotices,
   teamSubpoenas,
   type SubpoenaNotice,
@@ -54,17 +60,35 @@ const MAX_REASON_LENGTH = 1000
 
 const field = (body: unknown, key: string) => (body as Record<string, unknown> | undefined)?.[key]
 
+/** A part's AI feedback; the default (on, two rounds) when not given. */
+function readAiFeedback(part: Record<string, unknown>, label: string): AiFeedbackSettings {
+  const ai = part.aiFeedback as Record<string, unknown> | undefined
+  if (ai === undefined) return { ...DEFAULT_AI_FEEDBACK }
+  if (typeof ai?.enabled !== 'boolean') throw new HttpError(400, `Say whether ${label} get AI feedback.`)
+  const rounds = ai.rounds ?? null
+  const { min, max } = AI_ROUNDS_RANGE
+  if (rounds !== null && (!Number.isInteger(rounds) || (rounds as number) < min || (rounds as number) > max)) {
+    throw new HttpError(400, `The rounds of AI feedback for ${label} must be unlimited or a whole number from ${min} to ${max}.`)
+  }
+  return { enabled: ai.enabled, rounds: rounds as number | null }
+}
+
 function readPart(body: unknown, key: string, label: string, withLimits: boolean): PartSettings {
   const part = field(body, key) as Record<string, unknown> | undefined
   if (typeof part?.enabled !== 'boolean') throw new HttpError(400, `Say whether the case includes ${label}.`)
-  if (!withLimits) return { enabled: part.enabled, limit: 1, days: 1 }
+  if (!withLimits) return { enabled: part.enabled, limit: 1, days: 1, aiFeedback: { enabled: false, rounds: null } }
   const whole = (value: unknown, { min, max }: { min: number; max: number }, what: string) => {
     if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) {
       throw new HttpError(400, `The ${what} for ${label} must be a whole number from ${min} to ${max}.`)
     }
     return value as number
   }
-  return { enabled: part.enabled, limit: whole(part.limit, LIMIT_RANGE, 'limit'), days: whole(part.days, DAYS_RANGE, 'days to respond') }
+  return {
+    enabled: part.enabled,
+    limit: whole(part.limit, LIMIT_RANGE, 'limit'),
+    days: whole(part.days, DAYS_RANGE, 'days to respond'),
+    aiFeedback: readAiFeedback(part, label),
+  }
 }
 
 /** The kinds of request a subpoena may make; all of them when not given. */
@@ -88,7 +112,7 @@ function readFirm(body: unknown, side: Side): Firm {
   return { firm: firmName, partner }
 }
 
-/** Validates `{ disclosures: { enabled }, subpoenas, interrogatories, rfas: { enabled, limit, days }, firms }`. */
+/** Validates `{ disclosures: { enabled }, subpoenas, interrogatories, rfas: { enabled, limit, days, aiFeedback }, firms }`. */
 function readSettings(body: unknown): SettingsInput {
   return {
     disclosures: { enabled: readPart(body, 'disclosures', 'initial disclosures', false).enabled },
@@ -148,7 +172,11 @@ export interface StudentPart {
   days: number
   used: number
   remaining: number
-  requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
+  /** `checkRounds`: the team's AI checks of its answers to a received set. */
+  requests: (ExchangeRequest & { seen: boolean; checkRounds: number; direction: 'sent' | 'received' })[]
+  /** The team's unsent sets of this kind, newest first. */
+  drafts: DiscoveryDraft[]
+  aiFeedback: AiFeedbackSettings
 }
 
 /** The team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */
@@ -161,6 +189,9 @@ export interface StudentSubpoenas {
   remaining: number
   served: TeamSubpoena[]
   notices: SubpoenaNotice[]
+  /** The team's unsent subpoenas, newest first. */
+  drafts: DiscoveryDraft[]
+  aiFeedback: AiFeedbackSettings
 }
 
 // Shape sent to the client; matches `StudentExchange` in src/courses/types.ts.
@@ -222,11 +253,12 @@ async function requireStudentContext(req: Request) {
 }
 
 async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
-  const [settings, options, submission, requests] = await Promise.all([
+  const [settings, options, submission, requests, drafts] = await Promise.all([
     getSettings(ctx.caseId),
     disclosureOptions(ctx.caseId),
     findSubmission(ctx.caseId, ctx.userId),
     listTeamRequests(ctx.caseId, ctx.teamId, ctx.userId),
+    listDrafts(ctx),
   ])
   const sideOptions = options.filter((o) => o.side === ctx.side)
   const keyIds = new Set(sideOptions.map((o) => o.id))
@@ -246,12 +278,24 @@ async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
       requests: requests
         .filter((r) => r.kind === kind)
         .map((r) => ({ ...r, direction: r.fromTeam.id === ctx.teamId ? 'sent' : 'received' })),
+      drafts: drafts.filter((d) => d.kind === kind),
+      aiFeedback: p.aiFeedback,
     }
   }
   const subpoenas = async (p: SubpoenaSettings): Promise<StudentSubpoenas | null> => {
     if (!p.enabled) return null
     const [served, notices] = await Promise.all([teamSubpoenas(ctx.caseId, ctx.teamId, ctx.userId), subpoenaNotices(ctx.caseId, ctx.teamId, ctx.userId)])
-    return { types: p.types, limit: p.limit, days: p.days, used: served.length, remaining: Math.max(0, p.limit - served.length), served, notices }
+    return {
+      types: p.types,
+      limit: p.limit,
+      days: p.days,
+      used: served.length,
+      remaining: Math.max(0, p.limit - served.length),
+      served,
+      notices,
+      drafts: drafts.filter((d) => d.kind === 'subpoena'),
+      aiFeedback: p.aiFeedback,
+    }
   }
   const numbers = await teamNumbers(ctx)
   return {
@@ -322,7 +366,10 @@ myExchangeRouter.post('/disclosures', async (req, res) => {
   res.status(201).json({ exchange: await studentExchange(ctx) })
 })
 
-/** Sends a set to the other team: `{ kind: 'interrogatories' | 'rfas', items: string[] }`, one per line. */
+/**
+ * Sends a set to the other team: `{ kind: 'interrogatories' | 'rfas', items: string[], checkId, draftId }`,
+ * one per line. Sending from a draft deletes the draft.
+ */
 myExchangeRouter.post('/requests', async (req, res) => {
   const ctx = await requireStudentContext(req)
   if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Requests open in the information exchange phase.')
@@ -330,19 +377,23 @@ myExchangeRouter.post('/requests', async (req, res) => {
   if (!EXCHANGE_KINDS.includes(kind)) throw new HttpError(400, 'Choose interrogatories or requests for admission.')
   const settings = await getSettings(ctx.caseId)
   if (!settings[kind].enabled) throw new HttpError(409, "This case doesn't include that kind of request.")
-  const items = field(req.body, 'items')
-  if (!Array.isArray(items) || items.some((t) => typeof t !== 'string')) throw new HttpError(400, 'Send one question per line.')
-  await sendRequest(ctx, kind, settings[kind], items as string[])
+  const items = readItems(req.body)
+  const check = await submissionCheck(ctx, field(req.body, 'checkId'), { kind, mode: 'draft', items })
+  await sendRequest(ctx, kind, settings[kind], items, check)
+  await deleteDraft(ctx, field(req.body, 'draftId'))
   res.status(201).json({ exchange: await studentExchange(ctx) })
 })
 
-/** The team's responses to a set it received: `{ responses: [{ position, answer, objection, admission, agreePart, disagreePart }] }`. */
-myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
-  const ctx = await requireStudentContext(req)
-  if (!isUuid(req.params.requestId)) throw new HttpError(404, 'Request not found.')
-  const raw = field(req.body, 'responses')
+function readItems(body: unknown) {
+  const items = field(body, 'items')
+  if (!Array.isArray(items) || items.some((t) => typeof t !== 'string')) throw new HttpError(400, 'Send one question per line.')
+  return items as string[]
+}
+
+function readResponses(body: unknown): ItemResponse[] {
+  const raw = field(body, 'responses')
   if (!Array.isArray(raw)) throw new HttpError(400, 'Send a response for each item.')
-  const responses: ItemResponse[] = raw.map((r) => {
+  return raw.map((r) => {
     const admission = readString(r, 'admission')
     return {
       position: Number(field(r, 'position')),
@@ -353,26 +404,129 @@ myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
       disagreePart: readString(r, 'disagreePart'),
     }
   })
-  await respondToRequest(ctx, req.params.requestId, responses)
+}
+
+const readSubpoena = (body: unknown, settings: SubpoenaSettings) => ({
+  recipient: readString(body, 'recipient'),
+  recipientDescription: readString(body, 'recipientDescription'),
+  requestType: subpoenaType(readString(body, 'requestType'), settings),
+  records: readString(body, 'records'),
+  justification: readString(body, 'justification'),
+})
+
+/**
+ * Has the discovery mentor check a draft before it's sent: `{ kind, mode,
+ * requestId, draft }`. A subpoena's `draft` is the subpoena; a set's is `{
+ * items }`; answers (mode answer, with the set's `requestId`) are `{
+ * responses }`. A re-check of a draft names the check it follows
+ * (`previousCheckId`); answers find theirs by the set. Returns `{ check: { id,
+ * tag, feedback, round } }`; send the `id` with the submission. `409` when the
+ * part's AI feedback is off, or the draft has used its rounds.
+ */
+myExchangeRouter.post('/check', async (req, res) => {
+  const ctx = await requireStudentContext(req)
+  if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Requests open in the information exchange phase.')
+  const settings = await getSettings(ctx.caseId)
+  const kind = readString(req.body, 'kind')
+  const mode = readString(req.body, 'mode')
+  const draftBody = field(req.body, 'draft')
+  let draft: CheckDraft
+  if (kind === 'subpoena') {
+    if (!settings.subpoenas.enabled) throw new HttpError(409, "This case doesn't include subpoenas.")
+    const subpoena = readSubpoena(draftBody, settings.subpoenas)
+    if (!subpoena.recipient.trim() || !subpoena.records.trim()) throw new HttpError(400, 'Fill in who the subpoena is for and what you want first.')
+    draft = { kind, mode: 'draft', subpoena }
+  } else if (EXCHANGE_KINDS.includes(kind as ExchangeKind)) {
+    if (!settings[kind as ExchangeKind].enabled) throw new HttpError(409, "This case doesn't include that kind of request.")
+    if (mode === 'answer') {
+      const requestId = readString(req.body, 'requestId')
+      if (!isUuid(requestId)) throw new HttpError(404, 'Request not found.')
+      draft = { kind: kind as ExchangeKind, mode: 'answer', requestId, responses: readResponses(draftBody) }
+    } else {
+      const items = readItems(draftBody)
+      if (!items.some((t) => t.trim())) throw new HttpError(400, 'Write at least one question first.')
+      draft = { kind: kind as ExchangeKind, mode: 'draft', items }
+    }
+  } else throw new HttpError(400, 'Choose what to check.')
+  const ai = (kind === 'subpoena' ? settings.subpoenas : settings[kind as ExchangeKind]).aiFeedback
+  if (!ai.enabled) throw new HttpError(409, 'AI feedback is turned off for this part of the case.')
+  res.json({ check: await runCheck(ctx, draft, { previousCheckId: field(req.body, 'previousCheckId'), rounds: ai.rounds }) })
+})
+
+/** The team's responses to a set it received: `{ responses: [{ position, answer, objection, admission, agreePart, disagreePart }] }`. */
+myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
+  const ctx = await requireStudentContext(req)
+  const requestId = req.params.requestId
+  if (!isUuid(requestId)) throw new HttpError(404, 'Request not found.')
+  const responses = readResponses(req.body)
+  const { rows } = await pool.query<{ kind: ExchangeKind }>('SELECT kind FROM exchange_requests WHERE id = $1 AND case_id = $2', [
+    requestId,
+    ctx.caseId,
+  ])
+  const check = rows[0]
+    ? await submissionCheck(ctx, field(req.body, 'checkId'), { kind: rows[0].kind, mode: 'answer', requestId, responses })
+    : null
+  await respondToRequest(ctx, requestId, responses, check)
   res.json({ exchange: await studentExchange(ctx) })
 })
 
 /**
- * Serves a subpoena: `{ recipient, recipientDescription, requestType, records }`,
- * who it's for and who they are, what kind of request, and what it wants.
+ * Serves a subpoena: `{ recipient, recipientDescription, requestType, records,
+ * justification, checkId }`: who it's for and who they are, what kind of
+ * request, what it wants, how the team would justify it to the judge, and the
+ * discovery mentor's check before it (optional). Serving from a draft (`draftId`)
+ * deletes the draft.
  */
 myExchangeRouter.post('/subpoenas', async (req, res) => {
   const ctx = await requireStudentContext(req)
   if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Subpoenas open in the information exchange phase.')
   const settings = await getSettings(ctx.caseId)
   if (!settings.subpoenas.enabled) throw new HttpError(409, "This case doesn't include subpoenas.")
-  await serveSubpoena(ctx, settings.subpoenas, {
-    recipient: readString(req.body, 'recipient'),
-    recipientDescription: readString(req.body, 'recipientDescription'),
-    requestType: readString(req.body, 'requestType'),
-    records: readString(req.body, 'records'),
-  })
+  const subpoena = readSubpoena(req.body, settings.subpoenas)
+  const check = await submissionCheck(ctx, field(req.body, 'checkId'), { kind: 'subpoena', mode: 'draft', subpoena })
+  await serveSubpoena(ctx, settings.subpoenas, subpoena, check)
+  await deleteDraft(ctx, field(req.body, 'draftId'))
   res.status(201).json({ exchange: await studentExchange(ctx) })
+})
+
+/** The team's context for a draft of this kind: the exchange is open and the case includes it. */
+async function requireDraftContext(req: Request, kind: DraftKind) {
+  const ctx = await requireStudentContext(req)
+  if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Requests open in the information exchange phase.')
+  const settings = await getSettings(ctx.caseId)
+  if (!settings[kind === 'subpoena' ? 'subpoenas' : kind].enabled) throw new HttpError(409, "This case doesn't include that kind of request.")
+  return ctx
+}
+
+async function draftKindOf(req: Request) {
+  const { rows } = await pool.query<{ kind: DraftKind }>('SELECT kind FROM discovery_drafts WHERE id = $1', [req.params.draftId])
+  if (!isUuid(req.params.draftId) || !rows[0]) throw new HttpError(404, 'Draft not found. A teammate may have sent or deleted it.')
+  return rows[0].kind
+}
+
+/**
+ * Saves a new draft: `{ kind, content, lastCheck }`. A subpoena's content is
+ * its fields; a set's is `{ items }`. `lastCheck` is `{ id, key }`: the last AI
+ * check and the key of the draft it checked. Returns `{ draft }`.
+ */
+myExchangeRouter.post('/drafts', async (req, res) => {
+  const kind = readString(req.body, 'kind') as DraftKind
+  if (!DRAFT_KINDS.includes(kind)) throw new HttpError(400, 'Choose a subpoena, interrogatories, or requests for admission.')
+  const ctx = await requireDraftContext(req, kind)
+  res.status(201).json({ draft: await createDraft(ctx, kind, field(req.body, 'content'), field(req.body, 'lastCheck')) })
+})
+
+/** Saves over a draft: `{ content, lastCheck }`. Returns `{ draft }`. */
+myExchangeRouter.put('/drafts/:draftId', async (req, res) => {
+  const ctx = await requireDraftContext(req, await draftKindOf(req))
+  res.json({ draft: await updateDraft(ctx, req.params.draftId as string, field(req.body, 'content'), field(req.body, 'lastCheck')) })
+})
+
+/** Deletes a draft (Cancel, or deleting it from the list). */
+myExchangeRouter.delete('/drafts/:draftId', async (req, res) => {
+  const ctx = await requireStudentContext(req)
+  await deleteDraft(ctx, req.params.draftId)
+  res.status(204).end()
 })
 
 /** Marks the responses to the team's sets, and the answers to its subpoenas, as read by this student. */

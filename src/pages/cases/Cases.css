@@ -1204,9 +1204,9 @@ a.case-row:hover {
   align-self: center;
 }
 
-.content-text-failed .form-error {
-  display: inline;
-  margin: 0;
+.content-text-failed {
+  display: block;
+  color: var(--error);
   font-size: 0.8rem;
 }
 
@@ -1659,5 +1659,20 @@ a.case-row:hover {
 
 .source-subpoena {
   background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+/* A field filled in with the AI's suggestion from the case file */
+
+.suggested-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.suggested-note svg {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
   color: var(--tint-amber-fg);
 }

@@ -630,7 +630,7 @@
 
 .exchange-bars li {
   display: grid;
-  grid-template-columns: minmax(7rem, auto) 1fr auto;
+  grid-template-columns: minmax(0, auto) minmax(2.5rem, 1fr) auto;
   align-items: center;
   gap: 0.75rem;
   font-size: 0.83rem;
@@ -692,22 +692,33 @@
   margin-bottom: 0;
 }
 
-/* On its tab the card is compact: the two counts are small squares beside the teams bars. */
+/*
+ * On its tab the card is compact: the counts (interrogatories, requests for
+ * admission, subpoenas: however many are included) are small squares beside
+ * the teams bars, which take the rest of the row or wrap onto their own.
+ */
 .exchange-card-in-tab {
   padding: 1rem 1.1rem;
 }
 
 .exchange-card-compact .exchange-stats {
-  grid-template-columns: 8.5rem 8.5rem minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
 }
 
 .exchange-card-compact .exchange-stat {
+  min-width: 0;
   padding: 0.7rem 0.8rem;
 }
 
 .exchange-card-compact .exchange-stat:not(:last-child) {
+  flex: 0 0 8.5rem;
   aspect-ratio: 1;
+}
+
+.exchange-card-compact .exchange-stat:last-child {
+  flex: 1 1 15rem;
 }
 
 .exchange-card-compact .exchange-stat-number {
@@ -720,12 +731,13 @@
 }
 
 @media (max-width: 640px) {
-  .exchange-card-compact .exchange-stats {
-    grid-template-columns: 1fr 1fr;
+  .exchange-card-compact .exchange-stat:not(:last-child) {
+    flex: 1 1 6.5rem;
+    aspect-ratio: auto;
   }
 
   .exchange-card-compact .exchange-stat:last-child {
-    grid-column: 1 / -1;
+    flex-basis: 100%;
   }
 }
 
@@ -997,4 +1009,20 @@
   .exchange-type-list {
     width: 100%;
   }
+}
+
+/* Rounds of AI feedback per draft */
+.exchange-rounds {
+  flex: none;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ws-navy);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.exchange-rounds:disabled {
+  color: var(--muted);
 }

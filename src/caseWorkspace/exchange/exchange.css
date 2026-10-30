@@ -1201,3 +1201,226 @@
   display: block;
   color: var(--fg);
 }
+
+/* Check with AI: the discovery mentor's review before sending */
+
+.ai-check {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ai-check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.ai-check-result {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.ai-check-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0;
+  color: var(--ws-navy);
+  font-weight: 700;
+}
+
+.ai-check-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--tint-grey-bg);
+  color: var(--ws-muted);
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ai-check-icon svg {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 3;
+}
+
+.ai-check-spinner {
+  border: 3px solid var(--tint-grey-bg);
+  border-top-color: var(--ws-muted);
+  background: none;
+  animation: ai-check-spin 0.9s linear infinite;
+}
+
+@keyframes ai-check-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-check-spinner {
+    animation: ai-check-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes ai-check-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.ai-check-looks_good {
+  border-color: var(--tint-green-fg);
+}
+
+.ai-check-looks_good .ai-check-icon {
+  background: var(--tint-green-fg);
+  color: var(--surface);
+}
+
+.ai-check-small_edits {
+  border-color: var(--tint-amber-fg);
+}
+
+.ai-check-small_edits .ai-check-icon {
+  background: var(--tint-amber-fg);
+  color: var(--surface);
+}
+
+.ai-check-needs_improvement {
+  border-color: var(--tint-rose-fg);
+}
+
+.ai-check-needs_improvement .ai-check-icon {
+  background: var(--tint-rose-fg);
+  color: var(--surface);
+}
+
+/* How many rounds of feedback are left, inside the check button. */
+.ai-check-left {
+  margin-left: 0.15rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ai-check-last {
+  margin: 0;
+  color: var(--ws-muted);
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.ai-check-stale {
+  color: var(--ws-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.ai-check-feedback {
+  color: var(--ws-text);
+  font-size: 0.92rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ex-justification-hint {
+  color: var(--ws-muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.ex-justification {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+/* Drafts of new subpoenas and sets */
+
+.ex-draft-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ex-draft-row .ex-set-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.ex-draft-row .cw-row-body {
+  min-width: 0;
+}
+
+.ex-draft-row .cw-row-body strong {
+  overflow-wrap: anywhere;
+}
+
+.ex-draft-status {
+  align-self: center;
+  color: var(--ws-muted);
+  font-size: 0.82rem;
+}
+
+.ex-draft-status:empty {
+  display: none;
+}
+
+.ex-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.ex-draft-row .ex-confirm {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--tint-rose-fg);
+  border-radius: 0.55rem;
+  background: var(--tint-rose-bg);
+}
+
+.ai-check-actions .ex-confirm {
+  width: auto;
+}
+
+.ex-confirm-text {
+  color: var(--tint-rose-fg);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ws-btn-danger {
+  border: 1px solid var(--tint-rose-fg);
+  background: var(--tint-rose-fg);
+  color: var(--surface);
+}
+
+.ws-btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.ex-draft-row .check-summary-badge {
+  align-self: flex-start;
+  justify-self: start;
+  margin-top: 0.3rem;
+  white-space: nowrap;
+}

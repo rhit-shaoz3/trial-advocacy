@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { Download, TriangleAlert, Upload, X } from 'lucide-react'
 import { FileViewer } from '../../../components/FileViewer'
+import { SortHeader } from '../../../components/SortHeader'
+import { byText, useSort, type SortState } from '../../../components/sorting'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate, SOURCE_LABEL } from '../../../courses/caseLabels'
 import {
@@ -24,9 +26,6 @@ const ACCEPT = [
   '.mp4,.mov,.webm', // video
 ].join(',')
 
-/** How often the list refreshes while files are still being transcribed. */
-const POLL_MS = 5000
-
 /** A file waiting to be uploaded, with the label and audience the instructor picks for it. */
 interface QueuedFile {
   key: number
@@ -34,6 +33,9 @@ interface QueuedFile {
   label: string
   audience: MaterialAudience
 }
+
+/** How often the list refreshes while files are still being read, so a failure shows up. */
+const POLL_MS = 5000
 
 let nextKey = 0
 /** "Ride log (March).pdf" → "Ride log (March)" */
@@ -45,11 +47,35 @@ const SPECIFIC = 'specific'
 /** Where a file came from (files from before sources were recorded are the instructor's). */
 const sourceOf = (m: CaseMaterial): MaterialSource => m.source ?? 'instructor'
 
+/** The columns the table sorts by. */
+type SortKey = 'file' | 'source' | 'audience' | 'added'
+
+const SORTS: Record<SortKey, { label: string; first: 1 | -1; compare(a: CaseMaterial, b: CaseMaterial): number }> = {
+  file: { label: 'File', first: 1, compare: (a, b) => byText(a.filename, b.filename) },
+  source: { label: 'Source', first: 1, compare: (a, b) => byText(SOURCE_LABEL[sourceOf(a)], SOURCE_LABEL[sourceOf(b)]) },
+  audience: { label: 'Visible to', first: 1, compare: (a, b) => byText(AUDIENCE_LABEL[a.audience], AUDIENCE_LABEL[b.audience]) },
+  // Words sort A to Z first; dates newest first.
+  added: { label: 'Added', first: -1, compare: (a, b) => a.uploadedAt.localeCompare(b.uploadedAt) },
+}
+
+const FIRST = Object.fromEntries(Object.entries(SORTS).map(([k, s]) => [k, s.first])) as Record<SortKey, 1 | -1>
+
+/** The initial file first, then the rest by the chosen column (ties by file name). */
+function sortMaterials(list: CaseMaterial[], sort: SortState<SortKey>) {
+  return [...list].sort(
+    (a, b) =>
+      Number(b.initial) - Number(a.initial) ||
+      sort.dir * SORTS[sort.key].compare(a, b) ||
+      byText(a.filename, b.filename),
+  )
+}
+
 /**
  * The case file: the pieces of the fact pattern (documents, images, audio,
  * video), each shown to everyone in the case, only to one side, or only to
  * instructors, and on top of that to particular case worlds or teams. Every
- * file is also transcribed for the AI witnesses to read.
+ * file is also transcribed for the AI to read (behind the scenes). The initial
+ * file comes first, then the rest by file name, or by the column clicked.
  */
 export function MaterialsSection({
   courseId,
@@ -66,7 +92,12 @@ export function MaterialsSection({
   const [materials, setMaterials] = useState<CaseMaterial[] | null>(null)
   /** Which files the table shows, by where they came from; null for all. */
   const [sourceFilter, setSourceFilter] = useState<MaterialSource | null>(null)
-  const shown = (materials ?? []).filter((m) => !sourceFilter || sourceOf(m) === sourceFilter)
+  /** The column the table is sorted by: file name, A to Z, until a heading is clicked. */
+  const [sort, sortBy] = useSort<SortKey>('file', FIRST)
+  const shown = sortMaterials(
+    (materials ?? []).filter((m) => !sourceFilter || sourceOf(m) === sourceFilter),
+    sort,
+  )
   const [loadError, setLoadError] = useState<string | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
@@ -104,7 +135,7 @@ export function MaterialsSection({
     }
   }, [service, courseId, caseId])
 
-  // Transcription runs in the background after an upload; check back until it's done.
+  // Reading runs in the background after an upload; check back until it's done.
   const pending = materials?.some((m) => m.textStatus === 'pending') ?? false
   useEffect(() => {
     if (!pending) return
@@ -399,11 +430,9 @@ export function MaterialsSection({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th scope="col">File</th>
-                    <th scope="col">Source</th>
-                    <th scope="col">Visible to</th>
-                    <th scope="col">AI text</th>
-                    <th scope="col">Added</th>
+                    {(Object.keys(SORTS) as SortKey[]).map((key) => (
+                      <SortHeader key={key} column={key} label={SORTS[key].label} sort={sort} onSort={sortBy} />
+                    ))}
                     <th scope="col">
                       <span className="visually-hidden">Actions</span>
                     </th>
@@ -435,6 +464,21 @@ export function MaterialsSection({
                             {fileTypeLabel(m.contentType)} · {formatSize(m.sizeBytes)}
                             {m.description && ` · ${m.description}`}
                           </small>
+                          {/* Reading happens behind the scenes; only a failure needs the instructor. */}
+                          {m.textStatus === 'failed' && (
+                            <small className="content-text-failed">
+                              {retrying === m.id ? (
+                                'Reading again…'
+                              ) : (
+                                <>
+                                  The AI couldn&rsquo;t read this file.{' '}
+                                  <button type="button" className="link-button" onClick={() => handleRetry(m)} aria-label={`Read ${m.filename} again`}>
+                                    Retry
+                                  </button>
+                                </>
+                              )}
+                            </small>
+                          )}
                           {m.initial ? (
                             <span className="badge badge-case-active badge-initial">Initial file</span>
                           ) : m.worldNumber ? null : (
@@ -486,14 +530,6 @@ export function MaterialsSection({
                             </button>
                           )}
                         </td>
-                        <td>
-                          <TextStatusCell
-                            material={m}
-                            textUrl={service.materialTextUrl(courseId, caseId, m.id)}
-                            retrying={retrying === m.id}
-                            onRetry={() => handleRetry(m)}
-                          />
-                        </td>
                         <td>{shortDate(m.uploadedAt)}</td>
                         <td className="cell-actions">
                           <button
@@ -508,7 +544,7 @@ export function MaterialsSection({
                       </tr>
                       {sharing === m.id && teams && (
                         <tr className="share-row">
-                          <td colSpan={6}>
+                          <td colSpan={5}>
                             <SharePicker
                               material={m}
                               teams={teams}
@@ -539,36 +575,5 @@ export function MaterialsSection({
         />
       )}
     </section>
-  )
-}
-
-/** Whether the AI witnesses can read the file yet, with its transcription to check. */
-function TextStatusCell({
-  material: m,
-  textUrl,
-  retrying,
-  onRetry,
-}: {
-  material: CaseMaterial
-  textUrl: string
-  retrying: boolean
-  onRetry(): void
-}) {
-  if (retrying || m.textStatus === 'pending') return <span className="muted">Reading…</span>
-  if (m.textStatus === 'none') return <span className="muted">Nothing to read</span>
-  if (m.textStatus === 'ready') {
-    return (
-      <a href={textUrl} target="_blank" rel="noreferrer" aria-label={`View the text of ${m.filename}`}>
-        View text
-      </a>
-    )
-  }
-  return (
-    <span className="content-text-failed">
-      <span className="form-error">{m.textError ?? 'Could not read this file.'}</span>{' '}
-      <button type="button" className="link-button" onClick={onRetry} aria-label={`Read ${m.filename} again`}>
-        Retry
-      </button>
-    </span>
   )
 }

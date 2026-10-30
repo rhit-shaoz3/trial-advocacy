@@ -17,6 +17,10 @@
                                       the types the instructor allows)
     request_text                      the subpoena's numbered requests, definitions, date ranges, and
                                       any requested form for ESI, as the student wrote them
+    justification                     what the requesting side would tell the judge on a motion to quash
+                                      or modify; blank for subpoenas served before it was asked for
+    mentor_approved                   true when a supervising attorney (the discovery mentor) reviewed
+                                      this exact subpoena under the same rules and found it proper
     team_documents[]                  { title }  case files the requesting team already has
     world_subpoenas[]                 { recipient, type, request, response_title }  earlier subpoenas in this
                                       case world that got a response; the response is in the case file under
@@ -47,6 +51,19 @@ It asks for:
 <subpoena>
 {{request_text}}
 </subpoena>
+{{#justification}}
+
+How the requesting side justifies it (what they would tell the judge on a motion to quash or modify):
+<justification>
+{{justification}}
+</justification>
+
+Weigh this when deciding whether a court would quash or modify the subpoena, but it doesn't make an improper request proper.
+{{/justification}}
+{{#mentor_approved}}
+
+A supervising attorney reviewed this exact subpoena under the same rules and found it proper. Don't tag it QUASH or MODIFY; respond to it as written. Still follow the rules for particular kinds of recipients (for example, no message contents from a phone carrier).
+{{/mentor_approved}}
 
 Respond only to the types listed above. If the subpoena also asks for something else, such as testimony or a type not listed, say in one line that it's outside this response.
 

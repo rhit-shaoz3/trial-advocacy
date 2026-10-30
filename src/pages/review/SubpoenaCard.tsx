@@ -12,6 +12,7 @@ import type {
   ProducedDocument,
 } from "../../courses/types";
 import { ROLE_LABEL, worldLabel } from "../../courses/worldLabel";
+import { CheckSummary } from "../../components/CheckSummary";
 
 const dateTime = (iso: string) =>
   new Date(iso).toLocaleString("en-US", {
@@ -161,7 +162,13 @@ export function SubpoenaCard({
           servedAt={s.sentAt}
           dueAt={s.dueAt}
         />
+        {s.justification && (
+          <p className="review-subpoena-justification">
+            <strong>Justification:</strong> {s.justification}
+          </p>
+        )}
       </details>
+      <CheckSummary label={`${team}'s AI check before serving:`} check={s.check} />
 
       {answered ? (
         <div className="review-subpoena-answer">
@@ -450,7 +457,7 @@ function DenyDialog({
           value={note}
           rows={3}
           maxLength={4000}
-          placeholder="The request is overbroad: it has no date range and isn't tied to the claims."
+          placeholder="Why the request is improper: overbroad, privileged, or not tied to the claims"
           onChange={(e) => setNote(e.target.value)}
         />
       </label>
@@ -515,7 +522,7 @@ function RedraftDialog({
           value={notes}
           rows={4}
           maxLength={4000}
-          placeholder="Produce the maintenance log for June 2024 only, and leave out the inspector's handwritten notes."
+          placeholder="What the response should produce or leave out"
           onChange={(e) => setNotes(e.target.value)}
         />
       </label>

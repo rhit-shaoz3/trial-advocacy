@@ -482,6 +482,12 @@
   font-size: 0.8rem;
 }
 
+.review-subpoena-justification {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
 /* The queue beside the running list of facts */
 
 .review-layout {

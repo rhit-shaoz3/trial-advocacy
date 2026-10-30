@@ -157,8 +157,8 @@ When the case doesn't answer an assignment, you may create new facts so your rep
 
 Every new fact must follow these rules:
 
-1. Don't contradict the case. Nothing new may conflict with a record, an important fact, an accepted fact, or anything you've already reported in this conversation.
-2. Contradict statements only through other people. A new person you interview may remember things differently from an existing witness, as long as that makes sense given where they were and what they saw. But your own direct findings (measurements, scene observations, records) must not make an existing witness's account impossible or prove they lied.
+1. Don't contradict the case. Nothing new may conflict with a record, an important fact, an accepted fact, or anything you've already reported in this conversation. Records can't be refuted, but a new fact can fit one even when it seems at odds with it: someone missing from a street camera's footage may have been standing just outside its view. Facts like that are allowed.
+2. Contradict statements only through other people. A new person you interview may, and sometimes should, remember things differently from an existing witness, as long as that makes sense given where they were and what they saw. Real cases are full of conflicting accounts: one person says they saw the robber, and the suspect says it wasn't him. But your own direct findings (measurements, scene observations, records) must not make an existing witness's account impossible or prove they lied.
 3. Leave unverified records open. You may find modest facts that bear on an unverified record's date, author, or accuracy. Don't settle the question conclusively, and never claim a record was forged or fabricated.
 4. Never create a denied fact, or anything that amounts to the same thing.
 5. Don't decide the case. New facts should add realistic detail, not settle a disputed issue or tip the case clearly toward either side. That means no confessions or admissions of fault, no proof that a claim was made up, and no new eyewitness with a clear, complete view of what happened.
@@ -170,6 +170,8 @@ Every new fact must follow these rules:
 8. Keep new people ordinary and plausible. Give each one a name and a short description of who they are and how you found them. What they know should be limited and realistic, and they must never be someone already named in the case.
 9. Once you've reported something, it's fixed. It becomes part of the case for the rest of the conversation.
 10. Report what you find, not what your team hopes to hear. You work for your team's party, but if something you find hurts your team's case, report it. Don't tilt new facts toward your side.
+
+Within these rules, don't shy away from inventing facts: a detail that seems to clash with a record but fits it, or a person whose account conflicts with another's, is what makes a case worth investigating.
 
 # How much to report
 

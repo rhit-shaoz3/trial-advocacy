@@ -414,6 +414,25 @@ describe('ReviewPage: subpoenas', () => {
     expect(await within(card).findByText('Drafting Mercy Hospital’s response…')).toBeInTheDocument()
   })
 
+  it('shows the team’s justification and what the AI check told them', async () => {
+    const { user } = renderPage({
+      listSubpoenas: vi.fn().mockResolvedValue([
+        {
+          ...subpoena,
+          justification: 'Her ER records go to damages.',
+          check: { tag: 'SMALL_EDITS', feedback: 'Request 1: How far back?', current: false },
+        },
+      ]),
+    })
+    const card = await screen.findByRole('article', { name: 'Subpoena to Mercy Hospital' })
+    expect(card).toHaveTextContent("Team 3's AI check before serving:Small edits")
+    expect(card).toHaveTextContent('edited after the check')
+    await user.click(within(card).getByText('What the AI told them'))
+    expect(within(card).getByText('Request 1: How far back?')).toBeVisible()
+    await user.click(within(card).getByText('The subpoena Team 3 served'))
+    expect(card).toHaveTextContent('Justification: Her ER records go to damages.')
+  })
+
   it('denies with a note', async () => {
     const denySubpoena = vi.fn().mockResolvedValue({ ...subpoena, status: 'answered', outcome: 'denied', respondedAt: '2026-10-30T12:00:00Z' })
     const { user } = renderPage({ listSubpoenas: vi.fn().mockResolvedValue([subpoena]), denySubpoena })

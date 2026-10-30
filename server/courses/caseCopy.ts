@@ -131,10 +131,13 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
     await client.query(
       `INSERT INTO information_exchange (case_id, disclosures_enabled, subpoenas_enabled, subpoena_limit, subpoena_days,
          subpoena_types, interrogatories_enabled, interrogatory_limit, interrogatory_days, rfas_enabled, rfa_limit,
-         rfa_days, plaintiff_firm, plaintiff_partner, defense_firm, defense_partner, setup_completed_at)
+         rfa_days, plaintiff_firm, plaintiff_partner, defense_firm, defense_partner, subpoena_ai_feedback,
+         subpoena_ai_rounds, interrogatory_ai_feedback, interrogatory_ai_rounds, rfa_ai_feedback, rfa_ai_rounds,
+         setup_completed_at)
        SELECT $2, disclosures_enabled, subpoenas_enabled, subpoena_limit, subpoena_days,
          subpoena_types, interrogatories_enabled, interrogatory_limit, interrogatory_days, rfas_enabled, rfa_limit,
-         rfa_days, plaintiff_firm, plaintiff_partner, defense_firm, defense_partner, NULL
+         rfa_days, plaintiff_firm, plaintiff_partner, defense_firm, defense_partner, subpoena_ai_feedback,
+         subpoena_ai_rounds, interrogatory_ai_feedback, interrogatory_ai_rounds, rfa_ai_feedback, rfa_ai_rounds, NULL
        FROM information_exchange WHERE case_id = $1`,
       [sourceCaseId, newCaseId],
     )

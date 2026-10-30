@@ -6,6 +6,7 @@ import { worldLabel } from '../../../courses/worldLabel'
 import type { CourseCase, ExchangeKind, ExchangeRequest, ExchangeSettings } from '../../../courses/types'
 import type { ExchangeStep } from './ExchangeSetupFlow'
 import { KIND_LABEL, SIDE_LABEL, partSummary, subpoenaSummary } from './exchangeLabels'
+import { CheckSummary } from '../../../components/CheckSummary'
 import './exchange.css'
 
 const ADMISSION: Record<'agree' | 'disagree' | 'partial', string> = {
@@ -158,6 +159,10 @@ export function ExchangeTab({
                           </li>
                         ))}
                       </ol>
+                      <CheckSummary label={`Team ${r.fromTeam.number}'s AI check before sending:`} check={r.check} />
+                      {r.respondedAt && (
+                        <CheckSummary label={`Team ${r.toTeam.number}'s AI check before answering:`} check={r.responseCheck} />
+                      )}
                     </details>
                   </li>
                 )

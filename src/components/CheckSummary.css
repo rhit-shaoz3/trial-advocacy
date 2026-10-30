@@ -1,0 +1,61 @@
+/* What "Check with AI" told a team, for the instructor */
+
+.check-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+}
+
+.check-summary-label {
+  color: var(--ws-muted);
+  font-weight: 600;
+}
+
+.check-summary-badge {
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  background: var(--tint-grey-bg);
+  color: var(--ws-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.check-summary-looks_good {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.check-summary-small_edits {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.check-summary-needs_improvement {
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
+}
+
+.check-summary-note {
+  color: var(--ws-muted);
+  font-style: italic;
+}
+
+.check-summary-feedback {
+  flex-basis: 100%;
+}
+
+.check-summary-feedback summary {
+  color: var(--link, var(--ws-blue));
+  cursor: pointer;
+}
+
+.check-summary-feedback p {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-left: 3px solid var(--ws-line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

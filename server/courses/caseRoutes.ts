@@ -33,7 +33,7 @@ import { teamsRouter } from './teamRoutes.ts'
 import { getPreviewWorkspace, launchChecks } from './workspace.ts'
 import { applyDisclosures, requestsOpen } from '../exchange/exchange.ts'
 import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
-import { finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
+import { contentSuggestions, finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 import { duplicateCase, shareCase } from './caseCopy.ts'
 import { caseFacts } from '../reviews/caseFacts.ts'
@@ -180,6 +180,11 @@ caseRouter.use('/exchange', exchangeRouter)
 /** The witnesses the AI suggests from the initial file, offered once while setting up the case. */
 caseRouter.get('/witness-suggestions', async (req, res) => {
   res.json(await witnessSuggestions(req.courseCase!.id))
+})
+
+/** Suggested text for the case's own fields, from the initial file: `{ status: 'waiting' | 'ready' | 'none', suggestions }`. */
+caseRouter.get('/content-suggestions', async (req, res) => {
+  res.json(await contentSuggestions(req.courseCase!.id))
 })
 
 /** The instructor added some suggested witnesses, or skipped them: they're not offered again. */

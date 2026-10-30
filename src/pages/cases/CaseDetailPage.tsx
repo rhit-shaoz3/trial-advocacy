@@ -183,6 +183,7 @@ function CaseDetail() {
         <>
           {editing ? (
             <CaseForm
+              courseId={courseId}
               initial={courseCase}
               label="Edit case"
               submitLabel="Save"

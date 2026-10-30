@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type {
   CaseWorkspace,
   DisclosurePick,
+  DiscoveryDraft,
+  DraftKind,
   ExchangeKind,
   Investigation,
   ItemResponse,
@@ -16,10 +18,18 @@ import type {
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import { caseTab } from './caseTabs'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
+import type { DraftActions } from './exchange/useDraft'
 import { FlagsContext, type FlagsContextValue } from './flagsContext'
 
 /** How often the page checks for an investigator report while one is on its way. */
 const INVESTIGATION_POLL_MS = 20000
+
+/** The exchange with one kind of the team's drafts changed. */
+function withDrafts(exchange: StudentExchange, kind: DraftKind, change: (drafts: DiscoveryDraft[]) => DiscoveryDraft[]): StudentExchange {
+  if (kind === 'subpoena') return exchange.subpoenas ? { ...exchange, subpoenas: { ...exchange.subpoenas, drafts: change(exchange.subpoenas.drafts) } } : exchange
+  const part = exchange[kind]
+  return part ? { ...exchange, [kind]: { ...part, drafts: change(part.drafts) } } : exchange
+}
 
 /** A student's dashboard for one case, opened from "Enter case" or My cases. */
 export function StudentCasePage() {
@@ -27,8 +37,10 @@ export function StudentCasePage() {
   const service = useCourseService()
   const workspace = useOutletContext<WorkspaceContext | undefined>()
   // A notice can link straight to a tab: ?tab=investigator.
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const initialTab = caseTab(params.get('tab'))
+  // A draft open in the information exchange: ?tab=exchange&draft=…, so a refresh comes back to it.
+  const [initialDraftId] = useState(() => params.get('draft') ?? undefined)
   const [data, setData] = useState<CaseWorkspace | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reviews, setReviews] = useState<ReviewResult[] | undefined>(undefined)
@@ -79,17 +91,54 @@ export function StudentCasePage() {
     await afterExchange(await service.submitDisclosures(courseId, caseId, picks, heldBackReason))
   }
 
-  async function sendRequest(kind: ExchangeKind, items: string[]) {
-    setExchange(await service.sendExchangeRequest(courseId, caseId, kind, items))
+  async function sendRequest(kind: ExchangeKind, items: string[], checkId?: string, draftId?: string) {
+    setExchange(await service.sendExchangeRequest(courseId, caseId, kind, items, checkId, draftId))
   }
 
-  async function respondToRequest(requestId: string, responses: ItemResponse[]) {
-    await afterExchange(await service.respondToExchangeRequest(courseId, caseId, requestId, responses))
+  async function respondToRequest(requestId: string, responses: ItemResponse[], checkId?: string) {
+    await afterExchange(await service.respondToExchangeRequest(courseId, caseId, requestId, responses, checkId))
   }
 
-  async function serveSubpoena(subpoena: SubpoenaInput) {
-    setExchange(await service.serveSubpoena(courseId, caseId, subpoena))
+  async function serveSubpoena(subpoena: SubpoenaInput, checkId?: string, draftId?: string) {
+    setExchange(await service.serveSubpoena(courseId, caseId, subpoena, checkId, draftId))
   }
+
+  /** Saving a draft updates the team's list of drafts here, without reloading the exchange. */
+  const exchangeDrafts = useMemo<DraftActions>(
+    () => ({
+      async save(kind, id, content, lastCheck, options) {
+        const draft = id
+          ? await service.updateExchangeDraft(courseId, caseId, id, content, lastCheck, options)
+          : await service.createExchangeDraft(courseId, caseId, kind, content, lastCheck)
+        setExchange((prev) => prev && withDrafts(prev, draft.kind, (list) => [draft, ...list.filter((d) => d.id !== draft.id)]))
+        return draft
+      },
+      async remove(id) {
+        await service.deleteExchangeDraft(courseId, caseId, id)
+        setExchange((prev) => prev && (['subpoena', 'interrogatories', 'rfas'] as const).reduce((e, k) => withDrafts(e, k, (list) => list.filter((d) => d.id !== id)), prev))
+      },
+    }),
+    [service, courseId, caseId],
+  )
+
+  const openDraft = useCallback(
+    (draftId: string | null) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (draftId) {
+            next.set('tab', 'exchange')
+            next.set('draft', draftId)
+          } else {
+            next.delete('draft')
+            if (next.get('tab') === 'exchange') next.delete('tab')
+          }
+          return next
+        },
+        { replace: true },
+      ),
+    [setParams],
+  )
 
   /** Opening the Information exchange tab marks the other team's responses, and subpoena answers, read. */
   function openExchange() {
@@ -228,7 +277,11 @@ export function StudentCasePage() {
               onSendRequest={sendRequest}
               onRespondToRequest={respondToRequest}
               onServeSubpoena={serveSubpoena}
+              onCheckDiscovery={(input) => service.checkDiscovery(courseId, caseId, input)}
               onOpenExchange={openExchange}
+              exchangeDrafts={exchangeDrafts}
+              initialDraftId={initialDraftId}
+              onOpenDraft={openDraft}
               initialTab={initialTab}
             />
           </FlagsContext.Provider>

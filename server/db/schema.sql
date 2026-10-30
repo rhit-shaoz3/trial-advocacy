@@ -517,7 +517,7 @@ CREATE INDEX IF NOT EXISTS exchange_requests_case_idx ON exchange_requests (case
 
 -- One question or request in a set, one per line, and the response.
 -- `weight` is how many it counts toward the team's limit: each subpart of an
--- interrogatory, like (a) and (b), counts as its own question.
+-- interrogatory, like (a) and (b), or each separate question mark, counts as its own question.
 -- Interrogatories get an `answer` (or an objection); requests for admission
 -- get agree, disagree, or partial (with what's agreed and what isn't).
 CREATE TABLE IF NOT EXISTS exchange_items (
@@ -591,6 +591,19 @@ ALTER TABLE information_exchange DROP CONSTRAINT IF EXISTS information_exchange_
 ALTER TABLE information_exchange ADD CONSTRAINT information_exchange_subpoena_types_check
   CHECK (cardinality(subpoena_types) > 0
          AND subpoena_types <@ '{documents,esi,tangible_things,inspection}'::text[]);
+
+-- Whether teams can have the AI mentor check their subpoenas, sets, and
+-- answers before sending ("Check with AI"), and how many checks one draft
+-- gets (null: unlimited; 2 by default).
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS subpoena_ai_feedback boolean NOT NULL DEFAULT true;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS interrogatory_ai_feedback boolean NOT NULL DEFAULT true;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS rfa_ai_feedback boolean NOT NULL DEFAULT true;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS subpoena_ai_rounds integer DEFAULT 2 CHECK (subpoena_ai_rounds BETWEEN 1 AND 10);
+ALTER TABLE information_exchange ALTER COLUMN subpoena_ai_rounds SET DEFAULT 2;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS interrogatory_ai_rounds integer DEFAULT 2 CHECK (interrogatory_ai_rounds BETWEEN 1 AND 10);
+ALTER TABLE information_exchange ALTER COLUMN interrogatory_ai_rounds SET DEFAULT 2;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS rfa_ai_rounds integer DEFAULT 2 CHECK (rfa_ai_rounds BETWEEN 1 AND 10);
+ALTER TABLE information_exchange ALTER COLUMN rfa_ai_rounds SET DEFAULT 2;
 
 -- The AI drafts each subpoena's response as the recipient, and the instructor
 -- reviews the draft before the team sees anything:
@@ -705,10 +718,81 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_key text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_status text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_done_at timestamptz;
 
+-- Suggested text for the case's own fields (the disputed issues, the
+-- investigator's notes, the note to students, a few tasks), offered to the
+-- instructor to keep or edit. The same AI call as the witness suggestions
+-- makes it, so it shares their key (the initial file) and status.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS content_suggestions jsonb;
+
 -- Word documents (.docx) weren't read before; read the ones marked as having no text again.
 UPDATE case_materials SET text_status = 'pending', text_error = NULL
  WHERE text_status = 'none'
    AND content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+-- A subpoena's justification: what the requesting team would tell the judge
+-- about its validity, relevance, and proportionality on a motion to quash or
+-- modify. The recipient weighs it, and the instructor sees it.
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS justification text NOT NULL DEFAULT '';
+
+-- The discovery mentor's checks on a team's draft (a subpoena, a set of
+-- interrogatories or requests for admission, or answers to a set), before
+-- the team sends it. `content_hash` is what was checked, so a submission can
+-- tell whether it's the draft the mentor saw or was edited since.
+CREATE TABLE IF NOT EXISTS discovery_checks (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id      uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  kind         text        NOT NULL CHECK (kind IN ('subpoena', 'interrogatories', 'rfas')),
+  mode         text        NOT NULL CHECK (mode IN ('draft', 'answer')),
+  request_id   uuid        REFERENCES exchange_requests (id) ON DELETE CASCADE,
+  content_hash text        NOT NULL,
+  tag          text        NOT NULL CHECK (tag IN ('LOOKS_GOOD', 'SMALL_EDITS', 'NEEDS_IMPROVEMENT')),
+  feedback     text        NOT NULL,
+  checked_by   uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS discovery_checks_team_idx ON discovery_checks (team_id);
+
+-- Which check of the same draft this is (1 for the first), and the check it
+-- followed: a re-check reads the feedback before it, and the case's rounds of
+-- AI feedback are counted this way.
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS round integer NOT NULL DEFAULT 1;
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS previous_id uuid REFERENCES discovery_checks (id) ON DELETE SET NULL;
+
+-- The last check before a submission, for the instructor: its tag and
+-- feedback, and whether the submission is the draft that was checked (false:
+-- edited after). Null tag: sent without a check. On a set, check_* is the
+-- sending team's and response_check_* the answering team's.
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS check_tag text;
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS check_feedback text;
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS check_current boolean NOT NULL DEFAULT false;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS check_tag text;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS check_feedback text;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS check_current boolean NOT NULL DEFAULT false;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_tag text;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_feedback text;
+ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_current boolean NOT NULL DEFAULT false;
+
+-- A team's unsent subpoenas and sets, saved as they write them so a refresh or
+-- leaving the page doesn't lose the work. Shared by the team; deleted when sent
+-- or cancelled. content is the draft as typed (a subpoena's fields, or a set's
+-- { items }); check_id is the last AI check of it, and check_key the client's
+-- key for the draft it checked (to tell whether it's been edited since).
+CREATE TABLE IF NOT EXISTS discovery_drafts (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id    uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id    uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  kind       text        NOT NULL CHECK (kind IN ('subpoena', 'interrogatories', 'rfas')),
+  content    jsonb       NOT NULL,
+  check_id   uuid        REFERENCES discovery_checks (id) ON DELETE SET NULL,
+  check_key  text,
+  updated_by uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS discovery_drafts_team_idx ON discovery_drafts (case_id, team_id, updated_at DESC);
 
 -- The review panel no longer lists the facts the AI read from the case files.
 ALTER TABLE cases DROP COLUMN IF EXISTS file_facts;

@@ -3,6 +3,7 @@ import { ArrowRight, Check, ChevronLeft, FileText, Minus, Pencil, Plus, Triangle
 import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import type {
+  AiFeedbackSettings,
   CourseCase,
   DisclosureOption,
   ExchangeSettings,
@@ -11,7 +12,7 @@ import type {
   Side,
   SubpoenaType,
 } from '../../../courses/types'
-import { SUBPOENA_TYPES } from '../../../courses/types'
+import { DEFAULT_AI_FEEDBACK, SUBPOENA_TYPES } from '../../../courses/types'
 import { SUBPOENA_TYPE_HINT, SUBPOENA_TYPE_LABEL } from '../../../courses/subpoenaForm'
 import { WelcomeEmail } from '../../../caseWorkspace/exchange/WelcomeEmail'
 import { SIDE_LABEL, partSummary, subpoenaSummary } from './exchangeLabels'
@@ -51,7 +52,7 @@ const PART_COPY: Record<Part, { limit: string; limitHint: string; unit: string; 
   },
   interrogatories: {
     limit: 'Questions per team',
-    limitHint: 'The total across every set a team sends. Each subpart counts as a question.',
+    limitHint: 'The total across every set a team sends. Each subpart or separate question mark counts as a question.',
     unit: 'questions',
     daysHint: 'Starts when the other team receives the set.',
   },
@@ -452,6 +453,7 @@ function PartForm({
       {part === 'subpoenas' && value.types && (
         <SubpoenaTypes types={value.types} disabled={!value.enabled} onChange={(types) => onChange({ ...value, types } as PartSettings)} />
       )}
+      <AiFeedbackRows part={part} value={value.aiFeedback ?? DEFAULT_AI_FEEDBACK} disabled={!value.enabled} onChange={(aiFeedback) => onChange({ ...value, aiFeedback })} />
       {part === 'subpoenas' && (
         <p className="muted exchange-note">
           Teams serve subpoenas on people and organizations from the information exchange phase on. The AI drafts each
@@ -459,6 +461,54 @@ function PartForm({
         </p>
       )}
     </div>
+  )
+}
+
+const MAX_AI_ROUNDS = 10
+
+/** Whether teams can check their drafts with the AI mentor, and how many times per draft. */
+function AiFeedbackRows({
+  part,
+  value,
+  disabled,
+  onChange,
+}: {
+  part: Part
+  value: AiFeedbackSettings
+  disabled: boolean
+  onChange(value: AiFeedbackSettings): void
+}) {
+  const what = part === 'subpoenas' ? 'a subpoena before serving it' : 'a set before sending it, and their answers before responding'
+  return (
+    <>
+      <SettingRow label="AI feedback" hint={`Teams can ask an AI mentor to review ${what}.`}>
+        <input
+          type="checkbox"
+          role="switch"
+          className="switch"
+          checked={value.enabled}
+          disabled={disabled}
+          onChange={(e) => onChange({ ...value, enabled: e.target.checked })}
+          aria-label={`AI feedback on ${STEP_LABEL[part].toLowerCase()}`}
+        />
+      </SettingRow>
+      <SettingRow label="Rounds of feedback" hint="How many times a team can check one draft before sending it.">
+        <select
+          className="exchange-rounds"
+          aria-label="Rounds of feedback"
+          value={value.rounds ?? ''}
+          disabled={disabled || !value.enabled}
+          onChange={(e) => onChange({ ...value, rounds: e.target.value === '' ? null : Number(e.target.value) })}
+        >
+          <option value="">Unlimited</option>
+          {Array.from({ length: MAX_AI_ROUNDS }, (_, i) => i + 1).map((n) => (
+            <option key={n} value={n}>
+              {n === 1 ? '1 round per draft' : `${n} rounds per draft`}
+            </option>
+          ))}
+        </select>
+      </SettingRow>
+    </>
   )
 }
 

@@ -641,6 +641,43 @@ describe('subpoenas', () => {
     expect((await prof.get(subpoenasUrl())).body.subpoenas[0].basedOn).toBeNull()
   })
 
+  it('in review lite, answers at once: a quash denies, a modify sends the narrowed response; an appeal reopens it', async () => {
+    await prof.put(`${caseUrl()}/review-mode`).send({ reviewMode: 'lite' })
+    await toExchange()
+    recipientWrites('QUASH\n\nOBJECTIONS: Overbroad and unduly burdensome.')
+    await serve(ada, 'Mercy Hospital', "All of Ramirez's records, ever.")
+    await subpoenasSettled()
+    recipientWrites('MODIFY\n\nProduced, limited to June 10: MH-000001')
+    await serve(ada, 'Atlas Coaster Co.')
+    await subpoenasSettled()
+
+    // Nothing waits for the instructor.
+    expect((await prof.get(subpoenasUrl())).body.subpoenas).toEqual([])
+    const [modified, quashed] = (await exchange(ada)).subpoenas.served
+    expect(quashed).toMatchObject({ outcome: 'denied', auto: true, response: 'OBJECTIONS: Overbroad and unduly burdensome.' })
+    expect(modified).toMatchObject({ outcome: 'responded', auto: true, response: 'Produced, limited to June 10: MH-000001' })
+    expect(modified.documents).toHaveLength(1)
+
+    // Ada appeals the denial; the instructor reopens it and answers it.
+    const appeal = await ada.post(`${myCaseUrl()}/flags`).send({ kind: 'subpoena', targetId: quashed.id, reason: 'We only need June 10.' })
+    expect(appeal.status).toBe(201)
+    expect((await ada.post(`${myCaseUrl()}/flags`).send({ kind: 'subpoena', targetId: quashed.id, reason: 'Again.' })).status).toBe(409)
+    const { flags } = (await prof.get(`/api/courses/${course.id}/reviews`)).body
+    expect(flags).toMatchObject([{ kind: 'subpoena', reason: 'We only need June 10.', subpoena: { id: quashed.id, flag: 'quash' } }])
+    expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(1)
+    await prof.post(`/api/courses/${course.id}/reviews/flags/${flags[0].id}/resolve`).send({ action: 'reopen' })
+    const [reopened] = (await prof.get(subpoenasUrl())).body.subpoenas
+    expect(reopened).toMatchObject({ id: quashed.id, status: 'open', outcome: null, auto: false })
+    expect((await exchange(ada)).subpoenas.served[1]).toMatchObject({ outcome: null, response: null })
+    await prof.post(`${subpoenasUrl()}/${quashed.id}/approve`).send({ response: 'Produced: June 10 only.' })
+    expect((await exchange(ada)).subpoenas.served[1]).toMatchObject({ outcome: 'responded', auto: false })
+    expect((await ada.get(`${myCaseUrl()}/flags`)).body.flags).toMatchObject([{ status: 'resolved', resolution: 'changed' }])
+
+    // Only something decided automatically can be flagged.
+    const flagAgain = await ada.post(`${myCaseUrl()}/flags`).send({ kind: 'subpoena', targetId: quashed.id, reason: 'Hm.' })
+    expect(flagAgain.status).toBe(409)
+  })
+
   it("isn't offered when the case leaves subpoenas out", async () => {
     await prof.put(`${caseUrl()}/exchange`).send({ ...SETTINGS, subpoenas: { enabled: false, limit: 3, days: 14 } })
     await toExchange()

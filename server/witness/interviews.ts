@@ -58,6 +58,8 @@ export interface Interview {
   canAsk: boolean
   /** Why questions can't be asked, when they can't. */
   notice: string | null
+  /** Review lite: an ended interview's new facts stand without the instructor. */
+  reviewLite?: boolean
 }
 
 const UNIQUE_VIOLATION = '23505'
@@ -165,6 +167,7 @@ async function view(witness: Witness, owner: InterviewOwner, interviewId: string
 export interface InterviewContext {
   courseCase: Pick<CourseCase, 'id' | 'title' | 'summary' | 'inWorldDate' | 'disputedIssues' | 'importantFacts'> & {
     parties?: CourseCase['parties']
+    reviewMode?: CourseCase['reviewMode']
   }
   witness: Witness
   owner: InterviewOwner
@@ -218,7 +221,7 @@ export async function getInterview(ctx: InterviewContext): Promise<Interview> {
     await closeInterview(interviewId, ctx.owner.teamId)
     return getInterview(ctx)
   }
-  return { ...current, exhibits: ctx.exhibits }
+  return { ...current, exhibits: ctx.exhibits, reviewLite: ctx.courseCase.reviewMode === 'lite' }
 }
 
 /** Ends the current interview and opens a fresh one. */

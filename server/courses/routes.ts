@@ -41,6 +41,7 @@ import { sendInvestigation, teamInvestigations, type InvestigationContext } from
 import { myExchangeRouter } from '../exchange/exchangeRoutes.ts'
 import { subpoenasRouter } from '../exchange/subpoenaRoutes.ts'
 import { openSubpoenaCount } from '../exchange/subpoenas.ts'
+import { markFlagsSeen, openFlagCount, raiseFlag, teamFlags } from '../reviews/flags.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -183,7 +184,8 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
           upcoming: [],
           stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
           // Subpoenas waiting for an answer are on the Review page too.
-          reviewCount: (await openReviewCount(course.id)) + (await openSubpoenaCount(course.id)),
+          reviewCount:
+            (await openReviewCount(course.id)) + (await openSubpoenaCount(course.id)) + (await openFlagCount(course.id)),
           instructor: await instructorHome(course.id),
         }
       : {
@@ -360,6 +362,33 @@ coursesRouter.post('/:courseId/my-cases/:caseId/investigator/requests', async (r
 coursesRouter.post('/:courseId/my-cases/:caseId/investigator/seen', async (req, res) => {
   const ctx = await teamInvestigation(req, false)
   if (ctx) await markReviewsSeen(ctx.caseId, ctx.teamId, ctx.userId, 'investigation')
+  res.status(204).end()
+})
+
+/** The team's flags on things decided automatically (review lite), with the instructor's answers. */
+coursesRouter.get('/:courseId/my-cases/:caseId/flags', async (req, res) => {
+  const { courseId, caseId } = req.params
+  await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  res.json({ flags: teamId ? await teamFlags(caseId, teamId, req.user!.id) : [] })
+})
+
+/** Flags something decided automatically for the instructor: `{ kind, targetId, reviewId, reason }`. */
+coursesRouter.post('/:courseId/my-cases/:caseId/flags', async (req, res) => {
+  const { courseId, caseId } = req.params
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  if (workspace.case.status !== 'active') throw new HttpError(409, 'This case is closed.')
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  if (!teamId) throw new HttpError(409, 'You need a team first.')
+  res.status(201).json({ flags: await raiseFlag({ caseId, teamId, userId: req.user!.id }, req.body) })
+})
+
+/** Marks the instructor's answers to the team's flags as read by this student. */
+coursesRouter.post('/:courseId/my-cases/:caseId/flags/seen', async (req, res) => {
+  const { courseId, caseId } = req.params
+  await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  if (teamId) await markFlagsSeen(caseId, teamId, req.user!.id)
   res.status(204).end()
 })
 

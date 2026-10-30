@@ -3,7 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { CourseServiceContext } from '../../courses/CourseServiceContext'
-import type { CourseService, CourseSubpoena, FactDecision, InterviewReview } from '../../courses/types'
+import type {
+  CaseFacts,
+  CourseCase,
+  CourseFlag,
+  CourseService,
+  CourseSubpoena,
+  FactDecision,
+  FactGroup,
+  InterviewReview,
+  ReviewQueue,
+} from '../../courses/types'
 import { fakeCourseService } from '../../test/fakeCourseService'
 import { ReviewPage } from './ReviewPage'
 
@@ -26,6 +36,11 @@ const review: InterviewReview = {
   ],
 }
 
+const facts: CaseFacts = {
+  allWorlds: { accepted: [], denied: [] },
+  worlds: [],
+}
+
 const ruled = (decisions: (FactDecision | null)[]) => ({
   ...review,
   facts: review.facts.map((f, i) => ({ ...f, decision: decisions[i] })),
@@ -46,26 +61,29 @@ function renderPage(overrides: Partial<CourseService>, url = '/courses/c1/review
   return { user, service }
 }
 
+/** The open queue: these reviews, and any groups or flags. */
+const queue = (reviews: InterviewReview[], more: Partial<ReviewQueue> = {}) =>
+  vi.fn().mockResolvedValue({ reviews, groups: [], flags: [], ...more })
+
 describe('ReviewPage', () => {
   it('shows each conversation to review with its world, team, and witness', async () => {
-    const { service } = renderPage({ listReviews: vi.fn().mockResolvedValue([review]) })
+    const { service } = renderPage({ listReviewQueue: queue([review]) })
 
     const card = await screen.findByRole('article', { name: 'Interview of Elena Torres' })
-    expect(service.listReviews).toHaveBeenCalledWith('c1', 'open')
+    expect(service.listReviewQueue).toHaveBeenCalledWith('c1')
     expect(card).toHaveTextContent('Rivera v. Thrill Park')
     expect(card).toHaveTextContent('World B · Plaintiff · Team 3 (Ada Lawyer, Bo Partner)')
     expect(within(card).getAllByRole('radiogroup')).toHaveLength(2)
-    expect(within(card).getByRole('button', { name: 'Finish review' })).toBeDisabled()
+    expect(within(card).queryByRole('button', { name: 'Finish review' })).not.toBeInTheDocument()
     expect(card).toHaveTextContent('0 of 2 ruled')
   })
 
-  it('saves each ruling, and finishes the review once every fact has one', async () => {
+  it('saves each ruling, and the review is done once every fact has one', async () => {
     const decideFact = vi
       .fn()
       .mockResolvedValueOnce(ruled(['accept_world', null]))
-      .mockResolvedValueOnce(ruled(['accept_world', 'deny_case']))
-    const completeReview = vi.fn().mockResolvedValue({ ...ruled(['accept_world', 'deny_case']), status: 'completed' })
-    const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([review]), decideFact, completeReview })
+      .mockResolvedValueOnce({ ...ruled(['accept_world', 'deny_case']), status: 'completed' })
+    const { user } = renderPage({ listReviewQueue: queue([review]), decideFact })
 
     const first = await screen.findByRole('radiogroup', { name: 'Ruling on fact 1' })
     expect(within(first).getAllByRole('radio').map((r) => r.closest('label')!.textContent)).toEqual([
@@ -76,18 +94,19 @@ describe('ReviewPage', () => {
     ])
     await user.click(within(first).getByRole('radio', { name: 'Accept for this world' }))
     expect(decideFact).toHaveBeenCalledWith('c1', 'r1', 'f1', 'accept_world')
+    expect(screen.getByRole('article', { name: 'Interview of Elena Torres' })).toHaveTextContent('1 of 2 ruled')
     await user.click(within(screen.getByRole('radiogroup', { name: 'Ruling on fact 2' })).getByRole('radio', { name: 'Deny for all worlds' }))
     expect(decideFact).toHaveBeenLastCalledWith('c1', 'r1', 'f2', 'deny_case')
 
-    await user.click(screen.getByRole('button', { name: 'Finish review' }))
-    expect(completeReview).toHaveBeenCalledWith('c1', 'r1')
-    expect(await screen.findByText('Nothing to review.')).toBeInTheDocument()
+    expect(await screen.findByRole('status')).toHaveTextContent('Interview of Elena Torres for Team 3 is done.')
+    expect(screen.queryByRole('article', { name: 'Interview of Elena Torres' })).not.toBeInTheDocument()
   })
 
-  it('lists completed reviews with the rulings made', async () => {
+  it('lists completed reviews with the rulings made, which can still be changed', async () => {
     const done = { ...ruled(['accept_case', 'deny_world']), status: 'completed' as const, completedAt: '2026-10-16T16:00:00.000Z' }
-    const listReviews = vi.fn().mockImplementation((_c: string, status: string) => Promise.resolve(status === 'completed' ? [done] : []))
-    const { user } = renderPage({ listReviews })
+    const listReviews = vi.fn().mockResolvedValue([done])
+    const decideFact = vi.fn().mockResolvedValue({ ...done, facts: [{ ...done.facts[0], decision: 'deny_case' }, done.facts[1]] })
+    const { user } = renderPage({ listReviews, decideFact })
 
     expect(await screen.findByText('Nothing to review.')).toBeInTheDocument()
     await user.click(screen.getByRole('tab', { name: 'Completed reviews' }))
@@ -97,14 +116,18 @@ describe('ReviewPage', () => {
     expect(card).toHaveTextContent('Accept for all worlds')
     expect(card).toHaveTextContent('Deny for this world')
     expect(within(card).queryByRole('radio')).not.toBeInTheDocument()
-    expect(within(card).queryByRole('button', { name: 'Finish review' })).not.toBeInTheDocument()
+
+    await user.click(within(card).getAllByRole('button', { name: 'Change ruling' })[0])
+    await user.click(within(card).getByRole('radio', { name: 'Deny for all worlds' }))
+    expect(decideFact).toHaveBeenCalledWith('c1', 'r1', 'f1', 'deny_case')
+    expect(within(card).queryByRole('radio')).not.toBeInTheDocument()
   })
 
   it('shows a review still being summarized, and retries one that failed', async () => {
     const failed = { ...review, id: 'r2', status: 'failed' as const, error: 'Could not list the new facts.', facts: [] }
     const summarizing = { ...review, id: 'r3', status: 'summarizing' as const, facts: [] }
     const retryReview = vi.fn().mockResolvedValue({ ...failed, status: 'summarizing', error: null })
-    const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([failed, summarizing]), retryReview })
+    const { user } = renderPage({ listReviewQueue: queue([failed, summarizing]), retryReview })
 
     expect(await screen.findByText('Could not list the new facts.')).toBeInTheDocument()
     expect(screen.getByText('Listing the new facts in this conversation…')).toBeInTheDocument()
@@ -120,7 +143,7 @@ describe('ReviewPage', () => {
         { position: 0, question: 'Where were you at 3?', objection: 'Ms. Park: Objection, form.', answer: 'On break.', askedBy: 'Ada Lawyer', struck: 'all', reasons: [{ kind: 'produced', fact: 'Torres was on break at 3:00.' }] },
       ],
     })
-    const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([review]), getReviewTranscript })
+    const { user } = renderPage({ listReviewQueue: queue([review]), getReviewTranscript })
 
     await user.click(await screen.findByText('Show conversation'))
     expect(getReviewTranscript).toHaveBeenCalledWith('c1', 'r1')
@@ -129,6 +152,17 @@ describe('ReviewPage', () => {
     // A denied fact's exchange shows struck out, as the team will see it.
     expect(screen.getByText(/Where were you at 3\?/).closest('p')).toHaveClass('transcript-strike')
     expect(screen.getByText('Denied:')).toBeInTheDocument()
+  })
+
+  it('opens the facts of the review’s world on request', async () => {
+    const getCaseFacts = vi.fn().mockResolvedValue({
+      ...facts,
+      worlds: [{ matchupId: 'mu2', number: 2, teams: [], accepted: [{ text: 'The gate was open.', source: 'Interview of Elena Torres · Team 3', auto: false }], denied: [] }],
+    })
+    const { user } = renderPage({ listReviewQueue: queue([review]), getCaseFacts })
+    const card = await screen.findByRole('article', { name: 'Interview of Elena Torres' })
+    await user.click(within(card).getByText('World B facts'))
+    expect(await within(card).findByText('The gate was open.')).toBeInTheDocument()
   })
 
   it("shows an investigator report with its assignment, and lets the instructor allow or refuse each file", async () => {
@@ -145,9 +179,12 @@ describe('ReviewPage', () => {
       facts: [{ id: 'f1', text: 'A camera points at the lift hill.', decision: 'accept_world' }],
       documents: [{ materialId: 'm9', title: 'Inspection log', decision: null }],
     }
-    const decideDocument = vi.fn().mockResolvedValue({ ...investigation, documents: [{ materialId: 'm9', title: 'Inspection log', decision: 'deny' }] })
-    const completeReview = vi.fn().mockResolvedValue({ ...investigation, status: 'finalizing' })
-    const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([investigation]), decideDocument, completeReview })
+    const decideDocument = vi.fn().mockResolvedValue({
+      ...investigation,
+      status: 'finalizing',
+      documents: [{ materialId: 'm9', title: 'Inspection log', decision: 'deny' }],
+    })
+    const { user } = renderPage({ listReviewQueue: queue([investigation]), decideDocument })
 
     const card = await screen.findByRole('article', { name: 'Investigation for Team 3' })
     expect(card).toHaveTextContent('Assignment from Ada Lawyer')
@@ -155,37 +192,18 @@ describe('ReviewPage', () => {
     expect(card).toHaveTextContent('1. I photographed the lift hill.')
     expect(card).toHaveTextContent("The park's maintenance records, by subpoena.")
     expect(within(card).queryByText('Show conversation')).not.toBeInTheDocument()
-    const finish = within(card).getByRole('button', { name: 'Finish review' })
-    expect(finish).toBeDisabled()
     expect(card).toHaveTextContent('1 of 1 ruled · 0 of 1 files decided')
 
     const file = within(card).getByRole('radiogroup', { name: 'Allow Team 3 access to Inspection log' })
     await user.click(within(file).getByRole('radio', { name: "Don't allow" }))
     expect(decideDocument).toHaveBeenCalledWith('c1', 'r5', 'm9', 'deny')
-    await user.click(within(card).getByRole('button', { name: 'Finish review' }))
 
-    // It moves to Completed at once; the team's report is written there.
-    expect(completeReview).toHaveBeenCalledWith('c1', 'r5')
+    // The last call finishes it; the team's report is written in Completed.
+    expect(await screen.findByRole('status')).toHaveTextContent('Investigation for Team 3 is done; their report is being written.')
     expect(screen.queryByRole('article', { name: 'Investigation for Team 3' })).not.toBeInTheDocument()
-    expect(await screen.findByText('Nothing to review.')).toBeInTheDocument()
   })
 
-  it('moves a finished review out at once, and brings it back if finishing fails', async () => {
-    let fail!: (err: Error) => void
-    const completeReview = vi.fn(() => new Promise<InterviewReview>((_, reject) => (fail = reject)))
-    const { user } = renderPage({ listReviews: vi.fn().mockResolvedValue([{ ...review, facts: [] }]), completeReview })
-
-    const card = await screen.findByRole('article', { name: 'Interview of Elena Torres' })
-    await user.click(within(card).getByRole('button', { name: 'Finish review' }))
-    // Gone before the server answers.
-    expect(screen.queryByRole('article', { name: 'Interview of Elena Torres' })).not.toBeInTheDocument()
-
-    fail(new Error('The server is down.'))
-    expect(await screen.findByRole('article', { name: 'Interview of Elena Torres' })).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not finish the review for Team 3. The server is down.')
-  })
-
-  it("warns when the investigator didn't list his new facts or files", async () => {
+  it("sends on a report with nothing to rule on, and warns when the investigator didn't list his new facts or files", async () => {
     const investigation: InterviewReview = {
       ...review,
       id: 'r6',
@@ -197,11 +215,120 @@ describe('ReviewPage', () => {
       documents: [],
       reviewBlockMissing: true,
     }
-    renderPage({ listReviews: vi.fn().mockResolvedValue([investigation]) })
+    const completeReview = vi.fn().mockResolvedValue({ ...investigation, status: 'finalizing' })
+    const { user } = renderPage({ listReviewQueue: queue([investigation]), completeReview })
 
     const card = await screen.findByRole('article', { name: 'Investigation for Team 3' })
     expect(within(card).getByRole('note')).toHaveTextContent("The investigator didn’t list his new facts or files.")
-    expect(within(card).getByRole('button', { name: 'Finish review' })).toBeEnabled()
+    await user.click(within(card).getByRole('button', { name: 'Send to Team 3' }))
+    expect(completeReview).toHaveBeenCalledWith('c1', 'r6')
+    expect(screen.queryByRole('article', { name: 'Investigation for Team 3' })).not.toBeInTheDocument()
+  })
+})
+
+describe('ReviewPage: similar facts', () => {
+  const group: FactGroup = {
+    id: 'g1',
+    caseId: 'k1',
+    caseTitle: 'Rivera v. Thrill Park',
+    headline: 'Teams 1 and 3 both got medical bills from Torres.',
+    differences: '$6,000 (Team 1) vs. $8,000 (Team 3)',
+    createdAt: '2026-10-16T15:00:00.000Z',
+    facts: [
+      { id: 'f1', text: 'The bills were $6,000.', reviewId: 'r1', teamNumber: 1, worldNumber: 1, source: 'Interview of Elena Torres' },
+      { id: 'f9', text: 'The bills were $8,000.', reviewId: 'r9', teamNumber: 3, worldNumber: 2, source: 'Interview of Elena Torres' },
+    ],
+    worlds: 2,
+  }
+
+  it('rules on the group for each world, or ungroups it', async () => {
+    const grouped = { ...review, facts: [{ ...review.facts[0], groupId: 'g1' }, review.facts[1]] }
+    const listReviewQueue = vi
+      .fn()
+      .mockResolvedValueOnce({ reviews: [grouped], groups: [group], flags: [] })
+      .mockResolvedValue({ reviews: [ruled(['accept_world', null])], groups: [], flags: [] })
+    const { user, service } = renderPage({ listReviewQueue })
+
+    const card = await screen.findByRole('article', { name: group.headline })
+    expect(card).toHaveTextContent('$6,000 (Team 1) vs. $8,000 (Team 3)')
+    expect(card).toHaveTextContent('Team 3 · World B · Interview of Elena Torres')
+    expect(within(card).getByText('Show conversation · Team 1')).toBeInTheDocument()
+    // In its review, the grouped fact points to the group instead of asking for a ruling.
+    const reviewCard = screen.getByRole('article', { name: 'Interview of Elena Torres' })
+    expect(within(reviewCard).getAllByRole('radiogroup')).toHaveLength(1)
+    expect(within(reviewCard).getByRole('link', { name: 'Rule on the group' })).toHaveAttribute('href', '#group-g1')
+
+    await user.click(within(card).getByRole('button', { name: 'Accept for these 2 worlds' }))
+    expect(service.decideFactGroup).toHaveBeenCalledWith('c1', 'g1', 'accept_world')
+    expect(screen.queryByRole('article', { name: group.headline })).not.toBeInTheDocument()
+  })
+
+  it('ungroups', async () => {
+    const { user, service } = renderPage({ listReviewQueue: queue([], { groups: [group] }) })
+    const card = await screen.findByRole('article', { name: group.headline })
+    expect(within(card).getByRole('button', { name: 'Accept for all worlds' })).toBeEnabled()
+    await user.click(within(card).getByRole('button', { name: 'Ungroup to rule on each' }))
+    expect(service.ungroupFacts).toHaveBeenCalledWith('c1', 'g1')
+  })
+})
+
+describe('ReviewPage: flags and the facts panel', () => {
+  const lite = { ...ruled(['accept_world', 'accept_world']), status: 'completed' as const, facts: review.facts.map((f) => ({ ...f, decision: 'accept_world' as const, auto: true })) }
+  const flag: CourseFlag = {
+    id: 'fl1',
+    kind: 'fact',
+    caseId: 'k1',
+    caseTitle: 'Rivera v. Thrill Park',
+    teamNumber: 3,
+    worldNumber: 2,
+    raisedBy: 'Ada Lawyer',
+    reason: 'Nothing was burning.',
+    createdAt: '2026-10-16T15:00:00.000Z',
+    factId: 'f2',
+    materialId: null,
+    review: lite,
+    subpoena: null,
+  }
+
+  it('shows what a student flagged, and the instructor changes the call', async () => {
+    const { user, service } = renderPage({ listReviewQueue: queue([], { flags: [flag] }) })
+    const card = await screen.findByRole('article', { name: 'A fact from the interview of Elena Torres' })
+    expect(card).toHaveTextContent('Flagged by Team 3')
+    expect(card).toHaveTextContent('Nothing was burning.')
+    expect(card).toHaveTextContent('Torres smelled smoke.')
+    expect(within(card).getByText('Show conversation')).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'Deny for this world' }))
+    expect(service.resolveFlag).toHaveBeenCalledWith('c1', 'fl1', { decision: 'deny_world' })
+  })
+
+  it('lists the case’s new facts, and switches review lite on', async () => {
+    const courseCase = { id: 'k1', title: 'Rivera v. Thrill Park', reviewMode: 'all' } as CourseCase
+    const setReviewMode = vi.fn().mockResolvedValue({ ...courseCase, reviewMode: 'lite' })
+    const { user } = renderPage({
+      listCases: vi.fn().mockResolvedValue([courseCase]),
+      getCaseFacts: vi.fn().mockResolvedValue({
+        ...facts,
+        allWorlds: { accepted: [{ text: 'Torres was on break.', source: 'Interview of Elena Torres · Team 1', auto: false }], denied: [] },
+        worlds: [{ matchupId: 'mu1', number: 1, teams: [{ number: 1, side: 'plaintiff' }, { number: 2, side: 'defense' }], accepted: [], denied: [] }],
+      }),
+      setReviewMode,
+    })
+
+    const panel = await screen.findByRole('complementary', { name: 'New facts' })
+    expect(within(panel).getByRole('heading', { name: 'New facts' })).toBeInTheDocument()
+    expect(await within(panel).findByText('Torres was on break.')).toBeInTheDocument()
+    expect(panel).toHaveTextContent('World A · Team 1 (Plaintiff) v. Team 2 (Defendant)')
+    // Only the new facts: not what the case files say, nor the important facts.
+    expect(panel).not.toHaveTextContent(/From the case files|Important facts/)
+
+    // Review lite is a switch: off, then turned on.
+    const lite = within(panel).getByRole('switch', { name: 'Review lite for Rivera v. Thrill Park' })
+    expect(lite).not.toBeChecked()
+    expect(panel).toHaveTextContent('Off: every new fact, file, and subpoena response waits for you.')
+    await user.click(lite)
+    expect(setReviewMode).toHaveBeenCalledWith('c1', 'k1', 'lite')
+    expect(lite).toBeChecked()
+    expect(panel).toHaveTextContent('On: the AI’s calls stand at once')
   })
 })
 

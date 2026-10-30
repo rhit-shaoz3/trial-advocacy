@@ -65,7 +65,8 @@ export function InvestigatorSection({
       <p className="muted section-hint">
         Teams email the investigator assignments in the investigate phase: finding and interviewing new people,
         searching public records, inspecting the scene. You review every report, its new facts, and any case files he
-        would unlock for the team, before the team sees it. Without an investigator, the case goes straight from the
+        would unlock for the team, before the team sees it (in review lite, set on the Review page, reports go straight
+        to the team, and you see what they flag). Without an investigator, the case goes straight from the
         introduction (or information exchange) to deposition.
       </p>
       <form className="panel-form investigator-form" onSubmit={handleSubmit} aria-label="Investigator settings">

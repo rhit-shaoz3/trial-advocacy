@@ -130,8 +130,8 @@ describe('sending an interview for review', () => {
       team: ['Ada Lawyer', 'Bo Partner'],
       status: 'open',
       facts: [
-        { id: expect.any(String), text: 'Torres was on break at 3:00.', decision: null },
-        { id: expect.any(String), text: 'Torres smelled smoke.', decision: null },
+        { id: expect.any(String), text: 'Torres was on break at 3:00.', decision: null, groupId: null, auto: false },
+        { id: expect.any(String), text: 'Torres smelled smoke.', decision: null, groupId: null, auto: false },
       ],
     })
     expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(1)
@@ -180,21 +180,20 @@ describe('ruling on the facts', () => {
     const [first, second] = review.facts
 
     expect((await decide(review.id, first.id, 'maybe')).body.error).toBe('Choose a ruling for this fact.')
-    expect((await decide(review.id, first.id, 'accept_world')).body.review.facts[0].decision).toBe('accept_world')
+    const early = await decide(review.id, first.id, 'accept_world')
+    expect(early.body.review).toMatchObject({ status: 'open', facts: [{ decision: 'accept_world', auto: false }, { decision: null }] })
 
-    const early = await prof.post(`${reviewsUrl()}/${review.id}/complete`)
-    expect(early.status).toBe(409)
-    expect(early.body.error).toBe('Rule on every fact first.')
-
-    await decide(review.id, second.id, 'deny_case')
-    const done = await prof.post(`${reviewsUrl()}/${review.id}/complete`)
+    const done = await decide(review.id, second.id, 'deny_case')
     expect(done.body.review).toMatchObject({ status: 'completed', completedAt: expect.any(String) })
 
     expect(await openReviews()).toEqual([])
     expect((await prof.get(`${reviewsUrl()}?status=completed`)).body.reviews[0].facts.map((f: { decision: string }) => f.decision))
       .toEqual(['accept_world', 'deny_case'])
-    expect((await decide(review.id, first.id, 'deny_world')).status).toBe(409)
     expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(0)
+
+    // A ruling can still be changed afterwards.
+    const changed = await decide(review.id, first.id, 'deny_world')
+    expect(changed.body.review).toMatchObject({ status: 'completed', facts: [{ decision: 'deny_world' }, { decision: 'deny_case' }] })
   })
 
   it('shows the conversation behind a review', async () => {
@@ -222,13 +221,14 @@ describe('rulings bind later interviews', () => {
     await interviewAndEnd(ada, ['World fact.', 'World lie.', 'Case fact.', 'Case lie.'])
     const [review] = await openReviews()
     const decisions = ['accept_world', 'deny_world', 'accept_case', 'deny_case']
-    for (const [i, fact] of review.facts.entries()) await decide(review.id, fact.id, decisions[i])
+    for (const [i, fact] of review.facts.slice(0, 3).entries()) await decide(review.id, fact.id, decisions[i])
 
     // Not yet completed: nothing binds the witness.
     await ada.post(`${interview()}/questions`).send({ question: 'Anything else?' })
     expect(profiles.at(-1)!.settledFacts).toEqual({ accepted: [], denied: [] })
 
-    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
+    // The last ruling completes it.
+    await decide(review.id, review.facts[3].id, decisions[3])
     await ada.post(`${interview()}/questions`).send({ question: 'Anything else?' })
     expect(profiles.at(-1)!.settledFacts).toEqual({ accepted: ['World fact.', 'Case fact.'], denied: ['World lie.', 'Case lie.'] })
 
@@ -261,11 +261,11 @@ describe('the team sees the results', () => {
     await interviewAndEnd(ada, ['World fact.', 'World lie.', 'Case fact.', 'Case lie.'])
     const [review] = await openReviews()
     const decisions = ['accept_world', 'deny_world', 'accept_case', 'deny_case']
-    for (const [i, fact] of review.facts.entries()) await decide(review.id, fact.id, decisions[i])
+    for (const [i, fact] of review.facts.slice(0, 3).entries()) await decide(review.id, fact.id, decisions[i])
 
-    // Nothing until the instructor finishes.
+    // Nothing until the instructor has ruled on everything.
     expect((await ada.get(`${myCaseUrl()}/reviews`)).body.reviews).toEqual([])
-    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
+    await decide(review.id, review.facts[3].id, decisions[3])
 
     const { reviews } = (await bo.get(`${myCaseUrl()}/reviews`)).body
     expect(reviews).toEqual([
@@ -275,6 +275,12 @@ describe('the team sees the results', () => {
         completedAt: expect.any(String),
         accepted: ['World fact.', 'Case fact.'],
         denied: ['World lie.', 'Case lie.'],
+        items: [
+          { id: expect.any(String), text: 'World fact.', accepted: true, auto: false },
+          { id: expect.any(String), text: 'World lie.', accepted: false, auto: false },
+          { id: expect.any(String), text: 'Case fact.', accepted: true, auto: false },
+          { id: expect.any(String), text: 'Case lie.', accepted: false, auto: false },
+        ],
         seen: false,
       },
     ])
@@ -379,7 +385,6 @@ describe("the team's transcript", () => {
     expect((await ada.get(transcriptUrl(review.id))).status).toBe(404) // still open
     await decide(review.id, review.facts[0].id, 'deny_world')
     await decide(review.id, review.facts[1].id, 'accept_case')
-    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
 
     const res = await ada.get(transcriptUrl(review.id))
     expect(res.status).toBe(200)
@@ -401,7 +406,6 @@ describe("the team's transcript", () => {
     const review = await linkedInterview()
     await decide(review.id, review.facts[0].id, 'deny_case')
     await decide(review.id, review.facts[1].id, 'deny_world')
-    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
 
     const { turns } = (await ada.get(transcriptUrl(review.id))).body
     expect(turns[2].struck).toBe('all')
@@ -412,7 +416,6 @@ describe("the team's transcript", () => {
     const review = await linkedInterview()
     await decide(review.id, review.facts[0].id, 'accept_world')
     await decide(review.id, review.facts[1].id, 'accept_world')
-    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
 
     expect((await bo.get(transcriptUrl(review.id))).status).toBe(200)
     expect((await eve.get(transcriptUrl(review.id))).status).toBe(404)
@@ -424,7 +427,6 @@ describe("the team's transcript", () => {
     await pool.query('UPDATE review_facts SET links = NULL WHERE review_id = $1', [review.id])
     await decide(review.id, review.facts[0].id, 'deny_world')
     await decide(review.id, review.facts[1].id, 'deny_world')
-    await prof.post(`${reviewsUrl()}/${review.id}/complete`)
 
     const res = (await ada.get(transcriptUrl(review.id))).body
     expect(res.marked).toBe(false)

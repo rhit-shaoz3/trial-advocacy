@@ -43,11 +43,11 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
     await client.query(
       `INSERT INTO cases (id, course_id, title, summary, status, phase, instructor_note, disputed_issues,
          plaintiff_key_facts, defense_key_facts, plaintiff_name, defendant_name,
-         investigator_enabled, investigator_name, investigator_instructions,
+         investigator_enabled, investigator_name, investigator_instructions, review_mode,
          setup_step, setup_completed_at, witness_suggestions_done_at, copy_setup, copied_from_title, copied_from_name)
        SELECT $2, $3, $4, summary, 'draft', 'introduction', instructor_note, disputed_issues,
          plaintiff_key_facts, defense_key_facts, plaintiff_name, defendant_name,
-         investigator_enabled, investigator_name, investigator_instructions,
+         investigator_enabled, investigator_name, investigator_instructions, review_mode,
          'worlds', NULL, now(), true, title, $5
        FROM cases WHERE id = $1`,
       [sourceCaseId, newCaseId, targetCourseId, title, sourceRows[0].owner],

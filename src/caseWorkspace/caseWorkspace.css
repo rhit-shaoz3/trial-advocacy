@@ -1280,3 +1280,91 @@
     padding-inline: 0.4rem;
   }
 }
+
+/* Review lite: flagging what was decided automatically */
+
+.cw-investigation-facts {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ws-line);
+}
+
+.cw-investigation-facts > span {
+  color: var(--ws-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cw-investigation-facts ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}
+
+.cw-flag-button {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+}
+
+.cw-flag-button svg,
+.cw-flag-status svg {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.cw-flag-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0;
+  color: var(--ws-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.cw-flag-open {
+  color: var(--tint-amber-fg);
+}
+
+.cw-flag-changed {
+  color: var(--tint-green-fg);
+}
+
+.cw-flag-form {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.cw-flag-form label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.cw-flag-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  font: inherit;
+  font-weight: 400;
+}
+
+.cw-flag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

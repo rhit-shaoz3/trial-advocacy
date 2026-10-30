@@ -185,7 +185,7 @@ export async function createMaterial(input: {
   contentType: string
   sizeBytes: number
   storageKey: string
-  uploadedBy: string
+  uploadedBy: string | null
   /** The case world the file belongs to; leave out for a file every world shares. */
   matchupId?: string | null
   /** The instructor's upload unless said otherwise. */

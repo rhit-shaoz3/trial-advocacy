@@ -628,6 +628,45 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/complete`, { method: 'POST' })).review
   },
 
+  async listReviewQueue(courseId) {
+    const { reviews, groups, flags } = await apiRequest(`${reviewsPath(courseId)}?status=open`)
+    return { reviews, groups: groups ?? [], flags: flags ?? [] }
+  },
+
+  async decideFactGroup(courseId, groupId, decision) {
+    const path = `${reviewsPath(courseId)}/fact-groups/${encodeURIComponent(groupId)}`
+    await apiRequest(path, { method: 'PUT', body: JSON.stringify({ decision }) })
+  },
+
+  async ungroupFacts(courseId, groupId) {
+    await apiRequest(`${reviewsPath(courseId)}/fact-groups/${encodeURIComponent(groupId)}/ungroup`, { method: 'POST' })
+  },
+
+  async resolveFlag(courseId, flagId, resolution) {
+    const path = `${reviewsPath(courseId)}/flags/${encodeURIComponent(flagId)}/resolve`
+    await apiRequest(path, { method: 'POST', body: JSON.stringify(resolution) })
+  },
+
+  async getCaseFacts(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/facts`)).facts
+  },
+
+  async setReviewMode(courseId, caseId, reviewMode) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/review-mode`, { method: 'PUT', body: JSON.stringify({ reviewMode }) })).case
+  },
+
+  async listMyFlags(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/flags`)).flags
+  },
+
+  async raiseFlag(courseId, caseId, input) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/flags`, { method: 'POST', body: JSON.stringify(input) })).flags
+  },
+
+  async markFlagsSeen(courseId, caseId) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/flags/seen`, { method: 'POST' })
+  },
+
   async retryReview(courseId, reviewId) {
     return (await apiRequest(`${reviewsPath(courseId)}/${encodeURIComponent(reviewId)}/retry`, { method: 'POST' })).review
   },

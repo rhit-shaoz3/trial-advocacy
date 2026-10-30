@@ -273,6 +273,7 @@ describe("a student's case dashboard", () => {
       status: 'active',
       phase: 'introduction',
       instructorNote: 'Mind the timeline.',
+      reviewMode: 'all',
     })
     expect(workspace.side).toBe('plaintiff')
     expect(workspace.preview).toBe(false)

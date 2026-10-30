@@ -6,7 +6,17 @@ import type { DiscoveryCheck } from '../../courses/types'
 import { AiCheck } from './AiCheck'
 
 /** A one-field draft with the check under it. */
-function Draft({ onCheck, onSubmit }: { onCheck?(): Promise<DiscoveryCheck>; onSubmit(checkId?: string): Promise<void> }) {
+function Draft({
+  onCheck,
+  onSubmit,
+  rounds = null,
+  roundsUsed,
+}: {
+  onCheck?(previousCheckId?: string): Promise<DiscoveryCheck>
+  onSubmit(checkId?: string): Promise<void>
+  rounds?: number | null
+  roundsUsed?: number
+}) {
   const [text, setText] = useState('Who inspected it?')
   return (
     <>
@@ -22,6 +32,8 @@ function Draft({ onCheck, onSubmit }: { onCheck?(): Promise<DiscoveryCheck>; onS
         submitLabel="Send"
         busyLabel="Sending…"
         anywayLabel="Send anyway"
+        rounds={rounds}
+        roundsUsed={roundsUsed}
       />
     </>
   )
@@ -71,6 +83,59 @@ describe('Check with AI', () => {
     await user.click(screen.getByRole('button', { name: 'Check again' }))
     expect(await screen.findByText('Looks good')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+  })
+
+  it('counts down the rounds a draft has, then greys out the check and makes sending the way on', async () => {
+    const onCheck = vi
+      .fn()
+      .mockResolvedValueOnce({ ...check('SMALL_EDITS'), id: 'chk1', round: 1 })
+      .mockResolvedValueOnce({ ...check('SMALL_EDITS'), id: 'chk2', round: 2 })
+      .mockResolvedValueOnce({ ...check('SMALL_EDITS'), id: 'chk3', round: 3 })
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<Draft onCheck={onCheck} onSubmit={onSubmit} rounds={3} />)
+
+    await user.click(screen.getByRole('button', { name: 'Check with AI, 3 rounds left' }))
+    expect(onCheck).toHaveBeenLastCalledWith(undefined)
+    await user.click(await screen.findByRole('button', { name: 'Check again, 2 rounds left' }))
+    // Checking again names the check it follows.
+    expect(onCheck).toHaveBeenLastCalledWith('chk1')
+    const last = await screen.findByRole('button', { name: 'Check again, last round' })
+    expect(last).toHaveTextContent('Last round')
+    expect(last).toHaveClass('ws-btn-primary')
+    expect(screen.getByRole('button', { name: 'Send anyway' })).toHaveClass('ws-btn-secondary')
+
+    await user.click(last)
+    expect(onCheck).toHaveBeenLastCalledWith('chk2')
+    const spent = await screen.findByRole('button', { name: 'Check again, 0 rounds left' })
+    expect(spent).toBeDisabled()
+    expect(spent).toHaveClass('ws-btn-secondary')
+    // The normal send button, not "anyway", and the prominent one.
+    expect(screen.queryByRole('button', { name: 'Send anyway' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveClass('ws-btn-primary')
+    expect(screen.getByText('That was your last round of AI feedback. Send it when you’re ready.')).toBeInTheDocument()
+    // Still the feedback to work from.
+    expect(screen.getByLabelText('AI feedback')).toHaveTextContent('Interrogatory 1: Knowledge of what?')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(onSubmit).toHaveBeenCalledWith('chk3')
+  })
+
+  it('with one round, checks once and then sends', async () => {
+    const onCheck = vi.fn().mockResolvedValue({ ...check('NEEDS_IMPROVEMENT'), round: 1 })
+    const user = userEvent.setup()
+    render(<Draft onCheck={onCheck} onSubmit={vi.fn().mockResolvedValue(undefined)} rounds={1} />)
+    await user.click(screen.getByRole('button', { name: 'Check with AI, 1 round left' }))
+    expect(await screen.findByRole('button', { name: 'Check again, 0 rounds left' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveClass('ws-btn-primary')
+  })
+
+  it('remembers rounds used before, and shows no count when unlimited', async () => {
+    const { unmount } = render(<Draft onCheck={vi.fn()} onSubmit={vi.fn()} rounds={2} roundsUsed={2} />)
+    expect(screen.getByRole('button', { name: 'Check with AI, 0 rounds left' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveClass('ws-btn-primary')
+    unmount()
+    render(<Draft onCheck={vi.fn()} onSubmit={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'Check with AI' })).not.toHaveTextContent(/left|round/i)
   })
 
   it('lets the team send without a check when the AI is down', async () => {

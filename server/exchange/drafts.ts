@@ -30,7 +30,7 @@ export interface DiscoveryDraft {
   kind: DraftKind
   content: DraftContent
   /** The last AI check of the draft, and the key of the draft it checked. */
-  lastCheck: { id: string; tag: MentorTag; feedback: string; key: string } | null
+  lastCheck: { id: string; tag: MentorTag; feedback: string; round: number; key: string } | null
   updatedAt: string
   updatedBy: string | null
 }
@@ -38,7 +38,7 @@ export interface DiscoveryDraft {
 const SELECT = `
   SELECT d.id, d.kind, d.content, d.updated_at AS "updatedAt", u.name AS "updatedBy",
          CASE WHEN c.id IS NULL THEN NULL
-              ELSE json_build_object('id', c.id, 'tag', c.tag, 'feedback', c.feedback, 'key', d.check_key) END AS "lastCheck"
+              ELSE json_build_object('id', c.id, 'tag', c.tag, 'feedback', c.feedback, 'round', c.round, 'key', d.check_key) END AS "lastCheck"
     FROM discovery_drafts d
     LEFT JOIN users u ON u.id = d.updated_by
     LEFT JOIN discovery_checks c ON c.id = d.check_id`

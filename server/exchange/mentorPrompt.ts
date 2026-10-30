@@ -49,6 +49,10 @@ export interface MentorContext {
   draft: string
   /** What the team says it's trying to accomplish (a subpoena's justification). */
   goal?: string
+  /** On a re-check: the last check of this draft, which this one follows. */
+  previous?: { round: number; feedback: string }
+  /** This is the team's last allowed check of the draft. */
+  finalRound?: boolean
   interrogatoryLimit: number
   interrogatoriesServed: number
   /** Only files the team can see, and its own interview transcripts. */
@@ -86,6 +90,9 @@ function view(ctx: MentorContext, today: Date) {
     served_requests: ctx.servedRequests ?? '',
     student_draft: ctx.draft,
     student_goal: ctx.goal?.trim() ?? '',
+    previous_feedback: ctx.previous?.feedback.trim() ?? '',
+    previous_round: ctx.previous?.round ?? 0,
+    final_round: ctx.finalRound ?? false,
     interrogatory_limit: ctx.interrogatoryLimit,
     interrogatories_already_served: ctx.interrogatoriesServed,
     documents: ctx.documents,

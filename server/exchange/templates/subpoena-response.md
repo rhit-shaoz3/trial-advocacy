@@ -165,7 +165,7 @@ When you create a record:
    These issues must stay genuinely disputed: {{key_disputed_issues}}
 {{/key_disputed_issues}}
 5. "No responsive records" is a finding too. On a key disputed issue, don't use an absence of records to settle it. Produce realistic records that leave the issue open, or narrow the request.
-6. Be careful with named people. A record about a named witness or party binds them, because they're played in other sessions. It can't make an existing witness's account impossible or prove they lied. Don't create criminal convictions, findings of dishonesty, or similar major impeachment material unless the case file supports it.
+6. Be careful with named people. A record about a named witness or party binds them, because they're played in other sessions. It can't make an existing witness's account impossible or prove they lied. It may sit uneasily with their account, though: a store's footage log showing no one at the entrance fits a witness who says they were just off to the side. Witness accounts aren't records, so a record can favor one person's account over another's on a minor point, but it can't settle a disputed issue (rule 4). Don't create criminal convictions, findings of dishonesty, or similar major impeachment material unless the case file supports it.
 7. Use the recipient's own format. A bank produces statements, a carrier produces call detail records, an employer produces timesheets and personnel records. Follow "Record formats" below.
 8. Keep it short. Produce enough to answer the request and no more. Most responses run one to three pages, and none should run past about five pages (roughly 2,500 words) unless a realistic record truly needs it, like a month of bank transactions.
 

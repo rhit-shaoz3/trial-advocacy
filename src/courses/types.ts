@@ -505,11 +505,24 @@ export interface CaseWorkspace {
 /** Interrogatories, or requests for admission (RFAs). */
 export type ExchangeKind = 'interrogatories' | 'rfas'
 
-/** One part of the exchange: whether it's included, each team's limit, and the days the other side has to respond. */
+/** Whether teams can check their drafts with the AI mentor, and how many checks one draft gets (null: unlimited). */
+export interface AiFeedbackSettings {
+  enabled: boolean
+  rounds: number | null
+}
+
+/** AI feedback until the instructor changes it: on, with two checks per draft. */
+export const DEFAULT_AI_FEEDBACK: AiFeedbackSettings = { enabled: true, rounds: 2 }
+
+/**
+ * One part of the exchange: whether it's included, each team's limit, the
+ * days the other side has to respond, and its AI feedback.
+ */
 export interface PartSettings {
   enabled: boolean
   limit: number
   days: number
+  aiFeedback: AiFeedbackSettings
 }
 
 /** What a subpoena can ask for (the boxes on the federal form, AO 88B). */
@@ -580,7 +593,7 @@ export interface DisclosurePick {
 export interface ExchangeItem {
   position: number
   text: string
-  /** How many it counts toward the limit: each lettered subpart of an interrogatory counts. */
+  /** How many it counts toward the limit: each lettered subpart or separate question in an interrogatory counts. */
   weight: number
   answer: string | null
   objection: boolean
@@ -615,6 +628,8 @@ export interface DiscoveryCheck {
   tag: CheckTag
   /** The mentor's feedback, without its tag line. */
   feedback: string
+  /** Which check of the same draft this is: 1 for the first. */
+  round?: number
 }
 
 /** A check as a draft keeps it: with the key of the draft it checked, to tell when it's been edited since. */
@@ -653,10 +668,14 @@ export interface DiscoveryCheckRecord {
 }
 
 /** What to check: a subpoena, a set of interrogatories or RFAs, or the answers to one. */
-export type CheckInput =
+export type CheckInput = (
   | { kind: 'subpoena'; mode: 'draft'; draft: SubpoenaInput }
   | { kind: ExchangeKind; mode: 'draft'; draft: { items: string[] } }
   | { kind: ExchangeKind; mode: 'answer'; requestId: string; draft: { responses: ItemResponse[] } }
+) & {
+  /** A re-check of a draft: the check it follows, so the mentor reads its feedback and the round counts. */
+  previousCheckId?: string
+}
 
 export interface ItemResponse {
   position: number
@@ -673,10 +692,15 @@ export interface StudentPart {
   days: number
   used: number
   remaining: number
-  /** `seen`: whether this student has read the response (for answered sets the team sent). */
-  requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
+  /**
+   * `seen`: whether this student has read the response (for answered sets the
+   * team sent); `checkRounds`: the team's AI checks of its answers to a received set.
+   */
+  requests: (ExchangeRequest & { seen: boolean; checkRounds?: number; direction: 'sent' | 'received' })[]
   /** The team's unsent sets of this kind, newest first. */
   drafts: DiscoveryDraft[]
+  /** Optional for responses from before AI feedback could be turned off: `DEFAULT_AI_FEEDBACK`. */
+  aiFeedback?: AiFeedbackSettings
 }
 
 /** How the instructor answered a subpoena: sent the recipient's response, or denied it. */
@@ -734,6 +758,7 @@ export interface StudentSubpoenas {
   notices: SubpoenaNotice[]
   /** The team's unsent subpoenas, newest first. */
   drafts: DiscoveryDraft[]
+  aiFeedback?: AiFeedbackSettings
 }
 
 /** Where the AI's draft of a subpoena's response stands. */
@@ -820,9 +845,14 @@ export interface ExchangeOverview {
   disclosed: { materials: string[]; witnesses: string[] }
 }
 
-/** How many questions an interrogatory counts as: one, or one per lettered subpart like "(a)". */
+/**
+ * How many questions an interrogatory counts as: one per lettered subpart like
+ * "(a)", or one per question mark, whichever is more ("??" counts once).
+ */
 export function questionWeight(text: string) {
-  return Math.max(1, (text.match(/\([a-z]\)/gi) ?? []).length)
+  const subparts = (text.match(/\([a-z]\)/gi) ?? []).length
+  const questions = (text.match(/\?(\s*\?)*/g) ?? []).length
+  return Math.max(1, subparts, questions)
 }
 
 /** Everything the UI needs from the courses backend. See `httpCourseService`. */

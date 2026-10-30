@@ -11,9 +11,6 @@ import {
   ClipboardList,
   Download,
   FileText,
-  Image,
-  FileAudio,
-  FileVideo,
   Gavel,
   Inbox,
   Lock,
@@ -66,6 +63,8 @@ import { FileViewer, type ViewableFile } from '../components/FileViewer'
 import { PhaseSteps } from '../components/PhaseSteps'
 import { Toast, Toasts } from '../components/Toasts'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
+import { CaseFileTable } from './CaseFileTable'
+import { CATEGORY_ICON } from './categoryIcons'
 import { ExchangePanel } from './exchange/ExchangePanel'
 import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
@@ -74,13 +73,6 @@ import './caseWorkspace.css'
 
 type Tab = CaseTab
 type WorkspaceTask = CaseWorkspace['tasks'][number]
-
-const CATEGORY_ICON: Record<FileCategory, typeof FileText> = {
-  document: FileText,
-  image: Image,
-  audio: FileAudio,
-  video: FileVideo,
-}
 
 const COUNSEL: Record<Side, string> = { plaintiff: 'Plaintiff counsel', defense: 'Defense counsel' }
 const other = (side: Side): Side => (side === 'plaintiff' ? 'defense' : 'plaintiff')
@@ -470,23 +462,17 @@ export function CaseWorkspaceView({
                 </div>
               </section>
             )}
-            {byCategory.length === 0 && reports.length === 0 ? (
+            {materials.length === 0 && reports.length === 0 ? (
               <p className="cw-empty">The case file hasn&rsquo;t been posted yet.</p>
             ) : (
-              byCategory.map((g) => (
-                <section key={g.category} className="cw-group" aria-labelledby={`cw-group-${g.category}`}>
-                  <h3 id={`cw-group-${g.category}`}>
-                    {CATEGORY_HEADING[g.category]} <span>{g.files.length}</span>
+              materials.length > 0 && (
+                <section className="cw-group" aria-labelledby="cw-group-files">
+                  <h3 id="cw-group-files">
+                    Files <span>{materials.length}</span>
                   </h3>
-                  <ul className="cw-list">
-                    {g.files.map((m) => (
-                      <li key={m.id}>
-                        <MaterialLink material={m} href={downloadUrl(m.id)} now={now} row onOpen={() => openMaterial(m)} />
-                      </li>
-                    ))}
-                  </ul>
+                  <CaseFileTable materials={materials} downloadUrl={downloadUrl} now={now} onOpen={openMaterial} />
                 </section>
-              ))
+              )
             )}
           </section>
         )}
@@ -785,23 +771,21 @@ function ProgressBanner({ workspace }: { workspace: CaseWorkspace }) {
   )
 }
 
-/** A case file: click to open it in the viewer; the icon at the end downloads it. */
+/** The initial file on the overview: click to open it in the viewer; the icon at the end downloads it. */
 function MaterialLink({
   material: m,
   href,
   now,
-  row = false,
   onOpen,
 }: {
   material: CaseMaterial
   href: string
   now: Date
-  row?: boolean
   onOpen(): void
 }) {
   const Icon = CATEGORY_ICON[fileCategory(m.contentType)]
   return (
-    <div className={row ? 'cw-row cw-row-link cw-file-row' : 'cw-file cw-file-row'}>
+    <div className="cw-file cw-file-row">
       <button type="button" className="cw-file-open" onClick={onOpen} title={`Open ${m.filename} in the viewer`}>
         <span className="ws-icon-tile ws-icon-tile-sm ws-tone-blue" aria-hidden="true">
           <Icon />
@@ -813,7 +797,6 @@ function MaterialLink({
           </small>
           {m.description && <span className="cw-row-desc">{m.description}</span>}
         </span>
-        {m.initial && row && <span className="cw-badge">Start here</span>}
         {m.audience !== 'all' && (
           <span className="cw-badge">
             {/* A team only sees an instructors-only file when it's been shared with them. */}

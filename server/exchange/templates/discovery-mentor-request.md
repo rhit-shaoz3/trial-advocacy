@@ -43,4 +43,16 @@ What the team says it's trying to accomplish:
 </student_goal>
 {{/student_goal}}
 
+{{#previous_feedback}}
+
+You checked an earlier version of this draft (check {{previous_round}}). Your feedback then was:
+<previous_feedback>
+{{previous_feedback}}
+</previous_feedback>
+{{/previous_feedback}}
+{{#final_round}}
+
+This is the team's last check before it sends.
+{{/final_round}}
+
 Review this draft.

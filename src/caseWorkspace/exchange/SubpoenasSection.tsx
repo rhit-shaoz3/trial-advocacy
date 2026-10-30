@@ -18,6 +18,7 @@ import type {
   SubpoenaType,
   TeamSubpoena,
 } from '../../courses/types'
+import { DEFAULT_AI_FEEDBACK } from '../../courses/types'
 import { AiCheck } from './AiCheck'
 import { DraftControls, DraftsList } from './Drafts'
 import { useDraft, type DraftActions } from './useDraft'
@@ -108,7 +109,7 @@ export function SubpoenasSection({
           await onServe(subpoena, checkId, draftId)
           back()
         }}
-        onCheck={onCheck}
+        onCheck={part.aiFeedback?.enabled === false ? undefined : onCheck}
         onBack={back}
         onTeach={onTeach}
       />
@@ -419,7 +420,8 @@ function Compose({
         }
         ready={ready}
         draftKey={JSON.stringify([recipient, recipientDescription, requestType, records, justification].map((t) => t.trim()))}
-        onCheck={onCheck && (() => onCheck({ kind: 'subpoena', mode: 'draft', draft: subpoena() }))}
+        onCheck={onCheck && ((previousCheckId) => onCheck({ kind: 'subpoena', mode: 'draft', draft: subpoena(), previousCheckId }))}
+        rounds={(part.aiFeedback ?? DEFAULT_AI_FEEDBACK).rounds}
         initialCheck={draft?.lastCheck}
         onCheckChange={setLastCheck}
         onSubmit={(checkId) => autosave.submit((draftId) => onServe(subpoena(), checkId, draftId))}

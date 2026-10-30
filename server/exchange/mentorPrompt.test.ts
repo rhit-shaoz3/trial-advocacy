@@ -58,6 +58,27 @@ describe('the discovery mentor prompt', () => {
     const message = buildMentorMessage({ ...base, kind: 'interrogatories', mode: 'draft', draft: '1. Who?' })
     expect(message).toContain('It has already served 4 interrogatories on this party, and the limit is 25')
   })
+
+  it('tells a re-check what it said last time, and says when it is the last check', () => {
+    const first = buildMentorMessage({ ...base, kind: 'interrogatories', mode: 'draft', draft: '1. Who?' })
+    expect(first).not.toContain('earlier version')
+    expect(first).not.toContain('last check')
+
+    const again = buildMentorMessage({
+      ...base,
+      kind: 'interrogatories',
+      mode: 'draft',
+      draft: '1. Who inspected it?',
+      previous: { round: 1, feedback: 'Interrogatory 1: Who what?' },
+      finalRound: true,
+    })
+    expect(again).toContain('You checked an earlier version of this draft (check 1).')
+    expect(again).toContain('<previous_feedback>\nInterrogatory 1: Who what?\n</previous_feedback>')
+    expect(again).toContain("This is the team's last check before it sends.")
+    expect(again.endsWith('Review this draft.')).toBe(true)
+    // The system prompt stays the same, so it's still cached.
+    expect(buildMentorPrompt({ ...base, previous: { round: 1, feedback: 'x' }, finalRound: true })).toBe(buildMentorPrompt(base))
+  })
 })
 
 describe('reading the reply', () => {

@@ -1204,9 +1204,9 @@ a.case-row:hover {
   align-self: center;
 }
 
-.content-text-failed .form-error {
-  display: inline;
-  margin: 0;
+.content-text-failed {
+  display: block;
+  color: var(--error);
   font-size: 0.8rem;
 }
 

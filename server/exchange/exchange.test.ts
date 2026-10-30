@@ -106,6 +106,25 @@ describe('setting up information exchange', () => {
     })
   })
 
+  it('turns AI feedback on or off for each part, with unlimited or a number of rounds', async () => {
+    // On, with two rounds per draft, until the instructor changes it.
+    expect((await prof.get(`${caseUrl()}/exchange`)).body.settings.interrogatories.aiFeedback).toEqual({ enabled: true, rounds: 2 })
+    const saved = await prof.put(`${caseUrl()}/exchange`).send({
+      ...SETTINGS,
+      subpoenas: { ...SETTINGS.subpoenas, aiFeedback: { enabled: false, rounds: null } },
+      interrogatories: { ...SETTINGS.interrogatories, aiFeedback: { enabled: true, rounds: null } },
+    })
+    expect(saved.status).toBe(200)
+    expect(saved.body.settings).toMatchObject({
+      subpoenas: { aiFeedback: { enabled: false, rounds: null } },
+      interrogatories: { aiFeedback: { enabled: true, rounds: null } },
+      rfas: { aiFeedback: { enabled: true, rounds: 2 } },
+    })
+    const bad = await prof.put(`${caseUrl()}/exchange`).send({ ...SETTINGS, rfas: { ...SETTINGS.rfas, aiFeedback: { enabled: true, rounds: 11 } } })
+    expect(bad.status).toBe(400)
+    expect(bad.body.error).toBe('The rounds of AI feedback for requests for admission must be unlimited or a whole number from 1 to 10.')
+  })
+
   it('checks the limits and the disclosure choices', async () => {
     const bad = await prof.put(`${caseUrl()}/exchange`).send({ ...SETTINGS, interrogatories: { enabled: true, limit: 0, days: 30 } })
     expect(bad.status).toBe(400)
@@ -215,6 +234,12 @@ describe('interrogatories and requests for admission', () => {
   it('counts each subpart as a question', () => {
     expect(questionWeight('Who inspected the harness?')).toBe(1)
     expect(questionWeight('Was it replaced, and if so, (a) when and (b) by whom?')).toBe(2)
+    // Each separate question mark is a question too; marks side by side count once.
+    expect(questionWeight('When was it replaced? Who replaced it?')).toBe(2)
+    expect(questionWeight('Who inspected it?? Why?')).toBe(2)
+    expect(questionWeight('Who inspected it ? ?')).toBe(1)
+    // Lettered subparts that are also questions aren't counted twice.
+    expect(questionWeight('(a) When? (b) By whom? (c) Why?')).toBe(3)
   })
 
   it('opens in the information exchange phase, and keeps each team to its limit', async () => {
@@ -659,7 +684,7 @@ describe('checking with AI', () => {
     replies.push({ tag: 'NEEDS_IMPROVEMENT', feedback: 'Request 1: How far back do you need?' })
     const first = await check(ada, { kind: 'subpoena', mode: 'draft', draft: subpoena })
     expect(first.status).toBe(200)
-    expect(first.body.check).toEqual({ id: expect.any(String), tag: 'NEEDS_IMPROVEMENT', feedback: 'Request 1: How far back do you need?' })
+    expect(first.body.check).toEqual({ id: expect.any(String), tag: 'NEEDS_IMPROVEMENT', feedback: 'Request 1: How far back do you need?', round: 1 })
 
     const context = seen[0]
     expect(context).toMatchObject({
@@ -757,6 +782,48 @@ describe('checking with AI', () => {
     })
     // The other team never sees either team's checks.
     expect(JSON.stringify(await exchange(ada))).not.toContain('Knowledge of what?')
+  })
+
+  it('reads its earlier feedback on a re-check, and stops at the rounds the case allows', async () => {
+    await prof.put(`${caseUrl()}/exchange`).send({
+      ...SETTINGS,
+      subpoenas: { ...SETTINGS.subpoenas, aiFeedback: { enabled: false, rounds: null } },
+      interrogatories: { ...SETTINGS.interrogatories, aiFeedback: { enabled: true, rounds: 2 } },
+    })
+    await toExchange()
+    expect((await exchange(ada)).interrogatories.aiFeedback).toEqual({ enabled: true, rounds: 2 })
+    const off = await check(ada, { kind: 'subpoena', mode: 'draft', draft: subpoena })
+    expect(off.status).toBe(409)
+    expect(off.body.error).toBe('AI feedback is turned off for this part of the case.')
+
+    replies.push({ tag: 'SMALL_EDITS', feedback: 'Interrogatory 1: Knowledge of what?' })
+    const draft = (items: string[], previousCheckId?: string) => check(ada, { kind: 'interrogatories', mode: 'draft', draft: { items }, previousCheckId })
+    const first = await draft(['Identify all persons with knowledge.'])
+    expect(first.body.check.round).toBe(1)
+    expect(seen[0]).toMatchObject({ finalRound: false })
+    expect(seen[0].previous).toBeUndefined()
+
+    // Another team's check doesn't count as this draft's.
+    const cyCheck = await check(cy, { kind: 'interrogatories', mode: 'draft', draft: { items: ['Who?'] } })
+    expect((await draft(['Who?'], cyCheck.body.check.id)).body.check.round).toBe(1)
+
+    const second = await draft(['Identify all persons with knowledge of the inspection.'], first.body.check.id)
+    expect(second.body.check.round).toBe(2)
+    expect(seen.at(-1)).toMatchObject({ previous: { round: 1, feedback: 'Interrogatory 1: Knowledge of what?' }, finalRound: true })
+    const third = await draft(['Identify all persons with knowledge of the inspection.'], second.body.check.id)
+    expect(third.status).toBe(409)
+    expect(third.body.error).toBe("You've used all 2 rounds of AI feedback for this draft. Send it when you're ready.")
+
+    // Answers count by the set, without naming a check.
+    await ada.post(`${exchangeUrl()}/requests`).send({ kind: 'interrogatories', items: ['Who?'] })
+    const set = (await exchange(cy)).interrogatories.requests.find((r: { direction: string }) => r.direction === 'received')
+    expect(set.checkRounds).toBe(0)
+    const responses = [{ position: 1, answer: 'Tom Becker.', objection: false, admission: null, agreePart: '', disagreePart: '' }]
+    const answer = () => check(cy, { kind: 'interrogatories', mode: 'answer', requestId: set.id, draft: { responses } })
+    expect((await answer()).body.check.round).toBe(1)
+    expect((await answer()).body.check.round).toBe(2)
+    expect((await answer()).status).toBe(409)
+    expect((await exchange(cy)).interrogatories.requests.find((r: { id: string }) => r.id === set.id).checkRounds).toBe(2)
   })
 
   it('says so when the AI can’t check', async () => {

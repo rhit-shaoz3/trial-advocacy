@@ -14,8 +14,11 @@ const TAG_LABEL: Record<CheckTag, string> = {
  * experienced trial attorney reviews the draft. Looks good reveals the send
  * button; small edits or needs improvement show the mentor's questions, with
  * Check again first and sending anyway still possible. Editing after a check
- * makes it out of date. Without `onCheck` (a preview, or no AI), it's just the
- * send button. A draft opened again starts with its last check (`initialCheck`).
+ * makes it out of date. Without `onCheck` (a preview, or AI feedback off), it's
+ * just the send button. A draft opened again starts with its last check
+ * (`initialCheck`). When the case limits the rounds of feedback, the check
+ * button says how many are left; after the last one it greys out and the send
+ * button takes over.
  */
 export function AiCheck({
   info,
@@ -31,6 +34,8 @@ export function AiCheck({
   initialCheck = null,
   onCheckChange,
   extra,
+  rounds = null,
+  roundsUsed = 0,
 }: {
   /** What the footer says on the left (deadlines, what happens next). */
   info?: ReactNode
@@ -38,7 +43,8 @@ export function AiCheck({
   ready: boolean
   /** The draft as a string, to tell when it's been edited since the check. */
   draftKey: string
-  onCheck?(): Promise<DiscoveryCheck>
+  /** Checks the draft; `previousCheckId` is the check shown, when checking again. */
+  onCheck?(previousCheckId?: string): Promise<DiscoveryCheck>
   /** Sends it, with the last check's id; throws to show an error. */
   onSubmit(checkId?: string): Promise<void>
   submitIcon?: ReactNode
@@ -54,6 +60,10 @@ export function AiCheck({
   onCheckChange?(check: KeyedCheck): void
   /** More buttons before the check and send buttons (the draft's). */
   extra?: ReactNode
+  /** How many checks one draft gets; null for unlimited. */
+  rounds?: number | null
+  /** Checks already used before any shown here (answers to a set, after a refresh). */
+  roundsUsed?: number
 }) {
   const [check, setCheck] = useState<KeyedCheck | null>(initialCheck)
   const [checking, setChecking] = useState(false)
@@ -62,6 +72,9 @@ export function AiCheck({
   const [error, setError] = useState<string | null>(null)
   const stale = check !== null && check.key !== draftKey
   const good = check?.tag === 'LOOKS_GOOD' && !stale
+  const used = check ? (check.round ?? roundsUsed + 1) : roundsUsed
+  const left = rounds === null ? null : Math.max(0, rounds - used)
+  const outOfRounds = left === 0
 
   async function runCheck() {
     if (!onCheck) return
@@ -69,7 +82,7 @@ export function AiCheck({
     setError(null)
     setCheckFailed(false)
     try {
-      const result = await onCheck()
+      const result = await onCheck(check?.id)
       const keyed = { ...result, key: draftKey }
       setCheck(keyed)
       onCheckChange?.(keyed)
@@ -99,10 +112,18 @@ export function AiCheck({
       {sending ? busyLabel : label}
     </button>
   )
+  const pill = left === null ? null : left === 1 && used > 0 ? 'Last round' : `${left} left`
   const checkButton = (label: string) => (
-    <button type="button" className="ws-btn ws-btn-primary" onClick={runCheck} disabled={busy || !ready}>
+    <button
+      type="button"
+      className={`ws-btn ${outOfRounds ? 'ws-btn-secondary' : 'ws-btn-primary'}`}
+      onClick={runCheck}
+      disabled={busy || !ready || outOfRounds}
+      aria-label={pill ? `${label}, ${pill === 'Last round' ? 'last round' : `${left} ${left === 1 ? 'round' : 'rounds'} left`}` : undefined}
+    >
       <Sparkles aria-hidden="true" />
       {label}
+      {pill && !checking && <span className="ai-check-left">{pill}</span>}
     </button>
   )
 
@@ -115,6 +136,14 @@ export function AiCheck({
       <>
         {sendButton(false, `${submitLabel} without a check`)}
         {checkButton('Try again')}
+      </>
+    )
+  } else if (outOfRounds && !good) {
+    // No rounds left: the check is greyed out, and sending is the way on.
+    actions = (
+      <>
+        {checkButton(check ? 'Check again' : 'Check with AI')}
+        {sendButton(true, submitLabel)}
       </>
     )
   } else if (!check) actions = checkButton('Check with AI')
@@ -164,6 +193,9 @@ export function AiCheck({
           {actions}
         </div>
       </div>
+      {outOfRounds && !good && !error && (
+        <p className="ai-check-last">That was your last round of AI feedback. Send it when you&rsquo;re ready.</p>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}

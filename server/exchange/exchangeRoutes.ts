@@ -6,9 +6,11 @@ import { findCase, type CasePhase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { findStudentTeamId, getStudentWorkspace } from '../courses/workspace.ts'
 import {
+  AI_ROUNDS_RANGE,
   compareDisclosures,
   completeExchangeSetup,
   DAYS_RANGE,
+  DEFAULT_AI_FEEDBACK,
   disclosureOptions,
   EXCHANGE_KINDS,
   exchangeOverview,
@@ -27,6 +29,7 @@ import {
   SUBPOENA_TYPES,
   submitDisclosures,
   usedCount,
+  type AiFeedbackSettings,
   type DisclosureOption,
   type DisclosureReview,
   type DisclosureSubmission,
@@ -57,17 +60,35 @@ const MAX_REASON_LENGTH = 1000
 
 const field = (body: unknown, key: string) => (body as Record<string, unknown> | undefined)?.[key]
 
+/** A part's AI feedback; the default (on, two rounds) when not given. */
+function readAiFeedback(part: Record<string, unknown>, label: string): AiFeedbackSettings {
+  const ai = part.aiFeedback as Record<string, unknown> | undefined
+  if (ai === undefined) return { ...DEFAULT_AI_FEEDBACK }
+  if (typeof ai?.enabled !== 'boolean') throw new HttpError(400, `Say whether ${label} get AI feedback.`)
+  const rounds = ai.rounds ?? null
+  const { min, max } = AI_ROUNDS_RANGE
+  if (rounds !== null && (!Number.isInteger(rounds) || (rounds as number) < min || (rounds as number) > max)) {
+    throw new HttpError(400, `The rounds of AI feedback for ${label} must be unlimited or a whole number from ${min} to ${max}.`)
+  }
+  return { enabled: ai.enabled, rounds: rounds as number | null }
+}
+
 function readPart(body: unknown, key: string, label: string, withLimits: boolean): PartSettings {
   const part = field(body, key) as Record<string, unknown> | undefined
   if (typeof part?.enabled !== 'boolean') throw new HttpError(400, `Say whether the case includes ${label}.`)
-  if (!withLimits) return { enabled: part.enabled, limit: 1, days: 1 }
+  if (!withLimits) return { enabled: part.enabled, limit: 1, days: 1, aiFeedback: { enabled: false, rounds: null } }
   const whole = (value: unknown, { min, max }: { min: number; max: number }, what: string) => {
     if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) {
       throw new HttpError(400, `The ${what} for ${label} must be a whole number from ${min} to ${max}.`)
     }
     return value as number
   }
-  return { enabled: part.enabled, limit: whole(part.limit, LIMIT_RANGE, 'limit'), days: whole(part.days, DAYS_RANGE, 'days to respond') }
+  return {
+    enabled: part.enabled,
+    limit: whole(part.limit, LIMIT_RANGE, 'limit'),
+    days: whole(part.days, DAYS_RANGE, 'days to respond'),
+    aiFeedback: readAiFeedback(part, label),
+  }
 }
 
 /** The kinds of request a subpoena may make; all of them when not given. */
@@ -91,7 +112,7 @@ function readFirm(body: unknown, side: Side): Firm {
   return { firm: firmName, partner }
 }
 
-/** Validates `{ disclosures: { enabled }, subpoenas, interrogatories, rfas: { enabled, limit, days }, firms }`. */
+/** Validates `{ disclosures: { enabled }, subpoenas, interrogatories, rfas: { enabled, limit, days, aiFeedback }, firms }`. */
 function readSettings(body: unknown): SettingsInput {
   return {
     disclosures: { enabled: readPart(body, 'disclosures', 'initial disclosures', false).enabled },
@@ -151,9 +172,11 @@ export interface StudentPart {
   days: number
   used: number
   remaining: number
-  requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
+  /** `checkRounds`: the team's AI checks of its answers to a received set. */
+  requests: (ExchangeRequest & { seen: boolean; checkRounds: number; direction: 'sent' | 'received' })[]
   /** The team's unsent sets of this kind, newest first. */
   drafts: DiscoveryDraft[]
+  aiFeedback: AiFeedbackSettings
 }
 
 /** The team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */
@@ -168,6 +191,7 @@ export interface StudentSubpoenas {
   notices: SubpoenaNotice[]
   /** The team's unsent subpoenas, newest first. */
   drafts: DiscoveryDraft[]
+  aiFeedback: AiFeedbackSettings
 }
 
 // Shape sent to the client; matches `StudentExchange` in src/courses/types.ts.
@@ -255,6 +279,7 @@ async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
         .filter((r) => r.kind === kind)
         .map((r) => ({ ...r, direction: r.fromTeam.id === ctx.teamId ? 'sent' : 'received' })),
       drafts: drafts.filter((d) => d.kind === kind),
+      aiFeedback: p.aiFeedback,
     }
   }
   const subpoenas = async (p: SubpoenaSettings): Promise<StudentSubpoenas | null> => {
@@ -269,6 +294,7 @@ async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
       served,
       notices,
       drafts: drafts.filter((d) => d.kind === 'subpoena'),
+      aiFeedback: p.aiFeedback,
     }
   }
   const numbers = await teamNumbers(ctx)
@@ -392,8 +418,10 @@ const readSubpoena = (body: unknown, settings: SubpoenaSettings) => ({
  * Has the discovery mentor check a draft before it's sent: `{ kind, mode,
  * requestId, draft }`. A subpoena's `draft` is the subpoena; a set's is `{
  * items }`; answers (mode answer, with the set's `requestId`) are `{
- * responses }`. Returns `{ check: { id, tag, feedback } }`; send the `id` with
- * the submission.
+ * responses }`. A re-check of a draft names the check it follows
+ * (`previousCheckId`); answers find theirs by the set. Returns `{ check: { id,
+ * tag, feedback, round } }`; send the `id` with the submission. `409` when the
+ * part's AI feedback is off, or the draft has used its rounds.
  */
 myExchangeRouter.post('/check', async (req, res) => {
   const ctx = await requireStudentContext(req)
@@ -420,7 +448,9 @@ myExchangeRouter.post('/check', async (req, res) => {
       draft = { kind: kind as ExchangeKind, mode: 'draft', items }
     }
   } else throw new HttpError(400, 'Choose what to check.')
-  res.json({ check: await runCheck(ctx, draft) })
+  const ai = (kind === 'subpoena' ? settings.subpoenas : settings[kind as ExchangeKind]).aiFeedback
+  if (!ai.enabled) throw new HttpError(409, 'AI feedback is turned off for this part of the case.')
+  res.json({ check: await runCheck(ctx, draft, { previousCheckId: field(req.body, 'previousCheckId'), rounds: ai.rounds }) })
 })
 
 /** The team's responses to a set it received: `{ responses: [{ position, answer, objection, admission, agreePart, disagreePart }] }`. */

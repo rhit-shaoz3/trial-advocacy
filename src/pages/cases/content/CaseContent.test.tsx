@@ -205,6 +205,51 @@ describe('MaterialsSection', () => {
     expect(onChange).toHaveBeenCalled()
   })
 
+  it('puts the initial file first and the rest by name, sorts by the heading clicked, and shows only failed reading', async () => {
+    const file = (id: string, filename: string, uploadedAt: string, more: Partial<CaseMaterial> = {}): CaseMaterial => ({
+      ...factPattern,
+      id,
+      filename,
+      uploadedAt,
+      ...more,
+    })
+    const list = [
+      file('m1', 'zoning notes.pdf', '2026-10-03T12:00:00Z', { audience: 'all' }),
+      file('m2', 'Complaint.pdf', '2026-10-01T12:00:00Z', { initial: true, audience: 'all' }),
+      file('m3', 'Ambulance log.pdf', '2026-10-02T12:00:00Z', { audience: 'instructor', textStatus: 'failed', textError: 'Unreadable.' }),
+      file('m4', 'medical bills.pdf', '2026-10-04T12:00:00Z', { audience: 'plaintiff' }),
+    ]
+    const retryTranscription = vi.fn().mockResolvedValue({ ...list[2], textStatus: 'ready' })
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, {
+      listMaterials: vi.fn().mockResolvedValue(list),
+      retryTranscription,
+    })
+    await screen.findByRole('button', { name: 'Complaint.pdf' })
+    const names = () => screen.getAllByTitle(/^Open .* in the viewer$/).map((b) => b.textContent)
+    expect(names()).toEqual(['Complaint.pdf', 'Ambulance log.pdf', 'medical bills.pdf', 'zoning notes.pdf'])
+    expect(screen.getByRole('columnheader', { name: /^File/ })).toHaveAttribute('aria-sort', 'ascending')
+    // What the AI read is behind the scenes.
+    expect(screen.queryByRole('columnheader', { name: /AI text/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /View the text/ })).not.toBeInTheDocument()
+
+    // Dates newest first, then oldest first; the initial file stays on top.
+    await user.click(screen.getByRole('button', { name: /^Added/ }))
+    expect(names()).toEqual(['Complaint.pdf', 'medical bills.pdf', 'zoning notes.pdf', 'Ambulance log.pdf'])
+    expect(screen.getByRole('columnheader', { name: /^Added/ })).toHaveAttribute('aria-sort', 'descending')
+    await user.click(screen.getByRole('button', { name: /^Added/ }))
+    expect(names()).toEqual(['Complaint.pdf', 'Ambulance log.pdf', 'zoning notes.pdf', 'medical bills.pdf'])
+
+    // Words A to Z: "Everyone", "Instructors only", "Plaintiff only".
+    await user.click(screen.getByRole('button', { name: /^Visible to/ }))
+    expect(names()).toEqual(['Complaint.pdf', 'zoning notes.pdf', 'Ambulance log.pdf', 'medical bills.pdf'])
+
+    // Only a file the AI couldn't read says so, with a way to try again.
+    expect(screen.getAllByText(/couldn’t read this file/)).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: 'Read Ambulance log.pdf again' }))
+    expect(retryTranscription).toHaveBeenCalledWith('c1', 'k1', 'm3')
+    expect(screen.queryByText(/couldn’t read this file/)).not.toBeInTheDocument()
+  })
+
   it('filters the files by source', async () => {
     const response: CaseMaterial = {
       ...factPattern,

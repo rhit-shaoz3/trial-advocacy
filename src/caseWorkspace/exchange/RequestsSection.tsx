@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { dueLabel, shortDate } from '../../courses/caseLabels'
 import {
+  DEFAULT_AI_FEEDBACK,
   questionWeight,
   type CheckInput,
   type DiscoveryCheck,
@@ -126,6 +127,9 @@ export function RequestsSection({
   const request = view.mode === 'respond' || view.mode === 'read' ? part.requests.find((r) => r.id === view.id) : undefined
   const copy = COPY[kind]
   const back = () => setView({ mode: 'hub' })
+  // The instructor can turn AI feedback off for this part, or limit its rounds.
+  const ai = part.aiFeedback ?? DEFAULT_AI_FEEDBACK
+  const check = ai.enabled ? onCheck : undefined
 
   if (view.mode === 'compose' && onSend) {
     return (
@@ -141,7 +145,8 @@ export function RequestsSection({
           await onSend(items, checkId, draftId)
           back()
         }}
-        onCheck={onCheck && ((items) => onCheck({ kind, mode: 'draft', draft: { items } }))}
+        onCheck={check && ((items, previousCheckId) => check({ kind, mode: 'draft', draft: { items }, previousCheckId }))}
+        rounds={ai.rounds}
         onBack={back}
         onTeach={onTeach}
       />
@@ -156,7 +161,8 @@ export function RequestsSection({
           await onRespond(request.id, responses, checkId)
           setView({ mode: 'read', id: request.id })
         }}
-        onCheck={onCheck && ((responses) => onCheck({ kind, mode: 'answer', requestId: request.id, draft: { responses } }))}
+        onCheck={check && ((responses) => check({ kind, mode: 'answer', requestId: request.id, draft: { responses } }))}
+        rounds={ai.rounds}
         onBack={back}
         onTeach={onTeach}
         now={now}
@@ -381,6 +387,7 @@ function Compose({
   onOpenDraft,
   onSend,
   onCheck,
+  rounds,
   onBack,
   onTeach,
 }: {
@@ -392,7 +399,9 @@ function Compose({
   actions?: DraftActions
   onOpenDraft?(draftId: string | null): void
   onSend(items: string[], checkId?: string, draftId?: string): Promise<void>
-  onCheck?(items: string[]): Promise<DiscoveryCheck>
+  onCheck?(items: string[], previousCheckId?: string): Promise<DiscoveryCheck>
+  /** How many checks one draft gets; null for unlimited. */
+  rounds: number | null
   onBack(): void
   onTeach(): void
 }) {
@@ -446,7 +455,7 @@ function Compose({
         title={`${copy.title} to ${to}`}
         sub={
           kind === 'interrogatories'
-            ? 'One question per line. Each subpart, like (a) and (b), counts as its own question.'
+            ? 'One question per line. Each subpart, like (a) and (b), and each separate question mark counts as its own question.'
             : 'One statement per line, written so the other side can agree or disagree with it.'
         }
         onBack={onBack}
@@ -484,7 +493,7 @@ function Compose({
                 {weight > 1 && (
                   <p className="ex-warn">
                     <TriangleAlert aria-hidden="true" />
-                    Has {weight} subparts, so it counts as {weight} questions.
+                    Has {weight} subparts or questions, so it counts as {weight} questions.
                   </p>
                 )}
                 {focus === i && (
@@ -537,7 +546,8 @@ function Compose({
         ready={filled.length > 0}
         blocked={over}
         draftKey={JSON.stringify(items())}
-        onCheck={onCheck && (() => onCheck(items()))}
+        onCheck={onCheck && ((previousCheckId) => onCheck(items(), previousCheckId))}
+        rounds={rounds}
         initialCheck={draft?.lastCheck}
         onCheckChange={setLastCheck}
         onSubmit={(checkId) => autosave.submit((draftId) => onSend(items(), checkId, draftId))}
@@ -575,6 +585,7 @@ function Respond({
   request,
   onRespond,
   onCheck,
+  rounds,
   onBack,
   onTeach,
   now,
@@ -582,7 +593,9 @@ function Respond({
   kind: ExchangeKind
   request: TeamRequest
   onRespond(responses: ItemResponse[], checkId?: string): Promise<void>
+  /** Answers' checks are counted by the set, so there's no earlier check to name. */
   onCheck?(responses: ItemResponse[]): Promise<DiscoveryCheck>
+  rounds: number | null
   onBack(): void
   onTeach(): void
   now: Date
@@ -698,6 +711,8 @@ function Respond({
         ready={answered === request.items.length}
         draftKey={JSON.stringify(drafts)}
         onCheck={onCheck && (() => onCheck(responses()))}
+        rounds={rounds}
+        roundsUsed={request.checkRounds ?? 0}
         onSubmit={(checkId) => onRespond(responses(), checkId)}
         submitIcon={<Send aria-hidden="true" />}
         submitLabel="Send responses"

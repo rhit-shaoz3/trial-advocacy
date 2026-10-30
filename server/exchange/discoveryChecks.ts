@@ -4,6 +4,7 @@ import { listMaterialsFor, listMaterialTexts } from '../courses/caseContent.ts'
 import { finishPendingTranscriptions } from '../courses/materialText.ts'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
+import { isUuid } from '../validation.ts'
 import { findTeamWorld, markedTranscript, settledFacts } from '../reviews/reviews.ts'
 import {
   getSettings,
@@ -25,7 +26,9 @@ import { teamSubpoenas } from './subpoenas.ts'
 // interview transcripts, and the discovery it has sent and received. Each
 // check is kept with a hash of what was checked; the submission that follows
 // records the last check's tag and feedback for the instructor, and whether
-// it's the same draft or was edited since.
+// it's the same draft or was edited since. Checking again is the next round:
+// the mentor reads its feedback from the round before, and the case may
+// limit how many rounds one draft gets.
 
 /** A subpoena as checked and served: its type already resolved (a case allowing one kind doesn't ask). */
 export interface SubpoenaDraft {
@@ -217,9 +220,47 @@ export async function mentorContext(ctx: TeamContext, draft: CheckDraft): Promis
   }
 }
 
-/** Has the mentor review the draft, and keeps the check for the submission that follows. */
-export async function runCheck(ctx: TeamContext, draft: CheckDraft) {
-  const context = await mentorContext(ctx, draft)
+/**
+ * The check this one follows, if any. A draft's is the check the team names,
+ * if it's the team's own check of the same kind; answers' is the team's
+ * latest check of its answers to that set.
+ */
+async function previousCheck(ctx: TeamContext, draft: CheckDraft, previousCheckId: unknown) {
+  const { rows } =
+    draft.mode === 'answer'
+      ? await pool.query<{ id: string; round: number; feedback: string }>(
+          `SELECT id, (SELECT count(*)::int FROM discovery_checks a
+                       WHERE a.request_id = $1 AND a.team_id = $2 AND a.mode = 'answer') AS round, feedback
+           FROM discovery_checks WHERE request_id = $1 AND team_id = $2 AND mode = 'answer'
+           ORDER BY created_at DESC LIMIT 1`,
+          [draft.requestId, ctx.teamId],
+        )
+      : isUuid(previousCheckId)
+        ? await pool.query<{ id: string; round: number; feedback: string }>(
+            `SELECT id, round, feedback FROM discovery_checks
+             WHERE id = $1 AND case_id = $2 AND team_id = $3 AND kind = $4 AND mode = 'draft'`,
+            [previousCheckId, ctx.caseId, ctx.teamId, draft.kind],
+          )
+        : { rows: [] }
+  return rows[0] ?? null
+}
+
+/**
+ * Has the mentor review the draft, and keeps the check for the submission
+ * that follows. `rounds` is how many checks one draft gets (null: unlimited).
+ */
+export async function runCheck(ctx: TeamContext, draft: CheckDraft, options: { previousCheckId?: unknown; rounds?: number | null } = {}) {
+  const previous = await previousCheck(ctx, draft, options.previousCheckId)
+  const round = (previous?.round ?? 0) + 1
+  const rounds = options.rounds ?? null
+  if (rounds !== null && round > rounds) {
+    throw new HttpError(409, `You've used all ${rounds === 1 ? 'your AI feedback' : `${rounds} rounds of AI feedback`} for this draft. Send it when you're ready.`)
+  }
+  const context: MentorContext = {
+    ...(await mentorContext(ctx, draft)),
+    previous: previous ? { round: previous.round, feedback: previous.feedback } : undefined,
+    finalRound: rounds !== null && round === rounds,
+  }
   let result: { tag: MentorTag; feedback: string }
   try {
     result = await ai.reviewDiscovery(context)
@@ -228,8 +269,8 @@ export async function runCheck(ctx: TeamContext, draft: CheckDraft) {
     throw new HttpError(502, err instanceof AiNotConfiguredError ? err.message : 'The AI couldn’t check your draft just now. Try again, or send it as it is.')
   }
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO discovery_checks (case_id, team_id, kind, mode, request_id, content_hash, tag, feedback, checked_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    `INSERT INTO discovery_checks (case_id, team_id, kind, mode, request_id, content_hash, tag, feedback, checked_by, round, previous_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
     [
       ctx.caseId,
       ctx.teamId,
@@ -240,9 +281,11 @@ export async function runCheck(ctx: TeamContext, draft: CheckDraft) {
       result.tag,
       result.feedback,
       ctx.userId,
+      round,
+      previous?.id ?? null,
     ],
   )
-  return { id: rows[0].id, tag: result.tag, feedback: result.feedback }
+  return { id: rows[0].id, tag: result.tag, feedback: result.feedback, round }
 }
 
 /**

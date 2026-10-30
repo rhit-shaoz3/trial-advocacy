@@ -116,7 +116,7 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
 
     await user.click(screen.getByRole('button', { name: 'Write interrogatories' }))
     await user.type(screen.getByLabelText('Question 1'), 'Was it replaced, (a) when and (b) by whom?')
-    expect(screen.getByText('Has 2 subparts, so it counts as 2 questions.')).toBeInTheDocument()
+    expect(screen.getByText('Has 2 subparts or questions, so it counts as 2 questions.')).toBeInTheDocument()
     expect(screen.getByText(/1 of 3 left after sending/)).toBeInTheDocument()
 
     // Return starts a new line; the last question fills the limit.
@@ -128,6 +128,16 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
     await user.click(screen.getByRole('button', { name: 'Send to Team 2' }))
     // Without the AI check (no onCheck), it's sent as it is.
     expect(onSend).toHaveBeenCalledWith('interrogatories', ['Was it replaced, (a) when and (b) by whom?', 'Who inspected it?'], undefined, undefined)
+  })
+
+  it('leaves out Check with AI when the instructor turned AI feedback off', async () => {
+    const onCheck = vi.fn()
+    const user = renderPanel({ ...open, interrogatories: part({ aiFeedback: { enabled: false, rounds: null } }) }, { onSend: vi.fn(), onCheck })
+    await user.click(screen.getByRole('button', { name: /^Interrogatories/ }))
+    await user.click(screen.getByRole('button', { name: 'Write interrogatories' }))
+    await user.type(screen.getByLabelText('Question 1'), 'Who inspected it?')
+    expect(screen.queryByRole('button', { name: /Check with AI/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send to Team 2' })).toHaveClass('ws-btn-primary')
   })
 
   it('greys out writing more once the team is out', async () => {

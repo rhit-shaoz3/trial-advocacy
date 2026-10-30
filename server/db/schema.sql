@@ -517,7 +517,7 @@ CREATE INDEX IF NOT EXISTS exchange_requests_case_idx ON exchange_requests (case
 
 -- One question or request in a set, one per line, and the response.
 -- `weight` is how many it counts toward the team's limit: each subpart of an
--- interrogatory, like (a) and (b), counts as its own question.
+-- interrogatory, like (a) and (b), or each separate question mark, counts as its own question.
 -- Interrogatories get an `answer` (or an objection); requests for admission
 -- get agree, disagree, or partial (with what's agreed and what isn't).
 CREATE TABLE IF NOT EXISTS exchange_items (
@@ -591,6 +591,19 @@ ALTER TABLE information_exchange DROP CONSTRAINT IF EXISTS information_exchange_
 ALTER TABLE information_exchange ADD CONSTRAINT information_exchange_subpoena_types_check
   CHECK (cardinality(subpoena_types) > 0
          AND subpoena_types <@ '{documents,esi,tangible_things,inspection}'::text[]);
+
+-- Whether teams can have the AI mentor check their subpoenas, sets, and
+-- answers before sending ("Check with AI"), and how many checks one draft
+-- gets (null: unlimited; 2 by default).
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS subpoena_ai_feedback boolean NOT NULL DEFAULT true;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS interrogatory_ai_feedback boolean NOT NULL DEFAULT true;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS rfa_ai_feedback boolean NOT NULL DEFAULT true;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS subpoena_ai_rounds integer DEFAULT 2 CHECK (subpoena_ai_rounds BETWEEN 1 AND 10);
+ALTER TABLE information_exchange ALTER COLUMN subpoena_ai_rounds SET DEFAULT 2;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS interrogatory_ai_rounds integer DEFAULT 2 CHECK (interrogatory_ai_rounds BETWEEN 1 AND 10);
+ALTER TABLE information_exchange ALTER COLUMN interrogatory_ai_rounds SET DEFAULT 2;
+ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS rfa_ai_rounds integer DEFAULT 2 CHECK (rfa_ai_rounds BETWEEN 1 AND 10);
+ALTER TABLE information_exchange ALTER COLUMN rfa_ai_rounds SET DEFAULT 2;
 
 -- The AI drafts each subpoena's response as the recipient, and the instructor
 -- reviews the draft before the team sees anything:
@@ -740,6 +753,12 @@ CREATE TABLE IF NOT EXISTS discovery_checks (
 );
 
 CREATE INDEX IF NOT EXISTS discovery_checks_team_idx ON discovery_checks (team_id);
+
+-- Which check of the same draft this is (1 for the first), and the check it
+-- followed: a re-check reads the feedback before it, and the case's rounds of
+-- AI feedback are counted this way.
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS round integer NOT NULL DEFAULT 1;
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS previous_id uuid REFERENCES discovery_checks (id) ON DELETE SET NULL;
 
 -- The last check before a submission, for the instructor: its tag and
 -- feedback, and whether the submission is the draft that was checked (false:

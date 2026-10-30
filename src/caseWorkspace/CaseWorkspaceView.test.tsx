@@ -188,26 +188,26 @@ describe('CaseWorkspaceView', () => {
     expect(note).toHaveTextContent('Prof. Ruiz')
   })
 
-  it('opens the case file, grouped by kind of file, and the witnesses and tasks tabs', async () => {
+  it('opens the case file as a table, and the witnesses and tasks tabs', async () => {
     const { user } = renderView()
 
     await user.click(screen.getByRole('button', { name: /^Case file/ }))
     expect(screen.getByRole('tab', { name: 'Case file, 4' })).toHaveAttribute('aria-selected', 'true')
-    const documents = screen.getByRole('region', { name: 'Documents 2' })
-    // A file opens in the viewer; the icon beside it downloads it.
-    const report = within(documents).getByRole('button', { name: /Incident report\.pdf/ })
-    expect(report).toHaveTextContent('Defense only')
-    expect(within(documents).getByRole('link', { name: 'Download Incident report.pdf' })).toHaveAttribute('href', '/files/m2')
-    expect(within(documents).getByRole('button', { name: /Fact pattern\.pdf/ })).toHaveTextContent('Start here')
-    const images = screen.getByRole('region', { name: 'Images 1' })
-    expect(within(images).getByRole('button', { name: /Ride photo\.jpg/ })).toHaveTextContent('Image')
+    const files = within(screen.getByRole('region', { name: 'Files 4' })).getByRole('table')
+    // A file opens in the viewer; the icon at the end downloads it.
+    const reportRow = within(files).getByRole('row', { name: /Incident report\.pdf/ })
+    expect(within(reportRow).getAllByRole('cell').map((c) => c.textContent)).toEqual(
+      expect.arrayContaining(['PDF', 'Defense only']),
+    )
+    expect(within(files).getByRole('link', { name: 'Download Incident report.pdf' })).toHaveAttribute('href', '/files/m2')
+    expect(within(files).getByRole('button', { name: /Fact pattern\.pdf/ })).toHaveTextContent('Start here')
+    expect(within(within(files).getByRole('row', { name: /Ride photo\.jpg/ })).getAllByRole('cell')[1]).toHaveTextContent('Image')
 
-    await user.click(report)
+    await user.click(within(files).getByRole('button', { name: /Incident report\.pdf/ }))
     const viewer = screen.getByRole('dialog', { name: 'Incident report.pdf' })
     expect(within(viewer).getByTitle('Incident report.pdf')).toHaveAttribute('src', '/files/m2?view=1')
     expect(within(viewer).getByRole('link', { name: 'Download' })).toHaveAttribute('href', '/files/m2')
-    expect(screen.getByRole('region', { name: 'Audio 1' })).toHaveTextContent('911 call.mp3')
-    expect(screen.queryByRole('region', { name: /Video/ })).not.toBeInTheDocument()
+    await user.click(within(viewer).getByRole('button', { name: /Close/ }))
 
     await user.click(screen.getByRole('tab', { name: 'Witnesses, 1' }))
     expect(screen.getByRole('tabpanel')).toHaveTextContent('Elena TorresRide operatorAt the controls.')
@@ -217,6 +217,24 @@ describe('CaseWorkspaceView', () => {
     expect(panel).toHaveTextContent('Completed by Ben Partner')
     expect(panel).toHaveTextContent('Overdue')
     expect(panel).toHaveTextContent('No due date')
+  })
+
+  it('lists the initial file first, then the rest by file name, and sorts by the heading clicked', async () => {
+    const { user } = renderView()
+    await user.click(screen.getByRole('button', { name: /^Case file/ }))
+    const names = () => screen.getAllByTitle(/^Open .* in the viewer$/).map((b) => b.getAttribute('title')!.replace(/^Open | in the viewer$/g, ''))
+    expect(names()).toEqual(['Fact pattern.pdf', '911 call.mp3', 'Incident report.pdf', 'Ride photo.jpg'])
+    expect(screen.getByRole('columnheader', { name: /^File/ })).toHaveAttribute('aria-sort', 'ascending')
+
+    // Dates newest first, then oldest first; the initial file stays on top.
+    await user.click(screen.getByRole('button', { name: /^Added/ }))
+    expect(names()).toEqual(['Fact pattern.pdf', '911 call.mp3', 'Ride photo.jpg', 'Incident report.pdf'])
+    await user.click(screen.getByRole('button', { name: /^Added/ }))
+    expect(names()).toEqual(['Fact pattern.pdf', 'Incident report.pdf', 'Ride photo.jpg', '911 call.mp3'])
+
+    // Words A to Z.
+    await user.click(screen.getByRole('button', { name: /^Type/ }))
+    expect(names()).toEqual(['Fact pattern.pdf', '911 call.mp3', 'Ride photo.jpg', 'Incident report.pdf'])
   })
 
   it('lets a team member tick tasks off', async () => {

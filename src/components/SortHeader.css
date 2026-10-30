@@ -1,0 +1,26 @@
+/* A table heading that sorts by its column. */
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.th-sort:hover {
+  color: var(--ws-navy, var(--fg));
+}
+
+.th-sort svg {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.th-sort-idle {
+  opacity: 0.35;
+}

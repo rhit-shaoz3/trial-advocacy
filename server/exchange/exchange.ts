@@ -15,11 +15,21 @@ import type { Side } from '../courses/matchups.ts'
 export const EXCHANGE_KINDS = ['interrogatories', 'rfas'] as const
 export type ExchangeKind = (typeof EXCHANGE_KINDS)[number]
 
-/** One part of the exchange: whether it's included, each team's limit, and the days to respond. */
+/** Whether teams can check their drafts with the AI mentor, and how many checks one draft gets (null: unlimited). */
+export interface AiFeedbackSettings {
+  enabled: boolean
+  rounds: number | null
+}
+
+/**
+ * One part of the exchange: whether it's included, each team's limit, the
+ * days to respond, and its AI feedback.
+ */
 export interface PartSettings {
   enabled: boolean
   limit: number
   days: number
+  aiFeedback: AiFeedbackSettings
 }
 
 /** What a subpoena can ask for (the boxes on the federal form, AO 88B). */
@@ -55,12 +65,15 @@ export type SettingsInput = Omit<ExchangeSettings, 'setupCompletedAt' | 'disclos
 
 export const LIMIT_RANGE = { min: 1, max: 100 }
 export const DAYS_RANGE = { min: 1, max: 365 }
+export const AI_ROUNDS_RANGE = { min: 1, max: 10 }
+/** AI feedback until the instructor changes it: on, with two checks per draft. */
+export const DEFAULT_AI_FEEDBACK: AiFeedbackSettings = { enabled: true, rounds: 2 }
 
 export const DEFAULT_SETTINGS: SettingsInput = {
   disclosures: { enabled: true },
-  subpoenas: { enabled: true, limit: 3, days: 14, types: [...SUBPOENA_TYPES] },
-  interrogatories: { enabled: true, limit: 25, days: 30 },
-  rfas: { enabled: true, limit: 25, days: 30 },
+  subpoenas: { enabled: true, limit: 3, days: 14, types: [...SUBPOENA_TYPES], aiFeedback: DEFAULT_AI_FEEDBACK },
+  interrogatories: { enabled: true, limit: 25, days: 30, aiFeedback: DEFAULT_AI_FEEDBACK },
+  rfas: { enabled: true, limit: 25, days: 30, aiFeedback: DEFAULT_AI_FEEDBACK },
   firms: { plaintiff: { firm: '', partner: '' }, defense: { firm: '', partner: '' } },
 }
 
@@ -68,11 +81,15 @@ export const DEFAULT_SETTINGS: SettingsInput = {
 export const requestsOpen = (phase: CasePhase) => phase !== 'introduction'
 
 /**
- * How many questions an interrogatory counts as toward the limit: one, or one
- * per lettered subpart, like "(a) when and (b) by whom".
+ * How many questions an interrogatory counts as toward the limit: one per
+ * lettered subpart, like "(a) when and (b) by whom", or one per question mark
+ * ("When? By whom?"), whichever is more. Question marks side by side ("??")
+ * count once.
  */
 export function questionWeight(text: string) {
-  return Math.max(1, (text.match(/\([a-z]\)/gi) ?? []).length)
+  const subparts = (text.match(/\([a-z]\)/gi) ?? []).length
+  const questions = (text.match(/\?(\s*\?)*/g) ?? []).length
+  return Math.max(1, subparts, questions)
 }
 
 const SETTINGS_COLUMNS = `setup_completed_at AS "setupCompletedAt",
@@ -82,10 +99,13 @@ const SETTINGS_COLUMNS = `setup_completed_at AS "setupCompletedAt",
     'witnessIds', coalesce((SELECT json_agg(d.witness_id) FROM disclosure_items d
                             WHERE d.case_id = ie.case_id AND d.witness_id IS NOT NULL), '[]')) AS disclosures,
   json_build_object('enabled', subpoenas_enabled, 'limit', subpoena_limit, 'days', subpoena_days,
-    'types', to_json(subpoena_types)) AS subpoenas,
-  json_build_object('enabled', interrogatories_enabled, 'limit', interrogatory_limit, 'days', interrogatory_days)
+    'types', to_json(subpoena_types),
+    'aiFeedback', json_build_object('enabled', subpoena_ai_feedback, 'rounds', subpoena_ai_rounds)) AS subpoenas,
+  json_build_object('enabled', interrogatories_enabled, 'limit', interrogatory_limit, 'days', interrogatory_days,
+    'aiFeedback', json_build_object('enabled', interrogatory_ai_feedback, 'rounds', interrogatory_ai_rounds))
     AS interrogatories,
-  json_build_object('enabled', rfas_enabled, 'limit', rfa_limit, 'days', rfa_days) AS rfas,
+  json_build_object('enabled', rfas_enabled, 'limit', rfa_limit, 'days', rfa_days,
+    'aiFeedback', json_build_object('enabled', rfa_ai_feedback, 'rounds', rfa_ai_rounds)) AS rfas,
   json_build_object(
     'plaintiff', json_build_object('firm', plaintiff_firm, 'partner', plaintiff_partner),
     'defense', json_build_object('firm', defense_firm, 'partner', defense_partner)) AS firms`
@@ -103,14 +123,18 @@ export async function saveSettings(caseId: string, s: SettingsInput) {
   await pool.query(
     `INSERT INTO information_exchange (case_id, disclosures_enabled, subpoenas_enabled, subpoena_limit, subpoena_days,
        interrogatories_enabled, interrogatory_limit, interrogatory_days, rfas_enabled, rfa_limit, rfa_days,
-       plaintiff_firm, plaintiff_partner, defense_firm, defense_partner, subpoena_types)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       plaintiff_firm, plaintiff_partner, defense_firm, defense_partner, subpoena_types,
+       subpoena_ai_feedback, subpoena_ai_rounds, interrogatory_ai_feedback, interrogatory_ai_rounds,
+       rfa_ai_feedback, rfa_ai_rounds)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
      ON CONFLICT (case_id) DO UPDATE SET
        disclosures_enabled = $2, subpoenas_enabled = $3, subpoena_limit = $4, subpoena_days = $5,
        interrogatories_enabled = $6, interrogatory_limit = $7, interrogatory_days = $8,
        rfas_enabled = $9, rfa_limit = $10, rfa_days = $11,
        plaintiff_firm = $12, plaintiff_partner = $13, defense_firm = $14, defense_partner = $15,
-       subpoena_types = $16, updated_at = now()`,
+       subpoena_types = $16, subpoena_ai_feedback = $17, subpoena_ai_rounds = $18,
+       interrogatory_ai_feedback = $19, interrogatory_ai_rounds = $20, rfa_ai_feedback = $21, rfa_ai_rounds = $22,
+       updated_at = now()`,
     [
       caseId,
       s.disclosures.enabled,
@@ -128,6 +152,12 @@ export async function saveSettings(caseId: string, s: SettingsInput) {
       s.firms.defense.firm,
       s.firms.defense.partner,
       s.subpoenas.types,
+      s.subpoenas.aiFeedback.enabled,
+      s.subpoenas.aiFeedback.rounds,
+      s.interrogatories.aiFeedback.enabled,
+      s.interrogatories.aiFeedback.rounds,
+      s.rfas.aiFeedback.enabled,
+      s.rfas.aiFeedback.rounds,
     ],
   )
   return getSettings(caseId)
@@ -424,12 +454,15 @@ export async function listCaseRequests(caseId: string) {
 
 /**
  * The sets a team sent or received, newest first, with whether this student
- * has read the responses (only meaningful for answered sets the team sent).
+ * has read the responses (only meaningful for answered sets the team sent),
+ * and how many times the team has checked its answers to it with the AI.
  */
 export async function listTeamRequests(caseId: string, teamId: string, userId: string) {
-  const { rows } = await pool.query<ExchangeRequest & { seen: boolean }>(
+  const { rows } = await pool.query<ExchangeRequest & { seen: boolean; checkRounds: number }>(
     `SELECT ${REQUEST_COLUMNS},
-            EXISTS (SELECT 1 FROM exchange_seen s WHERE s.request_id = r.id AND s.user_id = $3) AS seen
+            EXISTS (SELECT 1 FROM exchange_seen s WHERE s.request_id = r.id AND s.user_id = $3) AS seen,
+            (SELECT count(*)::int FROM discovery_checks c
+             WHERE c.request_id = r.id AND c.team_id = $2 AND c.mode = 'answer') AS "checkRounds"
      ${REQUEST_JOINS}
      WHERE r.case_id = $1 AND (r.from_team_id = $2 OR r.to_team_id = $2)
      ORDER BY r.sent_at DESC`,

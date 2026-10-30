@@ -8,6 +8,7 @@ import { respondToSubpoena } from '../exchange/subpoenaResponse.ts'
 import type { SubpoenaContext } from '../exchange/subpoenaPrompt.ts'
 import { reviewDiscovery } from '../exchange/mentor.ts'
 import type { MentorContext, MentorTag } from '../exchange/mentorPrompt.ts'
+import { groupFacts, type FactGroupProposal, type PendingFact } from '../reviews/factsAi.ts'
 import { transcribeFile, type FileToTranscribe } from './transcribe.ts'
 
 /**
@@ -45,4 +46,6 @@ export const ai = {
   reviewDiscovery: (context: MentorContext): Promise<{ tag: MentorTag; feedback: string }> => reviewDiscovery(anthropic(), context),
   /** Everything setup can start from, in one read of the complaint: who will likely testify, and text for the case's own fields. */
   suggestFromComplaint: (input: SuggestInput): Promise<ComplaintSuggestions> => suggestFromComplaint(anthropic(), input),
+  /** Which pending new facts are alike enough to rule on together. */
+  groupFacts: (facts: PendingFact[]): Promise<FactGroupProposal[]> => groupFacts(anthropic(), facts),
 }

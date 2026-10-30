@@ -16,6 +16,8 @@ const INTERVIEW_MINUTES = 60
 /** When the countdown turns amber and the team is warned. */
 const WARNING_MS = 5 * 60 * 1000
 const TIME_UP_NOTE = "Time's up. This interview was sent to your instructor for review."
+/** In review lite, the new facts stand without the instructor; the team can flag them. */
+const TIME_UP_NOTE_LITE = "Time's up. This interview ended, and its new facts are in the case's Reviews tab."
 
 /** 47:12 */
 function clock(ms: number) {
@@ -93,7 +95,7 @@ export function InterviewPage() {
       .then((fresh) => {
         if (fresh.endsAt === interview?.endsAt) return // not ended yet; try again shortly
         setInterview(fresh)
-        setSentNote(TIME_UP_NOTE)
+        setSentNote(fresh.reviewLite ? TIME_UP_NOTE_LITE : TIME_UP_NOTE)
       })
       .catch(() => {}) // the next tick tries again
   }, [remaining, now, service, courseId, caseId, witnessId, as, interview?.endsAt])
@@ -149,16 +151,22 @@ export function InterviewPage() {
 
   /** Ends the team's interview and sends the new facts the witness added to the instructor. */
   async function endForReview() {
-    if (!window.confirm('End this interview and send it to your instructor for review?')) return
+    const lite = interview?.reviewLite
+    const ask = lite
+      ? "End this interview? Its new facts go to the case's Reviews tab."
+      : 'End this interview and send it to your instructor for review?'
+    if (!window.confirm(ask)) return
     setError(null)
     setRestarting(true)
     try {
       const { interview: fresh, sentForReview } = await service.endInterview(courseId, caseId, witnessId)
       setInterview(fresh)
       setSentNote(
-        sentForReview
-          ? "Sent for review. You'll see your instructor's rulings in the case's Reviews tab."
-          : 'The interview ended. It had no questions, so nothing was sent for review.',
+        !sentForReview
+          ? 'The interview ended. It had no questions, so nothing was sent for review.'
+          : lite
+            ? "Interview ended. Its new facts are in the case's Reviews tab, where you can flag any you think are wrong."
+            : "Sent for review. You'll see your instructor's rulings in the case's Reviews tab.",
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -230,7 +238,8 @@ export function InterviewPage() {
           )}
           {remaining !== null && remaining > 0 && remaining <= WARNING_MS && (
             <p className="iv-notice iv-warning" role="alert">
-              Less than 5 minutes left. The interview ends automatically and is sent to your instructor for review.
+              Less than 5 minutes left. The interview ends automatically and{' '}
+              {interview.reviewLite ? 'its new facts go to the case’s Reviews tab.' : 'is sent to your instructor for review.'}
             </p>
           )}
 
@@ -245,7 +254,7 @@ export function InterviewPage() {
               <li className="iv-empty">
                 {isInstructor
                   ? `Ask a question to see how the witness answers ${ROLE_LABEL[interview.side].toLowerCase()}’s counsel. Test interviews are kept apart from the teams’ interviews.`
-                  : `Ask your first question to start the interview. Your partner sees the same conversation. Each interview lasts up to ${INTERVIEW_MINUTES / 60} hour from your first question, then ends and goes to your instructor for review; a timer will appear in the corner.`}
+                  : `Ask your first question to start the interview. Your partner sees the same conversation. Each interview lasts up to ${INTERVIEW_MINUTES / 60} hour from your first question, then ends and ${interview.reviewLite ? 'its new facts go to the case’s Reviews tab' : 'goes to your instructor for review'}; a timer will appear in the corner.`}
               </li>
             )}
             {interview.turns.map((t) => (

@@ -26,6 +26,12 @@ import { parseSubpoenaResponse, type SubpoenaContext } from './subpoenaPrompt.ts
 // the subpoena. The team sees
 // nothing until then. The other team in the case world gets notice of each
 // subpoena (FRCP 45(a)(4)), but not what came back.
+//
+// In review lite mode the first draft is sent at once (marked `auto`): a draft
+// the AI would quash denies the subpoena with its objections, and any other
+// (narrowed, for one it would modify) is approved as drafted. The team can
+// appeal or flag the answer, and the instructor can reopen the subpoena to
+// answer it themselves.
 
 export const SUBPOENA_OUTCOMES = ['responded', 'denied'] as const
 export type SubpoenaOutcome = (typeof SUBPOENA_OUTCOMES)[number]
@@ -69,6 +75,8 @@ export interface TeamSubpoena {
   response: string | null
   respondedAt: Date | null
   documents: ProducedDocument[]
+  /** Answered automatically (review lite), not by the instructor. */
+  auto: boolean
   /** Whether this student has read the answer. */
   seen: boolean
 }
@@ -126,7 +134,7 @@ const filesOf = (table: string, as: string, extra = '') => `coalesce((SELECT jso
 
 const COLUMNS = `s.id, s.recipient, s.recipient_description AS "recipientDescription", s.request_type AS "requestType",
   s.records, s.justification, su.name AS "sentBy", s.sent_at AS "sentAt", s.due_at AS "dueAt",
-  s.outcome, s.response, s.responded_at AS "respondedAt", ${filesOf('subpoena_documents', 'documents')}`
+  s.outcome, s.response, s.responded_at AS "respondedAt", ${filesOf('subpoena_documents', 'documents')}, s.auto`
 
 /** How many subpoenas a team has served (denied ones count too). */
 export async function subpoenaCount(caseId: string, teamId: string, db: Pick<PoolClient, 'query'> = pool) {
@@ -309,6 +317,9 @@ interface DraftRow {
   summary: string
   disputedIssues: string
   importantFacts: ImportantFacts
+  courseId: string
+  /** Review lite, and this is the first draft (a redraft is the instructor's). */
+  autoSend: boolean
 }
 
 async function draftResponse(id: string) {
@@ -319,7 +330,8 @@ async function draftResponse(id: string) {
             s.instructions, s.create_new AS "createNew",
             c.title AS "caseTitle", c.summary, c.disputed_issues AS "disputedIssues",
             json_build_object('plaintiff', c.plaintiff_name, 'defendant', c.defendant_name) AS parties,
-            json_build_object('plaintiff', c.plaintiff_key_facts, 'defense', c.defense_key_facts) AS "importantFacts"
+            json_build_object('plaintiff', c.plaintiff_key_facts, 'defense', c.defense_key_facts) AS "importantFacts",
+            c.course_id AS "courseId", (c.review_mode = 'lite' AND s.draft IS NULL) AS "autoSend"
      FROM subpoenas s JOIN cases c ON c.id = s.case_id
      WHERE s.id = $1 AND s.status = 'drafting'`,
     [id],
@@ -359,6 +371,7 @@ async function draftResponse(id: string) {
     } finally {
       client.release()
     }
+    if (row.autoSend) await sendAutomatically(row.courseId, id, parsed.flag, parsed.body)
   } catch (err) {
     const message =
       err instanceof AiNotConfiguredError
@@ -367,6 +380,20 @@ async function draftResponse(id: string) {
           ? err.message
           : 'The response could not be drafted.'
     await pool.query(`UPDATE subpoenas SET status = 'failed', error = $2 WHERE id = $1 AND status = 'drafting'`, [id, message])
+  }
+}
+
+/**
+ * Review lite: answers the subpoena with the draft at once. If that goes wrong
+ * (a draft too long to send, say), it waits for the instructor as usual.
+ */
+async function sendAutomatically(courseId: string, id: string, flag: 'quash' | 'modify' | null, body: string) {
+  try {
+    if (flag === 'quash') await denySubpoena(courseId, id, null, body.slice(0, MAX_NOTE_LENGTH))
+    else await approveSubpoena(courseId, id, null, body)
+    await pool.query('UPDATE subpoenas SET auto = true WHERE id = $1', [id])
+  } catch (err) {
+    console.error(`Could not answer subpoena ${id} automatically:`, err)
   }
 }
 
@@ -499,6 +526,10 @@ export async function listCourseSubpoenas(courseId: string, which: 'open' | 'com
   return rows.map(withParties)
 }
 
+export async function getCourseSubpoena(courseId: string, id: string) {
+  return findCourseSubpoena(courseId, id)
+}
+
 async function findCourseSubpoena(courseId: string, id: string) {
   const { rows } = await pool.query<CourseSubpoena>(`${COURSE_SELECT} WHERE c.course_id = $1 AND s.id = $2`, [courseId, id])
   if (!rows[0]) throw new HttpError(404, 'Subpoena not found.')
@@ -525,7 +556,7 @@ const fileName = (title: string) => `${title.replace(/[\\/:*?"<>|]+/g, ' ').repl
  * subpoena response, which later witnesses and subpoenas in that world read),
  * shared with the team. Either way the team is notified.
  */
-export async function approveSubpoena(courseId: string, id: string, userId: string, text: string) {
+export async function approveSubpoena(courseId: string, id: string, userId: string | null, text: string) {
   const subpoena = await findCourseSubpoena(courseId, id)
   if (subpoena.respondedAt) throw new HttpError(409, 'This subpoena has already been answered.')
   if (subpoena.status !== 'open') throw new HttpError(409, 'Wait for the draft response first.')
@@ -568,6 +599,7 @@ export async function approveSubpoena(courseId: string, id: string, userId: stri
           contentType: 'text/plain',
           sizeBytes: created.data.length,
           storageKey: created.storageKey,
+          // Sent automatically, it's no one's upload.
           uploadedBy: userId,
           matchupId,
           source: 'subpoena',
@@ -603,7 +635,7 @@ export async function approveSubpoena(courseId: string, id: string, userId: stri
 }
 
 /** Denies the subpoena, with an optional note for the team; nothing is produced. */
-export async function denySubpoena(courseId: string, id: string, userId: string, note: string) {
+export async function denySubpoena(courseId: string, id: string, userId: string | null, note: string) {
   const subpoena = await findCourseSubpoena(courseId, id)
   if (subpoena.respondedAt) throw new HttpError(409, 'This subpoena has already been answered.')
   const text = note.trim()
@@ -642,4 +674,52 @@ export async function redraftSubpoena(
   const drafting = await findCourseSubpoena(courseId, id)
   queueSubpoena(id)
   return drafting
+}
+
+/**
+ * Takes back the answer to a subpoena (the team appealed or flagged it) so the
+ * instructor can answer it again from the Review page: the files it produced
+ * are no longer the team's, a response file it created is deleted, and the
+ * draft waits for review as if new.
+ */
+export async function reopenSubpoena(courseId: string, id: string) {
+  const subpoena = await findCourseSubpoena(courseId, id)
+  if (!subpoena.respondedAt) throw new HttpError(409, 'This subpoena is still waiting for an answer.')
+  const { rows } = await pool.query<{ teamId: string; createdId: string | null }>(
+    'SELECT team_id AS "teamId", response_material_id AS "createdId" FROM subpoenas WHERE id = $1',
+    [id],
+  )
+  const { teamId, createdId } = rows[0]
+  let removedKey: string | null = null
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    for (const doc of subpoena.documents) {
+      await client.query('DELETE FROM material_shares WHERE material_id = $1 AND team_id = $2', [doc.materialId, teamId])
+    }
+    await client.query('DELETE FROM subpoena_documents WHERE subpoena_id = $1', [id])
+    await client.query('DELETE FROM subpoena_seen WHERE subpoena_id = $1', [id])
+    await client.query(
+      `UPDATE subpoenas SET outcome = NULL, status = CASE WHEN draft IS NULL THEN 'failed' ELSE 'open' END,
+         error = CASE WHEN draft IS NULL THEN 'Draft the response again.' END,
+         response = NULL, responded_at = NULL, responded_by = NULL, auto = false, response_material_id = NULL
+       WHERE id = $1`,
+      [id],
+    )
+    if (createdId) {
+      const { rows: removed } = await client.query<{ key: string | null }>(
+        'DELETE FROM case_materials WHERE id = $1 RETURNING storage_key AS key',
+        [createdId],
+      )
+      removedKey = removed[0]?.key ?? null
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+  if (removedKey) await storage.delete([removedKey]).catch(() => {})
+  return findCourseSubpoena(courseId, id)
 }

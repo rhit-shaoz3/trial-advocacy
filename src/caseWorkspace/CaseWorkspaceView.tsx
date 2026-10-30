@@ -62,6 +62,7 @@ import { caseInitials } from '../workspace/format'
 import { FileViewer, type ViewableFile } from '../components/FileViewer'
 import { PhaseSteps } from '../components/PhaseSteps'
 import { Toast, Toasts } from '../components/Toasts'
+import { FlagButton } from './flags'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { CaseFileTable } from './CaseFileTable'
 import { CATEGORY_ICON } from './categoryIcons'
@@ -541,6 +542,7 @@ export function CaseWorkspaceView({
             downloadUrl={downloadUrl}
             onOpenFile={setViewing}
             onSend={c.status === 'active' ? onSendInvestigation : undefined}
+            reviewLite={c.reviewMode === 'lite'}
           />
         )}
 
@@ -569,7 +571,7 @@ export function CaseWorkspaceView({
           />
         )}
 
-        {tab === 'reviews' && reviews && <ReviewsPanel reviews={reviews} loadTranscript={loadTranscript} />}
+        {tab === 'reviews' && reviews && <ReviewsPanel reviews={reviews} loadTranscript={loadTranscript} lite={c.reviewMode === 'lite'} />}
 
         {tab === 'tasks' && (
           <ListPanel title="Tasks" sub={`Everything assigned in ${c.title}.`} empty="No tasks have been assigned yet.">
@@ -595,18 +597,30 @@ export function CaseWorkspaceView({
 function ReviewsPanel({
   reviews,
   loadTranscript,
+  lite,
 }: {
   reviews: ReviewResult[]
   loadTranscript?(reviewId: string): Promise<ReviewTranscript>
+  /** Review lite: the new facts stand without the instructor, and the team flags what's wrong. */
+  lite?: boolean
 }) {
   return (
     <section className="cw-card" aria-labelledby="cw-reviews-title">
       <span className="ws-eyebrow">Case workspace</span>
       <h2 id="cw-reviews-title">Reviews</h2>
       <p className="cw-section-sub">
-        When your team ends an interview, your instructor rules on any new facts the witness added. Rely on the
-        accepted facts; don&rsquo;t rely on the denied ones. In each transcript, what rests on a denied fact is struck
-        out in red.
+        {lite ? (
+          <>
+            When your team ends an interview, the new facts the witness added are listed here. Rely on the accepted
+            facts; don&rsquo;t rely on the denied ones. If you think one is wrong, flag it for your instructor.
+          </>
+        ) : (
+          <>
+            When your team ends an interview, your instructor rules on any new facts the witness added. Rely on the
+            accepted facts; don&rsquo;t rely on the denied ones.
+          </>
+        )}{' '}
+        In each transcript, what rests on a denied fact is struck out in red.
       </p>
       {reviews.length === 0 ? (
         <p className="cw-empty">No reviewed interviews yet. End an interview to send it for review.</p>
@@ -623,7 +637,13 @@ function ReviewsPanel({
                 <p className="cw-empty">No new facts: the witness kept to the record.</p>
               ) : (
                 <div className="cw-review-lists">
-                  <FactList title="Accepted" tone="accepted" facts={r.accepted} />
+                  <FactList
+                    title="Accepted"
+                    tone="accepted"
+                    facts={r.accepted}
+                    // Review lite: the facts that stood automatically can be flagged.
+                    flaggable={r.items?.filter((f) => f.accepted)}
+                  />
                   <FactList title="Denied" tone="denied" facts={r.denied} />
                 </div>
               )}
@@ -662,7 +682,18 @@ function TranscriptDetails({ load }: { load(): Promise<ReviewTranscript> }) {
   )
 }
 
-function FactList({ title, tone, facts }: { title: string; tone: 'accepted' | 'denied'; facts: string[] }) {
+function FactList({
+  title,
+  tone,
+  facts,
+  flaggable,
+}: {
+  title: string
+  tone: 'accepted' | 'denied'
+  facts: string[]
+  /** The same facts with their ids, when some were decided automatically. */
+  flaggable?: { id: string; text: string; auto: boolean }[]
+}) {
   if (facts.length === 0) return null
   return (
     <div className={`cw-fact-list cw-fact-list-${tone}`}>
@@ -670,9 +701,14 @@ function FactList({ title, tone, facts }: { title: string; tone: 'accepted' | 'd
         {title} ({facts.length})
       </h3>
       <ul aria-label={title}>
-        {facts.map((f, i) => (
-          <li key={i}>{f}</li>
-        ))}
+        {flaggable && flaggable.length === facts.length
+          ? flaggable.map((f) => (
+              <li key={f.id}>
+                {f.text}
+                {f.auto && <FlagButton kind="fact" targetId={f.id} what={f.text} />}
+              </li>
+            ))
+          : facts.map((f, i) => <li key={i}>{f}</li>)}
       </ul>
     </div>
   )

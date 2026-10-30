@@ -71,6 +71,8 @@ export interface CaseWorkspace {
     instructorNote: string
     /** The parties' names; empty when the instructor hasn't named them. */
     parties: { plaintiff: string; defendant: string }
+    /** How the instructor reviews the case; in lite, the AI's calls stand and students flag what's wrong. */
+    reviewMode: 'all' | 'lite'
   }
   team: MyCase['team']
   world: MyCase['world']
@@ -103,6 +105,7 @@ async function findCaseRow(courseId: string, caseId: string) {
   const { rows } = await pool.query<CaseRow>(
     `SELECT id, title, summary, status, phase, instructor_note AS "instructorNote",
             json_build_object('plaintiff', plaintiff_name, 'defendant', defendant_name) AS parties,
+            review_mode AS "reviewMode",
             investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName",
             EXISTS (SELECT 1 FROM information_exchange ie
                     WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"

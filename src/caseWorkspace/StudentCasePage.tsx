@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../courses/CourseServiceContext'
@@ -13,11 +13,13 @@ import type {
   ReviewResult,
   StudentExchange,
   SubpoenaInput,
+  TeamFlag,
 } from '../courses/types'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import { caseTab } from './caseTabs'
 import { CaseWorkspaceView } from './CaseWorkspaceView'
 import type { DraftActions } from './exchange/useDraft'
+import { FlagsContext, type FlagsContextValue } from './flagsContext'
 
 /** How often the page checks for an investigator report while one is on its way. */
 const INVESTIGATION_POLL_MS = 20000
@@ -44,6 +46,8 @@ export function StudentCasePage() {
   const [reviews, setReviews] = useState<ReviewResult[] | undefined>(undefined)
   const [investigations, setInvestigations] = useState<Investigation[] | undefined>(undefined)
   const [exchange, setExchange] = useState<StudentExchange | null>(null)
+  const [flags, setFlags] = useState<TeamFlag[]>([])
+  const flagsMarked = useRef(false)
   const myCasesPath = `/courses/${courseId}/cases${workspace?.search ?? ''}`
 
   useEffect(() => {
@@ -62,6 +66,10 @@ export function StudentCasePage() {
       .listMyInvestigations(courseId, caseId)
       .then((i) => !cancelled && setInvestigations(i))
       .catch(() => {}) // nor its investigator reports
+    service
+      .listMyFlags(courseId, caseId)
+      .then((f) => !cancelled && setFlags(f))
+      .catch(() => {}) // nor its flags
     setExchange(null)
     service
       .getMyExchange(courseId, caseId)
@@ -187,6 +195,23 @@ export function StudentCasePage() {
       .catch(() => {})
   }
 
+  /** Flagging is for an active case; the instructor's answers are marked read once shown. */
+  const flagging: FlagsContextValue | null =
+    data?.case.status === 'active'
+      ? {
+          flags,
+          async raise(input) {
+            setFlags(await service.raiseFlag(courseId, caseId, input))
+            workspace?.reloadHome()
+          },
+          markSeen() {
+            // Once per visit; the New badges stay up until the flags are loaded again.
+            if (flagsMarked.current) return
+            flagsMarked.current = true
+            service.markFlagsSeen(courseId, caseId).catch(() => {})
+          },
+        }
+      : null
   async function toggleTask(taskId: string, done: boolean) {
     try {
       setData(await service.setTaskDone(courseId, caseId, taskId, done))
@@ -232,32 +257,34 @@ export function StudentCasePage() {
               {error}
             </p>
           )}
-          <CaseWorkspaceView
-            workspace={data}
-            downloadUrl={(id) => service.myMaterialDownloadUrl(courseId, caseId, id)}
-            loadText={(id) => service.myMaterialText(courseId, caseId, id)}
-            onToggleTask={toggleTask}
-            interviewHref={(id) => `/courses/${courseId}/cases/${caseId}/witnesses/${id}${workspace?.search ?? ''}`}
-            instructorName={workspace?.home.course.instructorName}
-            instructorAvatarUrl={workspace?.home.course.instructorAvatarUrl}
-            reviews={reviews ?? []}
-            onOpenReviews={openReviews}
-            loadTranscript={(reviewId) => service.getMyReviewTranscript(courseId, caseId, reviewId)}
-            investigations={investigations ?? []}
-            onSendInvestigation={sendInvestigation}
-            onOpenInvestigator={openInvestigator}
-            exchange={exchange}
-            onSubmitDisclosures={submitDisclosures}
-            onSendRequest={sendRequest}
-            onRespondToRequest={respondToRequest}
-            onServeSubpoena={serveSubpoena}
-            onCheckDiscovery={(input) => service.checkDiscovery(courseId, caseId, input)}
-            onOpenExchange={openExchange}
-            exchangeDrafts={exchangeDrafts}
-            initialDraftId={initialDraftId}
-            onOpenDraft={openDraft}
-            initialTab={initialTab}
-          />
+          <FlagsContext.Provider value={flagging}>
+            <CaseWorkspaceView
+              workspace={data}
+              downloadUrl={(id) => service.myMaterialDownloadUrl(courseId, caseId, id)}
+              loadText={(id) => service.myMaterialText(courseId, caseId, id)}
+              onToggleTask={toggleTask}
+              interviewHref={(id) => `/courses/${courseId}/cases/${caseId}/witnesses/${id}${workspace?.search ?? ''}`}
+              instructorName={workspace?.home.course.instructorName}
+              instructorAvatarUrl={workspace?.home.course.instructorAvatarUrl}
+              reviews={reviews ?? []}
+              onOpenReviews={openReviews}
+              loadTranscript={(reviewId) => service.getMyReviewTranscript(courseId, caseId, reviewId)}
+              investigations={investigations ?? []}
+              onSendInvestigation={sendInvestigation}
+              onOpenInvestigator={openInvestigator}
+              exchange={exchange}
+              onSubmitDisclosures={submitDisclosures}
+              onSendRequest={sendRequest}
+              onRespondToRequest={respondToRequest}
+              onServeSubpoena={serveSubpoena}
+              onCheckDiscovery={(input) => service.checkDiscovery(courseId, caseId, input)}
+              onOpenExchange={openExchange}
+              exchangeDrafts={exchangeDrafts}
+              initialDraftId={initialDraftId}
+              onOpenDraft={openDraft}
+              initialTab={initialTab}
+            />
+          </FlagsContext.Provider>
         </>
       )}
     </main>

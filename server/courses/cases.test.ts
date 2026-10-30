@@ -66,6 +66,7 @@ describe('creating', () => {
       setupStep: 'details',
       setupCompletedAt: null,
       investigator: { enabled: true, name: 'John Hastings', instructions: '' },
+      reviewMode: 'all',
       exchangeReady: false,
       // Made from scratch, not copied.
       copySetup: false,

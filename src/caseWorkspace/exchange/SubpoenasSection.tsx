@@ -23,6 +23,7 @@ import { AiCheck } from './AiCheck'
 import { DraftControls, DraftsList } from './Drafts'
 import { useDraft, type DraftActions } from './useDraft'
 import { Meter, SubHead } from './RequestsSection'
+import { FlagButton } from '../flags'
 
 const MAX_RECIPIENT = 200
 const MAX_DESCRIPTION = 1000
@@ -498,10 +499,15 @@ function ReadSubpoena({
       {!s.respondedAt ? (
         <p className="cw-empty">Waiting for {s.recipient} to respond.</p>
       ) : s.outcome === 'denied' ? (
-        <div className="ex-answer ex-answer-objection ex-subpoena-block">
-          <small>Your subpoena was denied</small>
-          {s.response || 'The court won\u2019t enforce this subpoena, so nothing was produced.'}
-        </div>
+        <>
+          <div className="ex-answer ex-answer-objection ex-subpoena-block">
+            <small>Your subpoena was denied</small>
+            {s.response || 'The court won\u2019t enforce this subpoena, so nothing was produced.'}
+          </div>
+          {s.auto && (
+            <FlagButton kind="subpoena" targetId={s.id} label="Appeal the denial" what={`subpoena to ${s.recipient}`} />
+          )}
+        </>
       ) : (
         <>
           {s.response && (
@@ -537,6 +543,9 @@ function ReadSubpoena({
                 ))}
               </ul>
             </div>
+          )}
+          {s.auto && (
+            <FlagButton kind="subpoena" targetId={s.id} label="Flag this response" what={`response of ${s.recipient}`} />
           )}
         </>
       )}

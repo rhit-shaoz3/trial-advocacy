@@ -6,6 +6,7 @@ import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
 import { stripTags } from '../investigator/finalize.ts'
 import type { SettledFacts } from '../witness/prompt.ts'
+import { queueGrouping } from './grouping.ts'
 
 // When a team ends an interview, the AI lists the new facts the witness added
 // (in the background, like transcriptions). The instructor rules on each one:
@@ -16,6 +17,13 @@ import type { SettledFacts } from '../witness/prompt.ts'
 // A team's request to the background investigator is reviewed the same way
 // (kind 'investigation'; its lifecycle is in server/investigator/requests.ts),
 // plus a ruling on each case file he'd unlock for the team.
+//
+// Similar facts from different reviews are grouped (grouping.ts) and ruled
+// together. A review finishes on its own once everything in it is ruled, and
+// rulings can still be changed afterwards. In review lite mode the AI's calls
+// stand at once: every new fact is accepted for the team's world and every
+// file the investigator found is allowed (marked `auto`), and students flag
+// what they think is wrong (flags.ts).
 
 export const FACT_DECISIONS = ['accept_world', 'deny_world', 'accept_case', 'deny_case'] as const
 export type FactDecision = (typeof FACT_DECISIONS)[number]
@@ -46,7 +54,7 @@ export interface InterviewReview {
   error: string | null
   createdAt: Date
   completedAt: Date | null
-  facts: { id: string; text: string; decision: FactDecision | null }[]
+  facts: { id: string; text: string; decision: FactDecision | null; groupId: string | null; auto: boolean }[]
   /** An investigation's assignment (what the team asked) and who sent it. */
   assignment: string | null
   askedBy: string | null
@@ -59,7 +67,7 @@ export interface InterviewReview {
   /** The investigator left off his review block, so his new facts and files weren't listed. */
   reviewBlockMissing: boolean
   /** Case files the investigator would unlock for the team, and the instructor's call on each. */
-  documents: { materialId: string; title: string; decision: DocumentDecision | null }[]
+  documents: { materialId: string; title: string; decision: DocumentDecision | null; auto: boolean }[]
 }
 
 /** What students see of a completed review: only whether each fact stands. */
@@ -69,6 +77,8 @@ export interface ReviewResult {
   completedAt: Date
   accepted: string[]
   denied: string[]
+  /** Each fact, for flagging the ones decided automatically. */
+  items: { id: string; text: string; accepted: boolean; auto: boolean }[]
   /** Whether this student has opened the results. */
   seen: boolean
 }
@@ -148,9 +158,10 @@ async function summarize(id: string) {
       interviewId: string
       caseTitle: string
       witnessName: string
+      lite: boolean
     }>(
       `SELECT r.case_id AS "caseId", r.matchup_id AS "matchupId", r.interview_id AS "interviewId",
-              c.title AS "caseTitle", w.name AS "witnessName"
+              c.title AS "caseTitle", w.name AS "witnessName", c.review_mode = 'lite' AS lite
        FROM interview_reviews r
        JOIN cases c ON c.id = r.case_id
        JOIN case_witnesses w ON w.id = r.witness_id
@@ -180,21 +191,23 @@ async function summarize(id: string) {
       await client.query('BEGIN')
       await client.query('DELETE FROM review_facts WHERE review_id = $1', [id])
       for (const [position, fact] of facts.entries()) {
-        await client.query('INSERT INTO review_facts (review_id, position, text, links) VALUES ($1, $2, $3, $4)', [
-          id,
-          position,
-          fact.text,
-          JSON.stringify({ producedBy: fact.producedBy, builtOn: fact.builtOn }),
-        ])
+        // Review lite: the testimony stands, for this world only.
+        await client.query(
+          `INSERT INTO review_facts (review_id, position, text, links, decision, decided_at, auto)
+           VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN 'accept_world' END, CASE WHEN $5 THEN now() END, $5)`,
+          [id, position, fact.text, JSON.stringify({ producedBy: fact.producedBy, builtOn: fact.builtOn }), review.lite],
+        )
       }
-      // Nothing new means nothing to rule on, so the review is done.
+      // Nothing new means nothing to rule on, so the review is done; so is everything in review lite.
+      const done = !facts.length || review.lite
       await client.query(
         `UPDATE interview_reviews
          SET status = $2, error = NULL, completed_at = CASE WHEN $2 = 'completed' THEN now() END
          WHERE id = $1`,
-        [id, facts.length ? 'open' : 'completed'],
+        [id, done ? 'completed' : 'open'],
       )
       await client.query('COMMIT')
+      if (!done) queueGrouping(review.caseId)
     } catch (err) {
       await client.query('ROLLBACK')
       throw err
@@ -229,7 +242,8 @@ const REVIEW_SELECT = `
                    LEFT JOIN users u ON u.id = e.user_id
                    WHERE m.team_id = r.team_id), '[]') AS team,
          r.status, r.error, r.created_at AS "createdAt", r.completed_at AS "completedAt",
-         coalesce((SELECT json_agg(json_build_object('id', f.id, 'text', f.text, 'decision', f.decision)
+         coalesce((SELECT json_agg(json_build_object('id', f.id, 'text', f.text, 'decision', f.decision,
+                                                     'groupId', f.group_id, 'auto', f.auto)
                                    ORDER BY f.position)
                    FROM review_facts f WHERE f.review_id = r.id), '[]') AS facts,
          r.assignment, (SELECT u.name FROM users u WHERE u.id = r.asked_by) AS "askedBy",
@@ -237,7 +251,7 @@ const REVIEW_SELECT = `
          r.review_block_missing AS "reviewBlockMissing",
          coalesce((SELECT json_agg(json_build_object('materialId', d.material_id,
                                                      'title', coalesce(nullif(cm.description, ''), cm.filename),
-                                                     'decision', d.decision) ORDER BY d.position)
+                                                     'decision', d.decision, 'auto', d.auto) ORDER BY d.position)
                    FROM review_documents d JOIN case_materials cm ON cm.id = d.material_id
                    WHERE d.review_id = r.id), '[]') AS documents
   FROM interview_reviews r
@@ -279,36 +293,92 @@ export async function getReview(courseId: string, reviewId: string) {
   return findReview(courseId, reviewId)
 }
 
-/** Records the instructor's ruling on one fact. */
-export async function decideFact(courseId: string, reviewId: string, factId: string, decision: FactDecision) {
+/**
+ * Records the instructor's ruling on one fact, or changes it once the review
+ * is done. A fact in a group is ruled with its group while the review is
+ * open. Ruling the last thing in a review finishes it (see finishIfRuled);
+ * changing a ruling on a finished investigation rewrites the team's report,
+ * so the caller starts that when the review comes back `finalizing`.
+ */
+export async function decideFact(courseId: string, reviewId: string, factId: string, decision: FactDecision, userId: string | null) {
   const review = await findReview(courseId, reviewId)
-  if (review.status === 'completed') throw new HttpError(409, 'This review is already completed.')
-  const { rowCount } = await pool.query(
-    'UPDATE review_facts SET decision = $3, decided_at = now() WHERE review_id = $1 AND id = $2',
-    [reviewId, factId, decision],
-  )
-  if (rowCount !== 1) throw new HttpError(404, 'Fact not found.')
-  return findReview(courseId, reviewId)
+  assertRuleable(review)
+  const fact = review.facts.find((f) => f.id === factId)
+  if (!fact) throw new HttpError(404, 'Fact not found.')
+  if (review.status === 'open' && fact.groupId) throw new HttpError(409, 'Rule on this fact with its group, or ungroup it first.')
+  await pool.query('UPDATE review_facts SET decision = $3, decided_at = now(), auto = false WHERE review_id = $1 AND id = $2', [
+    reviewId,
+    factId,
+    decision,
+  ])
+  // An investigator report says what's true, so it's rewritten when a fact goes from standing to denied, or back.
+  const flipped = fact.decision !== null && fact.decision.startsWith('deny') !== decision.startsWith('deny')
+  return afterRuling(courseId, review, userId, flipped)
 }
 
-/** Records the instructor's call on letting the team have one case file the investigator found. */
-export async function decideDocument(courseId: string, reviewId: string, materialId: string, decision: DocumentDecision) {
+/** Records the instructor's call on letting the team have one case file the investigator found, or changes it. */
+export async function decideDocument(
+  courseId: string,
+  reviewId: string,
+  materialId: string,
+  decision: DocumentDecision,
+  userId: string | null,
+) {
   const review = await findReview(courseId, reviewId)
-  if (review.status !== 'open') throw new HttpError(409, 'This review is already completed.')
-  const { rowCount } = await pool.query('UPDATE review_documents SET decision = $3 WHERE review_id = $1 AND material_id = $2', [
+  assertRuleable(review)
+  const doc = review.documents.find((d) => d.materialId === materialId)
+  if (!doc) throw new HttpError(404, 'File not found.')
+  await pool.query('UPDATE review_documents SET decision = $3, auto = false WHERE review_id = $1 AND material_id = $2', [
     reviewId,
     materialId,
     decision,
   ])
-  if (rowCount !== 1) throw new HttpError(404, 'File not found.')
-  return findReview(courseId, reviewId)
+  return afterRuling(courseId, review, userId, doc.decision !== null && doc.decision !== decision)
+}
+
+function assertRuleable(review: InterviewReview) {
+  if (review.status === 'finalizing') throw new HttpError(409, 'The team’s report is being written. Try again in a moment.')
+  if (review.status !== 'open' && review.status !== 'completed') {
+    throw new HttpError(409, 'The new facts in this conversation are not listed yet.')
+  }
 }
 
 /**
- * Finishes a review once every fact (and, for an investigation, every file)
- * has a ruling. An interview's rulings take effect now; an investigation goes
- * on to `finalizing` while the team's clean report is written (the caller
- * starts that), and its rulings take effect when it's done.
+ * After a ruling: an open review finishes once everything in it is ruled; a
+ * finished investigation whose ruling changed goes back to `finalizing` so
+ * the team's report (and its files) match. The caller starts that.
+ */
+async function afterRuling(courseId: string, review: InterviewReview, userId: string | null, changed: boolean) {
+  if (review.status === 'open') await finishIfRuled(review.id, userId)
+  else if (review.kind === 'investigation' && changed) {
+    await pool.query(`UPDATE interview_reviews SET status = 'finalizing' WHERE id = $1 AND status = 'completed'`, [review.id])
+  }
+  return findReview(courseId, review.id)
+}
+
+/**
+ * Finishes an open review once every fact (and, for an investigation, every
+ * file) has a ruling. An interview's rulings take effect now; an
+ * investigation goes on to `finalizing` while the team's clean report is
+ * written (the caller starts that), and its rulings take effect when it's done.
+ */
+export async function finishIfRuled(reviewId: string, userId: string | null) {
+  await pool.query(
+    `UPDATE interview_reviews r
+     SET status = CASE WHEN r.kind = 'investigation' THEN 'finalizing' ELSE 'completed' END,
+         completed_at = CASE WHEN r.kind = 'investigation' THEN r.completed_at ELSE now() END,
+         completed_by = $2
+     WHERE r.id = $1 AND r.status = 'open'
+       AND NOT EXISTS (SELECT 1 FROM review_facts f WHERE f.review_id = r.id AND f.decision IS NULL)
+       AND NOT EXISTS (SELECT 1 FROM review_documents d WHERE d.review_id = r.id AND d.decision IS NULL)`,
+    [reviewId, userId],
+  )
+}
+
+/**
+ * Sends on a review with nothing to rule on: an investigator's report that
+ * turned up no new facts or files waits for the instructor to read it first.
+ * (Everything else finishes on its own once ruled.)
  */
 export async function completeReview(courseId: string, reviewId: string, userId: string) {
   const review = await findReview(courseId, reviewId)
@@ -316,12 +386,7 @@ export async function completeReview(courseId: string, reviewId: string, userId:
   if (review.status !== 'open') throw new HttpError(409, 'The new facts in this conversation are not listed yet.')
   if (review.facts.some((f) => f.decision === null)) throw new HttpError(409, 'Rule on every fact first.')
   if (review.documents.some((d) => d.decision === null)) throw new HttpError(409, 'Decide on every file first.')
-  await pool.query(
-    review.kind === 'investigation'
-      ? `UPDATE interview_reviews SET status = 'finalizing', completed_by = $2 WHERE id = $1`
-      : `UPDATE interview_reviews SET status = 'completed', completed_at = now(), completed_by = $2 WHERE id = $1`,
-    [reviewId, userId],
-  )
+  await finishIfRuled(reviewId, userId)
   return findReview(courseId, reviewId)
 }
 
@@ -432,6 +497,10 @@ export async function teamReviewResults(caseId: string, teamId: string, userId: 
                       WHERE f.review_id = r.id AND f.decision LIKE 'accept%'), '[]') AS accepted,
             coalesce((SELECT json_agg(f.text ORDER BY f.position) FROM review_facts f
                       WHERE f.review_id = r.id AND f.decision LIKE 'deny%'), '[]') AS denied,
+            coalesce((SELECT json_agg(json_build_object('id', f.id, 'text', f.text,
+                                                        'accepted', f.decision LIKE 'accept%', 'auto', f.auto)
+                                      ORDER BY f.position)
+                      FROM review_facts f WHERE f.review_id = r.id), '[]') AS items,
             EXISTS (SELECT 1 FROM review_seen s WHERE s.review_id = r.id AND s.user_id = $3) AS seen
      FROM interview_reviews r JOIN case_witnesses w ON w.id = r.witness_id
      WHERE r.case_id = $1 AND r.team_id = $2 AND r.status = 'completed' AND r.kind = 'interview'

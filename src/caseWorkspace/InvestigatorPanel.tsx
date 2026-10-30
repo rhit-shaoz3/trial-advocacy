@@ -5,6 +5,7 @@ import { WitnessAvatar } from '../components/WitnessAvatar'
 import { fileTypeLabel, formatSize, shortDate } from '../courses/caseLabels'
 import type { Investigation } from '../courses/types'
 import { DictationTextarea } from '../components/Dictation'
+import { FlagButton } from './flags'
 
 /** The longest assignment a team can send (matches the server). */
 const MAX_ASSIGNMENT_LENGTH = 4000
@@ -30,6 +31,7 @@ export function InvestigatorPanel({
   downloadUrl,
   onOpenFile,
   onSend,
+  reviewLite,
 }: {
   investigator: { name: string; avatarUrl: string }
   available: boolean
@@ -42,6 +44,8 @@ export function InvestigatorPanel({
   onOpenFile?(file: ViewableFile): void
   /** Sends an assignment; leave out (the preview, or a closed case) to hide the email. */
   onSend?(assignment: string): Promise<void>
+  /** Review lite: reports come straight back, without the instructor's review. */
+  reviewLite?: boolean
 }) {
   const reports = investigations?.filter((i) => i.status === 'completed') ?? []
   const working = investigations?.find((i) => i.status === 'working')
@@ -56,7 +60,10 @@ export function InvestigatorPanel({
           <h2 id="cw-investigator-title">{investigator.name}</h2>
           <p className="cw-section-sub">
             A licensed private investigator working for your team. Email him an assignment and he&rsquo;ll report back
-            with what he finds. Your instructor reviews every report before it reaches you.
+            with what he finds.{' '}
+            {reviewLite
+              ? 'His reports come straight to you; flag anything you think is wrong for your instructor.'
+              : 'Your instructor reviews every report before it reaches you.'}
           </p>
         </div>
       </div>
@@ -94,8 +101,10 @@ export function InvestigatorPanel({
                 <strong>{investigator.name} is on it.</strong>
                 <p>
                   Sent {shortDate(working.sentAt)}
-                  {working.askedBy && ` by ${working.askedBy}`}. His report comes back once your instructor has
-                  reviewed it; you can send the next assignment then.
+                  {working.askedBy && ` by ${working.askedBy}`}.{' '}
+                  {reviewLite
+                    ? 'His report comes back as soon as it’s written; you can send the next assignment then.'
+                    : 'His report comes back once your instructor has reviewed it; you can send the next assignment then.'}
                 </p>
                 <blockquote>{working.assignment}</blockquote>
               </div>
@@ -105,7 +114,7 @@ export function InvestigatorPanel({
           {latest && <InvestigatorReport investigation={latest} downloadUrl={downloadUrl} onOpenFile={onOpenFile} latest />}
 
           {onSend && !working && teamName && (
-            <InvestigatorEmail name={investigator.name} teamName={teamName} onSend={onSend} />
+            <InvestigatorEmail name={investigator.name} teamName={teamName} onSend={onSend} reviewLite={reviewLite} />
           )}
           {!teamName && <p className="cw-empty">Your team can email the investigator once it&rsquo;s in a case world.</p>}
 
@@ -160,6 +169,20 @@ export function InvestigatorReport({
           {r.assignment}
         </p>
         <p className="cw-investigation-report">{r.report}</p>
+        {r.facts?.some((f) => f.auto) && (
+          // Review lite: what he turned up stands without the instructor, so the team can flag it.
+          <div className="cw-investigation-facts">
+            <span>What the investigator turned up</span>
+            <ul>
+              {r.facts.map((f) => (
+                <li key={f.id}>
+                  {f.text}
+                  {f.auto && <FlagButton kind="fact" targetId={f.id} what={f.text} />}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {r.unlocked.length > 0 && (
           <div className="cw-investigation-files">
             <span>
@@ -202,6 +225,7 @@ export function InvestigatorReport({
                       </small>
                     </a>
                   )}
+                  {f.auto && <FlagButton kind="document" targetId={f.id} reviewId={r.id} what={f.title} />}
                 </li>
               ))}
             </ul>
@@ -217,10 +241,12 @@ function InvestigatorEmail({
   name,
   teamName,
   onSend,
+  reviewLite,
 }: {
   name: string
   teamName: string
   onSend(assignment: string): Promise<void>
+  reviewLite?: boolean
 }) {
   const [assignment, setAssignment] = useState('')
   const [sending, setSending] = useState(false)
@@ -270,7 +296,9 @@ function InvestigatorEmail({
         </p>
       )}
       <div className="cw-email-actions">
-        <small className="muted">One assignment at a time. Your instructor reviews his report first.</small>
+        <small className="muted">
+          One assignment at a time.{reviewLite ? '' : ' Your instructor reviews his report first.'}
+        </small>
         <button type="submit" className="ws-btn ws-btn-primary" disabled={sending || !assignment.trim()}>
           <Send aria-hidden="true" />
           {sending ? 'Sending…' : `Send to ${name}`}

@@ -4,6 +4,7 @@ import { transcriptionsSettled } from '../courses/materialText.ts'
 import { subpoenasSettled } from '../exchange/subpoenas.ts'
 import { investigationsSettled } from '../investigator/requests.ts'
 import { reviewsSettled } from '../reviews/reviews.ts'
+import { groupingSettled } from '../reviews/grouping.ts'
 import { witnessSuggestionsSettled } from '../witness/suggestions.ts'
 
 // Server tests never call Claude. By default a file's "transcription" is its
@@ -24,6 +25,7 @@ beforeEach(() => {
   ai.finalizeReport = async (input) => input.body
   ai.suggestFromComplaint = async () => ({ witnesses: [], content: { disputedIssues: '', investigatorNotes: '', instructorNote: '', tasks: [] } })
   ai.reviewDiscovery = async () => ({ tag: 'LOOKS_GOOD', feedback: 'Nice work.' })
+  ai.groupFacts = async () => []
   ai.respondToSubpoena = async () => {
     throw new Error('This test did not set up a fake subpoena recipient.')
   }
@@ -36,5 +38,6 @@ afterEach(async () => {
   await investigationsSettled()
   await witnessSuggestionsSettled()
   await subpoenasSettled()
+  await groupingSettled()
   Object.assign(ai, real)
 })

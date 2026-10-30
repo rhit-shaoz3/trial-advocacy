@@ -28,6 +28,14 @@ export interface InvestigatorSettings {
 }
 
 /** The guided setup's steps, in order; a case remembers the furthest one reached. */
+/**
+ * How the instructor reviews the case. all: every new fact, file, and subpoena
+ * response waits for them. lite: the AI's calls stand at once, for the team's
+ * case world only, and students flag what they think is wrong.
+ */
+export const REVIEW_MODES = ['all', 'lite'] as const
+export type ReviewMode = (typeof REVIEW_MODES)[number]
+
 export const SETUP_STEPS = ['details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'investigator', 'tasks'] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
@@ -60,6 +68,7 @@ export interface CourseCase {
   /** When the instructor finished the guided setup; null until then. */
   setupCompletedAt: Date | null
   investigator: InvestigatorSettings
+  reviewMode: ReviewMode
   /** Whether the information exchange setup is finished (so students see it, and the case has its phase). */
   exchangeReady: boolean
   /** A copy whose guided setup is just its teams and worlds, until finished. */
@@ -99,6 +108,7 @@ const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "ins
   setup_step AS "setupStep", setup_completed_at AS "setupCompletedAt",
   json_build_object('enabled', investigator_enabled, 'name', investigator_name,
                     'instructions', investigator_instructions) AS investigator,
+  review_mode AS "reviewMode",
   EXISTS (SELECT 1 FROM information_exchange ie
           WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
   copy_setup AS "copySetup",
@@ -208,6 +218,17 @@ export async function setInvestigator(courseId: string, id: string, settings: In
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [courseId, id, settings.enabled, settings.name, settings.instructions],
+  )
+  return rows[0] ?? null
+}
+
+/** Sets how the instructor reviews the case. Returns null if there was no such case. */
+export async function setReviewMode(courseId: string, id: string, mode: ReviewMode) {
+  const { rows } = await pool.query<CourseCase>(
+    `UPDATE cases SET review_mode = $3, updated_at = now()
+     WHERE course_id = $1 AND id = $2
+     RETURNING ${CASE_COLUMNS}`,
+    [courseId, id, mode],
   )
   return rows[0] ?? null
 }

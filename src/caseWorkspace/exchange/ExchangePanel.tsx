@@ -14,6 +14,7 @@ import { DisclosuresSection } from './DisclosuresSection'
 import { RequestsSection } from './RequestsSection'
 import { SubpoenasSection } from './SubpoenasSection'
 import { TeachMe, type TeachTopic } from './TeachMe'
+import type { DraftActions } from './useDraft'
 import './exchange.css'
 
 type Section = 'disclosures' | 'subpoenas' | ExchangeKind
@@ -42,14 +43,17 @@ export function ExchangePanel({
   onOpenDocument,
   subpoenaForm,
   focus,
+  drafts,
+  initialDraftId,
+  onOpenDraft,
   now = new Date(),
 }: {
   exchange: StudentExchange
   /** Leave these out to make it read-only (a closed case). */
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
-  onSend?(kind: ExchangeKind, items: string[], checkId?: string): Promise<void>
+  onSend?(kind: ExchangeKind, items: string[], checkId?: string, draftId?: string): Promise<void>
   onRespond?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
-  onServeSubpoena?(subpoena: SubpoenaInput, checkId?: string): Promise<void>
+  onServeSubpoena?(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
   /** "Check with AI" before sending; leave out to send without it. */
   onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   /** Opens a case file produced in answer to a subpoena. */
@@ -58,8 +62,22 @@ export function ExchangePanel({
   subpoenaForm: { caseId: string; parties: CaseParties; attorney: string | null }
   /** A request or subpoena to open on, as when a notice links to its answer. */
   focus?: { kind: ExchangeKind | 'subpoenas'; id: string } | null
+  /** Saves and deletes the team's drafts of new subpoenas and sets; leave out to not keep drafts. */
+  drafts?: DraftActions
+  /** A draft to open on, as after a refresh. */
+  initialDraftId?: string
+  /** Called with the open draft's id, and null on leaving it. */
+  onOpenDraft?(draftId: string | null): void
   now?: Date
 }) {
+  // The section holding the draft to open on.
+  const draftSection: Section | undefined = !initialDraftId
+    ? undefined
+    : exchange.subpoenas?.drafts.some((d) => d.id === initialDraftId)
+      ? 'subpoenas'
+      : (['interrogatories', 'rfas'] as const).find((k) => exchange[k]?.drafts.some((d) => d.id === initialDraftId))
+  // Opened once: switching sections lets it go.
+  const [pendingDraft, setPendingDraft] = useState(draftSection && initialDraftId)
   const parts: { id: Section; label: string; icon: typeof Users; locked: boolean; badge: string | null }[] = []
   if (exchange.disclosures) {
     const d = exchange.disclosures
@@ -101,7 +119,8 @@ export function ExchangePanel({
   }
   const firstToDo = parts.find((p) => p.badge?.includes('to respond') || p.badge === 'To do')
   const [section, setSection] = useState<Section | undefined>(
-    (focus && parts.some((p) => p.id === focus.kind) ? focus.kind : undefined) ??
+    draftSection ??
+      (focus && parts.some((p) => p.id === focus.kind) ? focus.kind : undefined) ??
       firstToDo?.id ??
       parts.find((p) => !p.locked)?.id ??
       parts[0]?.id,
@@ -125,7 +144,10 @@ export function ExchangePanel({
             type="button"
             className="ex-menu-item"
             aria-current={section === p.id ? 'page' : undefined}
-            onClick={() => setSection(p.id)}
+            onClick={() => {
+              setSection(p.id)
+              setPendingDraft(undefined)
+            }}
           >
             {p.locked ? <Lock aria-hidden="true" /> : <p.icon aria-hidden="true" />}
             <span>{p.label}</span>
@@ -169,6 +191,9 @@ export function ExchangePanel({
             onOpenDocument={onOpenDocument}
             onTeach={() => setTeach('subpoenas')}
             initialSubpoenaId={focus?.kind === 'subpoenas' ? focus.id : undefined}
+            drafts={drafts}
+            initialDraftId={pendingDraft}
+            onOpenDraft={onOpenDraft}
             now={now}
           />
         )}
@@ -180,11 +205,14 @@ export function ExchangePanel({
             open={exchange.requestsOpen}
             opponentNumber={exchange.opponentNumber}
             opponentSide={OTHER_SIDE[exchange.side]}
-            onSend={onSend && ((items, checkId) => onSend(section, items, checkId))}
+            onSend={onSend && ((items, checkId, draftId) => onSend(section, items, checkId, draftId))}
             onRespond={onRespond}
             onCheck={onCheck}
             onTeach={() => setTeach(section)}
             initialRequestId={focus?.kind === section ? focus.id : undefined}
+            drafts={drafts}
+            initialDraftId={pendingDraft}
+            onOpenDraft={onOpenDraft}
             now={now}
           />
         )}

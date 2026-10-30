@@ -20,13 +20,17 @@ import {
   questionWeight,
   type CheckInput,
   type DiscoveryCheck,
+  type DiscoveryDraft,
   type ExchangeKind,
   type ExchangeRequest,
   type ItemResponse,
+  type KeyedCheck,
   type StudentPart,
 } from '../../courses/types'
 import { DictationTextarea } from '../../components/Dictation'
 import { AiCheck } from './AiCheck'
+import { DraftControls, DraftsList } from './Drafts'
+import { useDraft, type DraftActions } from './useDraft'
 
 type TeamRequest = StudentPart['requests'][number]
 
@@ -68,7 +72,7 @@ function timeLeft(iso: string, now: Date) {
   return days > 0 ? `${plural(days, 'day')} left` : `${plural(-days, 'day')} late`
 }
 
-type View = { mode: 'hub' } | { mode: 'compose' } | { mode: 'respond'; id: string } | { mode: 'read'; id: string }
+type View = { mode: 'hub' } | { mode: 'compose'; draft?: DiscoveryDraft } | { mode: 'respond'; id: string } | { mode: 'read'; id: string }
 
 /**
  * One kind of request (interrogatories, or requests for admission) as a team
@@ -86,6 +90,9 @@ export function RequestsSection({
   onCheck,
   onTeach,
   initialRequestId,
+  drafts,
+  initialDraftId,
+  onOpenDraft,
   now = new Date(),
 }: {
   kind: ExchangeKind
@@ -95,20 +102,27 @@ export function RequestsSection({
   opponentNumber: number
   opponentSide: string
   /** Leave out to make it read-only (a closed case). */
-  onSend?(items: string[], checkId?: string): Promise<void>
+  /** `draftId`: the draft it was written in. */
+  onSend?(items: string[], checkId?: string, draftId?: string): Promise<void>
   onRespond?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
   /** Has the AI check a draft (a set, or answers) before it's sent; leave out to send without one. */
   onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   onTeach(): void
   /** A request to open on (read), as when a notice links to its response. */
   initialRequestId?: string
+  /** Saves and deletes the team's drafts; leave out to not keep drafts. */
+  drafts?: DraftActions
+  /** A draft to open on, as after a refresh. */
+  initialDraftId?: string
+  /** Called with the open draft's id, and null on leaving it. */
+  onOpenDraft?(draftId: string | null): void
   now?: Date
 }) {
-  const [view, setView] = useState<View>(
-    initialRequestId && part.requests.some((r) => r.id === initialRequestId)
-      ? { mode: 'read', id: initialRequestId }
-      : { mode: 'hub' },
-  )
+  const [view, setView] = useState<View>(() => {
+    const draft = initialDraftId ? part.drafts.find((d) => d.id === initialDraftId) : undefined
+    if (draft && onSend) return { mode: 'compose', draft }
+    return initialRequestId && part.requests.some((r) => r.id === initialRequestId) ? { mode: 'read', id: initialRequestId } : { mode: 'hub' }
+  })
   const request = view.mode === 'respond' || view.mode === 'read' ? part.requests.find((r) => r.id === view.id) : undefined
   const copy = COPY[kind]
   const back = () => setView({ mode: 'hub' })
@@ -116,11 +130,15 @@ export function RequestsSection({
   if (view.mode === 'compose' && onSend) {
     return (
       <Compose
+        key={view.draft?.id ?? 'new'}
         kind={kind}
         part={part}
         to={`Team ${opponentNumber} (${opponentSide})`}
-        onSend={async (items, checkId) => {
-          await onSend(items, checkId)
+        draft={view.draft}
+        actions={drafts}
+        onOpenDraft={onOpenDraft}
+        onSend={async (items, checkId, draftId) => {
+          await onSend(items, checkId, draftId)
           back()
         }}
         onCheck={onCheck && ((items) => onCheck({ kind, mode: 'draft', draft: { items } }))}
@@ -200,6 +218,16 @@ export function RequestsSection({
           </div>
         )}
       </section>
+
+      {open && onSend && drafts && (
+        <DraftsList
+          drafts={part.drafts}
+          unit={[copy.sideLabel, `${copy.sideLabel}s`]}
+          onOpen={(draft) => setView({ mode: 'compose', draft })}
+          onDelete={drafts.remove}
+          now={now}
+        />
+      )}
 
       {open && (
         <section className="cw-card ex-section ex-to-respond" aria-labelledby={`ex-${kind}-respond`}>
@@ -348,6 +376,9 @@ function Compose({
   kind,
   part,
   to,
+  draft,
+  actions,
+  onOpenDraft,
   onSend,
   onCheck,
   onBack,
@@ -356,13 +387,29 @@ function Compose({
   kind: ExchangeKind
   part: StudentPart
   to: string
-  onSend(items: string[], checkId?: string): Promise<void>
+  /** The draft to carry on with. */
+  draft?: DiscoveryDraft
+  actions?: DraftActions
+  onOpenDraft?(draftId: string | null): void
+  onSend(items: string[], checkId?: string, draftId?: string): Promise<void>
   onCheck?(items: string[]): Promise<DiscoveryCheck>
   onBack(): void
   onTeach(): void
 }) {
   const copy = COPY[kind]
-  const [lines, setLines] = useState<string[]>([''])
+  const [lines, setLines] = useState<string[]>(() => {
+    const saved = draft && 'items' in draft.content ? draft.content.items : []
+    return saved.length > 0 ? saved : ['']
+  })
+  const [lastCheck, setLastCheck] = useState<KeyedCheck | null>(draft?.lastCheck ?? null)
+  const empty = !lines.some((l) => l.trim())
+  const autosave = useDraft({ kind, initial: draft, content: { items: lines }, check: lastCheck, empty, actions })
+  // The open draft goes in the address, so a refresh comes back to it.
+  useEffect(() => {
+    if (!autosave.draftId) return
+    onOpenDraft?.(autosave.draftId)
+    return () => onOpenDraft?.(null)
+  }, [autosave.draftId, onOpenDraft])
   const [focus, setFocus] = useState(0)
   const refs = useRef<(HTMLTextAreaElement | null)[]>([])
   const weightOf = (t: string) => (kind === 'interrogatories' ? questionWeight(t) : 1)
@@ -491,7 +538,25 @@ function Compose({
         blocked={over}
         draftKey={JSON.stringify(items())}
         onCheck={onCheck && (() => onCheck(items()))}
-        onSubmit={(checkId) => onSend(items(), checkId)}
+        initialCheck={draft?.lastCheck}
+        onCheckChange={setLastCheck}
+        onSubmit={(checkId) => autosave.submit((draftId) => onSend(items(), checkId, draftId))}
+        extra={
+          actions && (
+            <DraftControls
+              status={autosave.status}
+              empty={empty}
+              onSave={async () => {
+                await autosave.flush()
+                onBack()
+              }}
+              onCancel={async () => {
+                await autosave.discard()
+                onBack()
+              }}
+            />
+          )
+        }
         submitIcon={<Send aria-hidden="true" />}
         submitLabel={`Send to ${to.split(' (')[0]}`}
         busyLabel="Sending…"

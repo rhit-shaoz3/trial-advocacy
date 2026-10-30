@@ -7,6 +7,11 @@ const LABEL: Record<CheckTag, string> = {
   NEEDS_IMPROVEMENT: 'Needs improvement',
 }
 
+/** A check's result as a small colored badge. */
+export function CheckBadge({ tag }: { tag: CheckTag }) {
+  return <span className={`check-summary-badge check-summary-${tag.toLowerCase()}`}>AI: {LABEL[tag]}</span>
+}
+
 /**
  * For the instructor: what "Check with AI" told a team before it sent
  * discovery (or its answers), whether it sent what was checked, and the

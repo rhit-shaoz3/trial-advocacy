@@ -41,6 +41,7 @@ import {
   type TeamContext,
 } from './exchange.ts'
 import { runCheck, submissionCheck, type CheckDraft } from './discoveryChecks.ts'
+import { createDraft, deleteDraft, DRAFT_KINDS, listDrafts, updateDraft, type DiscoveryDraft, type DraftKind } from './drafts.ts'
 import {
   markSubpoenasSeen,
   serveSubpoena,
@@ -151,6 +152,8 @@ export interface StudentPart {
   used: number
   remaining: number
   requests: (ExchangeRequest & { seen: boolean; direction: 'sent' | 'received' })[]
+  /** The team's unsent sets of this kind, newest first. */
+  drafts: DiscoveryDraft[]
 }
 
 /** The team's subpoenas: its limit, what it has left, the ones it served, and notice of the other team's. */
@@ -163,6 +166,8 @@ export interface StudentSubpoenas {
   remaining: number
   served: TeamSubpoena[]
   notices: SubpoenaNotice[]
+  /** The team's unsent subpoenas, newest first. */
+  drafts: DiscoveryDraft[]
 }
 
 // Shape sent to the client; matches `StudentExchange` in src/courses/types.ts.
@@ -224,11 +229,12 @@ async function requireStudentContext(req: Request) {
 }
 
 async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
-  const [settings, options, submission, requests] = await Promise.all([
+  const [settings, options, submission, requests, drafts] = await Promise.all([
     getSettings(ctx.caseId),
     disclosureOptions(ctx.caseId),
     findSubmission(ctx.caseId, ctx.userId),
     listTeamRequests(ctx.caseId, ctx.teamId, ctx.userId),
+    listDrafts(ctx),
   ])
   const sideOptions = options.filter((o) => o.side === ctx.side)
   const keyIds = new Set(sideOptions.map((o) => o.id))
@@ -248,12 +254,22 @@ async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
       requests: requests
         .filter((r) => r.kind === kind)
         .map((r) => ({ ...r, direction: r.fromTeam.id === ctx.teamId ? 'sent' : 'received' })),
+      drafts: drafts.filter((d) => d.kind === kind),
     }
   }
   const subpoenas = async (p: SubpoenaSettings): Promise<StudentSubpoenas | null> => {
     if (!p.enabled) return null
     const [served, notices] = await Promise.all([teamSubpoenas(ctx.caseId, ctx.teamId, ctx.userId), subpoenaNotices(ctx.caseId, ctx.teamId, ctx.userId)])
-    return { types: p.types, limit: p.limit, days: p.days, used: served.length, remaining: Math.max(0, p.limit - served.length), served, notices }
+    return {
+      types: p.types,
+      limit: p.limit,
+      days: p.days,
+      used: served.length,
+      remaining: Math.max(0, p.limit - served.length),
+      served,
+      notices,
+      drafts: drafts.filter((d) => d.kind === 'subpoena'),
+    }
   }
   const numbers = await teamNumbers(ctx)
   return {
@@ -324,7 +340,10 @@ myExchangeRouter.post('/disclosures', async (req, res) => {
   res.status(201).json({ exchange: await studentExchange(ctx) })
 })
 
-/** Sends a set to the other team: `{ kind: 'interrogatories' | 'rfas', items: string[] }`, one per line. */
+/**
+ * Sends a set to the other team: `{ kind: 'interrogatories' | 'rfas', items: string[], checkId, draftId }`,
+ * one per line. Sending from a draft deletes the draft.
+ */
 myExchangeRouter.post('/requests', async (req, res) => {
   const ctx = await requireStudentContext(req)
   if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Requests open in the information exchange phase.')
@@ -335,6 +354,7 @@ myExchangeRouter.post('/requests', async (req, res) => {
   const items = readItems(req.body)
   const check = await submissionCheck(ctx, field(req.body, 'checkId'), { kind, mode: 'draft', items })
   await sendRequest(ctx, kind, settings[kind], items, check)
+  await deleteDraft(ctx, field(req.body, 'draftId'))
   res.status(201).json({ exchange: await studentExchange(ctx) })
 })
 
@@ -424,7 +444,8 @@ myExchangeRouter.post('/requests/:requestId/responses', async (req, res) => {
  * Serves a subpoena: `{ recipient, recipientDescription, requestType, records,
  * justification, checkId }`: who it's for and who they are, what kind of
  * request, what it wants, how the team would justify it to the judge, and the
- * discovery mentor's check before it (optional).
+ * discovery mentor's check before it (optional). Serving from a draft (`draftId`)
+ * deletes the draft.
  */
 myExchangeRouter.post('/subpoenas', async (req, res) => {
   const ctx = await requireStudentContext(req)
@@ -434,7 +455,48 @@ myExchangeRouter.post('/subpoenas', async (req, res) => {
   const subpoena = readSubpoena(req.body, settings.subpoenas)
   const check = await submissionCheck(ctx, field(req.body, 'checkId'), { kind: 'subpoena', mode: 'draft', subpoena })
   await serveSubpoena(ctx, settings.subpoenas, subpoena, check)
+  await deleteDraft(ctx, field(req.body, 'draftId'))
   res.status(201).json({ exchange: await studentExchange(ctx) })
+})
+
+/** The team's context for a draft of this kind: the exchange is open and the case includes it. */
+async function requireDraftContext(req: Request, kind: DraftKind) {
+  const ctx = await requireStudentContext(req)
+  if (!requestsOpen(ctx.phase)) throw new HttpError(409, 'Requests open in the information exchange phase.')
+  const settings = await getSettings(ctx.caseId)
+  if (!settings[kind === 'subpoena' ? 'subpoenas' : kind].enabled) throw new HttpError(409, "This case doesn't include that kind of request.")
+  return ctx
+}
+
+async function draftKindOf(req: Request) {
+  const { rows } = await pool.query<{ kind: DraftKind }>('SELECT kind FROM discovery_drafts WHERE id = $1', [req.params.draftId])
+  if (!isUuid(req.params.draftId) || !rows[0]) throw new HttpError(404, 'Draft not found. A teammate may have sent or deleted it.')
+  return rows[0].kind
+}
+
+/**
+ * Saves a new draft: `{ kind, content, lastCheck }`. A subpoena's content is
+ * its fields; a set's is `{ items }`. `lastCheck` is `{ id, key }`: the last AI
+ * check and the key of the draft it checked. Returns `{ draft }`.
+ */
+myExchangeRouter.post('/drafts', async (req, res) => {
+  const kind = readString(req.body, 'kind') as DraftKind
+  if (!DRAFT_KINDS.includes(kind)) throw new HttpError(400, 'Choose a subpoena, interrogatories, or requests for admission.')
+  const ctx = await requireDraftContext(req, kind)
+  res.status(201).json({ draft: await createDraft(ctx, kind, field(req.body, 'content'), field(req.body, 'lastCheck')) })
+})
+
+/** Saves over a draft: `{ content, lastCheck }`. Returns `{ draft }`. */
+myExchangeRouter.put('/drafts/:draftId', async (req, res) => {
+  const ctx = await requireDraftContext(req, await draftKindOf(req))
+  res.json({ draft: await updateDraft(ctx, req.params.draftId as string, field(req.body, 'content'), field(req.body, 'lastCheck')) })
+})
+
+/** Deletes a draft (Cancel, or deleting it from the list). */
+myExchangeRouter.delete('/drafts/:draftId', async (req, res) => {
+  const ctx = await requireStudentContext(req)
+  await deleteDraft(ctx, req.params.draftId)
+  res.status(204).end()
 })
 
 /** Marks the responses to the team's sets, and the answers to its subpoenas, as read by this student. */

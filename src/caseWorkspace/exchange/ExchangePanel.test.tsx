@@ -12,6 +12,7 @@ const part = (overrides: Partial<StudentPart> = {}): StudentPart => ({
   used: 0,
   remaining: 3,
   requests: [],
+  drafts: [],
   ...overrides,
 })
 
@@ -126,7 +127,7 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
 
     await user.click(screen.getByRole('button', { name: 'Send to Team 2' }))
     // Without the AI check (no onCheck), it's sent as it is.
-    expect(onSend).toHaveBeenCalledWith('interrogatories', ['Was it replaced, (a) when and (b) by whom?', 'Who inspected it?'], undefined)
+    expect(onSend).toHaveBeenCalledWith('interrogatories', ['Was it replaced, (a) when and (b) by whom?', 'Who inspected it?'], undefined, undefined)
   })
 
   it('greys out writing more once the team is out', async () => {
@@ -200,6 +201,7 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
 describe('ExchangePanel: subpoenas', () => {
   const subpoenas: StudentSubpoenas = {
     types: ['documents', 'esi'],
+    drafts: [],
     limit: 3,
     days: 14,
     used: 1,
@@ -301,7 +303,7 @@ describe('ExchangePanel: subpoenas', () => {
       requestType: 'esi',
       records: 'Inspection reports for Atlas Adventure, 2017–2019.',
       justification: 'The board inspected the ride the week before.',
-    }, undefined)
+    }, undefined, undefined)
   })
 
   it('fixes the kind of request when the case allows only one', async () => {
@@ -316,7 +318,7 @@ describe('ExchangePanel: subpoenas', () => {
     await user.type(screen.getByLabelText(/^Justification/), 'Sight lines.')
     expect(screen.getByRole('img', { name: 'Checked' }).closest('.sf-command')).toHaveTextContent('Inspection of Premises')
     await user.click(screen.getByRole('button', { name: 'Serve subpoena' }))
-    expect(onServeSubpoena).toHaveBeenCalledWith(expect.objectContaining({ requestType: 'inspection', records: 'The Atlas platform.' }), undefined)
+    expect(onServeSubpoena).toHaveBeenCalledWith(expect.objectContaining({ requestType: 'inspection', records: 'The Atlas platform.' }), undefined, undefined)
   })
 
   it('tells the team when a subpoena was denied', async () => {

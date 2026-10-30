@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookOpen, ChevronRight, Clock, FileText, Lock, Megaphone, Plus, ScrollText, Send } from 'lucide-react'
 import { DictationTextarea } from '../../components/Dictation'
 import { SubpoenaForm } from '../../components/SubpoenaForm'
@@ -8,14 +8,19 @@ import type {
   CaseParties,
   CheckInput,
   DiscoveryCheck,
+  DiscoveryDraft,
   Firm,
+  KeyedCheck,
   Side,
   StudentSubpoenas,
+  SubpoenaDraftContent,
   SubpoenaInput,
   SubpoenaType,
   TeamSubpoena,
 } from '../../courses/types'
 import { AiCheck } from './AiCheck'
+import { DraftControls, DraftsList } from './Drafts'
+import { useDraft, type DraftActions } from './useDraft'
 import { Meter, SubHead } from './RequestsSection'
 
 const MAX_RECIPIENT = 200
@@ -39,7 +44,7 @@ export interface SubpoenaFormContext {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
-type View = { mode: 'hub' } | { mode: 'compose' } | { mode: 'read'; id: string }
+type View = { mode: 'hub' } | { mode: 'compose'; draft?: DiscoveryDraft } | { mode: 'read'; id: string }
 
 /**
  * A team's subpoenas: what it has left, the ones it served and their answers,
@@ -56,6 +61,9 @@ export function SubpoenasSection({
   onOpenDocument,
   onTeach,
   initialSubpoenaId,
+  drafts,
+  initialDraftId,
+  onOpenDraft,
   now = new Date(),
 }: {
   part: StudentSubpoenas
@@ -63,8 +71,8 @@ export function SubpoenasSection({
   /** Whether subpoenas are open yet (after the introduction phase). */
   open: boolean
   opponentNumber: number
-  /** Leave out to make it read-only (a closed case). */
-  onServe?(subpoena: SubpoenaInput, checkId?: string): Promise<void>
+  /** Leave out to make it read-only (a closed case). `draftId`: the draft it was written in. */
+  onServe?(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
   /** Has the AI check the draft before it's served; leave out to serve without one. */
   onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   /** Opens a produced case file in the viewer. */
@@ -72,20 +80,32 @@ export function SubpoenasSection({
   onTeach(): void
   /** A subpoena to open on, as when a notice links to its answer. */
   initialSubpoenaId?: string
+  /** Saves and deletes the team's drafts; leave out to not keep drafts. */
+  drafts?: DraftActions
+  /** A draft to open on, as after a refresh. */
+  initialDraftId?: string
+  /** Called with the open draft's id, and null on leaving it. */
+  onOpenDraft?(draftId: string | null): void
   now?: Date
 }) {
-  const [view, setView] = useState<View>(
-    initialSubpoenaId && part.served.some((s) => s.id === initialSubpoenaId) ? { mode: 'read', id: initialSubpoenaId } : { mode: 'hub' },
-  )
+  const [view, setView] = useState<View>(() => {
+    const draft = initialDraftId ? part.drafts.find((d) => d.id === initialDraftId) : undefined
+    if (draft && onServe) return { mode: 'compose', draft }
+    return initialSubpoenaId && part.served.some((s) => s.id === initialSubpoenaId) ? { mode: 'read', id: initialSubpoenaId } : { mode: 'hub' }
+  })
   const back = () => setView({ mode: 'hub' })
 
   if (view.mode === 'compose' && onServe) {
     return (
       <Compose
+        key={view.draft?.id ?? 'new'}
         part={part}
         form={form}
-        onServe={async (subpoena, checkId) => {
-          await onServe(subpoena, checkId)
+        draft={view.draft}
+        actions={drafts}
+        onOpenDraft={onOpenDraft}
+        onServe={async (subpoena, checkId, draftId) => {
+          await onServe(subpoena, checkId, draftId)
           back()
         }}
         onCheck={onCheck}
@@ -149,6 +169,10 @@ export function SubpoenasSection({
           </div>
         )}
       </section>
+
+      {open && onServe && drafts && (
+        <DraftsList drafts={part.drafts} onOpen={(draft) => setView({ mode: 'compose', draft })} onDelete={drafts.remove} now={now} />
+      )}
 
       {open && (
         <section className="cw-card ex-section" aria-labelledby="ex-subpoenas-served">
@@ -233,6 +257,9 @@ function StatusBadge({ subpoena: s, now }: { subpoena: TeamSubpoena; now: Date }
 function Compose({
   part,
   form,
+  draft,
+  actions,
+  onOpenDraft,
   onServe,
   onCheck,
   onBack,
@@ -240,17 +267,35 @@ function Compose({
 }: {
   part: StudentSubpoenas
   form: SubpoenaFormContext
-  onServe(subpoena: SubpoenaInput, checkId?: string): Promise<void>
+  /** The draft to carry on with. */
+  draft?: DiscoveryDraft
+  actions?: DraftActions
+  onOpenDraft?(draftId: string | null): void
+  onServe(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
   onCheck?(input: CheckInput): Promise<DiscoveryCheck>
   onBack(): void
   onTeach(): void
 }) {
-  const [recipient, setRecipient] = useState('')
-  const [recipientDescription, setRecipientDescription] = useState('')
-  const [requestType, setRequestType] = useState<SubpoenaType | ''>(part.types.length === 1 ? part.types[0] : '')
-  const [records, setRecords] = useState('')
-  const [justification, setJustification] = useState('')
+  const saved = draft?.content as SubpoenaDraftContent | undefined
+  const [recipient, setRecipient] = useState(saved?.recipient ?? '')
+  const [recipientDescription, setRecipientDescription] = useState(saved?.recipientDescription ?? '')
+  const [requestType, setRequestType] = useState<SubpoenaType | ''>(() => {
+    if (saved?.requestType && part.types.includes(saved.requestType)) return saved.requestType
+    return part.types.length === 1 ? part.types[0] : ''
+  })
+  const [records, setRecords] = useState(saved?.records ?? '')
+  const [justification, setJustification] = useState(saved?.justification ?? '')
+  const [lastCheck, setLastCheck] = useState<KeyedCheck | null>(draft?.lastCheck ?? null)
   const ready = Boolean(recipient.trim() && records.trim() && requestType && justification.trim())
+  const content: SubpoenaDraftContent = { recipient, recipientDescription, requestType, records, justification }
+  const empty = ![recipient, recipientDescription, records, justification].some((t) => t.trim())
+  const autosave = useDraft({ kind: 'subpoena', initial: draft, content, check: lastCheck, empty, actions })
+  // The open draft goes in the address, so a refresh comes back to it.
+  useEffect(() => {
+    if (!autosave.draftId) return
+    onOpenDraft?.(autosave.draftId)
+    return () => onOpenDraft?.(null)
+  }, [autosave.draftId, onOpenDraft])
   // The date it would be due if served now, for the form.
   const [dueIfServedNow] = useState(() => new Date(Date.now() + part.days * 86_400_000).toISOString())
   const subpoena = (): SubpoenaInput => ({
@@ -287,7 +332,7 @@ function Compose({
               className="ex-text-input"
               value={recipient}
               maxLength={MAX_RECIPIENT}
-              placeholder="Custodian of records, Mercy General Hospital"
+              placeholder="Custodian of records, and the person, company, or office that has them"
               onChange={(e) => setRecipient(e.target.value)}
             />
           </label>
@@ -298,7 +343,7 @@ function Compose({
               className="ex-text-input"
               value={recipientDescription}
               maxLength={MAX_DESCRIPTION}
-              placeholder="The hospital that treated the plaintiff after the accident"
+              placeholder="Who they are, and how they’re connected to the case"
               onChange={(e) => setRecipientDescription(e.target.value)}
             />
           </label>
@@ -336,8 +381,8 @@ function Compose({
               maxLength={MAX_RECORDS}
               placeholder={
                 requestType === 'inspection'
-                  ? 'The Atlas ride platform and control booth, to measure, photograph, and view the operator\u2019s sight lines.'
-                  : '1. All emergency room records for the plaintiff from June 10 to June 14, 2019, including intake notes and imaging reports.'
+                  ? 'The place or thing to inspect, and what you\u2019ll do there: measure, photograph, test.'
+                  : '1. The records you want: what, about whom, and from which dates.'
               }
               onChange={(e) => setRecords(e.target.value)}
             />
@@ -375,7 +420,25 @@ function Compose({
         ready={ready}
         draftKey={JSON.stringify([recipient, recipientDescription, requestType, records, justification].map((t) => t.trim()))}
         onCheck={onCheck && (() => onCheck({ kind: 'subpoena', mode: 'draft', draft: subpoena() }))}
-        onSubmit={(checkId) => onServe(subpoena(), checkId)}
+        initialCheck={draft?.lastCheck}
+        onCheckChange={setLastCheck}
+        onSubmit={(checkId) => autosave.submit((draftId) => onServe(subpoena(), checkId, draftId))}
+        extra={
+          actions && (
+            <DraftControls
+              status={autosave.status}
+              empty={empty}
+              onSave={async () => {
+                await autosave.flush()
+                onBack()
+              }}
+              onCancel={async () => {
+                await autosave.discard()
+                onBack()
+              }}
+            />
+          )
+        }
         submitIcon={<Send aria-hidden="true" />}
         submitLabel="Serve subpoena"
         busyLabel="Serving…"

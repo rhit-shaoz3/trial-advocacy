@@ -3,7 +3,7 @@ import { askWitness, type WitnessReply } from '../witness/deposition.ts'
 import { finalizeReport, type FinalizeInput } from '../investigator/finalize.ts'
 import { investigate, type InvestigationInput } from '../investigator/investigate.ts'
 import { findNewFacts, type NewFact, type NewFactsInput } from '../witness/newFacts.ts'
-import { suggestWitnesses, type SuggestInput, type WitnessSuggestion } from '../witness/suggest.ts'
+import { suggestFromComplaint, type ComplaintSuggestions, type SuggestInput } from '../witness/suggest.ts'
 import { respondToSubpoena } from '../exchange/subpoenaResponse.ts'
 import type { SubpoenaContext } from '../exchange/subpoenaPrompt.ts'
 import { reviewDiscovery } from '../exchange/mentor.ts'
@@ -43,6 +43,6 @@ export const ai = {
   respondToSubpoena: (context: SubpoenaContext): Promise<string> => respondToSubpoena(anthropic(), context),
   /** The discovery mentor's tag and Socratic feedback on a team's draft requests or answers. */
   reviewDiscovery: (context: MentorContext): Promise<{ tag: MentorTag; feedback: string }> => reviewDiscovery(anthropic(), context),
-  /** Who the complaint suggests will testify, for the instructor to pick from. */
-  suggestWitnesses: (input: SuggestInput): Promise<WitnessSuggestion[]> => suggestWitnesses(anthropic(), input),
+  /** Everything setup can start from, in one read of the complaint: who will likely testify, and text for the case's own fields. */
+  suggestFromComplaint: (input: SuggestInput): Promise<ComplaintSuggestions> => suggestFromComplaint(anthropic(), input),
 }

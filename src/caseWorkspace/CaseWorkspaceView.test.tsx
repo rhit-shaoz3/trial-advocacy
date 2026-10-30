@@ -457,8 +457,8 @@ describe('CaseWorkspaceView: information exchange', () => {
     opponentNumber: 2,
     firm: { firm: 'Hale & Whitford LLP', partner: 'Margaret Hale' },
     disclosures: null,
-    interrogatories: { limit: 15, days: 30, used: 0, remaining: 15, requests: [] },
-    rfas: { limit: 3, days: 14, used: 1, remaining: 2, requests: [answered] },
+    interrogatories: { limit: 15, days: 30, used: 0, remaining: 15, requests: [], drafts: [] },
+    rfas: { limit: 3, days: 14, used: 1, remaining: 2, requests: [answered], drafts: [] },
   }
 
   it('opens the new response itself from the notice', async () => {
@@ -477,6 +477,7 @@ describe('CaseWorkspaceView: information exchange', () => {
       rfas: { ...exchange.rfas!, requests: [] },
       subpoenas: {
         types: ['documents'],
+        drafts: [],
         limit: 3,
         days: 14,
         used: 0,

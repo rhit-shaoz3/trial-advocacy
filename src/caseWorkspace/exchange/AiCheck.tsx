@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Check, Sparkles, X } from 'lucide-react'
-import type { CheckTag, DiscoveryCheck } from '../../courses/types'
+import type { CheckTag, DiscoveryCheck, KeyedCheck } from '../../courses/types'
 
 const TAG_LABEL: Record<CheckTag, string> = {
   LOOKS_GOOD: 'Looks good',
@@ -15,7 +15,7 @@ const TAG_LABEL: Record<CheckTag, string> = {
  * button; small edits or needs improvement show the mentor's questions, with
  * Check again first and sending anyway still possible. Editing after a check
  * makes it out of date. Without `onCheck` (a preview, or no AI), it's just the
- * send button.
+ * send button. A draft opened again starts with its last check (`initialCheck`).
  */
 export function AiCheck({
   info,
@@ -28,6 +28,9 @@ export function AiCheck({
   busyLabel,
   anywayLabel,
   blocked = false,
+  initialCheck = null,
+  onCheckChange,
+  extra,
 }: {
   /** What the footer says on the left (deadlines, what happens next). */
   info?: ReactNode
@@ -45,8 +48,14 @@ export function AiCheck({
   anywayLabel: string
   /** Sending isn't possible (over the team's limit, say). */
   blocked?: boolean
+  /** The last check of a draft opened again. */
+  initialCheck?: KeyedCheck | null
+  /** Called with each new check, to keep it with the draft. */
+  onCheckChange?(check: KeyedCheck): void
+  /** More buttons before the check and send buttons (the draft's). */
+  extra?: ReactNode
 }) {
-  const [check, setCheck] = useState<(DiscoveryCheck & { key: string }) | null>(null)
+  const [check, setCheck] = useState<KeyedCheck | null>(initialCheck)
   const [checking, setChecking] = useState(false)
   const [checkFailed, setCheckFailed] = useState(false)
   const [sending, setSending] = useState(false)
@@ -61,7 +70,9 @@ export function AiCheck({
     setCheckFailed(false)
     try {
       const result = await onCheck()
-      setCheck({ ...result, key: draftKey })
+      const keyed = { ...result, key: draftKey }
+      setCheck(keyed)
+      onCheckChange?.(keyed)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setCheckFailed(true)
@@ -148,7 +159,10 @@ export function AiCheck({
       )}
       <div className="ex-footer">
         {info && <span className="cw-section-sub">{info}</span>}
-        <div className="ai-check-actions">{actions}</div>
+        <div className="ai-check-actions">
+          {extra}
+          {actions}
+        </div>
       </div>
       {error && (
         <p className="form-error" role="alert">

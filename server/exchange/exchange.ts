@@ -469,7 +469,7 @@ export async function findOpponent(teamId: string) {
   return rows[0] ?? null
 }
 
-const MAX_ITEM_LENGTH = 1000
+export const MAX_ITEM_LENGTH = 1000
 export const MAX_ITEMS_PER_SET = 50
 
 /**

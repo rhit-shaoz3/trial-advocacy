@@ -67,6 +67,7 @@ import { PhaseSteps } from '../components/PhaseSteps'
 import { Toast, Toasts } from '../components/Toasts'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { ExchangePanel } from './exchange/ExchangePanel'
+import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
 import './caseWorkspace.css'
@@ -111,6 +112,9 @@ export function CaseWorkspaceView({
   onServeSubpoena,
   onCheckDiscovery,
   onOpenExchange,
+  exchangeDrafts,
+  initialDraftId,
+  onOpenDraft,
   initialTab = 'overview',
   loadText,
   now = new Date(),
@@ -138,13 +142,19 @@ export function CaseWorkspaceView({
   /** The team's information exchange; leave out (the preview, or not set up) to hide its tab. */
   exchange?: StudentExchange | null
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
-  onSendRequest?(kind: ExchangeKind, items: string[], checkId?: string): Promise<void>
+  onSendRequest?(kind: ExchangeKind, items: string[], checkId?: string, draftId?: string): Promise<void>
   onRespondToRequest?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
-  onServeSubpoena?(subpoena: SubpoenaInput, checkId?: string): Promise<void>
+  onServeSubpoena?(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
   /** "Check with AI" before sending discovery; leave out (the preview) to send without it. */
   onCheckDiscovery?(input: CheckInput): Promise<DiscoveryCheck>
   /** Called when the student opens the Information exchange tab, to mark the responses and subpoena answers read. */
   onOpenExchange?(): void
+  /** Saves and deletes the team's drafts of new subpoenas and sets; leave out (the preview) to not keep drafts. */
+  exchangeDrafts?: DraftActions
+  /** A draft to open on in the Information exchange, as after a refresh. */
+  initialDraftId?: string
+  /** Called with the open draft's id, and null on leaving it. */
+  onOpenDraft?(draftId: string | null): void
   /** The tab to open on, as when a notice links straight to a report. */
   initialTab?: CaseTab
   /** A case file's text version, for the viewer to show a document the browser can't. */
@@ -556,6 +566,9 @@ export function CaseWorkspaceView({
             onRespond={c.status === 'active' ? onRespondToRequest : undefined}
             onServeSubpoena={c.status === 'active' ? onServeSubpoena : undefined}
             onCheck={c.status === 'active' ? onCheckDiscovery : undefined}
+            drafts={c.status === 'active' ? exchangeDrafts : undefined}
+            initialDraftId={initialDraftId}
+            onOpenDraft={onOpenDraft}
             subpoenaForm={{
               caseId: c.id,
               parties: c.parties?.plaintiff && c.parties.defendant ? c.parties : titleParties(c.title),

@@ -287,6 +287,10 @@ export const httpCourseService: CourseService = {
     return apiRequest(`${casePath(courseId, caseId)}/witness-suggestions`)
   },
 
+  async getContentSuggestions(courseId, caseId) {
+    return apiRequest(`${casePath(courseId, caseId)}/content-suggestions`)
+  },
+
   async finishWitnessSuggestions(courseId, caseId) {
     await apiRequest(`${casePath(courseId, caseId)}/witness-suggestions/done`, { method: 'POST' })
   },
@@ -533,10 +537,10 @@ export const httpCourseService: CourseService = {
     return body.exchange
   },
 
-  async sendExchangeRequest(courseId, caseId, kind, items, checkId) {
+  async sendExchangeRequest(courseId, caseId, kind, items, checkId, draftId) {
     const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/requests`, {
       method: 'POST',
-      body: JSON.stringify({ kind, items, checkId }),
+      body: JSON.stringify({ kind, items, checkId, draftId }),
     })
     return body.exchange
   },
@@ -554,12 +558,33 @@ export const httpCourseService: CourseService = {
     return body.check
   },
 
-  async serveSubpoena(courseId, caseId, subpoena, checkId) {
+  async serveSubpoena(courseId, caseId, subpoena, checkId, draftId) {
     const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/subpoenas`, {
       method: 'POST',
-      body: JSON.stringify({ ...subpoena, checkId }),
+      body: JSON.stringify({ ...subpoena, checkId, draftId }),
     })
     return body.exchange
+  },
+
+  async createExchangeDraft(courseId, caseId, kind, content, lastCheck) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/drafts`, {
+      method: 'POST',
+      body: JSON.stringify({ kind, content, lastCheck: lastCheck && { id: lastCheck.id, key: lastCheck.key } }),
+    })
+    return body.draft
+  },
+
+  async updateExchangeDraft(courseId, caseId, draftId, content, lastCheck, options) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/drafts/${encodeURIComponent(draftId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content, lastCheck: lastCheck && { id: lastCheck.id, key: lastCheck.key } }),
+      keepalive: options?.keepalive,
+    })
+    return body.draft
+  },
+
+  async deleteExchangeDraft(courseId, caseId, draftId) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/exchange/drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' })
   },
 
   async markExchangeSeen(courseId, caseId) {

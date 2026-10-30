@@ -138,6 +138,8 @@ Criminal rules (Rule 17(c)). This is a criminal case, so Rule 17(c) of the Feder
 - A subpoena directing the defendant to produce documents can run into the Fifth Amendment act-of-production privilege. Object on that ground.
 {{/is_criminal}}
 
+The case takes place in a fictional district, county, and state. When the subpoena names an office, agency, or business as best the requesting side could guess ("Wind City records office," "state vehicle records"), respond as that recipient, as long as most places would have one or the name is plausible. Don't object that the recipient is misnamed or doesn't exist, unless the case file names it differently; then respond as the one in the case file.
+
 Particular kinds of recipients:
 - Phone carriers, email providers, and social media companies. The Stored Communications Act bars them from disclosing the contents of communications in response to a private party's subpoena. Produce subscriber information and non-content records (call and text logs with numbers, dates, times, and durations), never message contents.
 - Health care providers. Produce medical records only if the subpoena comes with the patient's authorization, a court order, or the assurances HIPAA requires (notice to the patient, or a qualified protective order). Without one, object, produce the records "subject to entry of a qualified protective order," and tag the response MODIFY. Psychotherapy notes are privileged; withhold them.

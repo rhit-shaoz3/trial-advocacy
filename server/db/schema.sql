@@ -705,6 +705,12 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_key text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_status text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS witness_suggestions_done_at timestamptz;
 
+-- Suggested text for the case's own fields (the disputed issues, the
+-- investigator's notes, the note to students, a few tasks), offered to the
+-- instructor to keep or edit. The same AI call as the witness suggestions
+-- makes it, so it shares their key (the initial file) and status.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS content_suggestions jsonb;
+
 -- Word documents (.docx) weren't read before; read the ones marked as having no text again.
 UPDATE case_materials SET text_status = 'pending', text_error = NULL
  WHERE text_status = 'none'
@@ -748,3 +754,23 @@ ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS check_current boolean NOT
 ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_tag text;
 ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_feedback text;
 ALTER TABLE exchange_requests ADD COLUMN IF NOT EXISTS response_check_current boolean NOT NULL DEFAULT false;
+
+-- A team's unsent subpoenas and sets, saved as they write them so a refresh or
+-- leaving the page doesn't lose the work. Shared by the team; deleted when sent
+-- or cancelled. content is the draft as typed (a subpoena's fields, or a set's
+-- { items }); check_id is the last AI check of it, and check_key the client's
+-- key for the draft it checked (to tell whether it's been edited since).
+CREATE TABLE IF NOT EXISTS discovery_drafts (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id    uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id    uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  kind       text        NOT NULL CHECK (kind IN ('subpoena', 'interrogatories', 'rfas')),
+  content    jsonb       NOT NULL,
+  check_id   uuid        REFERENCES discovery_checks (id) ON DELETE SET NULL,
+  check_key  text,
+  updated_by uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS discovery_drafts_team_idx ON discovery_drafts (case_id, team_id, updated_at DESC);

@@ -769,3 +769,92 @@ describe('checking with AI', () => {
     expect(res.body.error).toMatch(/couldn’t check your draft/)
   })
 })
+
+describe('drafts', () => {
+  const draftsUrl = () => `${exchangeUrl()}/drafts`
+  const subpoena = {
+    recipient: 'Mercy Hospital',
+    recipientDescription: '',
+    requestType: 'documents',
+    records: 'ER records for June 10.',
+    justification: '',
+  }
+
+  beforeEach(async () => {
+    await setUp()
+    ai.reviewDiscovery = async () => ({ tag: 'SMALL_EDITS', feedback: 'Request 1: Which dates?' })
+  })
+
+  it('saves a team’s unsent work for the whole team, with its last AI check', async () => {
+    await toExchange()
+    const created = await ada.post(draftsUrl()).send({ kind: 'subpoena', content: { recipient: 'Mercy' } })
+    expect(created.status).toBe(201)
+    expect(created.body.draft).toMatchObject({
+      kind: 'subpoena',
+      content: { recipient: 'Mercy', records: '', justification: '' },
+      lastCheck: null,
+      updatedBy: 'Ada Lawyer',
+    })
+    const id = created.body.draft.id
+
+    const checked = await ada.post(`${exchangeUrl()}/check`).send({ kind: 'subpoena', mode: 'draft', draft: subpoena })
+    // A teammate picks it up and saves over it, with the check.
+    const saved = await bo.put(`${draftsUrl()}/${id}`).send({ content: subpoena, lastCheck: { id: checked.body.check.id, key: 'k1' } })
+    expect(saved.status).toBe(200)
+    expect(saved.body.draft).toMatchObject({
+      content: subpoena,
+      lastCheck: { id: checked.body.check.id, tag: 'SMALL_EDITS', feedback: 'Request 1: Which dates?', key: 'k1' },
+      updatedBy: 'Bo Brief',
+    })
+    await ada.post(draftsUrl()).send({ kind: 'interrogatories', content: { items: ['Who inspected the harness?', ''] } })
+
+    const mine = await exchange(ada)
+    expect(mine.subpoenas.drafts.map((d: { id: string }) => d.id)).toEqual([id])
+    expect(mine.interrogatories.drafts[0].content).toEqual({ items: ['Who inspected the harness?', ''] })
+    expect(mine.rfas.drafts).toEqual([])
+    // Drafts don't count against the team's limits.
+    expect(mine.subpoenas.used).toBe(0)
+    expect(mine.interrogatories.used).toBe(0)
+
+    // The other team can't see, change, or delete them.
+    expect((await exchange(cy)).subpoenas.drafts).toEqual([])
+    expect((await cy.put(`${draftsUrl()}/${id}`).send({ content: subpoena })).status).toBe(404)
+    await cy.delete(`${draftsUrl()}/${id}`)
+    expect((await exchange(ada)).subpoenas.drafts).toHaveLength(1)
+
+    // Another team's check isn't kept.
+    const cyCheck = await cy.post(`${exchangeUrl()}/check`).send({ kind: 'subpoena', mode: 'draft', draft: subpoena })
+    const forged = await ada.put(`${draftsUrl()}/${id}`).send({ content: subpoena, lastCheck: { id: cyCheck.body.check.id, key: 'k1' } })
+    expect(forged.body.draft.lastCheck).toBeNull()
+
+    expect((await ada.delete(`${draftsUrl()}/${id}`)).status).toBe(204)
+    expect((await exchange(ada)).subpoenas.drafts).toEqual([])
+    expect((await ada.put(`${draftsUrl()}/${id}`).send({ content: subpoena })).status).toBe(404)
+  })
+
+  it('keeps drafts within the limits, and only once the exchange is open', async () => {
+    expect((await ada.post(draftsUrl()).send({ kind: 'rfas', content: { items: ['Admit it.'] } })).status).toBe(409)
+    await toExchange()
+    const long = await ada.post(draftsUrl()).send({ kind: 'subpoena', content: { ...subpoena, records: 'x'.repeat(5000) } })
+    expect(long.status).toBe(400)
+    expect((await ada.post(draftsUrl()).send({ kind: 'rfas', content: { items: 'Admit it.' } })).status).toBe(400)
+    expect((await ada.post(draftsUrl()).send({ kind: 'motions', content: {} })).status).toBe(400)
+  })
+
+  it('deletes the draft once it’s sent, and keeps it when sending fails', async () => {
+    await toExchange()
+    const sub = (await ada.post(draftsUrl()).send({ kind: 'subpoena', content: subpoena })).body.draft
+    // No justification yet, so serving fails and the draft stays.
+    expect((await ada.post(`${exchangeUrl()}/subpoenas`).send({ ...subpoena, draftId: sub.id })).status).toBe(400)
+    expect((await exchange(ada)).subpoenas.drafts).toHaveLength(1)
+    const served = await ada.post(`${exchangeUrl()}/subpoenas`).send({ ...subpoena, justification: 'Only they have it.', draftId: sub.id })
+    expect(served.status).toBe(201)
+    expect(served.body.exchange.subpoenas.drafts).toEqual([])
+    await subpoenasSettled()
+
+    const set = (await ada.post(draftsUrl()).send({ kind: 'rfas', content: { items: ['Admit the harness was red.'] } })).body.draft
+    const sent = await ada.post(`${exchangeUrl()}/requests`).send({ kind: 'rfas', items: ['Admit the harness was red.'], draftId: set.id })
+    expect(sent.status).toBe(201)
+    expect(sent.body.exchange.rfas.drafts).toEqual([])
+  })
+})

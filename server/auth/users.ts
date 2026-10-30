@@ -28,6 +28,8 @@ export interface PublicUser {
   role: Role
   theme: Theme
   avatarUrl: string | null
+  /** The guided tours they've been shown: tour key -> when it first started. */
+  toursSeen: Record<string, string>
   createdAt: string
 }
 
@@ -38,6 +40,7 @@ export interface UserRow {
   role: Role
   theme: Theme
   avatar_key: string | null
+  tours_seen: Record<string, string>
   password_hash: string
   created_at: Date
 }
@@ -50,6 +53,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     role: row.role,
     theme: row.theme,
     avatarUrl: avatarUrl(row.id, row.avatar_key),
+    toursSeen: row.tours_seen ?? {},
     createdAt: row.created_at.toISOString(),
   }
 }
@@ -72,6 +76,17 @@ export async function updateUser(id: string, fields: { name?: string; theme?: Th
   const { rows } = await pool.query<UserRow>(
     `UPDATE users SET name = coalesce($2, name), theme = coalesce($3, theme) WHERE id = $1 RETURNING *`,
     [id, fields.name ?? null, fields.theme ?? null],
+  )
+  return rows[0] ?? null
+}
+
+/** Marks a guided tour as shown, keeping the first time; returns the updated row. */
+export async function markTourSeen(id: string, key: string) {
+  const { rows } = await pool.query<UserRow>(
+    `UPDATE users SET tours_seen = CASE WHEN tours_seen ? $2 THEN tours_seen
+                                        ELSE tours_seen || jsonb_build_object($2::text, now()) END
+     WHERE id = $1 RETURNING *`,
+    [id, key],
   )
   return rows[0] ?? null
 }

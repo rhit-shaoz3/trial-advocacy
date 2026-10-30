@@ -17,6 +17,7 @@ import { ComingSoon } from './workspace/ComingSoon'
 import { CourseDashboard } from './workspace/CourseDashboard'
 import { CalendarPage } from './pages/calendar/CalendarPage'
 import { WorkspaceLayout } from './workspace/WorkspaceLayout'
+import { TourProvider } from './tour/TourProvider'
 
 /** Pages outside a student's course workspace: the course list, instructor pages. */
 function SignedInLayout() {
@@ -25,7 +26,7 @@ function SignedInLayout() {
       subtitle="Pretrial simulator"
       navLabel="Main"
       navHeading="Menu"
-      nav={[{ to: '/', label: 'Courses', icon: LayoutDashboard, end: true }]}
+      nav={[{ to: '/', label: 'Courses', icon: LayoutDashboard, end: true, tourId: 'courses' }]}
     >
       <Outlet />
     </AppShell>
@@ -41,30 +42,32 @@ function App() {
   const isInstructor = user.role === 'instructor'
 
   return (
-    <Routes>
-      {/* Inside a course, everyone gets the course workspace's own navigation. */}
-      <Route path="courses/:courseId" element={<WorkspaceLayout />}>
-        <Route index element={<CourseDashboard />} />
-        <Route path="cases" element={isInstructor ? <CasesPage /> : <MyCasesPage />} />
-        {isInstructor && <Route path="cases/new" element={<NewCasePage />} />}
-        <Route
-          path="cases/:caseId"
-          element={isInstructor ? <CaseDetailPage /> : <StudentCasePage />}
-        />
-        <Route path="cases/:caseId/witnesses/:witnessId" element={<InterviewPage />} />
-        <Route path="calendar" element={<CalendarPage />} />
-        {isInstructor && <Route path="review" element={<ReviewPage />} />}
-        {isInstructor && <Route path="manage" element={<CoursePage />} />}
-        <Route
-          path="*"
-          element={<ComingSoon title="Page not found" message="That page does not exist." />}
-        />
-      </Route>
-      <Route element={<SignedInLayout />}>
-        <Route index element={<HomePage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+    <TourProvider>
+      <Routes>
+        {/* Inside a course, everyone gets the course workspace's own navigation. */}
+        <Route path="courses/:courseId" element={<WorkspaceLayout />}>
+          <Route index element={<CourseDashboard />} />
+          <Route path="cases" element={isInstructor ? <CasesPage /> : <MyCasesPage />} />
+          {isInstructor && <Route path="cases/new" element={<NewCasePage />} />}
+          <Route
+            path="cases/:caseId"
+            element={isInstructor ? <CaseDetailPage /> : <StudentCasePage />}
+          />
+          <Route path="cases/:caseId/witnesses/:witnessId" element={<InterviewPage />} />
+          <Route path="calendar" element={<CalendarPage />} />
+          {isInstructor && <Route path="review" element={<ReviewPage />} />}
+          {isInstructor && <Route path="manage" element={<CoursePage />} />}
+          <Route
+            path="*"
+            element={<ComingSoon title="Page not found" message="That page does not exist." />}
+          />
+        </Route>
+        <Route element={<SignedInLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </TourProvider>
   )
 }
 

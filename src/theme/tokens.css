@@ -388,7 +388,7 @@
   --ws-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-/* ---------- Radioactive: office green and lime on a chartreuse glow, with hot pink and electric cyan ---------- */
+/* ---------- Radioactive: office green and lime on a pale green-white, with hot pink and electric cyan ---------- */
 :root[data-palette='radioactive'] {
   /* Ink */
   --ws-navy: #0f3d07;
@@ -396,14 +396,14 @@
   --fg-soft: #2a4524;
   --ws-muted: #4f6b47;
   /* Surfaces */
-  --ws-paper: #f2ffbf;
+  --ws-paper: #fafdf4;
   --surface: #ffffff;
-  --subtle: #ebffa8;
-  --surface-hover: #f9ffe3;
+  --subtle: #f0f7df;
+  --surface-hover: #f7fbee;
   --surface-translucent: rgba(255, 255, 255, 0.55);
   /* Lines */
-  --ws-line: #cfe98a;
-  --ws-row-line: #e3f5b5;
+  --ws-line: #dbe8c4;
+  --ws-row-line: #ebf2dc;
   --border-strong: #9fc94a;
   /* Brand: dark panels (sidebar, case banner) and the main buttons */
   --brand: #196a0b;

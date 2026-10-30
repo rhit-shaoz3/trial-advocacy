@@ -23,7 +23,7 @@ const courseCase: CourseCase = {
 const settings: ExchangeSettings = {
   setupCompletedAt: null,
   disclosures: { enabled: true, materialIds: [], witnessIds: [] },
-  subpoenas: { enabled: true, limit: 3, days: 14, types: ['documents', 'esi', 'tangible_things', 'inspection'], aiFeedback: { enabled: true, rounds: 2 } },
+  subpoenas: { enabled: true, limit: 3, days: 14, types: ['documents', 'tangible_things', 'inspection'], aiFeedback: { enabled: true, rounds: 2 } },
   interrogatories: { enabled: true, limit: 25, days: 30, aiFeedback: { enabled: true, rounds: 2 } },
   rfas: { enabled: true, limit: 25, days: 30, aiFeedback: { enabled: true, rounds: 2 } },
   firms: { plaintiff: { firm: '', partner: '' }, defense: { firm: '', partner: '' } },
@@ -63,22 +63,21 @@ describe('ExchangeSetupFlow', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(service.saveDisclosures).toHaveBeenCalledWith('c1', 'k1', { materialIds: ['m1'], witnessIds: ['w1'] })
 
-    // Subpoenas: limited to documents and ESI (the last kind can't be unticked), then turned off with the Include switch.
+    // Subpoenas: limited to documents and inspections (the last kind can't be unticked), then turned off with the Include switch.
     expect(await screen.findByRole('heading', { level: 2, name: 'Subpoenas' })).toBeInTheDocument()
     // The instructor answers subpoenas, so there's no deadline to set.
     expect(screen.queryByRole('spinbutton', { name: 'Days to respond' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('checkbox', { name: /Tangible things/ }))
     await user.click(screen.getByRole('checkbox', { name: /Inspection of premises/ }))
-    await user.click(screen.getByRole('checkbox', { name: /Electronically stored information/ }))
-    expect(screen.getByRole('checkbox', { name: /Physical documents/ })).toBeDisabled()
-    await user.click(screen.getByRole('checkbox', { name: /Electronically stored information/ }))
+    expect(screen.getByRole('checkbox', { name: /Physical documents or electronically stored information/ })).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: /Inspection of premises/ }))
     await user.click(screen.getByRole('switch', { name: 'Include subpoenas' }))
     await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(service.saveExchangeSettings).toHaveBeenLastCalledWith(
       'c1',
       'k1',
       expect.objectContaining({
-        subpoenas: { enabled: false, limit: 3, days: 14, types: ['documents', 'esi'], aiFeedback: { enabled: true, rounds: 2 } },
+        subpoenas: { enabled: false, limit: 3, days: 14, types: ['documents', 'inspection'], aiFeedback: { enabled: true, rounds: 2 } },
       }),
     )
 

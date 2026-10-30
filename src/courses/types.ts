@@ -636,7 +636,8 @@ export interface PartSettings {
 }
 
 /** What a subpoena can ask for (the boxes on the federal form, AO 88B). */
-export const SUBPOENA_TYPES = ['documents', 'esi', 'tangible_things', 'inspection'] as const
+/** What a subpoena can ask for; documents covers electronically stored information too. */
+export const SUBPOENA_TYPES = ['documents', 'tangible_things', 'inspection'] as const
 export type SubpoenaType = (typeof SUBPOENA_TYPES)[number]
 
 /** Subpoenas' settings, plus the kinds of request the instructor allows. */

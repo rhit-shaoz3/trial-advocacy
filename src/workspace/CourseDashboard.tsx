@@ -31,6 +31,8 @@ import { InstructorDashboard } from './InstructorDashboard'
 import { StatCard } from './StatCard'
 import type { ActivityItem, CaseStatus, CaseSummary, CourseHome, UpcomingItem } from './types'
 import { useWorkspace } from './useWorkspace'
+import { usePageTour } from '../tour/tourContext'
+import { STUDENT_COURSE } from '../tour/tours'
 import './workspace.css'
 
 const MAX_CASES = 4
@@ -62,6 +64,7 @@ export function CourseDashboard({ now = new Date() }: { now?: Date }) {
 function StudentDashboard({ now }: { now: Date }) {
   const { user } = useAuth()
   const { home, search } = useWorkspace()
+  usePageTour(STUDENT_COURSE)
   const base = `/courses/${home.course.id}`
 
   const upcoming = home.upcoming

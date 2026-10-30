@@ -259,9 +259,18 @@
 /* Page area */
 
 .ws-main {
+  position: relative;
   flex: 1;
   min-width: 0;
   margin-left: var(--ws-sidebar-width);
+}
+
+/* The tour button, in the page's upper right corner (notifications sit below it). */
+.ws-corner {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  z-index: 4;
 }
 
 .ws-sample-banner {
@@ -511,7 +520,15 @@
 /* Phones: the sidebar becomes a header bar with a scrolling row of links. */
 @media (max-width: 760px) {
   .ws {
+    position: relative;
     flex-direction: column;
+  }
+
+  /* In the top bar's corner, beside the profile and log-out buttons. */
+  .ws-corner {
+    top: 0.9rem;
+    right: 1rem;
+    z-index: 6;
   }
 
   .ws-sidebar {
@@ -555,11 +572,11 @@
     box-shadow: inset 0 -2px var(--ws-red);
   }
 
-  /* Keep just the log-out button, pinned to the brand row. */
+  /* Keep just the log-out button, pinned to the brand row, left of the tour button. */
   .ws-sidebar-bottom {
     position: absolute;
     top: 0.9rem;
-    right: 1rem;
+    right: 3.4rem;
     margin: 0;
     padding: 0;
   }
@@ -575,6 +592,7 @@
   }
 
   .ws-main {
+    position: static;
     margin-left: 0;
   }
 

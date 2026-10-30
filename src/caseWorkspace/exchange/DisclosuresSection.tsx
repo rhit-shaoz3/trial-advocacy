@@ -37,7 +37,7 @@ export function DisclosuresSection({
                 : 'Select what to submit in initial disclosures'}
           </h2>
         </div>
-        <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach}>
+        <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach} data-tour="ex-teach">
           <BookOpen aria-hidden="true" />
           Teach me
         </button>

@@ -25,6 +25,11 @@ ALTER TABLE users ADD CONSTRAINT users_theme_check
 -- null to show their initials.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key text;
 
+-- The guided tours the user has been shown: tour key -> when it first started.
+-- Keys are a page's tour (student-course, instructor-case, ...) or a case's
+-- phase for a student (phase:<caseId>:<phase>).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tours_seen jsonb NOT NULL DEFAULT '{}';
+
 -- A course offering in one term, e.g. LAW 540 in Fall 2026. Students join
 -- with the entry code, which is stored uppercase.
 CREATE TABLE IF NOT EXISTS courses (
@@ -586,11 +591,18 @@ CREATE TABLE IF NOT EXISTS subpoena_seen (
 -- Subpoenas ask for one kind of thing (the boxes on the federal form, AO 88B),
 -- and the instructor chooses which kinds a case allows.
 ALTER TABLE information_exchange ADD COLUMN IF NOT EXISTS subpoena_types text[] NOT NULL
-  DEFAULT '{documents,esi,tangible_things,inspection}';
+  DEFAULT '{documents,tangible_things,inspection}';
+ALTER TABLE information_exchange ALTER COLUMN subpoena_types SET DEFAULT '{documents,tangible_things,inspection}';
 ALTER TABLE information_exchange DROP CONSTRAINT IF EXISTS information_exchange_subpoena_types_check;
+-- Physical documents and electronically stored information (esi) became one
+-- kind, documents.
+UPDATE information_exchange
+   SET subpoena_types = ARRAY(SELECT t FROM unnest(array_replace(subpoena_types, 'esi', 'documents')) WITH ORDINALITY AS u(t, n)
+                              GROUP BY t ORDER BY min(n))
+ WHERE 'esi' = ANY (subpoena_types);
 ALTER TABLE information_exchange ADD CONSTRAINT information_exchange_subpoena_types_check
   CHECK (cardinality(subpoena_types) > 0
-         AND subpoena_types <@ '{documents,esi,tangible_things,inspection}'::text[]);
+         AND subpoena_types <@ '{documents,tangible_things,inspection}'::text[]);
 
 -- Whether teams can have the AI mentor check their subpoenas, sets, and
 -- answers before sending ("Check with AI"), and how many checks one draft
@@ -610,8 +622,12 @@ ALTER TABLE information_exchange ALTER COLUMN rfa_ai_rounds SET DEFAULT 2;
 -- drafting -> open (the draft is ready to review) -> answered, or failed.
 -- The instructor approves (the response becomes a case file shared with the
 -- team, with any existing files the draft produced) or denies it.
-ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS request_type text NOT NULL DEFAULT 'documents'
-  CHECK (request_type IN ('documents', 'esi', 'tangible_things', 'inspection'));
+ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS request_type text NOT NULL DEFAULT 'documents';
+-- Documents now include electronically stored information (once its own kind, esi).
+ALTER TABLE subpoenas DROP CONSTRAINT IF EXISTS subpoenas_request_type_check;
+UPDATE subpoenas SET request_type = 'documents' WHERE request_type = 'esi';
+ALTER TABLE subpoenas ADD CONSTRAINT subpoenas_request_type_check
+  CHECK (request_type IN ('documents', 'tangible_things', 'inspection'));
 ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS recipient_description text NOT NULL DEFAULT '';
 ALTER TABLE subpoenas ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'open'
   CHECK (status IN ('drafting', 'open', 'failed', 'answered'));
@@ -793,6 +809,10 @@ CREATE TABLE IF NOT EXISTS discovery_drafts (
 );
 
 CREATE INDEX IF NOT EXISTS discovery_drafts_team_idx ON discovery_drafts (case_id, team_id, updated_at DESC);
+
+-- Unsent subpoenas that asked for ESI, now part of documents.
+UPDATE discovery_drafts SET content = jsonb_set(content, '{requestType}', '"documents"')
+ WHERE kind = 'subpoena' AND content->>'requestType' = 'esi';
 
 -- The review panel no longer lists the facts the AI read from the case files.
 ALTER TABLE cases DROP COLUMN IF EXISTS file_facts;

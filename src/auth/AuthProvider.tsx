@@ -41,6 +41,12 @@ export function AuthProvider({ children, service = httpAuthService }: Props) {
       updateProfile: async (input) => setUser(await service.updateProfile(input)),
       uploadAvatar: async (image) => setUser(await service.uploadAvatar(image)),
       removeAvatar: async () => setUser(await service.removeAvatar()),
+      markTourSeen: async (key) => {
+        // Seen at once, so the tour can't start twice while the save is on its way.
+        setUser((u) => (u && !u.toursSeen?.[key] ? { ...u, toursSeen: { ...u.toursSeen, [key]: new Date().toISOString() } } : u))
+        // A failed save only means the tour may start again next time.
+        if (service.markTourSeen) await service.markTourSeen(key).catch(() => undefined)
+      },
     }),
     [user, loading, service],
   )

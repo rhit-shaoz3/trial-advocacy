@@ -38,4 +38,9 @@ export const httpAuthService: AuthService = {
     const body = await request('/me/avatar', { method: 'DELETE' })
     return body.user as User
   },
+
+  async markTourSeen(key) {
+    const body = await request('/me/tours', { method: 'POST', body: JSON.stringify({ key }) })
+    return body.user as User
+  },
 }

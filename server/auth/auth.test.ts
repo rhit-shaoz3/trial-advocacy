@@ -41,6 +41,7 @@ describe('POST /api/auth/signup', () => {
       role: 'student',
       theme: 'navy',
       avatarUrl: null,
+      toursSeen: {},
       createdAt: expect.any(String),
     })
     expect(JSON.stringify(res.body)).not.toContain('correct-horse')
@@ -224,6 +225,36 @@ describe('PATCH /api/auth/me', () => {
     )
     expect((await agent.patch('/api/auth/me').send({ theme: 'pink' })).body.error).toBe('Choose one of the themes.')
     expect((await request(app).patch('/api/auth/me').send({ name: 'Eve' })).status).toBe(401)
+  })
+})
+
+describe('POST /api/auth/me/tours', () => {
+  it('marks a tour as shown, keeping the first time', async () => {
+    const agent = request.agent(app)
+    await agent.post('/api/auth/signup').send(validSignup)
+
+    const first = await agent.post('/api/auth/me/tours').send({ key: 'phase:abc-123:information_exchange' })
+    expect(first.status).toBe(200)
+    const at = first.body.user.toursSeen['phase:abc-123:information_exchange']
+    expect(Date.parse(at)).not.toBeNaN()
+
+    const again = await agent.post('/api/auth/me/tours').send({ key: 'phase:abc-123:information_exchange' })
+    expect(again.body.user.toursSeen['phase:abc-123:information_exchange']).toBe(at)
+
+    await agent.post('/api/auth/me/tours').send({ key: 'student-course' })
+    expect(Object.keys((await agent.get('/api/auth/me')).body.user.toursSeen).sort()).toEqual([
+      'phase:abc-123:information_exchange',
+      'student-course',
+    ])
+  })
+
+  it('validates the key, and needs a login', async () => {
+    const agent = request.agent(app)
+    await agent.post('/api/auth/signup').send(validSignup)
+
+    expect((await agent.post('/api/auth/me/tours').send({ key: 'Not A Key!' })).status).toBe(400)
+    expect((await agent.post('/api/auth/me/tours').send({})).status).toBe(400)
+    expect((await request(app).post('/api/auth/me/tours').send({ key: 'student-course' })).status).toBe(401)
   })
 })
 

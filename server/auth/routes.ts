@@ -7,6 +7,7 @@ import {
   createUser,
   findUserByEmail,
   findUserById,
+  markTourSeen,
   MAX_NAME_LENGTH,
   THEMES,
   toPublicUser,
@@ -19,6 +20,7 @@ const BCRYPT_ROUNDS = 11
 const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_BYTES = 72 // bcrypt ignores anything past 72 bytes
 const ROLES: Role[] = ['student', 'instructor']
+const TOUR_KEY = /^[a-z0-9:_-]{1,120}$/
 
 // Compared against when the email doesn't exist, so a failed login takes the
 // same time either way and doesn't reveal which emails are registered.
@@ -58,6 +60,16 @@ authRouter.patch('/me', async (req, res) => {
     fields.theme = body.theme as Theme
   }
   const user = await updateUser(req.session.userId, fields)
+  if (!user) throw new HttpError(401, 'Log in first.')
+  res.json({ user: toPublicUser(user) })
+})
+
+/** A guided tour started: `{ key }`, e.g. student-course or phase:<caseId>:investigate. */
+authRouter.post('/me/tours', async (req, res) => {
+  if (!req.session.userId) throw new HttpError(401, 'Log in first.')
+  const key = readString(req.body, 'key')
+  if (!TOUR_KEY.test(key)) throw new HttpError(400, 'Unknown tour.')
+  const user = await markTourSeen(req.session.userId, key)
   if (!user) throw new HttpError(401, 'Log in first.')
   res.json({ user: toPublicUser(user) })
 })

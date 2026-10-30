@@ -3,6 +3,8 @@ import { useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import type { CourseCase, CourseFlag, CourseSubpoena, FactGroup, InterviewReview } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
+import { usePageTour } from '../../tour/tourContext'
+import { INSTRUCTOR_REVIEW } from '../../tour/tours'
 import './Review.css'
 import { FactGroupCard } from './FactGroupCard'
 import { FactsPanel } from './FactsPanel'
@@ -38,6 +40,7 @@ export function ReviewPage() {
   /** Bumped after each ruling, so the facts panel catches up. */
   const [version, setVersion] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  usePageTour(INSTRUCTOR_REVIEW, { ready: reviews !== null })
   /** Reviews that just finished here, for a note saying where they went. */
   const [finished, setFinished] = useState<InterviewReview | null>(null)
   const reloadHome = workspace?.reloadHome

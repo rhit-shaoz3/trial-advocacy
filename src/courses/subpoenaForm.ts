@@ -2,16 +2,14 @@ import type { SubpoenaType } from './types'
 
 /** What a subpoena asks for, as the form and its menu name it. */
 export const SUBPOENA_TYPE_LABEL: Record<SubpoenaType, string> = {
-  documents: 'Physical documents',
-  esi: 'Electronically stored information',
+  documents: 'Physical documents or electronically stored information',
   tangible_things: 'Tangible things',
   inspection: 'Inspection of premises',
 }
 
 /** A line on what each kind of request covers. */
 export const SUBPOENA_TYPE_HINT: Record<SubpoenaType, string> = {
-  documents: 'Paper or scanned records: files, logs, letters, reports.',
-  esi: 'Emails, texts, databases, video, and other electronic data. Say what form you want it in.',
+  documents: 'Files, logs, letters, and reports, on paper or electronic: emails, texts, databases, video. Say what form you want electronic data in.',
   tangible_things: 'Objects, like a part, a device, or a piece of clothing, made available to inspect.',
   inspection: 'Entry onto land or a building to inspect, measure, and photograph it.',
 }

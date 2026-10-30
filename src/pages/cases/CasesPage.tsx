@@ -4,6 +4,8 @@ import { useCourseService } from '../../courses/CourseServiceContext'
 import type { CourseCase } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { CaseStatusBadge } from './CaseStatusBadge'
+import { usePageTour } from '../../tour/tourContext'
+import { INSTRUCTOR_CASES } from '../../tour/tours'
 import '../CoursePage.css'
 import './Cases.css'
 
@@ -20,6 +22,7 @@ export function CasesPage() {
   const navigate = useNavigate()
   const [cases, setCases] = useState<CourseCase[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  usePageTour(INSTRUCTOR_CASES, { ready: cases !== null })
 
   useEffect(() => {
     let cancelled = false
@@ -46,7 +49,12 @@ export function CasesPage() {
             Each case is shared by the whole class. Students are paired into teams per case.
           </p>
         </div>
-        <button type="button" className="btn-primary" onClick={() => navigate(`/courses/${courseId}/cases/new${search}`)}>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => navigate(`/courses/${courseId}/cases/new${search}`)}
+          data-tour="new-case"
+        >
           New case
         </button>
       </header>

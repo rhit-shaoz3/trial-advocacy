@@ -19,7 +19,7 @@
     is_drafting, is_answering         exactly one is true; answering applies to interrogatories and RFAs only
     is_subpoena, is_interrogatories, is_rfas   exactly one is true
     subpoena_recipient                subpoenas only: who it's directed to
-    subpoena_types                    subpoenas only: requested types, e.g. "documents, ESI"
+    subpoena_types                    subpoenas only: requested types, e.g. "physical documents or electronically stored information (ESI)"
     served_requests                   answering only: the opposing counsel's requests being answered
     student_draft                     the team's draft requests or draft answers, as written
     student_goal                      optional: what the team says it's trying to accomplish

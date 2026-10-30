@@ -69,8 +69,7 @@ export function draftHash(draft: CheckDraft) {
 }
 
 const TYPE_TEXT: Record<SubpoenaType, string> = {
-  documents: 'documents',
-  esi: 'electronically stored information (ESI)',
+  documents: 'physical documents or electronically stored information (ESI)',
   tangible_things: 'tangible things',
   inspection: 'inspection of premises',
 }

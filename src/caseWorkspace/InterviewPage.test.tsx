@@ -35,7 +35,7 @@ function renderPage(overrides: Partial<CourseService>, user: User = student, url
   const service = fakeCourseService(overrides)
   const events = userEvent.setup()
   render(
-    <AuthContext.Provider value={{ user, loading: false, signUp: vi.fn(), logIn: vi.fn(), logOut: vi.fn(), updateProfile: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn() }}>
+    <AuthContext.Provider value={{ user, loading: false, signUp: vi.fn(), logIn: vi.fn(), logOut: vi.fn(), updateProfile: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn(), markTourSeen: vi.fn() }}>
       <MemoryRouter initialEntries={[url]}>
         <CourseServiceContext.Provider value={service}>
           <Routes>

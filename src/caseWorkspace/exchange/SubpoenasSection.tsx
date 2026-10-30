@@ -135,7 +135,7 @@ export function SubpoenasSection({
             </p>
           </div>
           <div className="ex-head-actions">
-            <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach}>
+            <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach} data-tour="ex-teach">
               <BookOpen aria-hidden="true" />
               Teach me
             </button>
@@ -144,6 +144,7 @@ export function SubpoenasSection({
                 type="button"
                 className="ws-btn ws-btn-primary"
                 disabled={!canServe}
+                data-tour="ex-serve"
                 title={open && part.remaining === 0 ? `Your team has used all ${part.limit} subpoenas.` : undefined}
                 onClick={() => setView({ mode: 'compose' })}
               >

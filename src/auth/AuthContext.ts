@@ -12,6 +12,8 @@ export interface AuthContextValue {
   /** Uploads a new (cropped) profile picture. */
   uploadAvatar(image: Blob): Promise<void>
   removeAvatar(): Promise<void>
+  /** Remembers that a guided tour was shown; `user.toursSeen` has it at once. */
+  markTourSeen(key: string): Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

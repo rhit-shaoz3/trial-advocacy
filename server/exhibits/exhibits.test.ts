@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { pool } from '../db/pool.ts'
 import { PDFDocument } from 'pdf-lib'
 import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
+import { transcriptionsSettled } from '../courses/materialText.ts'
 
 let prof: request.Agent
 let ada: request.Agent // plaintiff, Team 1
@@ -37,8 +38,12 @@ interface Exhibit {
   label: string | null
 }
 
-const upload = async (filename: string, audience: string) =>
-  (await uploadCaseFile(prof, caseUrl(), filename, { audience })).body.material.id as string
+/** Uploads a case file, once its background reading is done (so a test can set its text after). */
+async function upload(filename: string, audience: string) {
+  const id = (await uploadCaseFile(prof, caseUrl(), filename, { audience })).body.material.id as string
+  await transcriptionsSettled()
+  return id
+}
 
 beforeEach(async () => {
   await resetDatabase()
@@ -488,6 +493,7 @@ describe('redacting a partly admitted exhibit', () => {
 
   it('redacts marked paragraphs of a text file, and drops the ones left out', async () => {
     const notes = (await uploadCaseFile(prof, caseUrl(), 'Notes.txt', { audience: 'plaintiff' }, Buffer.from('x'))).body.material.id
+    await transcriptionsSettled()
     await pool.query(`UPDATE case_materials SET text_status = 'ready', text_content = $2 WHERE id = $1`, [
       notes,
       'Rider was calm.\n\nOperator said the light was red.\n\nWeather was clear.',

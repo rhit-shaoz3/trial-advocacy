@@ -10,13 +10,14 @@ const emptyList = (side: 'plaintiff' | 'defense'): ExhibitList => ({ side, items
 const base: StudentExhibits = {
   side: 'plaintiff',
   options: [
-    { kind: 'material', id: 'm1', title: 'Amended complaint.pdf', group: 'case-file', contentType: 'application/pdf' },
-    { kind: 'material', id: 'm2', title: 'Ride inspection log', group: 'investigator', contentType: 'application/pdf' },
+    { kind: 'material', id: 'm1', title: 'Amended complaint.pdf', group: 'case-file', contentType: 'application/pdf', markable: 'pdf' },
+    { kind: 'material', id: 'm2', title: 'Ride inspection log', group: 'investigator', contentType: 'application/pdf', markable: 'pdf' },
     {
-      kind: 'report',
-      id: 'r1',
-      title: "John Hastings's report (Oct 2)",
+      kind: 'material',
+      id: 't1',
+      title: 'Operator interview notes.docx',
       group: 'investigator',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       parts: [
         { n: 0, text: 'The operator skipped the checklist.' },
         { n: 1, text: 'The park changed vendors in May.' },
@@ -114,12 +115,12 @@ describe('building the list', () => {
     expect(screen.getByRole('note')).toHaveTextContent('If it isn’t on your list, you can’t use it at trial.')
     expect(screen.getByRole('group', { name: 'Case file' })).toHaveTextContent('Amended complaint.pdf')
     expect(screen.getByRole('group', { name: 'From your investigator' })).toHaveTextContent('Ride inspection log')
-    expect(screen.getByRole('group', { name: 'From your investigator' })).toHaveTextContent("John Hastings's report")
+    expect(screen.getByRole('group', { name: 'From your investigator' })).toHaveTextContent('Operator interview notes.docx')
     expect(screen.getByRole('group', { name: 'Your depositions' })).toHaveTextContent('Deposition of Tom Becker')
     expect(screen.getByRole('button', { name: 'Teach me' })).toBeInTheDocument()
   })
 
-  it('saves a draft with whole items, chosen pages, and chosen paragraphs', async () => {
+  it('saves a draft with whole items, a PDF’s chosen pages, and a text file’s chosen paragraphs', async () => {
     const { user, onSave, onOpenFile } = renderSection(base)
     await user.click(screen.getByRole('button', { name: 'View Amended complaint.pdf' }))
     expect(onOpenFile).toHaveBeenCalledWith('m1')
@@ -128,7 +129,7 @@ describe('building the list', () => {
     await user.click(within(screen.getByRole('radiogroup', { name: 'How much of Amended complaint.pdf' })).getByRole('radio', { name: 'Only some pages' }))
     await user.type(screen.getByRole('textbox', { name: 'Pages of Amended complaint.pdf' }), '2-3')
 
-    await user.click(screen.getByRole('checkbox', { name: "John Hastings's report (Oct 2)" }))
+    await user.click(screen.getByRole('checkbox', { name: 'Operator interview notes.docx' }))
     await user.click(screen.getByRole('radio', { name: 'Only some paragraphs' }))
     await user.click(screen.getByRole('checkbox', { name: /The park changed vendors/ }))
 
@@ -136,7 +137,7 @@ describe('building the list', () => {
     await user.click(screen.getByRole('button', { name: 'Save draft' }))
     expect(onSave).toHaveBeenCalledWith([
       { kind: 'material', id: 'm1', parts: [2, 3] },
-      { kind: 'report', id: 'r1', parts: [1] },
+      { kind: 'material', id: 't1', parts: [1] },
       { kind: 'deposition', id: 'i1', parts: null },
     ])
     expect(await screen.findByText('Draft saved')).toBeInTheDocument()
@@ -158,6 +159,59 @@ describe('building the list', () => {
     confirm.mockReturnValue(true)
     await user.click(screen.getByRole('button', { name: /Submit list/ }))
     expect(onSubmit).toHaveBeenCalledWith([{ kind: 'material', id: 'm1', parts: null }])
+  })
+
+  it('blacks out parts of a PDF it lists, with the copy, and saves them; changing the pages undoes it', async () => {
+    const copyActions = { loadFile: vi.fn(), upload: vi.fn() }
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(
+      <ExhibitListSection
+        exhibits={{
+          ...base,
+          mine: {
+            ...emptyList('plaintiff'),
+            updatedAt: '2026-11-01T10:00:00Z',
+            items: [
+              {
+                kind: 'material',
+                id: 'm1',
+                parts: [2],
+                marks: { mode: 'redact', pages: [{ page: 1, removed: false, boxes: [{ x: 0, y: 0, w: 0.5, h: 0.5 }] }] },
+                redactedKey: 'cases/k/copy',
+                title: 'Amended complaint.pdf — page 2 (with redactions)',
+              },
+            ],
+          },
+        }}
+        onSave={onSave}
+        onSubmit={vi.fn()}
+        onOpenFile={vi.fn()}
+        onOpenExhibit={vi.fn()}
+        copyActions={copyActions}
+      />,
+    )
+    // Unchecked files offer nothing yet; the listed PDF shows its black-outs.
+    expect(screen.queryAllByRole('button', { name: 'Black out parts' })).toHaveLength(0)
+    expect(screen.getByText(/Parts blacked out/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    expect(onSave).toHaveBeenLastCalledWith([
+      {
+        kind: 'material',
+        id: 'm1',
+        parts: [2],
+        marks: { mode: 'redact', pages: [{ page: 1, removed: false, boxes: [{ x: 0, y: 0, w: 0.5, h: 0.5 }] }] },
+        redactedKey: 'cases/k/copy',
+      },
+    ])
+
+    // New pages need new black-outs.
+    await user.type(screen.getByRole('textbox', { name: 'Pages of Amended complaint.pdf' }), ', 4')
+    expect(screen.queryByText(/Parts blacked out/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Black out parts' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Your exhibit · Amended complaint.pdf')
+    expect(within(screen.getByRole('dialog')).getByRole('radio', { name: 'Mark what to black out' })).toBeInTheDocument()
+    expect(copyActions.loadFile).toHaveBeenCalledWith('m1')
   })
 
   it('shows the submitted list while waiting for the other side', () => {
@@ -183,6 +237,34 @@ describe('after the exchange', () => {
     await user.type(screen.getByRole('textbox', { name: /Your objection/ }), 'Hearsay; redact page 2.')
     await user.click(screen.getByRole('button', { name: 'Send objection' }))
     expect(onMove).toHaveBeenCalledWith('x2', { step: 'admission', decision: 'challenge', objection: 'Hearsay; redact page 2.' })
+  })
+
+  it('moves an exhibit the team authenticates straight on to its admission decision', async () => {
+    const before = exchanged([exhibit({}), exhibit({ id: 'x2', title: 'Waiver.pdf' })])
+    const onMove = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    const props = { onMove, onOpenFile: vi.fn(), onOpenExhibit: vi.fn() }
+    const { rerender } = render(<ExhibitListSection exhibits={before} {...props} />)
+    const step = (name: RegExp) => screen.getByRole('group', { name })
+    expect(step(/Step 1 · Authenticity/)).toHaveTextContent('Incident report.pdf')
+    expect(screen.queryByRole('group', { name: /Step 2/ })).not.toBeInTheDocument()
+
+    await user.click(within(step(/Step 1/)).getAllByRole('button', { name: 'Agree to authenticity' })[0])
+    // The other exhibit is still waiting on its authenticity, but this one can be decided now.
+    rerender(
+      <ExhibitListSection
+        exhibits={exchanged([exhibit({ status: 'awaiting_admission', authenticated: true }), exhibit({ id: 'x2', title: 'Waiver.pdf' })])}
+        {...props}
+      />,
+    )
+    const admission = step(/Step 2 · Admission/)
+    expect(admission).toHaveTextContent('Incident report.pdf')
+    expect(admission).toHaveTextContent('Just authenticated: now decide on admission')
+    expect(step(/Step 1 · Authenticity/)).toHaveTextContent('Waiver.pdf')
+    const admit = within(admission).getByRole('button', { name: 'Admit' })
+    expect(admit).toBeEnabled()
+    await user.click(admit)
+    expect(onMove).toHaveBeenLastCalledWith('x1', { step: 'admission', decision: 'admit' })
   })
 
   it('needs a reason to challenge authenticity', async () => {

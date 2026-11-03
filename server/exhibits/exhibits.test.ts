@@ -97,7 +97,7 @@ const exhibitsOf = async (agent: request.Agent) => (await mine(agent)).exhibits 
 const find = (list: Exhibit[], test: (x: Exhibit) => boolean) => list.find(test)!
 
 describe('building an exhibit list', () => {
-  it('opens in the final steps phase, with the files, reports and depositions the team can list', async () => {
+  it('opens in the final steps phase, with the files and depositions the team can list (not investigator reports)', async () => {
     expect(await mine(ada)).toBeNull()
     expect((await ada.put(`${exhibitsUrl()}/list`).send({ items: [] })).status).toBe(409)
     expect((await toFinalSteps()).status).toBe(200)
@@ -109,16 +109,27 @@ describe('building an exhibit list', () => {
       'case-file: Medical records.pdf',
       expect.stringMatching(/^depositions: Deposition of Tom Becker \(/),
     ])
+    // A PDF can have parts blacked out.
+    expect(ours.options[0].markable).toBe('pdf')
     const theirs = await mine(cy)
-    expect(theirs.options.map((o: { title: string }) => o.title)).toEqual([
-      'Amended complaint.pdf',
-      'Incident report.pdf',
-      expect.stringMatching(/^John Hastings's report \(/),
+    expect(theirs.options.map((o: { title: string }) => o.title)).toEqual(['Amended complaint.pdf', 'Incident report.pdf'])
+    // Nor can an investigator report be listed.
+    expect((await cy.put(`${exhibitsUrl()}/list`).send({ items: [{ kind: 'report', id: report, parts: null }] })).status).toBe(400)
+  })
+
+  it('lists a text file whole or by paragraph', async () => {
+    const notes = await upload('Witness notes.txt', 'plaintiff')
+    await pool.query(`UPDATE case_materials SET text_status = 'ready', text_content = $2 WHERE id = $1`, [
+      notes,
+      'Rider was calm.\n\nOperator said the light was red.',
     ])
-    expect(theirs.options[2].parts.map((p: { text: string }) => p.text)).toEqual([
-      'The plaintiff skipped the safety video.',
-      'She signed the waiver at 2:04 PM.',
-    ])
+    await toFinalSteps()
+    const option = (await mine(ada)).options.find((o: { id: string }) => o.id === notes)
+    expect(option.parts.map((p: { text: string }) => p.text)).toEqual(['Rider was calm.', 'Operator said the light was red.'])
+    expect(option.markable).toBeUndefined()
+    expect((await ada.put(`${exhibitsUrl()}/list`).send({ items: [file(notes, [5])] })).status).toBe(400)
+    await ada.put(`${exhibitsUrl()}/list`).send({ items: [file(notes, [1])] }).expect(200)
+    expect((await mine(ada)).mine.items[0].title).toBe('Witness notes.txt — paragraph 2')
   })
 
   it('saves a draft, then submits it for good', async () => {
@@ -234,13 +245,18 @@ describe('exchanging the lists', () => {
   })
 
   it('keeps a snapshot of the chosen turns or paragraphs', async () => {
+    const notes = await upload('Guest notes.txt', 'defense')
+    const setText = (text: string) =>
+      pool.query(`UPDATE case_materials SET text_status = 'ready', text_content = $2 WHERE id = $1`, [notes, text])
+    await setText('The plaintiff skipped the safety video.\n\nShe signed the waiver at 2:04 PM.')
     await toFinalSteps()
     await submit(ada, [{ kind: 'deposition', id: deposition, parts: [1] }])
-    await submit(cy, [{ kind: 'report', id: report, parts: [1] }])
+    await submit(cy, [file(notes, [1])])
     await pool.query('DELETE FROM interview_turns WHERE interview_id = $1', [deposition])
+    await setText('Rewritten.')
     const list = await exhibitsOf(cy)
     expect(list.map((x) => x.excerpt?.map((p) => p.text))).toEqual([['The light was red.'], ['She signed the waiver at 2:04 PM.']])
-    expect(list[1].title).toMatch(/report \(.*\) — paragraph 2$/)
+    expect(list[1].title).toBe('Guest notes.txt — paragraph 2')
   })
 })
 
@@ -493,5 +509,202 @@ describe('redacting a partly admitted exhibit', () => {
       { n: 0, text: 'Rider was calm.' },
       { n: 1, text: '█████████████ the light was red.' },
     ])
+  })
+})
+
+describe('a team blacking out parts of a file it lists', () => {
+  async function pdf(pages: number) {
+    const doc = await PDFDocument.create()
+    for (let i = 1; i <= pages; i++) doc.addPage([i * 100, 500])
+    return Buffer.from(await doc.save())
+  }
+  const widths = async (data: Buffer) => (await PDFDocument.load(data)).getPages().map((p) => p.getWidth())
+  async function download(agent: request.Agent, url: string) {
+    const get = (u: string) =>
+      agent
+        .get(u)
+        .buffer(true)
+        .parse((res, done) => {
+          const chunks: Buffer[] = []
+          res.on('data', (c: Buffer) => chunks.push(c))
+          res.on('end', () => done(null, Buffer.concat(chunks)))
+        })
+    let res = await get(url)
+    if (res.status === 302) res = await get(res.headers.location)
+    expect(res.status).toBe(200)
+    return res.body as Buffer
+  }
+  async function uploadCopy(agent: request.Agent, materialId: string, data: Buffer) {
+    const start = await agent.post(`${exhibitsUrl()}/uploads`).send({ materialId, size: data.length })
+    expect(start.status).toBe(201)
+    const { key, url, headers } = start.body.upload
+    await agent.put(url).set(headers).send(data).expect(200)
+    return key as string
+  }
+  // Pages 2 and 4 of a five-page log, with a box on the first of them (so both stay).
+  const marks = { mode: 'redact', pages: [{ page: 1, removed: false, boxes: [{ x: 0.1, y: 0.1, w: 0.3, h: 0.1 }] }] }
+
+  it('keeps the blacked-out copy with the list, and shows the other side only that', async () => {
+    const log = (await uploadCaseFile(prof, caseUrl(), 'Shift log.pdf', { audience: 'plaintiff' }, await pdf(5))).body.material.id
+    await toFinalSteps()
+    const item = (extra: object) => ({ ...file(log, [2, 4]), marks, ...extra })
+    const save = (items: object[]) => ada.put(`${exhibitsUrl()}/list`).send({ items })
+
+    // Marks need their copy, and the copy must have the pages the marks keep.
+    expect((await save([item({})])).status).toBe(400)
+    expect((await save([item({ uploadKey: await uploadCopy(ada, log, await pdf(3)) })])).status).toBe(400)
+    // A text file can't be marked, and a team can only upload for a file it can list.
+    expect((await cy.post(`${exhibitsUrl()}/uploads`).send({ materialId: log, size: 10 })).status).toBe(404)
+
+    const copy = await pdf(2)
+    await save([item({ uploadKey: await uploadCopy(ada, log, copy) })]).expect(200)
+    let [saved] = (await mine(ada)).mine.items
+    expect(saved).toMatchObject({ title: 'Shift log.pdf — pages 2, 4 (with redactions)', redactedKey: expect.any(String) })
+    expect(saved.marks).toEqual(marks)
+    // Saving again keeps the copy, as long as the marks and pages are the same.
+    await save([item({ redactedKey: saved.redactedKey })]).expect(200)
+    expect((await save([{ ...item({ redactedKey: saved.redactedKey }), parts: [2] }])).status).toBe(400)
+    ;[saved] = (await mine(ada)).mine.items
+
+    // The page may still send the upload's key after a save (it was moved then): the saved copy is used.
+    const again = await uploadCopy(ada, log, copy)
+    await save([item({ uploadKey: again })]).expect(200)
+    const resaved = (await mine(ada)).mine.items[0].redactedKey
+    await save([item({ uploadKey: again })]).expect(200)
+    expect((await mine(ada)).mine.items[0].redactedKey).toBe(resaved)
+    ;[saved] = (await mine(ada)).mine.items
+
+    await submit(ada, [item({ redactedKey: saved.redactedKey })]).expect(200)
+    await submit(cy, []).expect(200)
+    const [x] = await exhibitsOf(cy)
+    expect(x).toMatchObject({ status: 'awaiting_authenticity', title: 'Shift log.pdf — pages 2, 4 (with redactions)' })
+    expect(await widths(await download(cy, `${exhibitsUrl()}/${x.id}/file`))).toEqual(await widths(copy))
+  })
+
+  it('sends the file for blacking out from the API itself, never a redirect to storage', async () => {
+    const log = (await uploadCaseFile(prof, caseUrl(), 'Shift log.pdf', { audience: 'plaintiff' }, await pdf(3))).body.material.id
+    await toFinalSteps()
+    const res = await ada.get(`${exhibitsUrl()}/sources/${log}`).buffer(true)
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/pdf')
+    // Only what the team can list and black out: not the other side's file.
+    expect((await cy.get(`${exhibitsUrl()}/sources/${log}`)).status).toBe(404)
+
+    // The instructor's marking window gets the exhibit's bytes the same way.
+    await submit(ada, [file(log)])
+    await submit(cy, [])
+    const [x] = await exhibitsOf(ada)
+    expect((await prof.get(`${reviewsUrl()}/${x.id}/file`)).status).toBe(302)
+    expect(await widths(await download(prof, `${reviewsUrl()}/${x.id}/file?stream=1`))).toEqual([100, 200, 300])
+    expect((await prof.get(`${reviewsUrl()}/${x.id}/file?stream=1`)).status).toBe(200)
+  })
+
+  it('counts a file both sides listed as authentic, but sends differently blacked-out versions on for admission', async () => {
+    await toFinalSteps()
+    // The complaint's stored test file isn't a real PDF, so it stands in for a picture (one page).
+    const both = complaint
+    await pool.query(`UPDATE case_materials SET content_type = 'image/png' WHERE id = $1`, [both])
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+    await submit(ada, [{ ...file(both), marks, uploadKey: await uploadCopy(ada, both, png) }]).expect(200)
+    await submit(cy, [file(both)]).expect(200)
+    const list = await exhibitsOf(ada)
+    expect(list.map((x) => `${x.offeredBy}${x.joint ? ' joint' : ''}: ${x.title} (${x.status}${x.authenticated ? ', authentic' : ''})`)).toEqual([
+      'plaintiff: Amended complaint.pdf (with redactions) (awaiting_admission, authentic)',
+      'defense: Amended complaint.pdf (awaiting_admission, authentic)',
+    ])
+  })
+})
+
+describe('two versions of one document before the judge', () => {
+  async function pdf(pages: number) {
+    const doc = await PDFDocument.create()
+    for (let i = 1; i <= pages; i++) doc.addPage([i * 100, 500])
+    return Buffer.from(await doc.save())
+  }
+  const move = (agent: request.Agent, id: string, step: string, body: object) => agent.post(`${exhibitsUrl()}/${id}/${step}`).send(body)
+  const versions = (body: object) => prof.post(`${reviewsUrl()}/versions`).send(body)
+
+  /** Pages 1–2 (the plaintiff's) and 3–4 (the defense's) of one log, each objected to and sent to the judge. */
+  async function bothInReview() {
+    const log = (await uploadCaseFile(prof, caseUrl(), 'Shift log.pdf', { audience: 'all' }, await pdf(5))).body.material.id
+    await toFinalSteps()
+    await submit(ada, [file(log, [1, 2]), file(medical)])
+    await submit(cy, [file(log, [3, 4])])
+    const list = await exhibitsOf(ada)
+    const p = find(list, (x) => x.sourceId === log && x.offeredBy === 'plaintiff')
+    const d = find(list, (x) => x.sourceId === log && x.offeredBy === 'defense')
+    await move(cy, p.id, 'admission', { decision: 'challenge', objection: 'Pages 1–2 are hearsay.' }).expect(200)
+    await move(ada, d.id, 'admission', { decision: 'challenge', objection: 'Pages 3–4 mislead without the rest.' }).expect(200)
+    await move(ada, p.id, 'response', { decision: 'review', response: 'Business records.' }).expect(200)
+    // Not yet a pair: only one version is before the judge.
+    const one = (await prof.get(reviewsUrl())).body.reviews
+    expect(one.map((r: { pairedWith: string | null }) => r.pairedWith)).toEqual([null])
+    await move(cy, d.id, 'response', { decision: 'review', response: 'Rule of completeness.' }).expect(200)
+    return { log, p, d }
+  }
+
+  it('lists the two versions together, with the document’s own title', async () => {
+    const { p, d } = await bothInReview()
+    const reviews = (await prof.get(reviewsUrl())).body.reviews
+    expect(reviews.map((r: { id: string; pairedWith: string; sourceTitle: string; title: string }) => [r.id, r.pairedWith, r.sourceTitle, r.title])).toEqual([
+      [p.id, d.id, 'Shift log.pdf', 'Shift log.pdf — pages 1–2'],
+      [d.id, p.id, 'Shift log.pdf', 'Shift log.pdf — pages 3–4'],
+    ])
+    // The whole original, for marking a partial ruling.
+    expect((await prof.get(`${reviewsUrl()}/${p.id}/marking?whole=1`)).body).toEqual({ markable: 'pdf', parts: null })
+    expect((await prof.get(`${reviewsUrl()}/${p.id}/original`)).status).toBe(200)
+  })
+
+  it('admits one side’s version as the joint exhibit, and the other gives way', async () => {
+    const { p, d } = await bothInReview()
+    // Only two versions both before the judge are ruled on together.
+    const med = find(await exhibitsOf(ada), (x) => x.sourceId === medical)
+    expect((await versions({ ids: [p.id, med.id], decision: 'defense' })).status).toBe(409)
+    expect((await versions({ ids: [p.id, p.id], decision: 'defense' })).status).toBe(400)
+    await versions({ ids: [p.id, d.id], decision: 'defense', note: 'Completeness wins.' }).expect(200)
+    const list = await exhibitsOf(cy)
+    expect(find(list, (x) => x.id === d.id)).toMatchObject({ status: 'admitted', joint: true, offeredBy: 'plaintiff', rulingNote: 'Completeness wins.' })
+    expect(find(list, (x) => x.id === p.id)).toMatchObject({ status: 'excluded', supersededBy: d.id })
+    expect((await versions({ ids: [p.id, d.id], decision: 'plaintiff' })).status).toBe(409)
+  })
+
+  it('admits the whole document as the joint exhibit', async () => {
+    const { p, d } = await bothInReview()
+    await versions({ ids: [p.id, d.id], decision: 'whole' }).expect(200)
+    const list = await exhibitsOf(ada)
+    expect(find(list, (x) => x.id === p.id)).toMatchObject({ status: 'admitted', joint: true, parts: null, title: 'Shift log.pdf' })
+    expect(find(list, (x) => x.id === d.id)).toMatchObject({ status: 'excluded', supersededBy: p.id })
+  })
+
+  it('admits a part the judge marks on the whole original', async () => {
+    const { p, d } = await bothInReview()
+    // Pages 1 and 5 of the original, marked admitted: a two-page copy.
+    const marks = {
+      mode: 'admit',
+      pages: [
+        { page: 1, removed: false, boxes: [{ x: 0, y: 0, w: 1, h: 1 }] },
+        { page: 5, removed: false, boxes: [{ x: 0, y: 0, w: 1, h: 1 }] },
+      ],
+    }
+    const copy = await pdf(2)
+    const { key, url, headers } = (await prof.post(`${reviewsUrl()}/${p.id}/uploads`).send({ size: copy.length }).expect(201)).body.upload
+    await prof.put(url).set(headers).send(copy).expect(200)
+    // A copy that doesn't match the marks on the whole original (two pages kept) is refused.
+    const wrong = await pdf(1)
+    const bad = (await prof.post(`${reviewsUrl()}/${p.id}/uploads`).send({ size: wrong.length }).expect(201)).body.upload
+    await prof.put(bad.url).set(bad.headers).send(wrong).expect(200)
+    expect((await versions({ ids: [p.id, d.id], decision: 'partial', marks, uploadKey: bad.key })).status).toBe(400)
+
+    await versions({ ids: [p.id, d.id], decision: 'partial', marks, uploadKey: key }).expect(200)
+    const list = await exhibitsOf(cy)
+    expect(find(list, (x) => x.id === p.id)).toMatchObject({ status: 'admitted', ruling: 'partial', redacted: true, title: 'Shift log.pdf' })
+    expect(find(list, (x) => x.id === d.id).status).toBe('excluded')
+  })
+
+  it('keeps both versions out', async () => {
+    const { p, d } = await bothInReview()
+    await versions({ ids: [p.id, d.id], decision: 'exclude' }).expect(200)
+    const list = await exhibitsOf(ada)
+    expect([p.id, d.id].map((id) => find(list, (x) => x.id === id).status)).toEqual(['excluded', 'excluded'])
   })
 })

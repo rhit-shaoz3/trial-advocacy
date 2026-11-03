@@ -2,11 +2,15 @@ import type { PoolClient } from 'pg'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
 import { isUuid } from '../validation.ts'
-import { listMaterialsFor } from '../courses/caseContent.ts'
+import { listMaterialsFor, removeStoredFiles } from '../courses/caseContent.ts'
+import { storage } from '../storage/storage.ts'
 import type { Side } from '../courses/matchups.ts'
 import { worldLetter } from '../courses/teams.ts'
 import {
   exhibitPageCount,
+  materialPdf,
+  pageCount as countPages,
+  type PageMarks,
   findExhibitSource,
   keepRedactedFile,
   keptPages,
@@ -20,9 +24,11 @@ import {
 } from './exhibitFiles.ts'
 
 // The joint exhibit list, in the final steps phase. Each side of a case world
-// lists what it may use at trial: case files it can see, transcripts of the
-// depositions it took, and its investigator reports (whole, or chosen turns
-// or paragraphs). Once both sides submit, the lists are exchanged: what both
+// lists what it may use at trial: case files it can see (a PDF's chosen pages,
+// a text file's chosen paragraphs, a PDF or picture with parts blacked out)
+// and transcripts of the depositions it took (whole, or chosen turns). The
+// investigator's reports themselves aren't exhibits: what he found that's a
+// record comes as a file he made. Once both sides submit, the lists are exchanged: what both
 // listed is admitted (the plaintiff's, since the plaintiff goes first), and
 // each side reviews the other's: authenticity first, then admissibility. The
 // instructor rules on every challenge, even in review lite. When nothing is
@@ -72,6 +78,10 @@ export interface ListItem {
   kind: SourceKind
   id: string
   parts: number[] | null
+  /** A PDF's or picture's black-outs, drawn by the team (see exhibitFiles.ts). */
+  marks?: PageMarks | null
+  /** The blacked-out copy the team's browser made, once kept. */
+  redactedKey?: string | null
 }
 
 /** A transcript turn or a report paragraph, as listed. */
@@ -96,8 +106,10 @@ export interface ExhibitOption {
   /** For a file, its type, to show it in the viewer. */
   contentType?: string
   filename?: string
-  /** For a transcript or report, its turns or paragraphs to choose from. */
+  /** For a transcript (or an older report), its turns or paragraphs to choose from; for a text file, its paragraphs. */
   parts?: Part[]
+  /** A PDF or picture, which the team can black parts out of. */
+  markable?: 'pdf' | 'image'
 }
 
 /** Shape sent to the client; matches `Exhibit` in src/courses/types.ts. */
@@ -206,33 +218,56 @@ async function investigatorFileIds(db: Db, teamId: string) {
   return new Set(rows.map((r) => r.id))
 }
 
-/** Everything the team can put on its list. */
+/** The paragraphs of the text files (Word, plain text) among `materials`, by id. */
+async function textFileParts(db: Db, materials: { id: string; contentType: string }[]) {
+  const { rows } = await db.query<{ id: string; text: string }>(
+    `SELECT id, text_content AS text FROM case_materials WHERE id = ANY($1) AND text_status = 'ready' AND text_content IS NOT NULL`,
+    [materials.map((m) => m.id)],
+  )
+  const types = new Map(materials.map((m) => [m.id, m.contentType]))
+  const parts = new Map<string, Part[]>()
+  for (const r of rows) {
+    if (markable({ materialId: r.id, contentType: types.get(r.id) ?? null, textContent: r.text }) !== 'text') continue
+    const paragraphs = splitParagraphs(r.text).map((text, n) => ({ n, text }))
+    if (paragraphs.length > 0) parts.set(r.id, paragraphs)
+  }
+  return parts
+}
+
+/**
+ * Everything the team can put on its list: the case files it can see (a text
+ * file with its paragraphs to choose from; a PDF or picture can have parts
+ * blacked out), and its depositions. Its investigator's reports aren't on it:
+ * the records he found come as files.
+ */
 export async function exhibitOptions(team: ExhibitTeam, db: Db = pool): Promise<ExhibitOption[]> {
-  const [materials, fromInvestigator, depositions, reports] = await Promise.all([
+  const [materials, fromInvestigator, depositions] = await Promise.all([
     listMaterialsFor(team.caseId, { side: team.side, teamId: team.teamId, matchupId: team.matchupId }),
     investigatorFileIds(db, team.teamId),
     teamDepositions(db, team.caseId, team.teamId),
-    teamReports(db, team.caseId, team.teamId),
   ])
+  const paragraphs = await textFileParts(db, materials)
   return [
-    ...materials.map(
-      (m): ExhibitOption => ({
+    ...materials.map((m): ExhibitOption => {
+      const kind = markable({ materialId: m.id, contentType: m.contentType, textContent: null })
+      return {
         kind: 'material',
         id: m.id,
         title: m.description || m.filename,
         group: fromInvestigator.has(m.id) ? 'investigator' : 'case-file',
         contentType: m.contentType,
         filename: m.filename,
-      }),
-    ),
-    ...reports.map((r): ExhibitOption => ({ kind: 'report', id: r.id, title: r.title, group: 'investigator', parts: r.parts })),
+        ...(paragraphs.has(m.id) && { parts: paragraphs.get(m.id) }),
+        ...((kind === 'pdf' || kind === 'image') && { markable: kind }),
+      }
+    }),
     ...depositions.map((d): ExhibitOption => ({ kind: 'deposition', id: d.id, title: d.title, group: 'depositions', parts: d.parts })),
   ]
 }
 
 const sourceKey = (item: Pick<ListItem, 'kind' | 'id'>) => `${item.kind}:${item.id}`
 
-/** " — pages 3–5, 9", " — Q&A 1–3, 7" or " — paragraphs 2, 4", counting from 1; "" for the whole thing. */
+/** " — pages 3–5, 9", " — Q&A 1–3, 7" or " — paragraphs 2, 4" (a text file's or report's), counting from 1; "" for the whole thing. */
 export function partsLabel(kind: SourceKind, parts: number[] | null, all: Part[] | null) {
   if (!parts) return ''
   const shown = all ? parts.map((n) => all.findIndex((p) => p.n === n) + 1).filter((i) => i > 0) : parts
@@ -243,16 +278,33 @@ export function partsLabel(kind: SourceKind, parts: number[] | null, all: Part[]
     ranges.push(j > i ? `${shown[i]}–${shown[j]}` : `${shown[i]}`)
     i = j
   }
+  // A file's parts are pages, unless it's a text file (whose paragraphs come with it).
   const noun =
-    kind === 'deposition' ? 'Q&A' : kind === 'material' ? (shown.length === 1 ? 'page' : 'pages') : shown.length === 1 ? 'paragraph' : 'paragraphs'
+    kind === 'deposition'
+      ? 'Q&A'
+      : kind === 'material' && !all
+        ? shown.length === 1
+          ? 'page'
+          : 'pages'
+        : shown.length === 1
+          ? 'paragraph'
+          : 'paragraphs'
   return ` — ${noun} ${ranges.join(', ')}`
 }
 
 /** The parts of a source that `parts` picks (all of them for null). */
 const pick = (all: Part[], parts: number[] | null) => (parts ? all.filter((p) => parts.includes(p.n)) : all)
 
-/** Reads a list from the request: `{ items: [{ kind, id, parts }] }`, checked against what the team can list. */
-function readItems(body: unknown, options: ExhibitOption[]): (ListItem & { title: string })[] {
+/** A listed item as read from the request, before its blacked-out copy is kept. */
+type ReadItem = ListItem & { title: string; uploadKey?: string | null }
+
+/**
+ * Reads a list from the request: `{ items: [{ kind, id, parts, marks?,
+ * uploadKey?, redactedKey? }] }`, checked against what the team can list. A
+ * PDF or picture with `marks` comes with the `uploadKey` of its new
+ * blacked-out copy, or the `redactedKey` of the one kept before.
+ */
+function readItems(body: unknown, options: ExhibitOption[]): ReadItem[] {
   const raw = (body as Record<string, unknown> | undefined)?.items
   if (!Array.isArray(raw)) throw new HttpError(400, 'Send the exhibit list.')
   if (raw.length > MAX_LIST_ITEMS) throw new HttpError(400, `An exhibit list can have at most ${MAX_LIST_ITEMS} items.`)
@@ -280,8 +332,79 @@ function readItems(body: unknown, options: ExhibitOption[]): (ListItem & { title
       // Every part is the whole thing.
       if (valid && parts.length === valid.size) parts = null
     }
-    return { kind, id, parts, title: option.title + partsLabel(kind, parts, option.parts ?? null) }
+    let marks: PageMarks | null = null
+    if (e?.marks !== null && e?.marks !== undefined) {
+      if (!option.markable) throw new HttpError(400, 'Only a PDF or a picture can have parts blacked out.')
+      // Checked against the pages once the copy is kept (see keepRedactions).
+      marks = e.marks as PageMarks
+    }
+    const key = (k: string) => (marks && typeof e?.[k] === 'string' ? (e[k] as string) : null)
+    return {
+      kind,
+      id,
+      parts,
+      marks,
+      uploadKey: key('uploadKey'),
+      redactedKey: key('redactedKey'),
+      title: option.title + partsLabel(kind, parts, option.parts ?? null) + (marks ? ' (with redactions)' : ''),
+    }
   })
+}
+
+/** JSON with its keys in order, since jsonb doesn't keep the order they were written in. */
+const canonical = (v: unknown): string =>
+  Array.isArray(v)
+    ? `[${v.map(canonical).join(',')}]`
+    : v && typeof v === 'object'
+      ? `{${Object.keys(v)
+          .sort()
+          .map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`)
+          .join(',')}}`
+      : JSON.stringify(v)
+
+const sameMarks = (a: PageMarks | null | undefined, b: PageMarks | null | undefined) => canonical(a ?? null) === canonical(b ?? null)
+
+/**
+ * Keeps each blacked-out copy the team uploaded (after checking its marks
+ * against the file's pages, and the copy against its marks), or reuses the
+ * copy an unchanged item already had. Returns the items with their keys, the
+ * new keys (to remove if the save fails), and the keys no longer used.
+ */
+async function keepRedactions(team: ExhibitTeam, items: ReadItem[], options: ExhibitOption[], before: ListItem[]) {
+  const kept: string[] = []
+  try {
+    const out: (ListItem & { title: string })[] = []
+    for (const { uploadKey, ...item } of items) {
+      if (!item.marks) {
+        out.push({ ...item, marks: null, redactedKey: null })
+        continue
+      }
+      const kind = options.find((o) => sourceKey(o) === sourceKey(item))!.markable!
+      const pages = kind === 'image' ? 1 : await countPages(await materialPdf(team.caseId, item.id, item.parts))
+      const marks = readPageMarks(item.marks, pages, `Something of ${item.title} has to stay in. To leave it all out, take it off the list.`)
+      // The copy saved before for the same pages and marks, if any.
+      const same = before.find(
+        (b) => sourceKey(b) === sourceKey(item) && b.redactedKey && sameParts(b.parts, item.parts) && sameMarks(b.marks, marks),
+      )
+      let redactedKey: string
+      // An upload already kept by an earlier save (the page still has its key) is that saved copy.
+      if (uploadKey && !(same && (await storage.size(uploadKey)) === null)) {
+        redactedKey = await keepRedactedFile(team.caseId, kind, uploadKey, keptPages(marks, pages).length)
+        kept.push(redactedKey)
+      } else {
+        if (!same?.redactedKey || (!uploadKey && same.redactedKey !== item.redactedKey)) {
+          throw new HttpError(400, `Black out the parts of ${item.title} again.`)
+        }
+        redactedKey = same.redactedKey
+      }
+      out.push({ ...item, marks, redactedKey })
+    }
+    const using = new Set(out.map((i) => i.redactedKey))
+    return { items: out, kept, unused: before.flatMap((b) => (b.redactedKey && !using.has(b.redactedKey) ? [b.redactedKey] : [])) }
+  } catch (err) {
+    await removeStoredFiles(kept)
+    throw err
+  }
 }
 
 // Lists -----------------------------------------------------------------------
@@ -312,9 +435,12 @@ async function listItems(db: Db, listId: string): Promise<(ListItem & { title: s
     interviewId: string | null
     reportId: string | null
     parts: number[] | null
+    marks: PageMarks | null
+    redactedKey: string | null
     title: string
   }>(
-    `SELECT material_id AS "materialId", interview_id AS "interviewId", report_id AS "reportId", parts, title
+    `SELECT material_id AS "materialId", interview_id AS "interviewId", report_id AS "reportId", parts, marks,
+            redacted_key AS "redactedKey", title
      FROM exhibit_list_items WHERE list_id = $1 ORDER BY position`,
     [listId],
   )
@@ -322,6 +448,8 @@ async function listItems(db: Db, listId: string): Promise<(ListItem & { title: s
     kind: r.materialId ? 'material' : r.interviewId ? 'deposition' : 'report',
     id: (r.materialId ?? r.interviewId ?? r.reportId)!,
     parts: r.parts,
+    marks: r.marks,
+    redactedKey: r.redactedKey,
     title: r.title,
   }))
 }
@@ -350,8 +478,8 @@ async function writeItems(client: PoolClient, listId: string, items: (ListItem &
   await client.query('DELETE FROM exhibit_list_items WHERE list_id = $1', [listId])
   for (const [position, item] of items.entries()) {
     await client.query(
-      `INSERT INTO exhibit_list_items (list_id, position, material_id, interview_id, report_id, parts, title)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO exhibit_list_items (list_id, position, material_id, interview_id, report_id, parts, title, marks, redacted_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         listId,
         position,
@@ -360,6 +488,8 @@ async function writeItems(client: PoolClient, listId: string, items: (ListItem &
         item.kind === 'report' ? item.id : null,
         item.parts,
         item.title,
+        item.marks ? JSON.stringify(item.marks) : null,
+        item.redactedKey ?? null,
       ],
     )
   }
@@ -377,35 +507,46 @@ async function ensureList(client: PoolClient, team: ExhibitTeam) {
 }
 
 /** Saves the team's draft list. */
-export async function saveList(team: ExhibitTeam, body: unknown) {
-  const items = readItems(body, await exhibitOptions(team))
-  await inTransaction(async (client) => {
-    await lockWorld(client, team.matchupId)
-    const list = await ensureList(client, team)
-    if (list.submittedAt) throw new HttpError(409, 'Your team already submitted its exhibit list.')
-    await writeItems(client, list.id, items)
-    await client.query('UPDATE exhibit_lists SET updated_at = now() WHERE id = $1', [list.id])
-  })
-}
+export const saveList = (team: ExhibitTeam, body: unknown) => storeList(team, body, false)
 
 /**
  * Submits the team's list (`{ items }`, saved first), which can't be undone.
  * If the other side has submitted too, the lists are exchanged.
  */
-export async function submitList(team: ExhibitTeam, body: unknown) {
-  const items = readItems(body, await exhibitOptions(team))
-  await inTransaction(async (client) => {
-    await lockWorld(client, team.matchupId)
-    const list = await ensureList(client, team)
-    if (list.submittedAt) throw new HttpError(409, 'Your team already submitted its exhibit list.')
-    await writeItems(client, list.id, items)
-    await client.query('UPDATE exhibit_lists SET updated_at = now(), submitted_at = now(), submitted_by = $2 WHERE id = $1', [
-      list.id,
-      team.userId,
-    ])
-    const lists = await findLists(client, team.matchupId)
-    if (lists.plaintiff?.submittedAt && lists.defense?.submittedAt) await exchangeLists(client, team.caseId, team.matchupId)
-  })
+export const submitList = (team: ExhibitTeam, body: unknown) => storeList(team, body, true)
+
+async function storeList(team: ExhibitTeam, body: unknown, submit: boolean) {
+  const options = await exhibitOptions(team)
+  const read = readItems(body, options)
+  const { rows: current } = await pool.query<{ id: string }>('SELECT id FROM exhibit_lists WHERE matchup_id = $1 AND side = $2', [
+    team.matchupId,
+    team.side,
+  ])
+  const before = current[0] ? await listItems(pool, current[0].id) : []
+  const { items, kept, unused } = await keepRedactions(team, read, options, before)
+  try {
+    await inTransaction(async (client) => {
+      await lockWorld(client, team.matchupId)
+      const list = await ensureList(client, team)
+      if (list.submittedAt) throw new HttpError(409, 'Your team already submitted its exhibit list.')
+      await writeItems(client, list.id, items)
+      if (!submit) {
+        await client.query('UPDATE exhibit_lists SET updated_at = now() WHERE id = $1', [list.id])
+        return
+      }
+      await client.query('UPDATE exhibit_lists SET updated_at = now(), submitted_at = now(), submitted_by = $2 WHERE id = $1', [
+        list.id,
+        team.userId,
+      ])
+      const lists = await findLists(client, team.matchupId)
+      if (lists.plaintiff?.submittedAt && lists.defense?.submittedAt) await exchangeLists(client, team.caseId, team.matchupId)
+    })
+  } catch (err) {
+    await removeStoredFiles(kept)
+    throw err
+  }
+  // Copies the list no longer uses (blacked out again, or taken off).
+  await removeStoredFiles(unused)
 }
 
 // The exchange ----------------------------------------------------------------
@@ -423,11 +564,16 @@ const sameParts = (a: number[] | null, b: number[] | null) =>
 /** The whole source a side listed: its title and parts, read from that side's team. */
 async function sourceDetails(db: Db, caseId: string, item: ListItem) {
   if (item.kind === 'material') {
-    const { rows } = await db.query<{ title: string }>(
-      `SELECT coalesce(nullif(description, ''), filename) AS title FROM case_materials WHERE case_id = $1 AND id = $2`,
+    const { rows } = await db.query<{ title: string; contentType: string; text: string | null }>(
+      `SELECT coalesce(nullif(description, ''), filename) AS title, content_type AS "contentType",
+              CASE WHEN text_status = 'ready' THEN text_content END AS text
+       FROM case_materials WHERE case_id = $1 AND id = $2`,
       [caseId, item.id],
     )
-    return { title: rows[0]?.title ?? 'A case file', parts: null as Part[] | null }
+    const file = rows[0]
+    // A text file's parts are its paragraphs; any other file's are pages.
+    const text = file && markable({ materialId: item.id, contentType: file.contentType, textContent: file.text }) === 'text' ? file.text : null
+    return { title: file?.title ?? 'A case file', parts: text ? splitParagraphs(text).map((t, n): Part => ({ n, text: t })) : null }
   }
   if (item.kind === 'deposition') {
     const { rows } = await db.query<{ teamId: string }>('SELECT team_id AS "teamId" FROM interviews WHERE id = $1', [item.id])
@@ -444,6 +590,8 @@ async function sourceDetails(db: Db, caseId: string, item: ListItem) {
  * side listed goes to the other side for authenticity. A source both listed
  * is authentic: the parts both chose are admitted at once (the plaintiff's),
  * and whatever more a side chose goes to the other side for admissibility.
+ * When either side blacked parts out by hand, only the very same version is
+ * admitted at once; otherwise each side's version goes on for admissibility.
  */
 async function exchangeLists(client: PoolClient, caseId: string, matchupId: string) {
   const lists = await findLists(client, matchupId)
@@ -452,13 +600,16 @@ async function exchangeLists(client: PoolClient, caseId: string, matchupId: stri
   const defenseByKey = new Map(defense.map((item, position) => [sourceKey(item), { item, position }]))
   const plaintiffKeys = new Set(plaintiff.map(sourceKey))
 
-  async function insert(item: ListItem, parts: number[] | null, side: Side, position: number, status: ExhibitStatus, joint = false) {
+  /** One exhibit from a side's item; `drawn` keeps the item's black-outs (its parts must be the item's). */
+  async function insert(item: ListItem, parts: number[] | null, side: Side, position: number, status: ExhibitStatus, joint = false, drawn = true) {
     const source = await sourceDetails(client, caseId, item)
-    const excerpt = source.parts ? pick(source.parts, parts) : null
+    // A text file listed whole is served as the file; chosen paragraphs, turns or a report's paragraphs as text.
+    const excerpt = source.parts && (item.kind !== 'material' || parts) ? pick(source.parts, parts) : null
+    const marks = drawn ? (item.marks ?? null) : null
     await client.query(
       `INSERT INTO exhibits (case_id, matchup_id, offered_by, joint, position, material_id, interview_id, report_id,
-                             parts, title, snapshot, status, authenticated)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                             parts, title, snapshot, status, authenticated, offered_marks, offered_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         caseId,
         matchupId,
@@ -469,10 +620,12 @@ async function exchangeLists(client: PoolClient, caseId: string, matchupId: stri
         item.kind === 'deposition' ? item.id : null,
         item.kind === 'report' ? item.id : null,
         parts,
-        source.title + partsLabel(item.kind, parts, source.parts),
+        source.title + partsLabel(item.kind, parts, source.parts) + (marks ? ' (with redactions)' : ''),
         excerpt ? JSON.stringify(excerpt) : null,
         status,
         status !== 'awaiting_authenticity',
+        marks ? JSON.stringify(marks) : null,
+        marks ? item.redactedKey : null,
       ],
     )
   }
@@ -483,8 +636,19 @@ async function exchangeLists(client: PoolClient, caseId: string, matchupId: stri
       await insert(item, item.parts, 'plaintiff', position, 'awaiting_authenticity')
       continue
     }
+    if (item.marks || other.item.marks) {
+      // Blacked out by hand: the file is authentic, but drawings aren't merged. The same version is
+      // admitted; otherwise each side's version goes to the other side for admission.
+      if (sameParts(item.parts, other.item.parts) && sameMarks(item.marks, other.item.marks)) {
+        await insert(item, item.parts, 'plaintiff', position, 'admitted', true)
+      } else {
+        await insert(item, item.parts, 'plaintiff', position, 'awaiting_admission')
+        await insert(other.item, other.item.parts, 'defense', other.position, 'awaiting_admission')
+      }
+      continue
+    }
     const both = overlap(item.parts, other.item.parts)
-    if (both === null || both.length > 0) await insert(item, both, 'plaintiff', position, 'admitted', true)
+    if (both === null || both.length > 0) await insert(item, both, 'plaintiff', position, 'admitted', true, false)
     // Whatever more each side chose is its own exhibit, already authentic.
     if (!sameParts(item.parts, both)) await insert(item, item.parts, 'plaintiff', position, 'awaiting_admission')
     if (!sameParts(other.item.parts, both)) await insert(other.item, other.item.parts, 'defense', other.position, 'awaiting_admission')
@@ -690,8 +854,100 @@ async function readRedaction(client: PoolClient, courseId: string, exhibitId: st
   }
   const pageCount = kind === 'image' ? 1 : await exhibitPageCount(source)
   const marks = readPageMarks(raw, pageCount)
-  const key = await keepRedactedFile(source, kind, uploadKey, keptPages(marks, pageCount).length)
+  const key = await keepRedactedFile(source.caseId, kind, uploadKey, keptPages(marks, pageCount).length)
   return { marks, excerpt: null, key, contentType: redactedType(kind) }
+}
+
+export const VERSION_DECISIONS = ['whole', 'plaintiff', 'defense', 'partial', 'exclude'] as const
+
+/**
+ * One ruling on two versions of the same document, each side's, both before
+ * the judge (`{ ids: [a, b], decision, note, marks?, uploadKey?, redaction? }`).
+ * Admitting the whole document, one side's version, or a part the judge marks
+ * on the whole original makes a single joint exhibit (the plaintiff's, since
+ * both sides wanted the document in), and the other version gives way to it;
+ * `exclude` keeps both out.
+ */
+export async function ruleOnVersions(courseId: string, userId: string, body: unknown) {
+  const ids = (body as Record<string, unknown> | undefined)?.ids
+  if (!Array.isArray(ids) || ids.length !== 2 || !ids.every(isUuid) || ids[0] === ids[1]) {
+    throw new HttpError(400, 'Choose the two versions to rule on.')
+  }
+  return inTransaction(async (client) => {
+    const pair = [await courseExhibit(client, courseId, ids[0] as string), await courseExhibit(client, courseId, ids[1] as string)]
+    if (pair.some((x) => x.status !== 'admission_review')) throw new HttpError(409, 'These versions aren’t both waiting for a ruling.')
+    const { rows: sources } = await client.query<{ id: string; source: string }>(
+      `SELECT id, coalesce(material_id, interview_id, report_id)::text AS source FROM exhibits WHERE id = ANY($1)`,
+      [ids],
+    )
+    const sameSource = new Set(sources.map((r) => r.source)).size === 1
+    if (!sameSource || pair[0].matchupId !== pair[1].matchupId || pair[0].offeredBy === pair[1].offeredBy) {
+      throw new HttpError(400, 'These aren’t two versions of the same document.')
+    }
+    const plaintiff = pair.find((x) => x.offeredBy === 'plaintiff')!
+    const defense = pair.find((x) => x.offeredBy === 'defense')!
+    const decision = readDecision(body, VERSION_DECISIONS)
+    const note = readNote(body, 'note', null)
+    const out = (id: string, by: string | null) =>
+      client.query(
+        `UPDATE exhibits SET status = 'excluded', ruling = 'sustained', ruling_note = $2, superseded_by = $3, ruled_by = $4,
+           ruled_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [id, note, by, userId],
+      )
+
+    if (decision === 'exclude') {
+      await out(plaintiff.id, null)
+      await out(defense.id, null)
+    } else if (decision === 'plaintiff' || decision === 'defense') {
+      // The chosen version, as the joint exhibit; the other gives way to it.
+      const chosen = decision === 'plaintiff' ? plaintiff : defense
+      await client.query(`UPDATE exhibits SET joint = true, offered_by = 'plaintiff' WHERE id = $1`, [chosen.id])
+      await admit(client, chosen.id, ', ruling = $2, ruling_note = $3, ruled_by = $4, ruled_at = now()', ['overruled', note, userId])
+      await out(chosen === plaintiff ? defense.id : plaintiff.id, chosen.id)
+    } else {
+      // The whole document (all of it, or the part the judge marks on it), as the plaintiff's version made joint.
+      const { rows } = await client.query<{ materialId: string | null; interviewId: string | null; reportId: string | null }>(
+        `SELECT material_id AS "materialId", interview_id AS "interviewId", report_id AS "reportId" FROM exhibits WHERE id = $1`,
+        [plaintiff.id],
+      )
+      const r = rows[0]
+      const item: ListItem = r.materialId
+        ? { kind: 'material', id: r.materialId, parts: null }
+        : r.interviewId
+          ? { kind: 'deposition', id: r.interviewId, parts: null }
+          : { kind: 'report', id: r.reportId!, parts: null }
+      const source = await sourceDetails(client, plaintiff.caseId, item)
+      await client.query(
+        `UPDATE exhibits SET joint = true, parts = NULL, title = $2, snapshot = $3, offered_key = NULL, offered_marks = NULL WHERE id = $1`,
+        [plaintiff.id, source.title, source.parts && item.kind !== 'material' ? JSON.stringify(source.parts) : null],
+      )
+      if (decision === 'whole') {
+        await admit(client, plaintiff.id, ', ruling = $2, ruling_note = $3, ruled_by = $4, ruled_at = now()', ['overruled', note, userId])
+      } else {
+        const redacted = await readRedaction(client, courseId, plaintiff.id, body)
+        const redaction = readNote(body, 'redaction', null)
+        await admit(
+          client,
+          plaintiff.id,
+          `, ruling = $2, ruling_note = $3, redaction = $4, ruled_by = $5, ruled_at = now(),
+           redaction_marks = $6, admitted_key = $7, admitted_content_type = $8, admitted_excerpt = $9`,
+          [
+            'partial',
+            note,
+            redaction,
+            userId,
+            JSON.stringify(redacted.marks),
+            redacted.key,
+            redacted.contentType,
+            redacted.excerpt ? JSON.stringify(redacted.excerpt) : null,
+          ],
+        )
+      }
+      await out(defense.id, plaintiff.id)
+    }
+    await maybeFinalize(client, plaintiff.matchupId)
+  })
 }
 
 /** An exhibit in one of the instructor's cases, locked. */
@@ -885,6 +1141,12 @@ export interface ExhibitReview extends Exhibit {
   worldNumber: number
   teams: { plaintiff: number | null; defense: number | null }
   ruledBy: string | null
+  /** The other side's version of the same document, also waiting for a ruling (to rule on together). */
+  pairedWith: string | null
+  /** The document's own title, without the parts or redactions of this version. */
+  sourceTitle: string
+  /** The offering team blacked parts out of this version. */
+  offeredRedacted: boolean
 }
 
 /** Open: challenges waiting for a ruling. Completed: exhibits the instructor ruled on, newest first. */
@@ -894,7 +1156,16 @@ export async function listExhibitReviews(courseId: string, which: 'open' | 'comp
             json_build_object(
               'plaintiff', (SELECT t.number FROM matchup_teams mt JOIN teams t ON t.id = mt.team_id WHERE mt.matchup_id = mu.id AND mt.side = 'plaintiff'),
               'defense', (SELECT t.number FROM matchup_teams mt JOIN teams t ON t.id = mt.team_id WHERE mt.matchup_id = mu.id AND mt.side = 'defense')) AS teams,
-            u.name AS "ruledBy"
+            u.name AS "ruledBy",
+            (SELECT o.id FROM exhibits o
+             WHERE o.matchup_id = x.matchup_id AND o.id <> x.id AND o.offered_by <> x.offered_by
+               AND o.status = 'admission_review' AND x.status = 'admission_review'
+               AND o.material_id IS NOT DISTINCT FROM x.material_id AND o.interview_id IS NOT DISTINCT FROM x.interview_id
+               AND o.report_id IS NOT DISTINCT FROM x.report_id
+             LIMIT 1) AS "pairedWith",
+            coalesce((SELECT coalesce(nullif(m.description, ''), m.filename) FROM case_materials m WHERE m.id = x.material_id), x.title)
+              AS "sourceTitle",
+            x.offered_marks IS NOT NULL AS "offeredRedacted"
      FROM exhibits x
      JOIN cases c ON c.id = x.case_id
      JOIN matchups mu ON mu.id = x.matchup_id

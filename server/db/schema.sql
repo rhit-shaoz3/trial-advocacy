@@ -1010,3 +1010,19 @@ ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS redaction_marks jsonb;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS admitted_key text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS admitted_content_type text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS admitted_excerpt jsonb;
+
+-- Records and illustrative aids the investigator makes with a report (a
+-- receipt, a public-record printout, a chart behind an estimate). Like a
+-- subpoena response, each belongs to its case world; it reaches the team when
+-- the instructor allows it with the report (in review lite, at once).
+ALTER TABLE case_materials DROP CONSTRAINT IF EXISTS case_materials_source_check;
+ALTER TABLE case_materials ADD CONSTRAINT case_materials_source_check
+  CHECK (source IN ('instructor', 'subpoena', 'investigator'));
+
+-- A case file a team lists with parts blacked out (boxes drawn on a PDF's
+-- pages or a picture): its marks, and the blacked-out copy its browser made.
+-- The exhibit made from it keeps both, and the other side sees that copy.
+ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS marks jsonb;
+ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS redacted_key text;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_marks jsonb;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_key text;

@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { BadgeCheck, BookOpen, Check, Eye, Gavel, Info, ListChecks, Lock, Scale, Send, TriangleAlert, X } from 'lucide-react'
+import { BadgeCheck, BookOpen, Check, Eye, Gavel, Highlighter, Info, ListChecks, Lock, Scale, Send, TriangleAlert, X } from 'lucide-react'
 import { Modal } from '../../components/Modal'
+import { RedactionEditor } from '../../components/redaction/RedactionEditor'
+import { cutPdf } from '../../components/redaction/redactFile'
 import { DictationTextarea } from '../../components/Dictation'
 import type {
   Exhibit,
@@ -8,6 +10,7 @@ import type {
   ExhibitMove,
   ExhibitOption,
   ExhibitPart,
+  PageRedactionMarks,
   Side,
   StudentExhibits,
 } from '../../courses/types'
@@ -19,7 +22,7 @@ import './exhibits.css'
 const SIDE_NAME: Record<Side, string> = { plaintiff: 'Plaintiff', defense: 'Defense' }
 const GROUPS: { id: ExhibitOption['group']; title: string; empty: string }[] = [
   { id: 'case-file', title: 'Case file', empty: 'No case files yet.' },
-  { id: 'investigator', title: 'From your investigator', empty: 'No reports or files from your investigator.' },
+  { id: 'investigator', title: 'From your investigator', empty: 'No files from your investigator yet: the records he gets or makes for you appear here.' },
   { id: 'depositions', title: 'Your depositions', empty: 'Your team hasn’t deposed anyone.' },
 ]
 
@@ -29,8 +32,20 @@ const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 /** One option as chosen: all of it, some parts, or (for a file) pages still being typed. */
 interface Choice {
   parts: number[] | null
-  /** A file's pages as typed, while "Only some pages" is on. */
+  /** A PDF's pages as typed, while "Only some pages" is on. */
   pages?: string
+  /** Parts of a PDF or picture blacked out, with the copy (a new upload, or the one it was saved with). */
+  marks?: PageRedactionMarks | null
+  uploadKey?: string
+  redactedKey?: string | null
+  /** "Keeps 2 of 3 pages, 1 with black-outs", once marked here. */
+  summary?: string
+}
+
+/** What the builder needs to black out parts of a file: its bytes, and somewhere to upload the copy. */
+export interface CopyActions {
+  loadFile(materialId: string): Promise<Uint8Array>
+  upload(materialId: string, file: Blob): Promise<string>
 }
 
 /**
@@ -47,6 +62,7 @@ export function ExhibitListSection({
   onMove,
   onOpenFile,
   onOpenExhibit,
+  copyActions,
 }: {
   exhibits: StudentExhibits
   onSave?(items: ExhibitListItem[]): Promise<void>
@@ -56,6 +72,8 @@ export function ExhibitListSection({
   onOpenFile(materialId: string): void
   /** Opens an exhibit's file: its listed pages, or the redacted version. */
   onOpenExhibit(exhibit: Exhibit): void
+  /** Lets the team black out parts of a PDF or picture it lists; leave out to list files only as they are. */
+  copyActions?: CopyActions
 }) {
   const [teach, setTeach] = useState(false)
   const [excerpt, setExcerpt] = useState<{ title: string; kind: Exhibit['kind']; parts: ExhibitPart[]; redacted?: boolean } | null>(null)
@@ -109,7 +127,7 @@ export function ExhibitListSection({
             </ol>
           </>
         ) : onSubmit && onSave ? (
-          <Builder exhibits={exhibits} onSave={onSave} onSubmit={onSubmit} onOpenFile={onOpenFile} />
+          <Builder exhibits={exhibits} onSave={onSave} onSubmit={onSubmit} onOpenFile={onOpenFile} copyActions={copyActions} />
         ) : (
           <p className="cw-empty">Your team didn’t submit an exhibit list.</p>
         )}
@@ -129,19 +147,26 @@ function Builder({
   onSave,
   onSubmit,
   onOpenFile,
+  copyActions,
 }: {
   exhibits: StudentExhibits
   onSave(items: ExhibitListItem[]): Promise<void>
   onSubmit(items: ExhibitListItem[]): Promise<void>
   onOpenFile(materialId: string): void
+  copyActions?: CopyActions
 }) {
   const { options, mine, theirs } = exhibits
-  const [chosen, setChosen] = useState<Map<string, Choice>>(
-    () =>
-      new Map(
-        mine.items.map((i) => [keyOf(i), i.kind === 'material' && i.parts ? { parts: i.parts, pages: pagesText(i.parts) } : { parts: i.parts }]),
-      ),
-  )
+  const [chosen, setChosen] = useState<Map<string, Choice>>(() => {
+    const byKey = new Map(options.map((o) => [keyOf(o), o]))
+    return new Map(
+      mine.items.map((i) => {
+        // A PDF's pages are typed; a text file's paragraphs and a transcript's turns are ticked.
+        const typed = i.kind === 'material' && i.parts && !byKey.get(keyOf(i))?.parts
+        const drawn = i.marks ? { marks: i.marks, redactedKey: i.redactedKey } : {}
+        return [keyOf(i), typed ? { parts: i.parts, pages: pagesText(i.parts!), ...drawn } : { parts: i.parts, ...drawn }]
+      }),
+    )
+  })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -162,13 +187,16 @@ function Builder({
     for (const option of options) {
       const choice = chosen.get(keyOf(option))
       if (!choice) continue
+      const drawn: Partial<ExhibitListItem> = choice.marks
+        ? { marks: choice.marks, ...(choice.uploadKey ? { uploadKey: choice.uploadKey } : { redactedKey: choice.redactedKey }) }
+        : {}
       if (choice.pages !== undefined) {
         const pages = parsePages(choice.pages)
         if (!pages) return `Write the pages of ${option.title} like “3–5, 9”.`
-        list.push({ kind: option.kind, id: option.id, parts: pages })
+        list.push({ kind: option.kind, id: option.id, parts: pages, ...drawn })
       } else {
         if (choice.parts?.length === 0) return `Choose at least one part of ${option.title}, or list it whole.`
-        list.push({ kind: option.kind, id: option.id, parts: choice.parts })
+        list.push({ kind: option.kind, id: option.id, parts: choice.parts, ...drawn })
       }
     }
     return list
@@ -202,9 +230,9 @@ function Builder({
       <p className="xl-warning" role="note">
         <TriangleAlert aria-hidden="true" />
         <span>
-          <strong>If it isn’t on your list, you can’t use it at trial.</strong> Mark everything you may need: case files,
-          your investigator’s reports, and transcripts of the depositions your team took. You can list a whole item or just
-          the part you need.
+          <strong>If it isn’t on your list, you can’t use it at trial.</strong> Mark everything you may need: case files
+          (including the records your investigator got or made for you) and transcripts of the depositions your team took.
+          You can list a whole item or just the part you need, and black out parts of a PDF or picture.
         </span>
       </p>
       <p className="muted xl-status">
@@ -221,7 +249,14 @@ function Builder({
             ) : (
               <ul className="xl-options">
                 {inGroup.map((o) => (
-                  <OptionRow key={keyOf(o)} option={o} choice={chosen.get(keyOf(o)) ?? null} onChange={(c) => set(o, c)} onOpenFile={onOpenFile} />
+                  <OptionRow
+                    key={keyOf(o)}
+                    option={o}
+                    choice={chosen.get(keyOf(o)) ?? null}
+                    onChange={(c) => set(o, c)}
+                    onOpenFile={onOpenFile}
+                    copyActions={copyActions}
+                  />
                 ))}
               </ul>
             )}
@@ -257,15 +292,23 @@ function OptionRow({
   choice,
   onChange,
   onOpenFile,
+  copyActions,
 }: {
   option: ExhibitOption
   choice: Choice | null
   onChange(choice: Choice | null): void
   onOpenFile(materialId: string): void
+  copyActions?: CopyActions
 }) {
   const [picking, setPicking] = useState(false)
-  const label = option.kind === 'material' ? 'pages' : option.kind === 'deposition' ? 'questions and answers' : 'paragraphs'
+  const [drawing, setDrawing] = useState(false)
+  // A PDF's parts are typed pages; a text file's are its paragraphs.
+  const byPage = option.kind === 'material' && !option.parts
+  const label = byPage ? 'pages' : option.kind === 'deposition' ? 'questions and answers' : 'paragraphs'
   const some = choice !== null && (choice.pages !== undefined || choice.parts !== null)
+  // The pages the black-outs are drawn on: all of them, or the ones typed (if they read).
+  const pages = choice?.pages !== undefined ? parsePages(choice.pages) : null
+  const canDraw = Boolean(copyActions && option.markable && choice && (choice.pages === undefined || pages))
   return (
     <li className={choice ? 'xl-option xl-option-on' : 'xl-option'}>
       <div className="xl-option-head">
@@ -273,7 +316,7 @@ function OptionRow({
           <input type="checkbox" checked={choice !== null} onChange={(e) => onChange(e.target.checked ? { parts: null } : null)} />
           <span>{option.title}</span>
         </label>
-        {option.kind === 'material' ? (
+        {option.kind === 'material' && !option.parts ? (
           <button type="button" className="link-button xl-view" onClick={() => onOpenFile(option.id)} aria-label={`View ${option.title}`}>
             <Eye aria-hidden="true" /> View
           </button>
@@ -293,7 +336,7 @@ function OptionRow({
             role="radio"
             aria-checked={some}
             onClick={() => {
-              onChange(option.kind === 'material' ? { parts: null, pages: '' } : { parts: [] })
+              onChange(byPage ? { parts: null, pages: '' } : { parts: [] })
               setPicking(true)
             }}
           >
@@ -313,6 +356,45 @@ function OptionRow({
             aria-label={`Pages of ${option.title}`}
           />
         </label>
+      )}
+      {canDraw && (
+        <div className="xl-drawn">
+          {choice!.marks ? (
+            <>
+              <span>
+                <Check aria-hidden="true" /> Parts blacked out{choice!.summary ? `: ${choice!.summary}` : ''}.
+              </span>
+              <button type="button" className="link-button" onClick={() => setDrawing(true)}>
+                Change
+              </button>
+              <button type="button" className="link-button" onClick={() => onChange({ ...choice!, marks: null, uploadKey: undefined, redactedKey: null, summary: undefined })}>
+                Undo
+              </button>
+            </>
+          ) : (
+            <button type="button" className="ws-btn ws-btn-secondary" onClick={() => setDrawing(true)}>
+              <Highlighter aria-hidden="true" /> Black out parts
+            </button>
+          )}
+        </div>
+      )}
+      {drawing && copyActions && option.markable && (
+        <RedactionEditor
+          team
+          eyebrow={`Your exhibit · ${option.title}`}
+          marking={{ markable: option.markable, parts: null }}
+          loadFile={async () => {
+            const data = await copyActions.loadFile(option.id)
+            return option.markable === 'pdf' && pages ? cutPdf(data, pages) : data
+          }}
+          upload={(file) => copyActions.upload(option.id, file)}
+          initial={choice?.marks ?? undefined}
+          onSave={(m) => {
+            onChange({ ...choice!, marks: m.marks as PageRedactionMarks, uploadKey: m.uploadKey, redactedKey: null, summary: m.summary })
+            setDrawing(false)
+          }}
+          onClose={() => setDrawing(false)}
+        />
       )}
       {option.parts && picking && (
         <ol className="xl-parts" aria-label={`${option.title}, ${label}`}>
@@ -449,6 +531,25 @@ function Exchanged({
   const { side } = exhibits
   const list = exhibits.exhibits
   const needs = list.filter((x) => needsUs(x, side))
+  // What needs the team, step by step: an exhibit it authenticates moves on to admission at once.
+  const steps = [
+    { id: 'authenticity', title: 'Step 1 · Authenticity', hint: 'Is each one what it claims to be?', items: needs.filter((x) => x.status === 'awaiting_authenticity') },
+    {
+      id: 'admission',
+      title: 'Step 2 · Admission',
+      hint: 'These are authenticated. Admit each one, or object.',
+      items: needs.filter((x) => x.status === 'awaiting_admission'),
+    },
+    { id: 'objections', title: 'Objections to your exhibits', hint: 'Drop it, or send it to the judge.', items: needs.filter((x) => x.status === 'objection_response') },
+  ].filter((step) => step.items.length > 0)
+  // Exhibits the team just authenticated here, marked as they arrive in Step 2.
+  const [justAuthenticated, setJustAuthenticated] = useState<Set<string>>(() => new Set())
+  const [statuses, setStatuses] = useState(() => new Map(list.map((x) => [x.id, x.status])))
+  if (list.some((x) => statuses.get(x.id) !== x.status)) {
+    const moved = list.filter((x) => statuses.get(x.id) === 'awaiting_authenticity' && x.status === 'awaiting_admission').map((x) => x.id)
+    setStatuses(new Map(list.map((x) => [x.id, x.status])))
+    if (moved.length) setJustAuthenticated((prev) => new Set([...prev, ...moved]))
+  }
   const groups = useMemo(
     () => [
       { id: 'in-review', title: 'In review', items: list.filter((x) => IN_REVIEW_STATES.has(x.status)) },
@@ -467,13 +568,22 @@ function Exchanged({
           {needs.length === 0 ? (
             <p className="cw-empty">You’ll get a notice here when the other side objects, or when your instructor rules.</p>
           ) : (
-            <ul className="ex-respond">
-              {needs.map((x) => (
-                <li key={x.id}>
-                  <MoveCard exhibit={x} side={side} onMove={onMove} onOpen={() => onOpen(x)} />
-                </li>
-              ))}
-            </ul>
+            steps.map((step) => (
+              <div key={step.id} className="xl-step" aria-labelledby={`xl-step-${step.id}`} role="group">
+                <h3 id={`xl-step-${step.id}`}>
+                  {step.title} <span className="cw-tab-count">{step.items.length}</span>
+                </h3>
+                <p className="muted xl-step-hint">{step.hint}</p>
+                <ul className="ex-respond">
+                  {step.items.map((x) => (
+                    // A new card at each step, so nothing from the last one carries over.
+                    <li key={`${x.id}:${x.status}`}>
+                      <MoveCard exhibit={x} side={side} onMove={onMove} onOpen={() => onOpen(x)} fresh={justAuthenticated.has(x.id)} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
           )}
         </section>
       )}
@@ -585,11 +695,14 @@ function MoveCard({
   side,
   onMove,
   onOpen,
+  fresh = false,
 }: {
   exhibit: Exhibit
   side: Side
   onMove(exhibitId: string, move: ExhibitMove): Promise<void>
   onOpen(): void
+  /** Just authenticated by the team, so its admission is a new choice. */
+  fresh?: boolean
 }) {
   const [writing, setWriting] = useState<'challenge' | 'review' | null>(null)
   const [text, setText] = useState('')
@@ -605,6 +718,7 @@ function MoveCard({
       await onMove(x.id, move)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
       setBusy(false)
     }
   }
@@ -699,13 +813,14 @@ function MoveCard({
   }
 
   return (
-    <div className={writing ? 'ex-respond-item ex-respond-open' : 'ex-respond-item'}>
+    <div className={`ex-respond-item${writing ? ' ex-respond-open' : ''}${fresh ? ' xl-fresh' : ''}`}>
       <div className="xl-row-head">
         <Who exhibit={x} />
         <button type="button" className="link-button xl-title" onClick={onOpen}>
           {x.title}
         </button>
         <Authentic exhibit={x} />
+        {fresh && <span className="cw-badge xl-badge-blue">Just authenticated: now decide on admission</span>}
       </div>
       {ours && x.objection && (
         <p className="xl-objection">

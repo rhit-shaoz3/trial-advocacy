@@ -1662,6 +1662,11 @@ a.case-row:hover {
   color: var(--tint-amber-fg);
 }
 
+.source-investigator {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
 /* A field filled in with the AI's suggestion from the case file */
 
 .suggested-note {

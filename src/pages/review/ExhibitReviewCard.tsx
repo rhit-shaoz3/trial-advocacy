@@ -6,7 +6,8 @@ import { worldLabel } from '../../courses/worldLabel'
 import type { ExhibitMarking, ExhibitReview, ExhibitRuling } from '../../courses/types'
 import { ExhibitRecord } from '../../caseWorkspace/finalSteps/ExhibitListSection'
 import { useExhibitViewer } from '../cases/finalSteps/useExhibitViewer'
-import { RedactionEditor, type MarkedRedaction } from './redaction/RedactionEditor'
+import { RedactionEditor, type MarkedRedaction } from '../../components/redaction/RedactionEditor'
+import { fetchBytes } from '../../components/redaction/redactFile'
 import '../../caseWorkspace/finalSteps/exhibits.css'
 
 /**
@@ -179,9 +180,11 @@ export function ExhibitReviewCard({
       {viewer.element}
       {editing && markable && (
         <RedactionEditor
-          courseId={courseId}
-          exhibit={x}
+          eyebrow={`Partly overrule · ${x.title}`}
           marking={markable}
+          deposition={x.kind === 'deposition'}
+          loadFile={() => fetchBytes(service.reviewExhibitBytesUrl(courseId, x.id))}
+          upload={(file) => service.uploadRedactedExhibit(courseId, x.id, file)}
           initial={marked?.marks}
           onSave={(m) => {
             setMarked(m)

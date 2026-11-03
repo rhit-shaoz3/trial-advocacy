@@ -268,6 +268,7 @@ describe('MaterialsSection', () => {
       'All2',
       'Instructor Uploaded1',
       'Subpoena Response1',
+      'From the Investigator0',
     ])
     expect(within(filter).getByRole('button', { name: /All/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('cell', { name: 'Subpoena Response · World A' })).toBeInTheDocument()

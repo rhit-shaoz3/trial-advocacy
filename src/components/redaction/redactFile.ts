@@ -1,4 +1,4 @@
-import type { PageRedactionMarks, RedactionBox, RedactionMode, TextRedactionMarks, ExhibitPart } from '../../../courses/types'
+import type { PageRedactionMarks, RedactionBox, RedactionMode, TextRedactionMarks, ExhibitPart } from '../../courses/types'
 
 // Making the redacted copy of a partly admitted exhibit, in the instructor's
 // browser. A page with marks is drawn to a canvas, blacked out there, and
@@ -67,6 +67,16 @@ export async function fetchBytes(url: string) {
 /** The most pixels a flattened page gets, so a big page doesn't make a huge picture. */
 const MAX_PIXELS = 2400 * 3200
 
+/** A copy of a PDF with only the given pages (from 1), in order; pages past the end are skipped (as the server cuts them). */
+export async function cutPdf(data: Uint8Array, pages: number[]) {
+  const { PDFDocument } = await import('pdf-lib')
+  const source = await PDFDocument.load(data, { ignoreEncryption: true })
+  const wanted = pages.map((p) => p - 1).filter((i) => i >= 0 && i < source.getPageCount())
+  const out = await PDFDocument.create()
+  for (const page of await out.copyPages(source, wanted)) out.addPage(page)
+  return out.save()
+}
+
 /** The redacted copy of a PDF exhibit, as marked. */
 export async function buildRedactedPdf(data: Uint8Array, marks: PageRedactionMarks): Promise<Blob> {
   const [pdfjs, { PDFDocument }] = await Promise.all([loadPdfJs(), import('pdf-lib')])
@@ -104,8 +114,8 @@ export async function buildRedactedPdf(data: Uint8Array, marks: PageRedactionMar
 }
 
 /** The redacted copy of a picture exhibit, as a PNG. */
-export async function buildRedactedImage(url: string, marks: PageRedactionMarks): Promise<Blob> {
-  const blob = new Blob([(await fetchBytes(url)) as BlobPart])
+export async function buildRedactedImage(data: Uint8Array, marks: PageRedactionMarks): Promise<Blob> {
+  const blob = new Blob([data as BlobPart])
   const image = await createImageBitmap(blob)
   const canvas = document.createElement('canvas')
   canvas.width = image.width

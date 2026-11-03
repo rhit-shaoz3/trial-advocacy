@@ -2,11 +2,14 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { modelFor } from '../ai/models.ts'
 import { hasServerFallback } from '../witness/deposition.ts'
 import { buildInvestigatorPrompt, buildTeamBlock, type InvestigatorContext } from './prompt.ts'
+import { extractMadeFiles, type MadeFile } from './records.ts'
 
 // One assignment to the background investigator: the team's earlier
 // assignments and (reviewed) reports as the conversation so far, then the new
 // assignment. His reply is a report ending in a <review> block of new facts,
 // files he could get for the team, and records that need legal process.
+// Before the block he may write out records and illustrative aids he made
+// (see records.ts).
 
 export const INVESTIGATOR_EFFORT = 'high'
 /** The longest assignment a team can send. */
@@ -81,8 +84,10 @@ export async function investigate(client: ReportClient, input: InvestigationInpu
 }
 
 export interface ParsedReport {
-  /** The report without its review block. */
+  /** The report without its review block, or the records and aids he made. */
   body: string
+  /** The records and illustrative aids he made, to become files for the team. */
+  made: MadeFile[]
   /** Whether he ended with a review block at all (if not, the instructor is warned). */
   hasReviewBlock: boolean
   facts: string[]
@@ -93,11 +98,11 @@ export interface ParsedReport {
 
 const HEADINGS = { 'NEW FACTS': 'facts', 'NEW ACCESS': 'accessTitles', 'RECORDS REQUESTED': 'records' } as const
 
-/** Splits the report from its <review> block and reads the block's three lists. */
+/** Splits the report from its <review> block and the records and aids he made, and reads the block's three lists. */
 export function parseReport(text: string): ParsedReport {
   const match = text.match(/<review>([\s\S]*?)(<\/review>|$)/i)
-  const body = (match ? text.slice(0, match.index) : text).trim()
-  const lists: Omit<ParsedReport, 'body' | 'hasReviewBlock'> = { facts: [], accessTitles: [], records: [] }
+  const { body, files: made } = extractMadeFiles((match ? text.slice(0, match.index) : text).trim())
+  const lists: Omit<ParsedReport, 'body' | 'made' | 'hasReviewBlock'> = { facts: [], accessTitles: [], records: [] }
   let current: keyof typeof lists | null = null
   for (const raw of (match?.[1] ?? '').split('\n')) {
     const line = raw.trim()
@@ -117,7 +122,7 @@ export function parseReport(text: string): ParsedReport {
     const title = tag[1].trim()
     if (!lists.accessTitles.some((t) => t.toLowerCase() === title.toLowerCase())) lists.accessTitles.push(title)
   }
-  return { body, hasReviewBlock: Boolean(match), ...lists }
+  return { body, made, hasReviewBlock: Boolean(match), ...lists }
 }
 
 /** Matches the titles he named to case files ("Title" is a file's label, else its filename). */

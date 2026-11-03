@@ -139,12 +139,13 @@ describe('reading a report', () => {
   it('treats "none" as nothing, and a report without a block as all report', () => {
     expect(parseReport('Done.\n<review>\nNEW FACTS\nnone\nNEW ACCESS\nnone\nRECORDS REQUESTED\nnone\n</review>')).toEqual({
       body: 'Done.',
+      made: [],
       hasReviewBlock: true,
       facts: [],
       accessTitles: [],
       records: [],
     })
-    expect(parseReport('Just a report.')).toEqual({ body: 'Just a report.', hasReviewBlock: false, facts: [], accessTitles: [], records: [] })
+    expect(parseReport('Just a report.')).toEqual({ body: 'Just a report.', made: [], hasReviewBlock: false, facts: [], accessTitles: [], records: [] })
   })
 
   it('reads headings in bold or with a colon', () => {

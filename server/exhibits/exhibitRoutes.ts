@@ -3,6 +3,7 @@ import { HttpError } from '../httpError.ts'
 import { isUuid } from '../validation.ts'
 import { teamMatchupId, findStudentTeamId, getStudentWorkspace } from '../courses/workspace.ts'
 import {
+  exhibitOptions,
   exhibitOverview,
   getStudentExhibits,
   listCaseExhibits,
@@ -10,12 +11,21 @@ import {
   markExhibitsSeen,
   ruleOnAdmission,
   ruleOnAuthenticity,
+  ruleOnVersions,
   saveList,
   submitList,
   teamMove,
   type ExhibitTeam,
 } from './exhibits.ts'
-import { findExhibitSource, markable, sendExhibitFile, sendExhibitText, startRedactedUpload, textParts } from './exhibitFiles.ts'
+import {
+  findExhibitSource,
+  markable,
+  sendExhibitFile,
+  sendExhibitText,
+  sendMaterialBytes,
+  startRedactedUpload,
+  textParts,
+} from './exhibitFiles.ts'
 
 /**
  * The student's side of its case world, once the case is in the final steps
@@ -59,6 +69,23 @@ myExhibitsRouter.post('/list/submit', async (req, res) => {
   const team = (await studentTeam(req, true))!
   await submitList(team, req.body)
   res.json({ exhibits: await getStudentExhibits(team) })
+})
+
+/** A PDF or picture the team can list, for blacking out parts of it in the browser. */
+myExhibitsRouter.get('/sources/:materialId', async (req, res) => {
+  const team = (await studentTeam(req, true))!
+  const option = (await exhibitOptions(team)).find((o) => o.kind === 'material' && o.id === req.params.materialId && o.markable)
+  if (!option) throw new HttpError(404, 'File not found.')
+  await sendMaterialBytes(res, team.caseId, option.id)
+})
+
+/** `{ materialId, size }`: where to upload the team's blacked-out copy of a PDF or picture it's listing. */
+myExhibitsRouter.post('/uploads', async (req, res) => {
+  const team = (await studentTeam(req, true))!
+  const materialId = (req.body as Record<string, unknown> | undefined)?.materialId
+  const option = (await exhibitOptions(team)).find((o) => o.kind === 'material' && o.id === materialId)
+  if (!option) throw new HttpError(404, 'File not found.')
+  res.status(201).json({ upload: await startRedactedUpload(team.caseId, option.markable ?? null, req.body) })
 })
 
 for (const step of ['authenticity', 'admission', 'response'] as const) {
@@ -139,25 +166,44 @@ exhibitReviewsRouter.post('/:exhibitId/authenticity', async (req, res) => {
   res.json({ reviews: await listExhibitReviews(req.course!.id, 'open') })
 })
 
-/** The exhibit's file as offered (its listed pages), for marking a redaction. */
+/** The exhibit's file as offered (its listed pages), for marking a redaction; `?stream=1` sends the bytes from here. */
 exhibitReviewsRouter.get('/:exhibitId/file', async (req, res) => {
-  await sendExhibitFile(res, await courseExhibit(req), req.query.view === '1')
+  await sendExhibitFile(res, await courseExhibit(req), req.query.view === '1', req.query.stream === '1')
 })
 
 exhibitReviewsRouter.get('/:exhibitId/text', async (req, res) => {
   await sendExhibitText(res, await courseExhibit(req))
 })
 
-/** `{ markable, parts }`: how the exhibit can be marked, and its turns or paragraphs when it's text. */
+/**
+ * `{ markable, parts }`: how the exhibit can be marked, and its turns or
+ * paragraphs when it's text; `?whole=1` for the whole original document
+ * (marking a ruling on two versions).
+ */
 exhibitReviewsRouter.get('/:exhibitId/marking', async (req, res) => {
-  const x = await courseExhibit(req)
+  const found = await courseExhibit(req)
+  const x = req.query.whole === '1' ? { ...found, parts: null, snapshot: null, offeredKey: null } : found
   const kind = markable(x)
   res.json({ markable: kind, parts: kind === 'text' ? textParts(x) : null })
 })
 
+/** The whole original file behind an exhibit, sent from here, for marking a ruling on two versions. */
+exhibitReviewsRouter.get('/:exhibitId/original', async (req, res) => {
+  const x = await courseExhibit(req)
+  if (!x.materialId) throw new HttpError(404, 'This exhibit has no file.')
+  await sendMaterialBytes(res, x.caseId, x.materialId)
+})
+
+/** `{ ids: [a, b], decision: whole | plaintiff | defense | partial | exclude, note, marks?, uploadKey?, redaction? }`. */
+exhibitReviewsRouter.post('/versions', async (req, res) => {
+  await ruleOnVersions(req.course!.id, req.user!.id, req.body)
+  res.json({ reviews: await listExhibitReviews(req.course!.id, 'open') })
+})
+
 /** `{ size }`: where to upload the redacted copy of a PDF or picture. */
 exhibitReviewsRouter.post('/:exhibitId/uploads', async (req, res) => {
-  res.status(201).json({ upload: await startRedactedUpload(await courseExhibit(req), req.body) })
+  const x = await courseExhibit(req)
+  res.status(201).json({ upload: await startRedactedUpload(x.caseId, markable(x), req.body) })
 })
 
 /** `{ decision: overrule | sustain | partial, redaction, note, marks, uploadKey }`. */

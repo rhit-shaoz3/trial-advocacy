@@ -76,6 +76,8 @@ export interface ExhibitSource {
   admittedKey: string | null
   admittedContentType: string | null
   admittedExcerpt: TextPart[] | null
+  /** The copy the offering team blacked parts out of, if it did. */
+  offeredKey: string | null
 }
 
 /** One exhibit, found by the world it's in (a student's) or the course it's in (the instructor's). */
@@ -84,7 +86,7 @@ export async function findExhibitSource(exhibitId: string, scope: { matchupId: s
     `SELECT x.id, x.case_id AS "caseId", x.matchup_id AS "matchupId", x.material_id AS "materialId", x.parts, x.snapshot,
             m.content_type AS "contentType", CASE WHEN m.text_status = 'ready' THEN m.text_content END AS "textContent",
             x.admitted_key AS "admittedKey", x.admitted_content_type AS "admittedContentType",
-            x.admitted_excerpt AS "admittedExcerpt"
+            x.admitted_excerpt AS "admittedExcerpt", x.offered_key AS "offeredKey"
      FROM exhibits x
      JOIN cases c ON c.id = x.case_id
      LEFT JOIN case_materials m ON m.id = x.material_id
@@ -124,41 +126,54 @@ async function materialBytes(file: NonNullable<Awaited<ReturnType<typeof findMat
   return file.storageKey ? storage.read(file.storageKey) : file.data!
 }
 
-/** The exhibit's PDF as served: cut down to its pages, if it lists some. */
-export async function exhibitPdf(x: ExhibitSource) {
-  const file = x.materialId ? await findMaterialFile(x.caseId, x.materialId) : null
+/** A case file's PDF, cut down to `pages` if given. */
+export async function materialPdf(caseId: string, materialId: string, pages: number[] | null) {
+  const file = await findMaterialFile(caseId, materialId)
   if (!file) throw new HttpError(404, 'File not found.')
   const data = await materialBytes(file)
   try {
-    return x.parts ? await cutPdf(data, x.parts) : new Uint8Array(data)
+    return pages ? await cutPdf(data, pages) : new Uint8Array(data)
   } catch {
     throw new HttpError(422, "This PDF couldn't be read to cut out its pages.")
   }
 }
 
-/** How many pages the exhibit has as served. */
-export async function exhibitPageCount(x: ExhibitSource) {
+/** The exhibit's PDF as served: the offering team's blacked-out copy, or the file cut down to its pages. */
+export async function exhibitPdf(x: ExhibitSource) {
+  if (x.offeredKey) return new Uint8Array(await storage.read(x.offeredKey))
+  if (!x.materialId) throw new HttpError(404, 'File not found.')
+  return materialPdf(x.caseId, x.materialId, x.parts)
+}
+
+/** How many pages a PDF has. */
+export async function pageCount(data: Uint8Array) {
   try {
-    return (await PDFDocument.load(await exhibitPdf(x), { ignoreEncryption: true })).getPageCount()
-  } catch (err) {
-    if (err instanceof HttpError) throw err
+    return (await PDFDocument.load(data, { ignoreEncryption: true })).getPageCount()
+  } catch {
     throw new HttpError(422, "This PDF couldn't be read.")
   }
 }
 
+/** How many pages the exhibit has as served. */
+export const exhibitPageCount = async (x: ExhibitSource) => pageCount(await exhibitPdf(x))
+
 /**
- * Sends an exhibit's file: the redacted copy once admitted with one, a PDF cut
- * down to its pages, or else the case file itself.
+ * Sends an exhibit's file: the redacted copy once admitted with one, the copy
+ * the offering team blacked parts out of, a PDF cut down to its pages, or else
+ * the case file itself. Stored files are a redirect to storage, unless
+ * `stream` (for the marking window; see `sendBytes`).
  */
-export async function sendExhibitFile(res: Response, x: ExhibitSource, view: boolean) {
+export async function sendExhibitFile(res: Response, x: ExhibitSource, view: boolean, stream = false) {
   if (!x.materialId) throw new HttpError(404, 'This exhibit has no file.')
   const file = await findMaterialFile(x.caseId, x.materialId)
   if (!file) throw new HttpError(404, 'File not found.')
-  if (x.admittedKey) {
-    const type = x.admittedContentType ?? file.contentType
-    res.redirect(302, await storage.downloadUrl(x.admittedKey, redactedName(file.filename, type), type, view))
-    return
-  }
+  const stored = async (key: string, type: string) =>
+    stream
+      ? sendBytes(res, await storage.read(key), type, redactedName(file.filename, type))
+      : res.redirect(302, await storage.downloadUrl(key, redactedName(file.filename, type), type, view))
+  if (x.admittedKey) return stored(x.admittedKey, x.admittedContentType ?? file.contentType)
+  const kind = markable(x)
+  if (x.offeredKey && (kind === 'pdf' || kind === 'image')) return stored(x.offeredKey, redactedType(kind))
   if (x.parts && file.contentType.startsWith('application/pdf')) {
     const data = await exhibitPdf(x)
     res.set({
@@ -169,7 +184,25 @@ export async function sendExhibitFile(res: Response, x: ExhibitSource, view: boo
     res.send(Buffer.from(data))
     return
   }
+  if (stream) return sendBytes(res, await materialBytes(file), file.contentType, file.filename)
   await sendMaterialFile(res, file, view)
+}
+
+/**
+ * Sends a file's bytes from the API itself rather than redirecting to
+ * storage: the marking window reads the file with fetch, and S3 only lets the
+ * app's pages upload (its CORS rule), not read.
+ */
+function sendBytes(res: Response, data: Uint8Array, type: string, filename: string) {
+  res.set({ 'Content-Type': type, 'Content-Disposition': dispositionHeader(filename, type, false), 'X-Content-Type-Options': 'nosniff' })
+  res.send(Buffer.from(data))
+}
+
+/** A case file's bytes, from the API itself, for a team blacking out parts of it (see `sendBytes`). */
+export async function sendMaterialBytes(res: Response, caseId: string, materialId: string) {
+  const file = await findMaterialFile(caseId, materialId)
+  if (!file) throw new HttpError(404, 'File not found.')
+  sendBytes(res, await materialBytes(file), file.contentType, file.filename)
 }
 
 /** The exhibit's text version (a Word file's), for the viewer. */
@@ -186,15 +219,18 @@ function redactedName(filename: string, type: string) {
 /** What a redacted file is stored as. */
 export const redactedType = (kind: 'pdf' | 'image') => (kind === 'pdf' ? 'application/pdf' : 'image/png')
 
-/** Where the instructor's browser uploads the redacted copy of an exhibit. */
-export async function startRedactedUpload(x: ExhibitSource, body: unknown) {
-  const kind = markable(x)
+/**
+ * Where a browser uploads the redacted copy of a PDF or picture (`kind`, from
+ * `markable`): the instructor's for a partial admission, or a team's for a
+ * case file it lists with parts blacked out.
+ */
+export async function startRedactedUpload(caseId: string, kind: Markable | null, body: unknown) {
   if (kind !== 'pdf' && kind !== 'image') throw new HttpError(409, 'Only a PDF or a picture is redacted as a file.')
   const size = (body as Record<string, unknown> | undefined)?.size
   if (!Number.isInteger(size) || (size as number) <= 0 || (size as number) > MAX_UPLOAD_BYTES) {
     throw new HttpError(400, 'The redacted file is too large.')
   }
-  const key = `uploads/${x.caseId}/${randomUUID()}`
+  const key = `uploads/${caseId}/${randomUUID()}`
   const { url, headers } = await storage.uploadTarget(key, redactedType(kind), size as number)
   return { key, url, headers }
 }
@@ -214,7 +250,11 @@ function readMode(raw: Record<string, unknown>): MarkMode {
  * Pages count from 1 through the exhibit as it's served, so a PDF listed as
  * pages 3–5 has pages 1 to 3.
  */
-export function readPageMarks(body: unknown, pageCount: number): PageMarks {
+export function readPageMarks(
+  body: unknown,
+  pageCount: number,
+  nothingLeft = 'Nothing is left to admit. To keep the whole exhibit out, sustain the objection.',
+): PageMarks {
   const raw = body as Record<string, unknown> | null
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.pages)) throw new HttpError(400, 'Mark the redaction on the exhibit.')
   const mode = readMode(raw)
@@ -245,9 +285,7 @@ export function readPageMarks(body: unknown, pageCount: number): PageMarks {
     }
   })
   const marks = { mode, pages }
-  if (keptPages(marks, pageCount).length === 0) {
-    throw new HttpError(400, 'Nothing is left to admit. To keep the whole exhibit out, sustain the objection.')
-  }
+  if (keptPages(marks, pageCount).length === 0) throw new HttpError(400, nothingLeft)
   if (!marks.pages.some((p) => p.removed || p.boxes.length > 0)) throw new HttpError(400, 'Mark what is redacted or what is admitted.')
   return marks
 }
@@ -376,8 +414,8 @@ export function redactText(parts: TextPart[], marks: TextMarks): TextPart[] {
  * case, finished, a real PDF with the kept pages or a PNG) and moves it to the
  * case's files. Returns its storage key.
  */
-export async function keepRedactedFile(x: ExhibitSource, kind: 'pdf' | 'image', uploadKey: unknown, pageCount: number) {
-  if (typeof uploadKey !== 'string' || !uploadKey.startsWith(`uploads/${x.caseId}/`) || !KEY_PATTERN.test(uploadKey)) {
+export async function keepRedactedFile(caseId: string, kind: 'pdf' | 'image', uploadKey: unknown, pageCount: number) {
+  if (typeof uploadKey !== 'string' || !uploadKey.startsWith(`uploads/${caseId}/`) || !KEY_PATTERN.test(uploadKey)) {
     throw new HttpError(400, 'Upload the redacted file first.')
   }
   const size = await storage.size(uploadKey)
@@ -397,7 +435,7 @@ export async function keepRedactedFile(x: ExhibitSource, kind: 'pdf' | 'image', 
     await storage.delete([uploadKey])
     throw new HttpError(400, "The redacted file doesn't match the marks. Try again.")
   }
-  const key = `cases/${x.caseId}/${randomUUID()}`
+  const key = `cases/${caseId}/${randomUUID()}`
   await storage.move(uploadKey, key)
   return key
 }

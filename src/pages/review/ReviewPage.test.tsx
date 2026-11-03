@@ -9,6 +9,7 @@ import type {
   CourseFlag,
   CourseService,
   CourseSubpoena,
+  ExhibitReview,
   FactDecision,
   FactGroup,
   InterviewReview,
@@ -203,6 +204,27 @@ describe('ReviewPage', () => {
     expect(screen.queryByRole('article', { name: 'Investigation for Team 3' })).not.toBeInTheDocument()
   })
 
+  it('shows a record the investigator made, to open before giving it to the team', async () => {
+    const investigation: InterviewReview = {
+      ...review,
+      id: 'r6',
+      kind: 'investigation',
+      witness: null,
+      assignment: 'Who owns the coaster?',
+      askedBy: 'Ada Lawyer',
+      report: '1. The county lists the owner. [NEW FACT]',
+      finalReport: null,
+      facts: [],
+      documents: [{ materialId: 'm7', title: 'Property record', decision: null, made: true, contentType: 'application/pdf' }],
+    }
+    const { user } = renderPage({ listReviewQueue: queue([investigation]) })
+    const card = await screen.findByRole('article', { name: 'Investigation for Team 3' })
+    expect(card).toHaveTextContent('Give Team 3 the file he made, Property record')
+    expect(within(card).getByRole('radiogroup', { name: 'Give Team 3 Property record' })).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'View' }))
+    expect(await screen.findByRole('dialog', { name: 'Property record' })).toBeInTheDocument()
+  })
+
   it("sends on a report with nothing to rule on, and warns when the investigator didn't list his new facts or files", async () => {
     const investigation: InterviewReview = {
       ...review,
@@ -329,6 +351,50 @@ describe('ReviewPage: flags and the facts panel', () => {
     expect(setReviewMode).toHaveBeenCalledWith('c1', 'k1', 'lite')
     expect(lite).toBeChecked()
     expect(panel).toHaveTextContent('On: the AI’s calls stand at once')
+  })
+})
+
+describe('ReviewPage: exhibit challenges', () => {
+  it('shows two versions of one document as one card, and each lone challenge on its own', async () => {
+    const base = {
+      joint: false,
+      position: 0,
+      kind: 'material' as const,
+      sourceId: 'm1',
+      excerpt: null,
+      contentType: 'application/pdf',
+      status: 'admission_review' as const,
+      authenticated: true,
+      authenticityNote: null,
+      authenticityRuling: null,
+      authenticityRulingNote: null,
+      objection: 'Hearsay.',
+      response: 'Business records.',
+      acceptsRedaction: null,
+      ruling: null,
+      rulingNote: null,
+      redaction: null,
+      supersededBy: null,
+      label: null,
+      updatedAt: '2026-11-03T10:00:00Z',
+      ruledAt: null,
+      caseId: 'k1',
+      caseTitle: 'Winston v. Thrillville',
+      worldNumber: 1,
+      teams: { plaintiff: 1, defense: 2 },
+      ruledBy: null,
+      sourceTitle: 'Shift log.pdf',
+    }
+    const reviews: ExhibitReview[] = [
+      { ...base, id: 'p1', offeredBy: 'plaintiff', parts: [1, 2], title: 'Shift log.pdf — pages 1–2', pairedWith: 'd1' },
+      { ...base, id: 'd1', offeredBy: 'defense', parts: [3, 4], title: 'Shift log.pdf — pages 3–4', pairedWith: 'p1' },
+      { ...base, id: 'x9', offeredBy: 'defense', sourceId: 'm9', parts: null, title: 'Waiver.pdf', sourceTitle: 'Waiver.pdf', pairedWith: null },
+    ]
+    renderPage({ listExhibitReviews: vi.fn().mockResolvedValue(reviews) })
+    const list = await screen.findByRole('list', { name: 'Exhibit challenges to rule on' })
+    const cards = within(list).getAllByRole('article')
+    expect(cards.map((c) => c.getAttribute('aria-labelledby'))).toEqual(['pair-p1', 'exhibit-x9'])
+    expect(cards[0]).toHaveTextContent('Two versions of one document')
   })
 })
 

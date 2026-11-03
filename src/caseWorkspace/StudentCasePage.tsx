@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
+import { fetchBytes } from '../components/redaction/redactFile'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type {
   CaseWorkspace,
@@ -204,6 +205,10 @@ export function StudentCasePage() {
       },
       fileUrl: (exhibitId: string) => service.myExhibitFileUrl(courseId, caseId, exhibitId),
       loadText: (exhibitId: string) => service.myExhibitText(courseId, caseId, exhibitId),
+      copy: {
+        loadFile: (materialId: string) => fetchBytes(service.myExhibitSourceUrl(courseId, caseId, materialId)),
+        upload: (materialId: string, file: Blob) => service.uploadExhibitCopy(courseId, caseId, materialId, file),
+      },
     }),
     [service, courseId, caseId],
   )

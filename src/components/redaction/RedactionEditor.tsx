@@ -1,66 +1,100 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Highlighter, X } from 'lucide-react'
-import { Modal } from '../../../components/Modal'
-import { useCourseService } from '../../../courses/CourseServiceContext'
+import { Modal } from '../Modal'
 import type {
-  ExhibitMarking,
   ExhibitPart,
-  ExhibitReview,
   PageRedactionMarks,
   RedactionBox,
   RedactionMarks,
   RedactionMode,
   TextRedactionMarks,
   TextRedactionRange,
-} from '../../../courses/types'
-import { buildRedactedImage, buildRedactedPdf, fetchBytes, loadPdfJs, planPages, redactParts } from './redactFile'
+} from '../../courses/types'
+import { buildRedactedImage, buildRedactedPdf, planPages, redactParts } from './redactFile'
+import { useFilePages } from './useFilePages'
 import './redaction.css'
 
-/** What the instructor marked, ready to rule with. */
+/** What was marked, ready to use. */
 export interface MarkedRedaction {
   marks: RedactionMarks
   uploadKey?: string
-  /** "Admits 2 of 5 pages", for the card. */
+  /** "Admits 2 of 5 pages", to show beside it. */
   summary: string
 }
 
 type PageMark = { removed: boolean; boxes: RedactionBox[] }
 type PartMark = { removed: boolean; ranges: TextRedactionRange[] }
 
-const MODE_HELP: Record<RedactionMode, { page: string; text: string }> = {
-  redact: {
-    page: 'Drag a box over each part to black out. Leave out a page to take it out entirely.',
-    text: 'Select text, then choose Mark. Marked text is blacked out. Leave out a turn or paragraph to take it out entirely.',
+/** The words for the judge's partial admission, or for a team blacking out its own exhibit. */
+const WORDS = {
+  judge: {
+    title: 'Mark the redaction',
+    modes: { redact: 'Mark what’s redacted', admit: 'Mark what’s admitted' },
+    preview: 'Show what’s admitted',
+    kept: 'admitted',
+    keeps: 'Admits',
+    nothing: 'Mark what’s redacted or what’s admitted.',
+    empty: 'Nothing is left to admit. To keep the whole exhibit out, sustain the objection instead.',
+    cantShow: 'The exhibit couldn’t be shown for marking. Describe the redaction instead.',
+    save: 'Use these marks',
   },
-  admit: {
-    page: 'Drag a box over each part that’s admitted. Everything else on the page is blacked out, and a page with no box is left out.',
-    text: 'Select text, then choose Mark. Only marked text is admitted; the rest is blacked out, and a part with nothing marked is left out.',
+  team: {
+    title: 'Black out parts',
+    modes: { redact: 'Mark what to black out', admit: 'Mark what to keep' },
+    preview: 'Show your copy',
+    kept: 'kept',
+    keeps: 'Keeps',
+    nothing: 'Mark what to black out or what to keep.',
+    empty: 'Nothing is left. To leave it all out, take it off your list.',
+    cantShow: 'This file couldn’t be shown here. List it as it is, or only some of its pages.',
+    save: 'Use this copy',
   },
 }
+type Words = (typeof WORDS)['judge']
+
+const help = (w: Words, mode: RedactionMode, text: boolean) =>
+  mode === 'redact'
+    ? text
+      ? 'Select text, then choose Mark. Marked text is blacked out. Leave out a turn or paragraph to take it out entirely.'
+      : 'Drag a box over each part to black out. Leave out a page to take it out entirely.'
+    : text
+      ? `Select text, then choose Mark. Only marked text is ${w.kept}; the rest is blacked out, and a part with nothing marked is left out.`
+      : `Drag a box over each part that’s ${w.kept}. Everything else on the page is blacked out, and a page with no box is left out.`
 
 /**
- * The instructor's marks for a partial admission, on the exhibit itself:
- * boxes on a PDF's pages or a picture, or ranges of a transcript's, report's
- * or text file's text, showing either what's redacted or what's admitted.
- * Saving a PDF or picture makes the redacted copy and uploads it.
+ * Marks on an exhibit itself: boxes on a PDF's pages or a picture, or ranges
+ * of a transcript's or text's text, showing either what's blacked out or
+ * what's kept. The instructor marks a partial admission; a team blacks out
+ * parts of a file it lists (`team`). Saving a PDF or picture makes the
+ * blacked-out copy and uploads it.
  */
 export function RedactionEditor({
-  courseId,
-  exhibit,
+  eyebrow,
   marking,
+  loadFile,
+  upload,
+  deposition = false,
+  team = false,
   initial,
   onSave,
   onClose,
 }: {
-  courseId: string
-  exhibit: ExhibitReview
-  marking: ExhibitMarking & { markable: 'pdf' | 'image' | 'text' }
+  eyebrow: string
+  marking: { markable: 'pdf' | 'image' | 'text'; parts: ExhibitPart[] | null }
+  /** A PDF's or picture's bytes, as they'd be served (only the listed pages). */
+  loadFile?(): Promise<Uint8Array>
+  /** Uploads the blacked-out copy of a PDF or picture; returns its key. */
+  upload?(file: Blob): Promise<string>
+  /** A transcript's turns, with their questions, rather than paragraphs. */
+  deposition?: boolean
+  /** A team blacking out its own exhibit, rather than the judge's ruling. */
+  team?: boolean
   /** The marks from before, when editing them again. */
   initial?: RedactionMarks
   onSave(marked: MarkedRedaction): void
   onClose(): void
 }) {
-  const service = useCourseService()
+  const words = team ? WORDS.team : WORDS.judge
   const [mode, setMode] = useState<RedactionMode>(initial?.mode ?? 'redact')
   const [preview, setPreview] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -75,8 +109,7 @@ export function RedactionEditor({
   )
 
   // A PDF's pages (or the picture), drawn for marking.
-  const fileUrl = service.reviewExhibitFileUrl(courseId, exhibit.id)
-  const { pages, bytes, loadError } = usePages(isText ? null : fileUrl, marking.markable === 'pdf')
+  const { pages, bytes, loadError } = useFilePages(isText ? null : (loadFile ?? null), marking.markable === 'pdf', words.cantShow)
 
   const pageMarksOut: PageRedactionMarks = {
     mode,
@@ -91,13 +124,9 @@ export function RedactionEditor({
   const kept = isText ? redactParts(parts, textMarksOut).length : plan.filter((p) => p !== 'drop').length
   const total = isText ? parts.length : (pages?.length ?? 0)
   const anything = isText ? textMarksOut.parts.length > 0 : pageMarksOut.pages.length > 0
-  const noun = isText ? (exhibit.kind === 'deposition' ? 'turns' : 'paragraphs') : 'pages'
-  const summary = `Admits ${kept} of ${total} ${noun}${isText ? '' : `, ${plan.filter((p) => p === 'black').length} with black-outs`}`
-  const problem = !anything
-    ? 'Mark what’s redacted or what’s admitted.'
-    : kept === 0
-      ? 'Nothing is left to admit. To keep the whole exhibit out, sustain the objection instead.'
-      : null
+  const noun = isText ? (deposition ? 'turns' : 'paragraphs') : marking.markable === 'image' ? 'pictures' : 'pages'
+  const summary = `${words.keeps} ${kept} of ${total} ${noun}${isText ? '' : `, ${plan.filter((p) => p === 'black').length} with black-outs`}`
+  const problem = !anything ? words.nothing : kept === 0 ? words.empty : null
 
   async function save() {
     setSaving(true)
@@ -107,9 +136,8 @@ export function RedactionEditor({
         onSave({ marks: textMarksOut, summary })
         return
       }
-      const file =
-        marking.markable === 'pdf' ? await buildRedactedPdf(bytes!, pageMarksOut) : await buildRedactedImage(fileUrl, pageMarksOut)
-      const uploadKey = await service.uploadRedactedExhibit(courseId, exhibit.id, file)
+      const file = marking.markable === 'pdf' ? await buildRedactedPdf(bytes!, pageMarksOut) : await buildRedactedImage(bytes!, pageMarksOut)
+      const uploadKey = await upload!(file)
       onSave({ marks: pageMarksOut, uploadKey, summary })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -139,8 +167,8 @@ export function RedactionEditor({
   return (
     <Modal
       wide
-      eyebrow={`Partly overrule · ${exhibit.title}`}
-      title="Mark the redaction"
+      eyebrow={eyebrow}
+      title={words.title}
       icon={<Highlighter />}
       onClose={onClose}
       footer={
@@ -155,9 +183,9 @@ export function RedactionEditor({
             type="button"
             className="ws-btn ws-btn-primary"
             onClick={save}
-            disabled={saving || Boolean(problem) || (!isText && !bytes && marking.markable === 'pdf')}
+            disabled={saving || Boolean(problem) || (!isText && !bytes)}
           >
-            {saving ? (isText ? 'Saving…' : 'Making the redacted copy…') : 'Use these marks'}
+            {saving ? (isText ? 'Saving…' : 'Making the blacked-out copy…') : words.save}
           </button>
         </>
       }
@@ -166,18 +194,18 @@ export function RedactionEditor({
         <div className="rx-toolbar">
           <div className="ex-segments" role="radiogroup" aria-label="What you mark">
             <button type="button" role="radio" aria-checked={mode === 'redact'} onClick={() => setMode('redact')}>
-              Mark what’s redacted
+              {words.modes.redact}
             </button>
             <button type="button" role="radio" aria-checked={mode === 'admit'} onClick={() => setMode('admit')}>
-              Mark what’s admitted
+              {words.modes.admit}
             </button>
           </div>
           <label className="rx-preview-toggle">
             <input type="checkbox" checked={preview} onChange={(e) => setPreview(e.target.checked)} />
-            Show what’s admitted
+            {words.preview}
           </label>
         </div>
-        <p className="muted rx-help">{isText ? MODE_HELP[mode].text : MODE_HELP[mode].page}</p>
+        <p className="muted rx-help">{help(words, mode, isText)}</p>
 
         {isText ? (
           <TextMarker
@@ -185,7 +213,8 @@ export function RedactionEditor({
             marks={partMarks}
             mode={mode}
             preview={preview}
-            deposition={exhibit.kind === 'deposition'}
+            deposition={deposition}
+            kept={words.kept}
             onChange={setPart}
           />
         ) : loadError ? (
@@ -206,6 +235,7 @@ export function RedactionEditor({
                 mode={mode}
                 preview={preview}
                 picture={marking.markable === 'image'}
+                kept={words.kept}
                 onChange={(change) => setPage(i + 1, change)}
               />
             ))}
@@ -214,68 +244,6 @@ export function RedactionEditor({
       </div>
     </Modal>
   )
-}
-
-/** The exhibit's pages as pictures to mark (a picture is one page), and a PDF's bytes for the copy. */
-function usePages(url: string | null, pdf: boolean) {
-  const [state, setState] = useState<{
-    pages: string[] | null
-    bytes: Uint8Array | null
-    loadError: string | null
-  }>({
-    pages: null,
-    bytes: null,
-    loadError: null,
-  })
-  useEffect(() => {
-    if (!url) return
-    let cancelled = false
-    const made: string[] = []
-    ;(async () => {
-      const data = await fetchBytes(url)
-      if (!pdf) {
-        made.push(URL.createObjectURL(new Blob([data as BlobPart])))
-        return { pages: made, bytes: null }
-      }
-      const pdfjs = await loadPdfJs()
-      const task = pdfjs.getDocument({ data: data.slice() })
-      const doc = await task.promise
-      for (let n = 1; n <= doc.numPages && !cancelled; n++) {
-        const page = await doc.getPage(n)
-        const base = page.getViewport({ scale: 1 })
-        const viewport = page.getViewport({
-          scale: Math.min(2, 1400 / base.width),
-        })
-        const canvas = document.createElement('canvas')
-        canvas.width = Math.round(viewport.width)
-        canvas.height = Math.round(viewport.height)
-        await page.render({
-          canvas,
-          canvasContext: canvas.getContext('2d')!,
-          viewport,
-        }).promise
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-        if (blob) made.push(URL.createObjectURL(blob))
-      }
-      await task.destroy()
-      return { pages: made, bytes: data }
-    })()
-      .then((r) => !cancelled && setState({ ...r, loadError: null }))
-      .catch(
-        () =>
-          !cancelled &&
-          setState({
-            pages: null,
-            bytes: null,
-            loadError: 'The exhibit couldn’t be shown for marking. Describe the redaction instead.',
-          }),
-      )
-    return () => {
-      cancelled = true
-      for (const u of made) URL.revokeObjectURL(u)
-    }
-  }, [url, pdf])
-  return state
 }
 
 const clamp = (n: number) => Math.min(1, Math.max(0, n))
@@ -289,6 +257,7 @@ function PageMarker({
   mode,
   preview,
   picture,
+  kept,
   onChange,
 }: {
   page: number
@@ -298,6 +267,8 @@ function PageMarker({
   mode: RedactionMode
   preview: boolean
   picture: boolean
+  /** "admitted" or "kept", for what a page with no box is left out for lacking. */
+  kept: string
   onChange(change: Partial<PageMark>): void
 }) {
   const overlay = useRef<HTMLDivElement>(null)
@@ -353,7 +324,7 @@ function PageMarker({
             Leave out this page
           </label>
         )}
-        {dropped && <span className="cw-badge xl-badge-rose">{mark.removed ? 'Left out' : 'Left out: nothing marked admitted'}</span>}
+        {dropped && <span className="cw-badge xl-badge-rose">{mark.removed ? 'Left out' : `Left out: nothing marked ${kept}`}</span>}
       </div>
       <div className="rx-sheet">
         <img src={src} alt={`The exhibit, ${name}`} draggable={false} />
@@ -428,6 +399,7 @@ function TextMarker({
   mode,
   preview,
   deposition,
+  kept,
   onChange,
 }: {
   parts: ExhibitPart[]
@@ -435,6 +407,7 @@ function TextMarker({
   mode: RedactionMode
   preview: boolean
   deposition: boolean
+  kept: string
   onChange(n: number, change: Partial<PartMark>): void
 }) {
   const box = useRef<HTMLOListElement>(null)
@@ -498,7 +471,7 @@ function TextMarker({
                   <input type="checkbox" checked={mark.removed} onChange={(e) => onChange(p.n, { removed: e.target.checked })} />
                   Leave out
                 </label>
-                {!out && <span className="cw-badge xl-badge-rose">{mark.removed ? 'Left out' : 'Left out: nothing marked admitted'}</span>}
+                {!out && <span className="cw-badge xl-badge-rose">{mark.removed ? 'Left out' : `Left out: nothing marked ${kept}`}</span>}
               </div>
               {preview ? (
                 out ? (

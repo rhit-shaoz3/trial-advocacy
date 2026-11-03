@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { CourseServiceContext } from '../../../courses/CourseServiceContext'
-import type { ExhibitReview } from '../../../courses/types'
-import { fakeCourseService } from '../../../test/fakeCourseService'
+import { CourseServiceContext } from '../../courses/CourseServiceContext'
+import type { ExhibitReview } from '../../courses/types'
+import { fakeCourseService } from '../../test/fakeCourseService'
 import { RedactionEditor } from './RedactionEditor'
 
 const exhibit = {
@@ -22,7 +22,7 @@ function renderEditor() {
   const user = userEvent.setup()
   render(
     <CourseServiceContext.Provider value={fakeCourseService()}>
-      <RedactionEditor courseId="c1" exhibit={exhibit} marking={{ markable: 'text', parts }} onSave={onSave} onClose={vi.fn()} />
+      <RedactionEditor eyebrow={exhibit.title} deposition marking={{ markable: 'text', parts }} onSave={onSave} onClose={vi.fn()} />
     </CourseServiceContext.Provider>,
   )
   return { user, onSave }

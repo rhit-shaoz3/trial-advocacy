@@ -12,6 +12,7 @@ export const AUDIENCE_LABEL: Record<MaterialAudience, string> = {
 export const SOURCE_LABEL: Record<MaterialSource, string> = {
   instructor: 'Instructor Uploaded',
   subpoena: 'Subpoena Response',
+  investigator: 'From the Investigator',
 }
 
 /** The broad kinds of file in a case file, in the order they're listed. */

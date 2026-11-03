@@ -7,6 +7,7 @@ import { usePageTour } from '../../tour/tourContext'
 import { INSTRUCTOR_REVIEW } from '../../tour/tours'
 import './Review.css'
 import { ExhibitReviewCard } from './ExhibitReviewCard'
+import { ExhibitPairCard } from './ExhibitPairCard'
 import { FactGroupCard } from './FactGroupCard'
 import { FactsPanel } from './FactsPanel'
 import { FlagCard } from './FlagCard'
@@ -249,11 +250,20 @@ export function ReviewPage() {
                 <>
                   <h2 className="review-section-title">Exhibit challenges</h2>
                   <ul className="review-list" aria-label={tab === 'open' ? 'Exhibit challenges to rule on' : 'Exhibit rulings'}>
-                    {exhibits.map((x) => (
-                      <li key={x.id}>
-                        <ExhibitReviewCard courseId={courseId} review={x} onRuled={tab === 'open' ? refresh : undefined} />
-                      </li>
-                    ))}
+                    {exhibits.map((x) => {
+                      // Two versions of one document waiting together are ruled on together, under the plaintiff's.
+                      const partner = tab === 'open' && x.pairedWith ? exhibits.find((o) => o.id === x.pairedWith) : undefined
+                      if (partner && x.offeredBy === 'defense') return null
+                      return (
+                        <li key={x.id}>
+                          {partner ? (
+                            <ExhibitPairCard courseId={courseId} versions={[x, partner]} onRuled={refresh} />
+                          ) : (
+                            <ExhibitReviewCard courseId={courseId} review={x} onRuled={tab === 'open' ? refresh : undefined} />
+                          )}
+                        </li>
+                      )
+                    })}
                   </ul>
                 </>
               )}

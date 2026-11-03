@@ -1,5 +1,13 @@
+import { randomUUID } from 'node:crypto'
 import { ai, AiNotConfiguredError } from '../ai/ai.ts'
-import { listMaterialsFor, listMaterialTexts, listWitnesses, shareMaterialWithTeam } from '../courses/caseContent.ts'
+import {
+  createMaterial,
+  listMaterialsFor,
+  listMaterialTexts,
+  listWitnesses,
+  removeStoredFiles,
+  shareMaterialWithTeam,
+} from '../courses/caseContent.ts'
 import type { ImportantFacts } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { finishPendingTranscriptions } from '../courses/materialText.ts'
@@ -7,13 +15,17 @@ import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
 import { queueGrouping } from '../reviews/grouping.ts'
 import { settledFacts } from '../reviews/reviews.ts'
+import { storage } from '../storage/storage.ts'
 import { MAX_ASSIGNMENT_LENGTH, matchTitles, parseReport } from './investigate.ts'
 import type { InvestigatorContext } from './prompt.ts'
+import { madeFileText, renderMadeFile } from './records.ts'
 
 // A team's requests to the case's background investigator. The team emails an
 // assignment; in the background the AI writes his report, which goes to the
 // instructor's review (an interview_reviews row of kind 'investigation') with
-// its new facts and the case files he'd unlock. Once the instructor has ruled,
+// its new facts, the case files he'd unlock, and the records and illustrative
+// aids he made (new case files in the team's world, for the instructor only
+// until allowed). Once the instructor has ruled,
 // the AI writes the clean report the team gets, the allowed files are shared
 // with the team, and the rulings bind later interviews and investigations.
 // In review lite mode the report skips the instructor: its facts stand for the
@@ -239,11 +251,30 @@ async function investigateRequest(id: string): Promise<'open' | 'finalizing' | n
     const parsed = parseReport(text)
     // Only files the team doesn't have yet are his to unlock.
     const unlock = matchTitles(parsed.accessTitles, context.documents.filter((d) => !d.teamHasAccess))
+    // The records and aids he made, drawn and stored before they're added to the case.
+    const made = await Promise.all(
+      parsed.made.map(async (file) => {
+        const materialId = randomUUID()
+        const data = Buffer.from(await renderMadeFile(file, request.investigatorName, request.teamNumber))
+        const storageKey = `cases/${request.caseId}/${materialId}`
+        await storage.put(storageKey, data, 'application/pdf')
+        return { file, materialId, storageKey, size: data.length }
+      }),
+    )
 
     const client = await pool.connect()
+    let replaced: string[] = []
     try {
       await client.query('BEGIN')
       await client.query('DELETE FROM review_facts WHERE review_id = $1', [id])
+      // A retry replaces what an earlier try made.
+      const { rows: earlier } = await client.query<{ id: string; key: string | null }>(
+        `DELETE FROM case_materials WHERE source = 'investigator'
+           AND id IN (SELECT material_id FROM review_documents WHERE review_id = $1)
+         RETURNING id, storage_key AS key`,
+        [id],
+      )
+      replaced = earlier.flatMap((m) => (m.key ? [m.key] : []))
       await client.query('DELETE FROM review_documents WHERE review_id = $1', [id])
       // Review lite: his facts stand for this world only, and his files are allowed.
       const lite = request.lite
@@ -261,6 +292,35 @@ async function investigateRequest(id: string): Promise<'open' | 'finalizing' | n
           [id, doc.id, position, lite],
         )
       }
+      // Each record or aid is a file in the team's world, for the instructor only until it's allowed.
+      for (const [i, m] of made.entries()) {
+        await createMaterial(
+          {
+            id: m.materialId,
+            caseId: request.caseId,
+            audience: 'instructor',
+            filename: `${m.file.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()}.pdf`,
+            description: m.file.title,
+            contentType: 'application/pdf',
+            sizeBytes: m.size,
+            storageKey: m.storageKey,
+            uploadedBy: null,
+            matchupId: request.matchupId,
+            source: 'investigator',
+          },
+          client,
+        )
+        // Its text is known, so witnesses and later investigations can read it once it's allowed.
+        await client.query(`UPDATE case_materials SET text_status = 'ready', text_content = $2 WHERE id = $1`, [
+          m.materialId,
+          madeFileText(m.file, request.investigatorName),
+        ])
+        await client.query(
+          `INSERT INTO review_documents (review_id, material_id, position, decision, auto)
+           VALUES ($1, $2, $3, CASE WHEN $4 THEN 'allow' END, $4)`,
+          [id, m.materialId, unlock.length + i, lite],
+        )
+      }
       // Otherwise every report waits for the instructor, even with nothing to rule on.
       const status = lite ? 'finalizing' : 'open'
       await client.query(
@@ -270,10 +330,12 @@ async function investigateRequest(id: string): Promise<'open' | 'finalizing' | n
         [id, parsed.body, parsed.records, !parsed.hasReviewBlock, status],
       )
       await client.query('COMMIT')
+      await removeStoredFiles(replaced)
       if (status === 'open') queueGrouping(request.caseId)
       return status
     } catch (err) {
       await client.query('ROLLBACK')
+      await removeStoredFiles(made.map((m) => m.storageKey))
       throw err
     } finally {
       client.release()

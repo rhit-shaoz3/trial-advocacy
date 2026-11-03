@@ -72,7 +72,7 @@ import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { CaseFileTable } from './CaseFileTable'
 import { CATEGORY_ICON } from './categoryIcons'
 import { ExchangePanel } from './exchange/ExchangePanel'
-import { ExhibitListSection } from './finalSteps/ExhibitListSection'
+import { ExhibitListSection, type CopyActions } from './finalSteps/ExhibitListSection'
 import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
@@ -171,6 +171,8 @@ export function CaseWorkspaceView({
     /** An exhibit's file (its listed pages, or the redacted version), and its text version. */
     fileUrl(exhibitId: string): string
     loadText(exhibitId: string): Promise<{ status: string; text: string | null }>
+    /** Blacking out parts of a PDF or picture the team lists. */
+    copy: CopyActions
   }
   /** Called when the student opens the Final steps tab, to mark what changed there read. */
   onOpenExhibits?(): void
@@ -649,6 +651,7 @@ export function CaseWorkspaceView({
               const file = materials.find((m) => m.id === id)
               if (file) openMaterial(file)
             }}
+            copyActions={exhibitActions?.copy}
             onOpenExhibit={(x) =>
               exhibitActions &&
               setViewing({

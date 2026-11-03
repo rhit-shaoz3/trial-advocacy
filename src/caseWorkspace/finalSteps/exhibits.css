@@ -516,3 +516,70 @@
   user-select: none;
   letter-spacing: -0.05em;
 }
+
+/* A PDF or picture the team has blacked parts out of. */
+.xl-drawn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.xl-drawn span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--tint-green-fg);
+  font-weight: 600;
+}
+
+.xl .xl-drawn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* What needs the team, step by step. */
+.xl-step {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.xl-step + .xl-step {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ws-line);
+}
+
+.xl-step h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.xl-step-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* An exhibit the team just authenticated, arriving at its admission decision. */
+.xl-fresh {
+  border-color: var(--tint-blue-fg);
+  box-shadow: 0 0 0 2px var(--tint-blue-bg);
+  animation: xl-arrive 0.6s ease-out;
+}
+
+@keyframes xl-arrive {
+  from {
+    transform: translateY(-6px);
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xl-fresh {
+    animation: none;
+  }
+}

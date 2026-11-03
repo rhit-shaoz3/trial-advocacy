@@ -267,8 +267,8 @@ export interface CaseMaterial {
   source?: MaterialSource
 }
 
-/** Where a case file came from: the instructor's upload, or a subpoena response approved in one case world. */
-export const MATERIAL_SOURCES = ['instructor', 'subpoena'] as const
+/** Where a case file came from: the instructor's upload, a subpoena response, or a record or aid the investigator made (each in one case world). */
+export const MATERIAL_SOURCES = ['instructor', 'subpoena', 'investigator'] as const
 export type MaterialSource = (typeof MATERIAL_SOURCES)[number]
 
 export interface MaterialShares {
@@ -411,7 +411,15 @@ export interface InterviewReview {
   /** The investigator's report had no list of its new facts and files, so read it before finishing. */
   reviewBlockMissing?: boolean
   /** Case files the investigator would unlock for the team. */
-  documents?: { materialId: string; title: string; decision: DocumentDecision | null; auto?: boolean }[]
+  documents?: {
+    materialId: string
+    title: string
+    decision: DocumentDecision | null
+    auto?: boolean
+    /** A record or illustrative aid the investigator made, rather than a case file he could get. */
+    made?: boolean
+    contentType?: string
+  }[]
 }
 
 /** Similar new facts from different reviews, to rule on together. */
@@ -1080,15 +1088,25 @@ export interface ExhibitOption {
   group: 'case-file' | 'investigator' | 'depositions'
   contentType?: string
   filename?: string
-  /** A transcript's turns or a report's paragraphs, to choose from. */
+  /** A transcript's turns, or a text file's paragraphs, to choose from. */
   parts?: ExhibitPart[]
+  /** A PDF or picture, which the team can black parts out of. */
+  markable?: 'pdf' | 'image'
 }
 
-/** An item on a list: the parts are a file's pages (from 1), a transcript's turns, or a report's paragraphs; null is all of it. */
+/**
+ * An item on a list: the parts are a PDF's pages (from 1), a text file's
+ * paragraphs, or a transcript's turns; null is all of it. A PDF or picture
+ * can have parts blacked out (`marks`), with its blacked-out copy: a new
+ * `uploadKey`, or the `redactedKey` it was saved with.
+ */
 export interface ExhibitListItem {
   kind: ExhibitSourceKind
   id: string
   parts: number[] | null
+  marks?: PageRedactionMarks | null
+  uploadKey?: string
+  redactedKey?: string | null
 }
 
 export interface ExhibitList {
@@ -1201,6 +1219,22 @@ export interface ExhibitReview extends Exhibit {
   worldNumber: number
   teams: { plaintiff: number | null; defense: number | null }
   ruledBy: string | null
+  /** The other side's version of the same document, also waiting for a ruling (ruled on together). */
+  pairedWith?: string | null
+  /** The document's own title, without this version's parts or redactions. */
+  sourceTitle?: string
+  /** The offering team blacked parts out of this version. */
+  offeredRedacted?: boolean
+}
+
+/** One ruling on two versions of a document: the whole of it, one side's version, a part marked on the original, or none. */
+export interface ExhibitVersionsRuling {
+  decision: 'whole' | 'plaintiff' | 'defense' | 'partial' | 'exclude'
+  note?: string
+  /** For `partial`: the marks on the whole original, and its redacted copy (a PDF or picture). */
+  marks?: RedactionMarks
+  uploadKey?: string
+  redaction?: string
 }
 
 export type ExhibitRuling =
@@ -1541,7 +1575,18 @@ export interface CourseService {
   caseExhibitText(courseId: string, caseId: string, exhibitId: string): Promise<{ status: string; text: string | null }>
   /** An exhibit under review, as offered, for marking a redaction. */
   reviewExhibitFileUrl(courseId: string, exhibitId: string): string
-  getExhibitMarking(courseId: string, exhibitId: string): Promise<ExhibitMarking>
+  /** How an exhibit can be marked, as offered, or (`whole`) the whole original document. */
+  getExhibitMarking(courseId: string, exhibitId: string, whole?: boolean): Promise<ExhibitMarking>
+  /** The whole original file behind an exhibit, sent by the API itself. */
+  reviewExhibitOriginalUrl(courseId: string, exhibitId: string): string
+  /** One ruling on two versions of the same document (`ids`: the two exhibits). */
+  ruleOnExhibitVersions(courseId: string, ids: [string, string], ruling: ExhibitVersionsRuling): Promise<void>
   /** Uploads the redacted copy of a PDF or picture; returns the key to rule with. */
   uploadRedactedExhibit(courseId: string, exhibitId: string, file: Blob): Promise<string>
+  /** A PDF or picture the team can list, sent by the API itself, for blacking out parts of it. */
+  myExhibitSourceUrl(courseId: string, caseId: string, materialId: string): string
+  /** An exhibit under review as offered, sent by the API itself, for marking a redaction. */
+  reviewExhibitBytesUrl(courseId: string, exhibitId: string): string
+  /** Uploads a team's blacked-out copy of a PDF or picture it's listing; returns the key to save with. */
+  uploadExhibitCopy(courseId: string, caseId: string, materialId: string, file: Blob): Promise<string>
 }

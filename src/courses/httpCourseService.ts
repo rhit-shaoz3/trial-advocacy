@@ -45,6 +45,22 @@ async function readCheckStream(body: ReadableStream<Uint8Array>, onProgress: (pr
   throw new Error('The check was cut off. Try again.')
 }
 
+/**
+ * A blacked-out copy of an exhibit, uploaded like a case file: the API returns
+ * a signed link, and the file goes straight to storage. Returns its key.
+ */
+async function uploadCopy(path: string, body: object, file: Blob): Promise<string> {
+  const { upload } = await apiRequest(path, { method: 'POST', body: JSON.stringify(body) })
+  let res: Response
+  try {
+    res = await fetch(upload.url, { method: 'PUT', headers: upload.headers, body: file })
+  } catch {
+    throw new Error('Could not reach file storage. Check your connection and try again.')
+  }
+  if (!res.ok) throw new Error(`File storage refused the upload (${res.status}). Try again.`)
+  return upload.key
+}
+
 export const httpCourseService: CourseService = {
   async listMyCourses() {
     return (await apiRequest('/courses')).courses
@@ -766,24 +782,32 @@ export const httpCourseService: CourseService = {
     return `/api${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/file`
   },
 
-  async getExhibitMarking(courseId, exhibitId) {
-    return apiRequest(`${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/marking`)
+  async getExhibitMarking(courseId, exhibitId, whole = false) {
+    return apiRequest(`${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/marking${whole ? '?whole=1' : ''}`)
+  },
+
+  reviewExhibitOriginalUrl(courseId, exhibitId) {
+    return `/api${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/original`
+  },
+
+  async ruleOnExhibitVersions(courseId, ids, ruling) {
+    await apiRequest(`${coursePath(courseId)}/exhibit-reviews/versions`, { method: 'POST', body: JSON.stringify({ ids, ...ruling }) })
   },
 
   async uploadRedactedExhibit(courseId, exhibitId, file) {
-    // Like a case file: the API returns a signed link, and the file goes straight to storage.
-    const { upload } = await apiRequest(`${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/uploads`, {
-      method: 'POST',
-      body: JSON.stringify({ size: file.size }),
-    })
-    let res: Response
-    try {
-      res = await fetch(upload.url, { method: 'PUT', headers: upload.headers, body: file })
-    } catch {
-      throw new Error('Could not reach file storage. Check your connection and try again.')
-    }
-    if (!res.ok) throw new Error(`File storage refused the upload (${res.status}). Try again.`)
-    return upload.key
+    return uploadCopy(`${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/uploads`, { size: file.size }, file)
+  },
+
+  myExhibitSourceUrl(courseId, caseId, materialId) {
+    return `/api${myCasePath(courseId, caseId)}/exhibits/sources/${encodeURIComponent(materialId)}`
+  },
+
+  reviewExhibitBytesUrl(courseId, exhibitId) {
+    return `/api${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/file?stream=1`
+  },
+
+  async uploadExhibitCopy(courseId, caseId, materialId, file) {
+    return uploadCopy(`${myCasePath(courseId, caseId)}/exhibits/uploads`, { materialId, size: file.size }, file)
   },
 
   async setReviewMode(courseId, caseId, reviewMode) {

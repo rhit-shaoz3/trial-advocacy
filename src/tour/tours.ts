@@ -431,6 +431,22 @@ const PHASE_STEPS: Record<CasePhase, TourStep[]> = {
       ifMissing: 'skip',
     },
   ],
+  final_steps: [
+    {
+      target: tab('final-steps'),
+      title: 'Final steps ⚖️',
+      body: 'Build your joint exhibit list. If it isn’t on your list, you can’t use it at trial.',
+      go: { tab: 'final-steps' },
+      ifMissing: 'skip',
+    },
+    {
+      target: '[data-tour="exhibit-teach"]',
+      title: 'Authentic, then admissible',
+      body: 'Teach me walks through exhibit lists, authenticity, and objections.',
+      go: { tab: 'final-steps' },
+      ifMissing: 'skip',
+    },
+  ],
 }
 
 const PHASE_TITLE: Record<CasePhase, string> = {
@@ -438,6 +454,7 @@ const PHASE_TITLE: Record<CasePhase, string> = {
   information_exchange: 'Information exchange',
   investigate: 'Investigate',
   deposition: 'Deposition',
+  final_steps: 'Final steps',
 }
 
 export const phaseTourKey = (caseId: string, phase: CasePhase) => `phase:${caseId}:${phase}`

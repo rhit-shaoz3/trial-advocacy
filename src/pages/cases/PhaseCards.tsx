@@ -1,13 +1,30 @@
 import { useEffect, useState } from 'react'
-import { Clock, Gavel, Search } from 'lucide-react'
+import { Clock, Gavel, Scale, Search } from 'lucide-react'
+import { Link } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import type { CourseCase, DepositionOverview, InvestigatorOverview } from '../../courses/types'
+import type { CourseCase, DepositionOverview, ExhibitOverview, InvestigatorOverview } from '../../courses/types'
 import { investigatorOf } from '../../courses/types'
 import './exchange/exchange.css'
 
-// The case dashboard's card for the investigate and deposition phases, in the
-// style of the information exchange card. Once the case moves on, each card
-// moves to its own tab.
+// The case dashboard's card for the investigate, deposition and final steps
+// phases, in the style of the information exchange card. Once the case moves
+// on, each card moves to its own tab.
+
+function WorldsBar({ label, done, total }: { label: string; done: number; total: number }) {
+  return (
+    <div className="exchange-stat">
+      <span>{label}</span>
+      <div className="exchange-stat-number" aria-label={`${done} of ${total} case worlds`}>
+        {done}/{total}
+        <small>worlds</small>
+      </div>
+      <div className="exchange-bar" aria-hidden="true">
+        <span style={{ width: `${share(done, total)}%` }} />
+      </div>
+      {total > done && <p>{total - done} still settling theirs.</p>}
+    </div>
+  )
+}
 
 /** Percent, for a bar. */
 const share = (n: number, of: number) => (of === 0 ? 0 : Math.round((n / of) * 100))
@@ -101,9 +118,19 @@ export function InvestigatorCard({
 }
 
 /** How teams are deposing the other side's witnesses. */
-export function DepositionCard({ courseId, courseCase }: { courseId: string; courseCase: CourseCase }) {
+export function DepositionCard({
+  courseId,
+  courseCase,
+  inTab = false,
+}: {
+  courseId: string
+  courseCase: CourseCase
+  /** On the Witnesses tab (after its phase). */
+  inTab?: boolean
+}) {
   const service = useCourseService()
   const [overview, setOverview] = useState<DepositionOverview | null>(null)
+  const current = courseCase.phase === 'deposition'
 
   useEffect(() => {
     let cancelled = false
@@ -114,7 +141,7 @@ export function DepositionCard({ courseId, courseCase }: { courseId: string; cou
   }, [service, courseId, courseCase.id, courseCase.phase])
 
   return (
-    <section className="exchange-card" aria-labelledby="deposition-card-title">
+    <section className={inTab ? 'exchange-card exchange-card-in-tab' : 'exchange-card'} aria-labelledby="deposition-card-title">
       <div className="exchange-card-head">
         <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
           <Gavel />
@@ -122,7 +149,9 @@ export function DepositionCard({ courseId, courseCase }: { courseId: string; cou
         <div>
           <div className="exchange-eyebrow">
             <span className="ws-eyebrow">Depositions</span>
-            <span className="exchange-phase-badge exchange-phase-open">Deposition phase</span>
+            <span className={current ? 'exchange-phase-badge exchange-phase-open' : 'exchange-phase-badge'}>
+              {current ? 'Deposition phase' : 'Phase finished'}
+            </span>
           </div>
           <h2 id="deposition-card-title">Deposing the other side&rsquo;s witnesses</h2>
         </div>
@@ -147,6 +176,59 @@ export function DepositionCard({ courseId, courseCase }: { courseId: string; cou
             </p>
           )}
         </>
+      )}
+    </section>
+  )
+}
+
+/** How the case worlds are settling their joint exhibit lists. Like the exchanges, it's the teams' work; challenges come to Review. */
+export function ExhibitCard({ courseId, courseCase }: { courseId: string; courseCase: CourseCase }) {
+  const service = useCourseService()
+  const [overview, setOverview] = useState<ExhibitOverview | null>(null)
+  const enabled = courseCase.exhibitListEnabled !== false
+
+  useEffect(() => {
+    let cancelled = false
+    service.getExhibitOverview(courseId, courseCase.id).then((o) => !cancelled && setOverview(o), () => {})
+    return () => {
+      cancelled = true
+    }
+  }, [service, courseId, courseCase.id, courseCase.phase])
+
+  return (
+    <section className="exchange-card" aria-labelledby="exhibit-card-title">
+      <div className="exchange-card-head">
+        <span className="ws-icon-tile ws-tone-blue" aria-hidden="true">
+          <Scale />
+        </span>
+        <div>
+          <div className="exchange-eyebrow">
+            <span className="ws-eyebrow">Joint exhibit list</span>
+            <span className="exchange-phase-badge exchange-phase-open">Final steps phase</span>
+          </div>
+          <h2 id="exhibit-card-title">Exhibits for trial</h2>
+        </div>
+      </div>
+      {!enabled ? (
+        <p className="muted">The joint exhibit list is off, so students don&rsquo;t see it. Turn it on in the Final steps tab.</p>
+      ) : (
+        overview && (
+          <>
+            <div className="exchange-stats">
+              <TeamsBar label="Teams that submitted their list" done={overview.teamsSubmitted} total={overview.teams} />
+              <WorldsBar label="Worlds with a final exhibit list" done={overview.worldsFinalized} total={overview.worlds} />
+            </div>
+            {overview.reviewsWaiting > 0 && (
+              <p className="exchange-waiting">
+                <Clock aria-hidden="true" />
+                <strong>
+                  {overview.reviewsWaiting} {overview.reviewsWaiting === 1 ? 'challenge' : 'challenges'} waiting for your ruling
+                </strong>
+                <Link to={`/courses/${courseId}/review`}>Go to Review</Link>
+              </p>
+            )}
+          </>
+        )
       )}
     </section>
   )

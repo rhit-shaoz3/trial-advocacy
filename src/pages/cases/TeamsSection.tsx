@@ -12,6 +12,7 @@ import {
 } from '../../courses/types'
 import { autoPairPreview } from './autoPair'
 import { Draggable, DropZone } from './dnd'
+import { LockedBadge } from './LockedBadge'
 import { useDragSensors } from './useDragSensors'
 import { WorldsSection } from './WorldsSection'
 
@@ -37,6 +38,8 @@ function StudentLabel({ student }: { student: RosterEntry }) {
  * Pairing students into teams for one case (auto-pair everyone left, pair
  * chosen students by hand, adjust teams afterwards), followed by the case
  * worlds those teams are matched into. Read-only once the case is closed.
+ * A locked world's teams stay (see Matchup.locked), though students can still
+ * move between teams; once the case leaves Introduction no new teams are made.
  */
 export function TeamsSection({
   courseId,
@@ -100,10 +103,19 @@ export function TeamsSection({
     setSelected((prev) => (prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email]))
   }
 
+  /** The world number of each team in a locked world. */
+  const lockedWorldOf = new Map(
+    (data?.matchups ?? []).filter((m) => m.locked).flatMap((m) => [
+      [m.plaintiffTeamId, m.number],
+      [m.defenseTeamId, m.number],
+    ]),
+  )
+
   function handleClear() {
-    if (!window.confirm('Unpair every student in this case? This deletes all of its teams and case worlds.')) {
-      return
-    }
+    const message = lockedWorldOf.size
+      ? 'Unpair every student not on a locked world’s team? This deletes those teams and their case worlds.'
+      : 'Unpair every student in this case? This deletes all of its teams and case worlds.'
+    if (!window.confirm(message)) return
     run(() => service.clearTeams(courseId, caseId))
   }
 
@@ -119,17 +131,13 @@ export function TeamsSection({
       setError({ in: 'teams', message: `A team can have at most ${MAX_TEAM_SIZE} students.` })
       return
     }
-    run(async () => {
-      const removed = from ? await service.removeTeamMember(courseId, caseId, from.id, email) : null
-      if (!toId) return removed!
-      try {
-        return await service.addTeamMember(courseId, caseId, toId, email)
-      } catch (err) {
-        // They're off their old team already, so show where things stand.
-        if (removed) setData(removed)
-        throw err
-      }
-    })
+    run(() =>
+      !toId
+        ? service.removeTeamMember(courseId, caseId, from!.id, email)
+        : from
+          ? service.moveTeamMember(courseId, caseId, toId, email)
+          : service.addTeamMember(courseId, caseId, toId, email),
+    )
   }
 
   const teamSize = Number(autoSize)
@@ -174,9 +182,9 @@ export function TeamsSection({
             <h2 id="teams-heading">Teams</h2>
             {data && !closed && (
               <div className="teams-actions">
-                {teams.length > 0 && (
+                {teams.length > lockedWorldOf.size && (
                   <button type="button" className="btn-danger" onClick={handleClear} disabled={busy}>
-                    Clear all teams
+                    {lockedWorldOf.size ? 'Clear unlocked teams' : 'Clear all teams'}
                   </button>
                 )}
                 {unpaired.length > 0 && autoSize === null && (
@@ -235,6 +243,8 @@ export function TeamsSection({
               {closed
                 ? 'This case is closed, so its teams are kept as they are.'
                 : 'Auto-pair makes teams of the size you choose and avoids partners students had in earlier cases; anyone left over stays here for you to place. Drag students by their handle to move them between teams.'}
+              {!closed && lockedWorldOf.size > 0 &&
+                ' A locked world’s teams stay, but its students can still move; a student who moves takes on their new team’s world.'}
             </p>
           )}
 
@@ -293,68 +303,76 @@ export function TeamsSection({
 
             {teams.length > 0 && (
               <ul className="team-grid" aria-label="Teams">
-                {teams.map((team) => (
-                  <DropZone as="li" id={teamDrop(team.id)} key={team.id} className="team-card" label={`Team ${team.number}`}>
-                    <div className="team-card-header">
-                      <h3>Team {team.number}</h3>
-                      {!closed && (
-                        <button
-                          type="button"
-                          className="link-button"
-                          onClick={() => handleDeleteTeam(team)}
-                          disabled={busy}
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                    <ul className="team-members">
-                      {team.members.map((m) => (
-                        <li key={m.email}>
-                          {closed ? (
-                            <StudentLabel student={m} />
-                          ) : (
-                            <Draggable id={m.email} label={`Drag ${displayName(m)} to another team`} className="team-drag" disabled={busy}>
+                {teams.map((team) => {
+                  const lockedWorld = lockedWorldOf.get(team.id)
+                  const keepLast = lockedWorld !== undefined && team.members.length === 1
+                  return (
+                    <DropZone as="li" id={teamDrop(team.id)} key={team.id} className="team-card" label={`Team ${team.number}`}>
+                      <div className="team-card-header">
+                        <h3>Team {team.number}</h3>
+                        {lockedWorld !== undefined && <LockedBadge world={lockedWorld} />}
+                        {!closed && lockedWorld === undefined && (
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => handleDeleteTeam(team)}
+                            disabled={busy}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                      <ul className="team-members">
+                        {team.members.map((m) => (
+                          <li key={m.email}>
+                            {closed ? (
                               <StudentLabel student={m} />
-                            </Draggable>
-                          )}
-                          {!closed && (
-                            <button
-                              type="button"
-                              className="icon-button"
-                              onClick={() =>
-                                run(() => service.removeTeamMember(courseId, caseId, team.id, m.email))
-                              }
-                              disabled={busy}
-                              aria-label={`Remove ${displayName(m)} from Team ${team.number}`}
-                              title="Remove from team"
-                            >
-                              <X aria-hidden="true" />
-                            </button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                    {!closed && team.members.length < MAX_TEAM_SIZE && unpaired.length > 0 && (
-                      <select
-                        className="team-add"
-                        value=""
-                        onChange={(e) =>
-                          run(() => service.addTeamMember(courseId, caseId, team.id, e.target.value))
-                        }
-                        disabled={busy}
-                        aria-label={`Add a student to Team ${team.number}`}
-                      >
-                        <option value="">Add a student…</option>
-                        {unpaired.map((s) => (
-                          <option key={s.email} value={s.email}>
-                            {displayName(s)}
-                          </option>
+                            ) : (
+                              <Draggable id={m.email} label={`Drag ${displayName(m)} to another team`} className="team-drag" disabled={busy}>
+                                <StudentLabel student={m} />
+                              </Draggable>
+                            )}
+                            {!closed && !keepLast && (
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() =>
+                                  run(() => service.removeTeamMember(courseId, caseId, team.id, m.email))
+                                }
+                                disabled={busy}
+                                aria-label={`Remove ${displayName(m)} from Team ${team.number}`}
+                                title="Remove from team"
+                              >
+                                <X aria-hidden="true" />
+                              </button>
+                            )}
+                          </li>
                         ))}
-                      </select>
-                    )}
-                  </DropZone>
-                ))}
+                      </ul>
+                      {!closed && team.members.length < MAX_TEAM_SIZE && unpaired.length > 0 && (
+                        <select
+                          className="team-add"
+                          value=""
+                          onChange={(e) =>
+                            run(() => service.addTeamMember(courseId, caseId, team.id, e.target.value))
+                          }
+                          disabled={busy}
+                          aria-label={`Add a student to Team ${team.number}`}
+                        >
+                          <option value="">Add a student…</option>
+                          {unpaired.map((s) => (
+                            <option key={s.email} value={s.email}>
+                              {displayName(s)}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {!closed && keepLast && (
+                        <p className="muted team-locked-note">A locked world’s team keeps at least one student.</p>
+                      )}
+                    </DropZone>
+                  )
+                })}
               </ul>
             )}
           </DndContext>

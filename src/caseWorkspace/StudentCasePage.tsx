@@ -8,10 +8,13 @@ import type {
   DiscoveryDraft,
   DraftKind,
   ExchangeKind,
+  ExhibitListItem,
+  ExhibitMove,
   Investigation,
   ItemResponse,
   ReviewResult,
   StudentExchange,
+  StudentExhibits,
   SubpoenaInput,
   TeamFlag,
 } from '../courses/types'
@@ -51,6 +54,8 @@ export function StudentCasePage() {
   const [exchange, setExchange] = useState<StudentExchange | null>(null)
   /** Whether the exchange has loaded (it's null too when not set up), so a tour finds its tab. */
   const [exchangeLoaded, setExchangeLoaded] = useState(false)
+  const [exhibits, setExhibits] = useState<StudentExhibits | null>(null)
+  const [exhibitsLoaded, setExhibitsLoaded] = useState(false)
   const [flags, setFlags] = useState<TeamFlag[]>([])
   const flagsMarked = useRef(false)
   const myCasesPath = `/courses/${courseId}/cases${workspace?.search ?? ''}`
@@ -64,7 +69,7 @@ export function StudentCasePage() {
     if (!phase || !status) return null
     return pickCaseTour((key) => (key === 'student-case' ? caseSeen : phaseSeen), caseId, phase, status)
   }, [caseId, phase, status, caseSeen, phaseSeen])
-  usePageTour(tours?.tour ?? null, { ready: Boolean(data) && exchangeLoaded, startWith: tours?.startWith ?? null })
+  usePageTour(tours?.tour ?? null, { ready: Boolean(data) && exchangeLoaded && exhibitsLoaded, startWith: tours?.startWith ?? null })
 
   useEffect(() => {
     let cancelled = false
@@ -93,6 +98,13 @@ export function StudentCasePage() {
       .then((e) => !cancelled && setExchange(e))
       .catch(() => {}) // nor its information exchange
       .finally(() => !cancelled && setExchangeLoaded(true))
+    setExhibits(null)
+    setExhibitsLoaded(false)
+    service
+      .getMyExhibits(courseId, caseId)
+      .then((x) => !cancelled && setExhibits(x))
+      .catch(() => {}) // nor its exhibit list
+      .finally(() => !cancelled && setExhibitsLoaded(true))
     return () => {
       cancelled = true
     }
@@ -177,6 +189,30 @@ export function StudentCasePage() {
     )
     service.markExchangeSeen(courseId, caseId).catch(() => {})
   }
+
+  /** The joint exhibit list's actions; each returns the list as it now stands. */
+  const exhibitActions = useMemo(
+    () => ({
+      async save(items: ExhibitListItem[]) {
+        setExhibits(await service.saveExhibitList(courseId, caseId, items))
+      },
+      async submit(items: ExhibitListItem[]) {
+        setExhibits(await service.submitExhibitList(courseId, caseId, items))
+      },
+      async move(exhibitId: string, move: ExhibitMove) {
+        setExhibits(await service.moveExhibit(courseId, caseId, exhibitId, move))
+      },
+      fileUrl: (exhibitId: string) => service.myExhibitFileUrl(courseId, caseId, exhibitId),
+      loadText: (exhibitId: string) => service.myExhibitText(courseId, caseId, exhibitId),
+    }),
+    [service, courseId, caseId],
+  )
+
+  /** Opening the Final steps tab marks what changed in the exhibit list read. */
+  const openExhibits = useCallback(() => {
+    setExhibits((prev) => prev && { ...prev, notices: { exchanged: false, objections: 0, rulings: 0, finalized: false } })
+    service.markExhibitsSeen(courseId, caseId).catch(() => {})
+  }, [service, courseId, caseId])
 
   // While a request is with the investigator or the instructor, check back for the report.
   const waiting = investigations?.some((i) => i.status === 'working') ?? false
@@ -295,11 +331,15 @@ export function StudentCasePage() {
               onSendRequest={sendRequest}
               onRespondToRequest={respondToRequest}
               onServeSubpoena={serveSubpoena}
-              onCheckDiscovery={(input) => service.checkDiscovery(courseId, caseId, input)}
+              onCheckDiscovery={(input, onProgress) => service.checkDiscovery(courseId, caseId, input, onProgress)}
+              onWarmCheck={(input) => void service.warmDiscoveryCheck(courseId, caseId, input).catch(() => {})}
               onOpenExchange={openExchange}
               exchangeDrafts={exchangeDrafts}
               initialDraftId={initialDraftId}
               onOpenDraft={openDraft}
+              exhibits={exhibits}
+              exhibitActions={exhibitActions}
+              onOpenExhibits={openExhibits}
               initialTab={initialTab}
             />
           </FlagsContext.Provider>

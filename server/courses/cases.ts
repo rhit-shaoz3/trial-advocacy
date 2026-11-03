@@ -4,8 +4,11 @@ export const CASE_STATUSES = ['draft', 'active', 'closed'] as const
 export type CaseStatus = (typeof CASE_STATUSES)[number]
 
 /** In order. Every case starts in introduction; the instructor moves it on (or back). */
-export const CASE_PHASES = ['introduction', 'information_exchange', 'investigate', 'deposition'] as const
+export const CASE_PHASES = ['introduction', 'information_exchange', 'investigate', 'deposition', 'final_steps'] as const
 export type CasePhase = (typeof CASE_PHASES)[number]
+
+/** Whether `phase` is `from` or a later one. */
+export const phaseAtLeast = (phase: CasePhase, from: CasePhase) => CASE_PHASES.indexOf(phase) >= CASE_PHASES.indexOf(from)
 
 /**
  * A case's phases: there's no information exchange phase until its setup is
@@ -71,6 +74,8 @@ export interface CourseCase {
   reviewMode: ReviewMode
   /** Whether the information exchange setup is finished (so students see it, and the case has its phase). */
   exchangeReady: boolean
+  /** Whether students get the joint exhibit list in the final steps phase. */
+  exhibitListEnabled: boolean
   /** A copy whose guided setup is just its teams and worlds, until finished. */
   copySetup: boolean
   /** The case it was copied from, and whose it was; null for a case made from scratch. */
@@ -111,7 +116,7 @@ const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "ins
   review_mode AS "reviewMode",
   EXISTS (SELECT 1 FROM information_exchange ie
           WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
-  copy_setup AS "copySetup",
+  exhibit_list_enabled AS "exhibitListEnabled", copy_setup AS "copySetup",
   CASE WHEN copied_from_title IS NULL THEN NULL
        ELSE json_build_object('title', copied_from_title, 'owner', copied_from_name) END AS "copiedFrom",
   created_at AS "createdAt", updated_at AS "updatedAt"`
@@ -202,7 +207,8 @@ export async function completeSetup(courseId: string, id: string) {
 /** Moves every world in the case to `phase`. Returns null if there was no such case. */
 export async function setCasePhase(courseId: string, id: string, phase: CasePhase) {
   const { rows } = await pool.query<CourseCase>(
-    `UPDATE cases SET phase = $3, updated_at = now()
+    `UPDATE cases SET phase = $3, updated_at = now(),
+       worlds_locked_at = CASE WHEN $3 = 'introduction' THEN worlds_locked_at ELSE coalesce(worlds_locked_at, now()) END
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [courseId, id, phase],
@@ -229,6 +235,17 @@ export async function setReviewMode(courseId: string, id: string, mode: ReviewMo
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [courseId, id, mode],
+  )
+  return rows[0] ?? null
+}
+
+/** Turns the joint exhibit list on or off for students. Returns null if there was no such case. */
+export async function setExhibitListEnabled(courseId: string, id: string, enabled: boolean) {
+  const { rows } = await pool.query<CourseCase>(
+    `UPDATE cases SET exhibit_list_enabled = $3, updated_at = now()
+     WHERE course_id = $1 AND id = $2
+     RETURNING ${CASE_COLUMNS}`,
+    [courseId, id, enabled],
   )
   return rows[0] ?? null
 }

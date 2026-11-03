@@ -1,0 +1,518 @@
+/* The joint exhibit list (final steps). Builds on the information exchange's
+   section, segment and response styles in ../exchange/exchange.css. */
+
+.xl {
+  display: grid;
+  gap: 1rem;
+}
+
+/* Legal citations like "801(c)" mustn't turn into a copyright sign. */
+.xl,
+.xl-record,
+.xl-note,
+.xl-peek {
+  font-variant-ligatures: none;
+  font-feature-settings: 'calt' 0, 'liga' 0, 'dlig' 0;
+}
+
+.review-card .xl-record {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.xl-warning,
+.xl-waiting,
+.xl-final-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.55rem;
+  font-size: 0.9rem;
+}
+
+.xl-warning {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.xl-waiting {
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+}
+
+.xl-final-note {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.xl-warning svg,
+.xl-waiting svg,
+.xl-final-note svg {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.1rem;
+}
+
+.xl-status {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.xl-plain {
+  margin: 0;
+  padding-left: 1.4rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+/* Building the list */
+
+.xl-group {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.xl-group legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.xl-options {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.xl-option {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.55rem;
+  background: var(--surface);
+}
+
+.xl-option-on {
+  border-color: var(--focus);
+}
+
+.xl-option-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.xl-option-head label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.xl-option-head input {
+  margin-top: 0.2rem;
+}
+
+.xl-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+  font-size: 0.85rem;
+}
+
+.xl-view svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.ex-segments.xl-scope button {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.xl-pages {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--fg-soft);
+}
+
+.xl-pages input {
+  width: 10rem;
+  max-width: 100%;
+}
+
+.xl-parts {
+  display: grid;
+  gap: 0.4rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.6rem;
+  border-radius: 0.5rem;
+  background: var(--subtle);
+  list-style: none;
+}
+
+.xl-parts-read {
+  /* In a tall window, the turns stay together at the top. */
+  align-content: start;
+  max-height: none;
+  background: none;
+  padding: 0;
+}
+
+.xl-parts label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.xl-parts input {
+  margin-top: 0.2rem;
+}
+
+.xl-turn {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.88rem;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.xl-turn em {
+  color: var(--tint-amber-fg);
+  font-size: 0.82rem;
+}
+
+.xl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ws-line);
+}
+
+.xl-actions .muted {
+  margin-right: auto;
+  font-size: 0.85rem;
+}
+
+.xl-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--tint-green-fg);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.xl-saved svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+/* After the exchange */
+
+.xl-steps {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.55rem;
+  background: var(--tint-blue-bg);
+  color: var(--fg);
+}
+
+.xl-steps p {
+  margin: 0;
+}
+
+.xl-steps ol {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.xl-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.xl-steps svg {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-top: 0.15rem;
+  color: var(--tint-blue-fg);
+}
+
+.xl-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.xl-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+  font-weight: 600;
+}
+
+.xl-who {
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.xl-who-plaintiff {
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+}
+
+.xl-who-defense {
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
+}
+
+.xl-authentic {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.xl-authentic svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.cw-badge.xl-badge-green {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.cw-badge.xl-badge-amber {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.cw-badge.xl-badge-blue {
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+}
+
+.cw-badge.xl-badge-rose {
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
+}
+
+.xl-label {
+  flex: none;
+  min-width: 2.6rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.xl-objection {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border-left: 3px solid var(--tint-amber-fg);
+  background: var(--tint-amber-bg);
+  font-size: 0.9rem;
+}
+
+.xl-record {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.3rem 0.9rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Each label and its text share the record's two columns, so the labels line up. */
+.xl-record div {
+  display: contents;
+}
+
+.xl-record dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.xl-record dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.xl-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.xl-note {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.xl-field {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.xl-field small {
+  display: block;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.xl-field textarea,
+.xl-field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.xl-status-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.xl-status-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0;
+  font-size: 1rem;
+}
+
+.xl-rows {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.xl-row {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.5rem;
+}
+
+.xl-out summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--fg-soft);
+}
+
+.xl-out .xl-rows {
+  margin-top: 0.5rem;
+}
+
+/* The final list */
+
+.xl-final {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.25rem;
+}
+
+.xl-final h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.xl-final-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.xl-final-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .xl-record {
+    grid-template-columns: 1fr;
+    row-gap: 0;
+  }
+
+  .xl-record dd {
+    margin-bottom: 0.35rem;
+  }
+
+  .xl-actions .muted {
+    flex-basis: 100%;
+  }
+}
+
+/* The instructor's read-only look at a world (Final steps tab) */
+.xl-peek {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0 1rem 1rem;
+}
+
+.xl-peek h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+/* A long title sits beside its label and wraps there, rather than below it. */
+.xl-final-list .xl-title {
+  flex: 1 1 10rem;
+}
+
+.xl-final-list .cw-badge {
+  white-space: normal;
+}
+
+/* A redaction in admitted text: black in either theme, edged so it shows on a dark page. */
+.xl-bar {
+  color: #000;
+  background: #000;
+  box-shadow: 0 0 0 1px var(--border-strong);
+  border-radius: 1px;
+  user-select: none;
+  letter-spacing: -0.05em;
+}

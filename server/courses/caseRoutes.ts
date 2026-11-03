@@ -15,6 +15,7 @@ import {
   REVIEW_MODES,
   setCasePhase,
   setInvestigator,
+  setExhibitListEnabled,
   setReviewMode,
   SETUP_STEPS,
   updateCase,
@@ -35,6 +36,7 @@ import { applyDisclosures, requestsOpen } from '../exchange/exchange.ts'
 import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
 import { contentSuggestions, finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
+import { caseExhibitsRouter } from '../exhibits/exhibitRoutes.ts'
 import { duplicateCase, shareCase } from './caseCopy.ts'
 import { caseFacts } from '../reviews/caseFacts.ts'
 
@@ -176,6 +178,7 @@ caseRouter.use('/materials', materialsRouter)
 caseRouter.use('/witnesses', witnessesRouter)
 caseRouter.use('/tasks', tasksRouter)
 caseRouter.use('/exchange', exchangeRouter)
+caseRouter.use('/exhibits', caseExhibitsRouter)
 
 /** The witnesses the AI suggests from the initial file, offered once while setting up the case. */
 caseRouter.get('/witness-suggestions', async (req, res) => {
@@ -254,6 +257,13 @@ caseRouter.put('/review-mode', async (req, res) => {
   const mode = readString(req.body, 'reviewMode')
   if (!REVIEW_MODES.includes(mode as ReviewMode)) throw new HttpError(400, 'Choose how to review this case.')
   res.json({ case: await setReviewMode(req.course!.id, req.courseCase!.id, mode as ReviewMode) })
+})
+
+/** `{ enabled }`: whether students get the joint exhibit list in the final steps phase. */
+caseRouter.put('/exhibit-list', async (req, res) => {
+  const enabled = (req.body as Record<string, unknown> | undefined)?.enabled
+  if (typeof enabled !== 'boolean') throw new HttpError(400, 'Say whether students get the joint exhibit list.')
+  res.json({ case: await setExhibitListEnabled(req.course!.id, req.courseCase!.id, enabled) })
 })
 
 /** The case's running list of new facts: what's settled for all worlds and each one. */

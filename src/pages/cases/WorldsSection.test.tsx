@@ -12,11 +12,12 @@ const t1: Team = { id: 't1', number: 1, members: [student('Ada'), student('Ben')
 const t2: Team = { id: 't2', number: 2, members: [student('Cy'), student('Dee')] }
 const t3: Team = { id: 't3', number: 3, members: [student('Eve'), student('Fay')] }
 
-const waiting: CaseTeams = { teams: [t1, t2, t3], unpaired: [], matchups: [] }
+const waiting: CaseTeams = { teams: [t1, t2, t3], unpaired: [], matchups: [], worldsLocked: false }
 const oneWorld: CaseTeams = {
   teams: [t1, t2, t3],
   unpaired: [],
-  matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't1', defenseTeamId: 't2' }],
+  matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't1', defenseTeamId: 't2', locked: false }],
+  worldsLocked: false,
 }
 
 function renderSection(initial: CaseTeams, overrides: Partial<CourseService> = {}, closed = false) {
@@ -45,7 +46,7 @@ describe('worldLabel', () => {
 
 describe('case worlds', () => {
   it('asks for teams first when there are none', async () => {
-    renderSection({ teams: [], unpaired: [student('Ada')], matchups: [] })
+    renderSection({ teams: [], unpaired: [student('Ada')], matchups: [], worldsLocked: false })
 
     expect(await within(await screen.findByRole('region', { name: 'Case worlds' })).findByText('Pair students into teams first.')).toBeInTheDocument()
   })
@@ -65,7 +66,7 @@ describe('case worlds', () => {
   it('auto-matches the waiting teams', async () => {
     const autoMatch = vi.fn().mockResolvedValue({
       ...waiting,
-      matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't3', defenseTeamId: 't1' }],
+      matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't3', defenseTeamId: 't1', locked: false }],
     })
     const { user } = renderSection(waiting, { autoMatch })
 
@@ -96,7 +97,7 @@ describe('case worlds', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const swapSides = vi.fn().mockResolvedValue({
       ...oneWorld,
-      matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't2', defenseTeamId: 't1' }],
+      matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't2', defenseTeamId: 't1', locked: false }],
     })
     const deleteMatchup = vi.fn().mockResolvedValue(waiting)
     const { user } = renderSection(oneWorld, { swapSides, deleteMatchup })
@@ -119,6 +120,41 @@ describe('case worlds', () => {
     await user.click(await screen.findByRole('button', { name: 'Auto-match 3 teams' }))
 
     expect(await within(worlds()).findByRole('alert')).toHaveTextContent('There are not two teams waiting')
+  })
+
+  it("doesn't swap or delete a locked world, and clears only the others", async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const twoWorlds: CaseTeams = {
+      teams: [t1, t2, t3, { id: 't4', number: 4, members: [student('Gus')] }],
+      unpaired: [],
+      matchups: [
+        { id: 'm1', number: 1, plaintiffTeamId: 't1', defenseTeamId: 't2', locked: true },
+        { id: 'm2', number: 2, plaintiffTeamId: 't3', defenseTeamId: 't4', locked: false },
+      ],
+      worldsLocked: false,
+    }
+    const clearMatchups = vi.fn().mockResolvedValue({ ...twoWorlds, matchups: [twoWorlds.matchups[0]] })
+    const { user } = renderSection(twoWorlds, { clearMatchups })
+
+    await screen.findByRole('listitem', { name: 'World A' })
+    expect(world('A')).toHaveTextContent('Locked')
+    expect(within(world('A')).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(world('B')).getByRole('button', { name: 'Swap sides' })).toBeInTheDocument()
+    // Its teams show which locked world they're in.
+    expect(screen.getByRole('listitem', { name: 'Team 1' })).toHaveTextContent('Locked · World A')
+
+    await user.click(within(worlds()).getByRole('button', { name: 'Clear unlocked worlds' }))
+    expect(clearMatchups).toHaveBeenCalledWith('c1', 'k1')
+    expect(within(worlds()).queryByRole('button', { name: /Clear/ })).not.toBeInTheDocument()
+  })
+
+  it('still makes new worlds once the case is past Introduction', async () => {
+    renderSection({ ...waiting, worldsLocked: true })
+
+    await within(await screen.findByRole('region', { name: 'Case worlds' })).findByText('Waiting for an opponent (3)')
+    expect(within(worlds()).getByRole('button', { name: /Auto-match/ })).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: 'New case world' })).toBeInTheDocument()
+    expect(worlds()).toHaveTextContent('The worlds made before the case left Introduction are locked')
   })
 
   it('is read-only for a closed case', async () => {

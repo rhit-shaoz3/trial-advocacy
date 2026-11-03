@@ -68,6 +68,7 @@ describe('creating', () => {
       investigator: { enabled: true, name: 'John Hastings', instructions: '' },
       reviewMode: 'all',
       exchangeReady: false,
+      exhibitListEnabled: true,
       // Made from scratch, not copied.
       copySetup: false,
       copiedFrom: null,

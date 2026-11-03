@@ -6,8 +6,7 @@ import { shortDate } from '../../courses/caseLabels'
 import { SUBPOENA_TYPE_HINT, SUBPOENA_TYPE_LABEL } from '../../courses/subpoenaForm'
 import type {
   CaseParties,
-  CheckInput,
-  DiscoveryCheck,
+  CheckDiscovery,
   DiscoveryDraft,
   Firm,
   KeyedCheck,
@@ -17,6 +16,7 @@ import type {
   SubpoenaInput,
   SubpoenaType,
   TeamSubpoena,
+  WarmCheckInput,
 } from '../../courses/types'
 import { DEFAULT_AI_FEEDBACK } from '../../courses/types'
 import { AiCheck } from './AiCheck'
@@ -60,6 +60,7 @@ export function SubpoenasSection({
   opponentNumber,
   onServe,
   onCheck,
+  onWarmCheck,
   onOpenDocument,
   onTeach,
   initialSubpoenaId,
@@ -76,7 +77,9 @@ export function SubpoenasSection({
   /** Leave out to make it read-only (a closed case). `draftId`: the draft it was written in. */
   onServe?(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
   /** Has the AI check the draft before it's served; leave out to serve without one. */
-  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
+  onCheck?: CheckDiscovery
+  /** A form that can be checked was opened, to get the mentor ready. */
+  onWarmCheck?(input: WarmCheckInput): void
   /** Opens a produced case file in the viewer. */
   onOpenDocument?(materialId: string): void
   onTeach(): void
@@ -111,6 +114,7 @@ export function SubpoenasSection({
           back()
         }}
         onCheck={part.aiFeedback?.enabled === false ? undefined : onCheck}
+        onWarm={part.aiFeedback?.enabled === false || !onCheck || !onWarmCheck ? undefined : () => onWarmCheck({ kind: 'subpoena', mode: 'draft' })}
         onBack={back}
         onTeach={onTeach}
       />
@@ -265,6 +269,7 @@ function Compose({
   onOpenDraft,
   onServe,
   onCheck,
+  onWarm,
   onBack,
   onTeach,
 }: {
@@ -275,7 +280,8 @@ function Compose({
   actions?: DraftActions
   onOpenDraft?(draftId: string | null): void
   onServe(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
-  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
+  onCheck?: CheckDiscovery
+  onWarm?(): void
   onBack(): void
   onTeach(): void
 }) {
@@ -422,7 +428,8 @@ function Compose({
         }
         ready={ready}
         draftKey={JSON.stringify([recipient, recipientDescription, requestType, records, justification].map((t) => t.trim()))}
-        onCheck={onCheck && ((previousCheckId) => onCheck({ kind: 'subpoena', mode: 'draft', draft: subpoena(), previousCheckId }))}
+        onCheck={onCheck && ((previousCheckId, onProgress) => onCheck({ kind: 'subpoena', mode: 'draft', draft: subpoena(), previousCheckId }, onProgress))}
+        onWarm={onWarm}
         rounds={(part.aiFeedback ?? DEFAULT_AI_FEEDBACK).rounds}
         initialCheck={draft?.lastCheck}
         onCheckChange={setLastCheck}

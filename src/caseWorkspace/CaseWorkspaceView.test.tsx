@@ -534,3 +534,35 @@ describe('CaseWorkspaceView: information exchange', () => {
     expect(onOpenExchange).toHaveBeenCalled()
   })
 })
+
+describe('the Final steps tab', () => {
+  const exhibits = {
+    side: 'defense' as const,
+    options: [],
+    mine: { side: 'defense' as const, items: [], updatedAt: null, submittedAt: '2026-10-14T10:00:00Z', submittedBy: 'Ada Lawyer' },
+    theirs: { side: 'plaintiff' as const, items: [], updatedAt: null, submittedAt: '2026-10-14T11:00:00Z', submittedBy: 'Cy Counsel' },
+    exhibits: [],
+    finalizedAt: null,
+    notices: { exchanged: true, objections: 0, rulings: 0, finalized: false },
+  }
+
+  it('shows once the exhibit list is open, with a notice when the lists are exchanged that opening it clears', async () => {
+    const onOpenExhibits = vi.fn()
+    const { user } = renderView({
+      workspace: { ...sampleWorkspace, case: { ...sampleWorkspace.case, phase: 'final_steps' } },
+      exhibits,
+      onOpenExhibits,
+    })
+    expect(screen.getByRole('tab', { name: 'Final steps, 1' })).toBeInTheDocument()
+    expect(screen.getByText('Exhibit lists exchanged: the other side’s list is ready to review')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Open Final steps' }))
+    expect(screen.getByRole('heading', { name: 'Settle the exhibits for trial' })).toBeInTheDocument()
+    expect(onOpenExhibits).toHaveBeenCalled()
+  })
+
+  it('stays hidden without an exhibit list', () => {
+    renderView()
+    expect(screen.queryByRole('tab', { name: /Final steps/ })).not.toBeInTheDocument()
+  })
+})

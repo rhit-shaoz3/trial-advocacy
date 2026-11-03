@@ -52,7 +52,7 @@ describe('creating case worlds by hand', () => {
     const res = await prof.post(`${caseUrl()}/matchups`).send({ plaintiffTeamId: t1.id, defenseTeamId: t2.id })
     expect(res.status).toBe(201)
     expect(res.body.matchups).toEqual([
-      { id: expect.any(String), number: 1, plaintiffTeamId: t1.id, defenseTeamId: t2.id },
+      { id: expect.any(String), number: 1, plaintiffTeamId: t1.id, defenseTeamId: t2.id, locked: false },
     ])
 
     const second = await prof.post(`${caseUrl()}/matchups`).send({ plaintiffTeamId: t4.id, defenseTeamId: t3.id })
@@ -241,7 +241,7 @@ describe('the course home cases', () => {
         progress: null,
         // Launched into its first phase; John Hastings is on by default, and there's no information exchange set up.
         phase: 'introduction',
-        phases: ['introduction', 'investigate', 'deposition'],
+        phases: ['introduction', 'investigate', 'deposition', 'final_steps'],
         nextMilestone: null,
         nextTask: null,
         participants: [{ name: 'Ada Lawyer', avatarUrl: null }, { name: email(2), avatarUrl: null }, { name: email(3), avatarUrl: null }, { name: email(4), avatarUrl: null }],

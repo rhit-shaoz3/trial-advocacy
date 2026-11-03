@@ -68,11 +68,12 @@ describe('PhasePanel', () => {
 
   it('shows errors, and is read-only once the case is closed', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const { user } = renderPanel({ ...coaster, phase: 'deposition' }, {
+    const { user } = renderPanel({ ...coaster, phase: 'final_steps' }, {
       setCasePhase: vi.fn().mockRejectedValue(new Error('This case is closed, so its phase can no longer change.')),
     })
+    // Final steps is the last phase.
     expect(screen.queryByRole('button', { name: /Move to/ })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Back to Investigate' }))
+    await user.click(screen.getByRole('button', { name: 'Back to Deposition' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('This case is closed')
   })
 
@@ -102,7 +103,7 @@ describe('PhasePanel', () => {
         }),
       },
     )
-    expect(within(screen.getByRole('list', { name: 'Phases' })).getAllByRole('listitem')).toHaveLength(4)
+    expect(within(screen.getByRole('list', { name: 'Phases' })).getAllByRole('listitem')).toHaveLength(5)
 
     await user.click(screen.getByRole('button', { name: 'Move to Information exchange' }))
     const dialog = await screen.findByRole('dialog', { name: 'Move to information exchange?' })
@@ -122,7 +123,7 @@ describe('PhasePanel', () => {
     const { user, service } = renderPanel({ ...coaster, investigator: { enabled: false, name: 'John Hastings', instructions: '' } })
 
     const steps = within(screen.getByRole('list', { name: 'Phases' })).getAllByRole('listitem')
-    expect(steps.map((s) => s.textContent)).toEqual(['1Introduction', '2Deposition'])
+    expect(steps.map((s) => s.textContent)).toEqual(['1Introduction', '2Deposition', '3Final steps'])
     expect(screen.getByText(/initial disclosures\. Every case world/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Move to Deposition/ }))
     expect(service.setCasePhase).toHaveBeenCalledWith('c1', 'k1', 'deposition')

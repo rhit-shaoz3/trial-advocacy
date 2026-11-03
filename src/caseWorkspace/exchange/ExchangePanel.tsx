@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react'
 import { BookOpen, CheckCheck, CircleHelp, Lock, ScrollText, Users } from 'lucide-react'
 import type {
   CaseParties,
-  CheckInput,
-  DiscoveryCheck,
+  CheckDiscovery,
   DisclosurePick,
   ExchangeKind,
   ItemResponse,
   StudentExchange,
   SubpoenaInput,
+  WarmCheckInput,
 } from '../../courses/types'
 import { DisclosuresSection } from './DisclosuresSection'
 import { RequestsSection } from './RequestsSection'
@@ -41,6 +41,7 @@ export function ExchangePanel({
   onRespond,
   onServeSubpoena,
   onCheck,
+  onWarmCheck,
   onOpenDocument,
   subpoenaForm,
   focus,
@@ -56,7 +57,9 @@ export function ExchangePanel({
   onRespond?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
   onServeSubpoena?(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
   /** "Check with AI" before sending; leave out to send without it. */
-  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
+  onCheck?: CheckDiscovery
+  /** A form that can be checked was opened, to get the mentor ready. */
+  onWarmCheck?(input: WarmCheckInput): void
   /** Opens a case file produced in answer to a subpoena. */
   onOpenDocument?(materialId: string): void
   /** The case and student, for filling in the subpoena form. */
@@ -126,7 +129,7 @@ export function ExchangePanel({
       parts.find((p) => !p.locked)?.id ??
       parts[0]?.id,
   )
-  const [teach, setTeach] = useState<TeachTopic | null>(null)
+  const [teach, setTeach] = useState<Exclude<TeachTopic, 'exhibits'> | null>(null)
   // Guided tours open the section a step is about.
   const sectionIds = parts.map((p) => p.id).join(' ')
   const tourNavigator = useMemo(
@@ -203,6 +206,7 @@ export function ExchangePanel({
             opponentNumber={exchange.opponentNumber}
             onServe={onServeSubpoena}
             onCheck={onCheck}
+            onWarmCheck={onWarmCheck}
             onOpenDocument={onOpenDocument}
             onTeach={() => setTeach('subpoenas')}
             initialSubpoenaId={focus?.kind === 'subpoenas' ? focus.id : undefined}
@@ -223,6 +227,7 @@ export function ExchangePanel({
             onSend={onSend && ((items, checkId, draftId) => onSend(section, items, checkId, draftId))}
             onRespond={onRespond}
             onCheck={onCheck}
+            onWarmCheck={onWarmCheck}
             onTeach={() => setTeach(section)}
             initialRequestId={focus?.kind === section ? focus.id : undefined}
             drafts={drafts}

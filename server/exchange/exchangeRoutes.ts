@@ -43,7 +43,7 @@ import {
   type SubpoenaType,
   type TeamContext,
 } from './exchange.ts'
-import { runCheck, submissionCheck, type CheckDraft } from './discoveryChecks.ts'
+import { finishCheck, prepareCheck, submissionCheck, warmCheck, type CheckDraft } from './discoveryChecks.ts'
 import { createDraft, deleteDraft, DRAFT_KINDS, listDrafts, updateDraft, type DiscoveryDraft, type DraftKind } from './drafts.ts'
 import {
   markSubpoenasSeen,
@@ -414,6 +414,10 @@ const readSubpoena = (body: unknown, settings: SubpoenaSettings) => ({
   justification: readString(body, 'justification'),
 })
 
+/** The part's AI feedback settings, for a kind of draft. */
+const aiFeedbackFor = (settings: Awaited<ReturnType<typeof getSettings>>, kind: string) =>
+  (kind === 'subpoena' ? settings.subpoenas : settings[kind as ExchangeKind]).aiFeedback
+
 /**
  * Has the discovery mentor check a draft before it's sent: `{ kind, mode,
  * requestId, draft }`. A subpoena's `draft` is the subpoena; a set's is `{
@@ -422,6 +426,13 @@ const readSubpoena = (body: unknown, settings: SubpoenaSettings) => ({
  * (`previousCheckId`); answers find theirs by the set. Returns `{ check: { id,
  * tag, feedback, round } }`; send the `id` with the submission. `409` when the
  * part's AI feedback is off, or the draft has used its rounds.
+ *
+ * With `Accept: application/x-ndjson`, the feedback streams as it's written,
+ * one JSON object a line: `{ type: 'tag', tag }` once the tag line is in,
+ * `{ type: 'text', text }` for each piece of feedback after it, `{ type:
+ * 'wait' }` every few seconds while the mentor thinks, and last `{ type:
+ * 'done', check }` or `{ type: 'error', error }`. Refusals (out of rounds,
+ * AI feedback off) still come back as plain JSON errors, before any line.
  */
 myExchangeRouter.post('/check', async (req, res) => {
   const ctx = await requireStudentContext(req)
@@ -448,9 +459,55 @@ myExchangeRouter.post('/check', async (req, res) => {
       draft = { kind: kind as ExchangeKind, mode: 'draft', items }
     }
   } else throw new HttpError(400, 'Choose what to check.')
-  const ai = (kind === 'subpoena' ? settings.subpoenas : settings[kind as ExchangeKind]).aiFeedback
+  const ai = aiFeedbackFor(settings, kind)
   if (!ai.enabled) throw new HttpError(409, 'AI feedback is turned off for this part of the case.')
-  res.json({ check: await runCheck(ctx, draft, { previousCheckId: field(req.body, 'previousCheckId'), rounds: ai.rounds }) })
+  const prepared = await prepareCheck(ctx, draft, { previousCheckId: field(req.body, 'previousCheckId'), rounds: ai.rounds })
+  if (req.accepts(['application/json', 'application/x-ndjson']) !== 'application/x-ndjson') {
+    res.json({ check: await finishCheck(prepared) })
+    return
+  }
+
+  res.status(200).type('application/x-ndjson').set('Cache-Control', 'no-cache')
+  res.flushHeaders()
+  const line = (value: object) => res.write(`${JSON.stringify(value)}\n`)
+  // Something every few seconds while the mentor thinks, so nothing on the
+  // way (Heroku's router) gives up on a quiet connection.
+  const wait = setInterval(() => line({ type: 'wait' }), 10_000)
+  try {
+    const check = await finishCheck(prepared, {
+      onTag: (tag) => line({ type: 'tag', tag }),
+      onText: (text) => line({ type: 'text', text }),
+    })
+    line({ type: 'done', check })
+  } catch (err) {
+    line({ type: 'error', error: err instanceof HttpError ? err.message : 'Something went wrong. Please try again.' })
+  } finally {
+    clearInterval(wait)
+    res.end()
+  }
+})
+
+/**
+ * A team opened a form it can check with AI: `{ kind, mode, requestId? }`.
+ * Loads the mentor's prompt for that kind of draft into the cache in the
+ * background, so the first check is quicker. `204` either way; nothing
+ * happens when the part's AI feedback is off, or it was loaded within the hour.
+ */
+myExchangeRouter.post('/check/warm', async (req, res) => {
+  const ctx = await requireStudentContext(req)
+  const settings = await getSettings(ctx.caseId)
+  const kind = readString(req.body, 'kind')
+  const mode = readString(req.body, 'mode')
+  const requestId = readString(req.body, 'requestId')
+  let draft: CheckDraft | null = null
+  if (kind === 'subpoena' && settings.subpoenas.enabled) {
+    draft = { kind, mode: 'draft', subpoena: { recipient: '', recipientDescription: '', requestType: '', records: '', justification: '' } }
+  } else if (EXCHANGE_KINDS.includes(kind as ExchangeKind) && settings[kind as ExchangeKind].enabled) {
+    if (mode === 'answer') draft = isUuid(requestId) ? { kind: kind as ExchangeKind, mode: 'answer', requestId, responses: [] } : null
+    else draft = { kind: kind as ExchangeKind, mode: 'draft', items: [] }
+  }
+  if (draft && requestsOpen(ctx.phase) && aiFeedbackFor(settings, kind).enabled) warmCheck(ctx, draft)
+  res.status(204).end()
 })
 
 /** The team's responses to a set it received: `{ responses: [{ position, answer, objection, admission, agreePart, disagreePart }] }`. */

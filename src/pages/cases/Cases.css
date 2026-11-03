@@ -1676,3 +1676,22 @@ a.case-row:hover {
   height: 0.85rem;
   color: var(--tint-amber-fg);
 }
+
+/* A case world whose teams can't change any more. */
+.badge-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
+}
+
+.badge-locked svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.team-locked-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+}

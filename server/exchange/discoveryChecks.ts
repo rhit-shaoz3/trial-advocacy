@@ -17,6 +17,7 @@ import {
   type SubpoenaType,
   type TeamContext,
 } from './exchange.ts'
+import type { MentorProgress, MentorReview } from './mentor.ts'
 import type { CheckMode, DiscoveryKind, MentorContext, MentorTag, PriorDiscovery } from './mentorPrompt.ts'
 import { teamSubpoenas } from './subpoenas.ts'
 
@@ -244,11 +245,56 @@ async function previousCheck(ctx: TeamContext, draft: CheckDraft, previousCheckI
   return rows[0] ?? null
 }
 
+/** A team's last warm-up or check of each draft's prompt (team, kind, mode, set), to keep warm-ups to one an hour. */
+const lastLoaded = new Map<string, number>()
+/** Under the cache's hour, so a warm-up is never skipped for a cache that's about to expire. */
+const WARM_EVERY_MS = 50 * 60 * 1000
+const loadKey = (ctx: TeamContext, draft: CheckDraft) =>
+  [ctx.teamId, draft.kind, draft.mode, draft.mode === 'answer' ? draft.requestId : ''].join(':')
+
+const warming = new Set<Promise<unknown>>()
+/** Resolves once warm-ups in flight are done (tests wait for it before resetting the database). */
+export const warmsSettled = () => Promise.allSettled(warming)
+
 /**
- * Has the mentor review the draft, and keeps the check for the submission
- * that follows. `rounds` is how many checks one draft gets (null: unlimited).
+ * Loads the mentor's prompt for this draft into the cache in the background,
+ * so the team's first check doesn't wait for the case files to be read.
+ * Only the kind of draft matters (its content is the check's message), and
+ * at most once an hour for each.
  */
-export async function runCheck(ctx: TeamContext, draft: CheckDraft, options: { previousCheckId?: unknown; rounds?: number | null } = {}) {
+export function warmCheck(ctx: TeamContext, draft: CheckDraft) {
+  const key = loadKey(ctx, draft)
+  if (Date.now() - (lastLoaded.get(key) ?? 0) < WARM_EVERY_MS) return
+  lastLoaded.set(key, Date.now())
+  const job = mentorContext(ctx, draft)
+    .then((context) => ai.warmMentor(context))
+    .then(
+      (u) => console.log(`mentor warm-up: cache read ${u.cacheReadTokens} / write ${u.cacheWriteTokens}`),
+      (err) => {
+        // Not set up, a set that's gone, the API down: the check will just load it itself.
+        lastLoaded.delete(key)
+        if (!(err instanceof AiNotConfiguredError) && !(err instanceof HttpError)) console.error('Could not warm the mentor:', err)
+      },
+    )
+  warming.add(job)
+  void job.finally(() => warming.delete(job))
+}
+
+/** A check ready for the mentor: its round is allowed and its context gathered. */
+export interface PreparedCheck {
+  ctx: TeamContext
+  draft: CheckDraft
+  context: MentorContext
+  round: number
+  previousId: string | null
+}
+
+/**
+ * Everything before the mentor reads the draft, so a refusal (out of rounds,
+ * a set that's gone) comes back before any feedback starts streaming.
+ * `rounds` is how many checks one draft gets (null: unlimited).
+ */
+export async function prepareCheck(ctx: TeamContext, draft: CheckDraft, options: { previousCheckId?: unknown; rounds?: number | null } = {}): Promise<PreparedCheck> {
   const previous = await previousCheck(ctx, draft, options.previousCheckId)
   const round = (previous?.round ?? 0) + 1
   const rounds = options.rounds ?? null
@@ -260,16 +306,33 @@ export async function runCheck(ctx: TeamContext, draft: CheckDraft, options: { p
     previous: previous ? { round: previous.round, feedback: previous.feedback } : undefined,
     finalRound: rounds !== null && round === rounds,
   }
-  let result: { tag: MentorTag; feedback: string }
+  return { ctx, draft, context, round, previousId: previous?.id ?? null }
+}
+
+const seconds = (ms: number | null | undefined) => (ms == null ? '?' : `${(ms / 1000).toFixed(1)}s`)
+
+/** Has the mentor review a prepared check (streaming its feedback to `progress`), and keeps the check for the submission. */
+export async function finishCheck({ ctx, draft, context, round, previousId }: PreparedCheck, progress?: MentorProgress) {
+  // The check loads the prompt into the cache too.
+  lastLoaded.set(loadKey(ctx, draft), Date.now())
+  let result: MentorReview
   try {
-    result = await ai.reviewDiscovery(context)
+    result = await ai.reviewDiscovery(context, progress)
   } catch (err) {
     if (!(err instanceof AiNotConfiguredError)) console.error('Could not check a discovery draft:', err)
     throw new HttpError(502, err instanceof AiNotConfiguredError ? err.message : 'The AI couldn’t check your draft just now. Try again, or send it as it is.')
   }
+  const u = result.usage
+  if (u) {
+    console.log(
+      `mentor check: ${seconds(u.durationMs)} total, first text ${seconds(u.firstTextMs)}, ` +
+        `cache read ${u.cacheReadTokens} / write ${u.cacheWriteTokens} / input ${u.inputTokens} / output ${u.outputTokens}`,
+    )
+  }
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO discovery_checks (case_id, team_id, kind, mode, request_id, content_hash, tag, feedback, checked_by, round, previous_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+    `INSERT INTO discovery_checks (case_id, team_id, kind, mode, request_id, content_hash, tag, feedback, checked_by, round, previous_id,
+                                   duration_ms, first_text_ms, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
     [
       ctx.caseId,
       ctx.teamId,
@@ -281,10 +344,21 @@ export async function runCheck(ctx: TeamContext, draft: CheckDraft, options: { p
       result.feedback,
       ctx.userId,
       round,
-      previous?.id ?? null,
+      previousId,
+      u?.durationMs ?? null,
+      u?.firstTextMs ?? null,
+      u?.inputTokens ?? null,
+      u?.cacheReadTokens ?? null,
+      u?.cacheWriteTokens ?? null,
+      u?.outputTokens ?? null,
     ],
   )
   return { id: rows[0].id, tag: result.tag, feedback: result.feedback, round }
+}
+
+/** Has the mentor review the draft, and keeps the check for the submission that follows. */
+export async function runCheck(ctx: TeamContext, draft: CheckDraft, options: { previousCheckId?: unknown; rounds?: number | null } = {}) {
+  return finishCheck(await prepareCheck(ctx, draft, options))
 }
 
 /**

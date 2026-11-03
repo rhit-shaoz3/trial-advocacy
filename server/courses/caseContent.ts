@@ -285,12 +285,17 @@ export async function listStorageKeys(scope: { caseId: string } | { courseId: st
     'caseId' in scope
       ? `SELECT storage_key AS key FROM case_materials WHERE case_id = $1 AND storage_key IS NOT NULL
          UNION ALL
-         SELECT avatar_key FROM case_witnesses WHERE case_id = $1 AND avatar_key IS NOT NULL`
+         SELECT avatar_key FROM case_witnesses WHERE case_id = $1 AND avatar_key IS NOT NULL
+         UNION ALL
+         SELECT admitted_key FROM exhibits WHERE case_id = $1 AND admitted_key IS NOT NULL`
       : `SELECT m.storage_key AS key FROM case_materials m JOIN cases c ON c.id = m.case_id
          WHERE c.course_id = $1 AND m.storage_key IS NOT NULL
          UNION ALL
          SELECT w.avatar_key FROM case_witnesses w JOIN cases c ON c.id = w.case_id
-         WHERE c.course_id = $1 AND w.avatar_key IS NOT NULL`,
+         WHERE c.course_id = $1 AND w.avatar_key IS NOT NULL
+         UNION ALL
+         SELECT x.admitted_key FROM exhibits x JOIN cases c ON c.id = x.case_id
+         WHERE c.course_id = $1 AND x.admitted_key IS NOT NULL`,
     ['caseId' in scope ? scope.caseId : scope.courseId],
   )
   return rows.map((r) => r.key)

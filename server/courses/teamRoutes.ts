@@ -11,6 +11,7 @@ import {
   MAX_AUTO_TEAM_SIZE,
   MAX_TEAM_SIZE,
   MIN_AUTO_TEAM_SIZE,
+  moveMember,
   removeMember,
 } from './teams.ts'
 
@@ -87,4 +88,10 @@ teamsRouter.post('/:teamId/members', async (req, res) => {
 teamsRouter.delete('/:teamId/members/:email', async (req, res) => {
   const { teamId, email } = req.params
   res.json(await removeMember(req.course!.id, req.courseCase!.id, readTeamId(teamId), normalize(email)))
+})
+
+/** Moves a student who is on another team onto this one. */
+teamsRouter.put('/:teamId/members/:email', async (req, res) => {
+  const { teamId, email } = req.params
+  res.json(await moveMember(req.course!.id, req.courseCase!.id, readTeamId(teamId), normalize(email)))
 })

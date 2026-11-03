@@ -7,6 +7,7 @@ import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFi
 import { questionWeight } from './exchange.ts'
 import { buildSubpoenaMessage, buildSubpoenaPrompt, type SubpoenaContext } from './subpoenaPrompt.ts'
 import { subpoenasSettled } from './subpoenas.ts'
+import { warmsSettled } from './discoveryChecks.ts'
 import { buildMentorPrompt, type MentorContext, type MentorTag } from './mentorPrompt.ts'
 
 let prof: request.Agent
@@ -873,6 +874,111 @@ describe('checking with AI', () => {
     const res = await check(ada, { kind: 'rfas', mode: 'draft', draft: { items: ['Admit the harness was red.'] } })
     expect(res.status).toBe(502)
     expect(res.body.error).toMatch(/couldn’t check your draft/)
+  })
+  /** A check that streams its feedback: the lines it sent, parsed. */
+  const streamed = async (agent: request.Agent, body: object) => {
+    const res = await agent
+      .post(`${exchangeUrl()}/check`)
+      .set('Accept', 'application/x-ndjson')
+      .send(body)
+      .buffer(true)
+      .parse((r, done) => {
+        let text = ''
+        r.on('data', (chunk: Buffer) => (text += chunk.toString()))
+        r.on('end', () => done(null, text))
+      })
+    const lines = res.headers['content-type']?.includes('ndjson')
+      ? (res.body as string).split('\n').filter(Boolean).map((l) => JSON.parse(l))
+      : []
+    return { res, lines }
+  }
+
+  it('streams the feedback as it’s written, keeping the check and how long it took', async () => {
+    await toExchange()
+    ai.reviewDiscovery = async (context, progress) => {
+      seen.push(structuredClone(context))
+      progress?.onTag?.('SMALL_EDITS')
+      progress?.onText?.('Interrogatory 1: ')
+      progress?.onText?.('Who, exactly?')
+      return {
+        tag: 'SMALL_EDITS',
+        feedback: 'Interrogatory 1: Who, exactly?',
+        usage: { durationMs: 8400, firstTextMs: 6100, inputTokens: 380, cacheReadTokens: 41200, cacheWriteTokens: 0, outputTokens: 410 },
+      }
+    }
+    const { res, lines } = await streamed(ada, { kind: 'interrogatories', mode: 'draft', draft: { items: ['Who inspected it?'] } })
+    expect(res.status).toBe(200)
+    const done = lines.at(-1)
+    expect(lines).toEqual([
+      { type: 'tag', tag: 'SMALL_EDITS' },
+      { type: 'text', text: 'Interrogatory 1: ' },
+      { type: 'text', text: 'Who, exactly?' },
+      { type: 'done', check: { id: expect.any(String), tag: 'SMALL_EDITS', feedback: 'Interrogatory 1: Who, exactly?', round: 1 } },
+    ])
+    const { rows } = await pool.query(
+      `SELECT duration_ms, first_text_ms, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens FROM discovery_checks WHERE id = $1`,
+      [done.check.id],
+    )
+    expect(rows[0]).toEqual({
+      duration_ms: 8400,
+      first_text_ms: 6100,
+      input_tokens: 380,
+      cache_read_tokens: 41200,
+      cache_write_tokens: 0,
+      output_tokens: 410,
+    })
+    // Without asking to stream, the same check comes back as one JSON reply.
+    const plain = await check(ada, { kind: 'interrogatories', mode: 'draft', draft: { items: ['Who?'] } })
+    expect(plain.body.check).toMatchObject({ tag: 'SMALL_EDITS', feedback: 'Interrogatory 1: Who, exactly?', round: 1 })
+  })
+
+  it('refuses before streaming, and ends the stream with an error when the AI can’t check', async () => {
+    await prof.put(`${caseUrl()}/exchange`).send({ ...SETTINGS, rfas: { ...SETTINGS.rfas, aiFeedback: { enabled: false, rounds: null } } })
+    await toExchange()
+    const off = await streamed(ada, { kind: 'rfas', mode: 'draft', draft: { items: ['Admit it.'] } })
+    expect(off.res.status).toBe(409)
+    expect(off.lines).toEqual([])
+
+    ai.reviewDiscovery = async () => {
+      throw new Error('overloaded')
+    }
+    const failed = await streamed(ada, { kind: 'interrogatories', mode: 'draft', draft: { items: ['Who?'] } })
+    expect(failed.res.status).toBe(200)
+    expect(failed.lines.at(-1)).toEqual({ type: 'error', error: expect.stringMatching(/couldn’t check your draft/) })
+  })
+
+  it('loads the prompt into the cache when a form opens, once an hour, the same prompt a check reads', async () => {
+    const warmed: MentorContext[] = []
+    ai.warmMentor = async (context) => {
+      warmed.push(structuredClone(context))
+      return { cacheReadTokens: 0, cacheWriteTokens: 30000 }
+    }
+    const warm = (agent: request.Agent, body: object) => agent.post(`${exchangeUrl()}/check/warm`).send(body)
+    // Not before requests open.
+    expect((await warm(ada, { kind: 'subpoena', mode: 'draft' })).status).toBe(204)
+    await warmsSettled()
+    expect(warmed).toHaveLength(0)
+
+    await toExchange()
+    await warm(ada, { kind: 'subpoena', mode: 'draft' })
+    await warm(ada, { kind: 'subpoena', mode: 'draft' })
+    await warmsSettled()
+    expect(warmed).toHaveLength(1)
+    await check(ada, { kind: 'subpoena', mode: 'draft', draft: subpoena })
+    expect(buildMentorPrompt(warmed[0])).toBe(buildMentorPrompt(seen[0]))
+
+    // A check loads it too, so a form opened after one doesn't warm again.
+    await check(ada, { kind: 'rfas', mode: 'draft', draft: { items: ['Admit it.'] } })
+    await warm(ada, { kind: 'rfas', mode: 'draft' })
+    await warmsSettled()
+    expect(warmed).toHaveLength(1)
+
+    // Nothing when the part's AI feedback is off, or for a kind it doesn't know.
+    await prof.put(`${caseUrl()}/exchange`).send({ ...SETTINGS, interrogatories: { ...SETTINGS.interrogatories, aiFeedback: { enabled: false, rounds: null } } })
+    await warm(ada, { kind: 'interrogatories', mode: 'draft' })
+    expect((await warm(ada, { kind: 'motions', mode: 'draft' })).status).toBe(204)
+    await warmsSettled()
+    expect(warmed).toHaveLength(1)
   })
 })
 

@@ -29,6 +29,7 @@ const data: CaseTeams = {
   ],
   unpaired: [dee],
   matchups: [],
+  worldsLocked: false,
 }
 const dragged = (id: string, overId: string | null) => ({ active: { id }, over: overId && { id: overId } }) as DragEndEvent
 
@@ -37,6 +38,7 @@ async function renderTeams() {
     listTeams: vi.fn().mockResolvedValue(data),
     removeTeamMember: vi.fn().mockResolvedValue(data),
     addTeamMember: vi.fn().mockResolvedValue(data),
+    moveTeamMember: vi.fn().mockResolvedValue(data),
     createMatchup: vi.fn().mockResolvedValue(data),
   })
   render(
@@ -49,12 +51,13 @@ async function renderTeams() {
 }
 
 describe('dragging students between teams', () => {
-  it('moves a student from one team to another', async () => {
+  it('moves a student from one team to another in one step', async () => {
     const service = await renderTeams()
     drops['teams-dnd'](dragged(ada.email, 'team:t2'))
 
-    await waitFor(() => expect(service.addTeamMember).toHaveBeenCalledWith('c1', 'k1', 't2', ada.email))
-    expect(service.removeTeamMember).toHaveBeenCalledWith('c1', 'k1', 't1', ada.email)
+    await waitFor(() => expect(service.moveTeamMember).toHaveBeenCalledWith('c1', 'k1', 't2', ada.email))
+    expect(service.removeTeamMember).not.toHaveBeenCalled()
+    expect(service.addTeamMember).not.toHaveBeenCalled()
   })
 
   it('adds an unpaired student to a team, or takes one off their team', async () => {

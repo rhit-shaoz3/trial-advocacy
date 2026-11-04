@@ -434,8 +434,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS material_shares_team_idx ON material_shares (m
 ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_phase_check;
 UPDATE cases SET phase = 'introduction' WHERE phase = 'subpoena';
 ALTER TABLE cases ALTER COLUMN phase SET DEFAULT 'introduction';
+-- (final_steps is listed here too, so this still passes on a database that
+-- already has cases in that phase; it's added again below.)
 ALTER TABLE cases ADD CONSTRAINT cases_phase_check
-  CHECK (phase IN ('introduction', 'information_exchange', 'investigate', 'deposition'));
+  CHECK (phase IN ('introduction', 'information_exchange', 'investigate', 'deposition', 'final_steps'));
 
 -- A case's information exchange settings, from its own guided setup: which
 -- parts are included, each team's limit and the days the other side has to
@@ -776,6 +778,16 @@ CREATE INDEX IF NOT EXISTS discovery_checks_team_idx ON discovery_checks (team_i
 ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS round integer NOT NULL DEFAULT 1;
 ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS previous_id uuid REFERENCES discovery_checks (id) ON DELETE SET NULL;
 
+-- How long the mentor took (in all, and until its first word of feedback,
+-- after thinking) and the tokens it used: how much of the prompt came from
+-- the cache, was written to it, or was read fresh. Null before these were kept.
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS duration_ms integer;
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS first_text_ms integer;
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS input_tokens integer;
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS cache_read_tokens integer;
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS cache_write_tokens integer;
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS output_tokens integer;
+
 -- The last check before a submission, for the instructor: its tag and
 -- feedback, and whether the submission is the draft that was checked (false:
 -- edited after). Null tag: sent without a check. On a set, check_* is the
@@ -884,3 +896,133 @@ CREATE TABLE IF NOT EXISTS flag_seen (
   seen_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (flag_id, user_id)
 );
+
+-- When the case first left the introduction phase. From then on every case
+-- world's teams are set (students can still move between teams), even if the
+-- case moves back. A world also locks on its own once it has facts or files
+-- of its own (see lockedWorlds in server/courses/teams.ts).
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS worlds_locked_at timestamptz;
+UPDATE cases SET worlds_locked_at = updated_at WHERE worlds_locked_at IS NULL AND phase <> 'introduction';
+
+-- Final steps ----------------------------------------------------------------
+
+-- The last phase: each case world's two sides build and exchange their trial
+-- exhibit lists (later, also a final report).
+ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_phase_check;
+ALTER TABLE cases ADD CONSTRAINT cases_phase_check
+  CHECK (phase IN ('introduction', 'information_exchange', 'investigate', 'deposition', 'final_steps'));
+
+-- Whether students get the joint exhibit list in the final steps phase.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS exhibit_list_enabled boolean NOT NULL DEFAULT true;
+
+-- One side's exhibit list in a case world: a draft until submitted, and fixed
+-- after. `finalized_at` is set on both sides' lists once every exhibit in the
+-- world is decided.
+CREATE TABLE IF NOT EXISTS exhibit_lists (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  matchup_id   uuid        NOT NULL REFERENCES matchups (id) ON DELETE CASCADE,
+  side         text        NOT NULL CHECK (side IN ('plaintiff', 'defense')),
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  submitted_at timestamptz,
+  submitted_by uuid        REFERENCES users (id) ON DELETE SET NULL,
+  finalized_at timestamptz,
+  UNIQUE (matchup_id, side)
+);
+
+CREATE INDEX IF NOT EXISTS exhibit_lists_case_idx ON exhibit_lists (case_id);
+
+-- What a list holds: a case file, a deposition transcript the team took, or
+-- one of its investigator reports. `parts` picks a file's pages (from 1),
+-- transcript turns (by position) or report paragraphs (from 0); null is the
+-- whole thing.
+CREATE TABLE IF NOT EXISTS exhibit_list_items (
+  list_id      uuid    NOT NULL REFERENCES exhibit_lists (id) ON DELETE CASCADE,
+  position     integer NOT NULL,
+  material_id  uuid    REFERENCES case_materials (id) ON DELETE CASCADE,
+  interview_id uuid    REFERENCES interviews (id) ON DELETE CASCADE,
+  report_id    uuid    REFERENCES interview_reviews (id) ON DELETE CASCADE,
+  parts        integer[],
+  -- As the team saw it when saving, with the parts it chose.
+  title        text    NOT NULL,
+  PRIMARY KEY (list_id, position),
+  CHECK (num_nonnulls(material_id, interview_id, report_id) = 1)
+);
+
+-- The exhibits of a case world, made when both sides have submitted. Joint
+-- exhibits (both sides listed them) are the plaintiff's. Each moves through
+-- authenticity (the other side agrees, or challenges and the instructor
+-- rules) and then admissibility (the other side admits, or objects; the
+-- offering side drops it or answers, and the instructor rules). `snapshot`
+-- holds the chosen transcript turns or report paragraphs as they were.
+CREATE TABLE IF NOT EXISTS exhibits (
+  id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id           uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  matchup_id        uuid        NOT NULL REFERENCES matchups (id) ON DELETE CASCADE,
+  offered_by        text        NOT NULL CHECK (offered_by IN ('plaintiff', 'defense')),
+  joint             boolean     NOT NULL DEFAULT false,
+  position          integer     NOT NULL,
+  material_id       uuid        REFERENCES case_materials (id) ON DELETE CASCADE,
+  interview_id      uuid        REFERENCES interviews (id) ON DELETE CASCADE,
+  report_id         uuid        REFERENCES interview_reviews (id) ON DELETE CASCADE,
+  parts             integer[],
+  title             text        NOT NULL,
+  snapshot          jsonb,
+  status            text        NOT NULL CHECK (status IN (
+                      'awaiting_authenticity', 'authenticity_review', 'inauthentic',
+                      'awaiting_admission', 'objection_response', 'admission_review',
+                      'dropped', 'admitted', 'excluded')),
+  authenticated     boolean     NOT NULL DEFAULT false,
+  authenticity_note text,
+  objection         text,
+  response          text,
+  accepts_redaction text,
+  -- The instructor's rulings: on an authenticity challenge, then on an objection.
+  authenticity_ruling      text CHECK (authenticity_ruling IN ('authenticated', 'inauthentic')),
+  authenticity_ruling_note text,
+  ruling            text        CHECK (ruling IN ('overruled', 'sustained', 'partial')),
+  ruling_note       text,
+  redaction         text,
+  ruled_by          uuid        REFERENCES users (id) ON DELETE SET NULL,
+  ruled_at          timestamptz,
+  superseded_by     uuid        REFERENCES exhibits (id) ON DELETE SET NULL,
+  label             text,
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  CHECK (num_nonnulls(material_id, interview_id, report_id) = 1)
+);
+
+CREATE INDEX IF NOT EXISTS exhibits_matchup_idx ON exhibits (matchup_id);
+CREATE INDEX IF NOT EXISTS exhibits_case_idx ON exhibits (case_id);
+
+-- When each student last looked at their world's exhibits, for notices.
+CREATE TABLE IF NOT EXISTS exhibit_seen (
+  matchup_id uuid        NOT NULL REFERENCES matchups (id) ON DELETE CASCADE,
+  user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  seen_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (matchup_id, user_id)
+);
+
+-- A partly admitted exhibit, as the instructor marked it: boxes on its pages
+-- (a PDF or picture) or ranges of its text, either what's redacted or what's
+-- admitted. For a file, the redacted copy they made is stored at
+-- `admitted_key`; for text, the redacted turns or paragraphs are kept here.
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS redaction_marks jsonb;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS admitted_key text;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS admitted_content_type text;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS admitted_excerpt jsonb;
+
+-- Records and illustrative aids the investigator makes with a report (a
+-- receipt, a public-record printout, a chart behind an estimate). Like a
+-- subpoena response, each belongs to its case world; it reaches the team when
+-- the instructor allows it with the report (in review lite, at once).
+ALTER TABLE case_materials DROP CONSTRAINT IF EXISTS case_materials_source_check;
+ALTER TABLE case_materials ADD CONSTRAINT case_materials_source_check
+  CHECK (source IN ('instructor', 'subpoena', 'investigator'));
+
+-- A case file a team lists with parts blacked out (boxes drawn on a PDF's
+-- pages or a picture): its marks, and the blacked-out copy its browser made.
+-- The exhibit made from it keeps both, and the other side sees that copy.
+ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS marks jsonb;
+ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS redacted_key text;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_marks jsonb;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_key text;

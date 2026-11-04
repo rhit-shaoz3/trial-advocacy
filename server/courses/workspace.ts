@@ -10,7 +10,7 @@ import {
   type MaterialViewer,
   type Witness,
 } from './caseContent.ts'
-import type { CasePhase } from './cases.ts'
+import { phaseAtLeast, type CasePhase } from './cases.ts'
 import {
   disclosedWitnessIds,
   findSubmission,
@@ -47,7 +47,7 @@ export function visibleWitnesses<W extends Pick<Witness, 'id' | 'audience' | 'al
   phase: CasePhase,
   disclosed: ReadonlySet<string> = new Set(),
 ) {
-  if (phase === 'deposition') return witnesses
+  if (phaseAtLeast(phase, 'deposition')) return witnesses
   const audiences: string[] = visibleTo(side)
   return witnesses.filter(
     (w) =>
@@ -58,7 +58,7 @@ export function visibleWitnesses<W extends Pick<Witness, 'id' | 'audience' | 'al
 
 /** Whether a team on `side` can interview a witness it can see: the other side's only in deposition. */
 export const interviewable = (w: Pick<Witness, 'alignedSide' | 'audience'>, side: Side | null, phase: CasePhase) =>
-  phase === 'deposition' || !side || (w.alignedSide ?? (w.audience === 'all' ? side : w.audience)) === side
+  phaseAtLeast(phase, 'deposition') || !side || (w.alignedSide ?? (w.audience === 'all' ? side : w.audience)) === side
 
 // Shape sent to the client; matches `CaseWorkspace` in src/courses/types.ts.
 export interface CaseWorkspace {
@@ -86,6 +86,8 @@ export interface CaseWorkspace {
   investigatorAvailable: boolean
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady: boolean
+  /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
+  exhibitListEnabled: boolean
   /**
    * The instructor's tasks, plus the information exchange's own (`auto`):
    * choosing initial disclosures, and responding to each set the other team
@@ -99,7 +101,12 @@ export interface CaseWorkspace {
 /** The background investigator's portrait, the same in every case (public/investigator.png). */
 export const INVESTIGATOR_AVATAR_URL = '/investigator.png'
 
-type CaseRow = CaseWorkspace['case'] & { investigatorEnabled: boolean; investigatorName: string; exchangeReady: boolean }
+type CaseRow = CaseWorkspace['case'] & {
+  investigatorEnabled: boolean
+  investigatorName: string
+  exchangeReady: boolean
+  exhibitListEnabled: boolean
+}
 
 async function findCaseRow(courseId: string, caseId: string) {
   const { rows } = await pool.query<CaseRow>(
@@ -107,6 +114,7 @@ async function findCaseRow(courseId: string, caseId: string) {
             json_build_object('plaintiff', plaintiff_name, 'defendant', defendant_name) AS parties,
             review_mode AS "reviewMode",
             investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName",
+            exhibit_list_enabled AS "exhibitListEnabled",
             EXISTS (SELECT 1 FROM information_exchange ie
                     WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"
      FROM cases WHERE course_id = $1 AND id = $2`,
@@ -193,7 +201,7 @@ const byDue = (a: WorkspaceTask, b: WorkspaceTask) =>
   (a.dueAt ? new Date(a.dueAt).getTime() : Infinity) - (b.dueAt ? new Date(b.dueAt).getTime() : Infinity)
 
 async function assemble(
-  { investigatorEnabled, investigatorName, exchangeReady, ...caseRow }: CaseRow,
+  { investigatorEnabled, investigatorName, exchangeReady, exhibitListEnabled, ...caseRow }: CaseRow,
   team: MyCase['team'],
   world: MyCase['world'],
   viewer: MaterialViewer,
@@ -234,8 +242,9 @@ async function assemble(
       }
     }),
     investigator: investigatorEnabled ? { name: investigatorName, avatarUrl: INVESTIGATOR_AVATAR_URL } : null,
-    investigatorAvailable: investigatorEnabled && (caseRow.phase === 'investigate' || caseRow.phase === 'deposition'),
+    investigatorAvailable: investigatorEnabled && phaseAtLeast(caseRow.phase, 'investigate'),
     exchangeReady,
+    exhibitListEnabled,
     tasks: [
       ...tasks.map((t) => ({
         ...t,

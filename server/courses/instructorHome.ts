@@ -103,7 +103,9 @@ async function courseStats(courseId: string, now: Date): Promise<InstructorHome[
           JOIN cases c ON c.id = w.case_id
         WHERE c.course_id = $1 AND i.team_id IS NOT NULL AND t.created_at > $2) AS "questionsThisWeek",
        (SELECT count(*)::int FROM interview_reviews r JOIN cases c ON c.id = r.case_id
-        WHERE c.course_id = $1 AND r.status = 'open') AS "reviewsWaiting"`,
+        WHERE c.course_id = $1 AND r.status = 'open')
+       + (SELECT count(*)::int FROM exhibits x JOIN cases c ON c.id = x.case_id
+          WHERE c.course_id = $1 AND x.status IN ('authenticity_review', 'admission_review')) AS "reviewsWaiting"`,
     [courseId, new Date(now.getTime() - WEEK)],
   )
   return rows[0]

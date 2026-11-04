@@ -2,6 +2,7 @@ import { afterEach, beforeEach } from 'vitest'
 import { ai } from '../ai/ai.ts'
 import { transcriptionsSettled } from '../courses/materialText.ts'
 import { subpoenasSettled } from '../exchange/subpoenas.ts'
+import { warmsSettled } from '../exchange/discoveryChecks.ts'
 import { investigationsSettled } from '../investigator/requests.ts'
 import { reviewsSettled } from '../reviews/reviews.ts'
 import { groupingSettled } from '../reviews/grouping.ts'
@@ -25,6 +26,7 @@ beforeEach(() => {
   ai.finalizeReport = async (input) => input.body
   ai.suggestFromComplaint = async () => ({ witnesses: [], content: { disputedIssues: '', investigatorNotes: '', instructorNote: '', tasks: [] } })
   ai.reviewDiscovery = async () => ({ tag: 'LOOKS_GOOD', feedback: 'Nice work.' })
+  ai.warmMentor = async () => ({ cacheReadTokens: 0, cacheWriteTokens: 0 })
   ai.groupFacts = async () => []
   ai.respondToSubpoena = async () => {
     throw new Error('This test did not set up a fake subpoena recipient.')
@@ -38,6 +40,7 @@ afterEach(async () => {
   await investigationsSettled()
   await witnessSuggestionsSettled()
   await subpoenasSettled()
+  await warmsSettled()
   await groupingSettled()
   Object.assign(ai, real)
 })

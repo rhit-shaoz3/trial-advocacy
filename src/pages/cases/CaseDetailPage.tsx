@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ChevronLeft, Copy, Pencil, Share2 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import { investigatorOf, type CourseCase } from '../../courses/types'
+import { investigatorOf, phaseAtLeast, type CourseCase } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { NotFoundPage } from '../NotFoundPage'
 import { CaseForm } from './CaseForm'
@@ -18,7 +18,8 @@ import { WitnessesSection } from './content/WitnessesSection'
 import { PhasePanel } from './PhasePanel'
 import { CaseSetupFlow } from './setup/CaseSetupFlow'
 import { ExchangeCard } from './exchange/ExchangeCard'
-import { DepositionCard, InvestigatorCard } from './PhaseCards'
+import { DepositionCard, ExhibitCard, InvestigatorCard } from './PhaseCards'
+import { FinalStepsTab } from './finalSteps/FinalStepsTab'
 import { ExchangeSetupFlow, type ExchangeStep } from './exchange/ExchangeSetupFlow'
 import { ExchangeTab } from './exchange/ExchangeTab'
 import { TeamsSection } from './TeamsSection'
@@ -33,6 +34,7 @@ const TABS = [
   { id: 'witnesses', label: 'Witnesses' },
   { id: 'investigator', label: 'Investigator' },
   { id: 'exchange', label: 'Information exchange' },
+  { id: 'final-steps', label: 'Final steps' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'student-view', label: 'Student view' },
 ] as const
@@ -139,8 +141,9 @@ function CaseDetail() {
 
   const launched = courseCase !== null && courseCase.status !== 'draft'
   /** Past the information exchange (its card moves to its tab), and past investigating (likewise). */
-  const pastExchange = launched && (courseCase.phase === 'investigate' || courseCase.phase === 'deposition')
-  const pastInvestigate = launched && courseCase.phase === 'deposition'
+  const pastExchange = launched && phaseAtLeast(courseCase.phase, 'investigate')
+  const pastInvestigate = launched && phaseAtLeast(courseCase.phase, 'deposition')
+  const pastDeposition = launched && phaseAtLeast(courseCase.phase, 'final_steps')
   const exchangeCard = (c: CourseCase, inTab = false) => (
     <ExchangeCard courseId={courseId} courseCase={c} onSetUp={() => setExchangeStep('disclosures')} inTab={inTab} />
   )
@@ -275,7 +278,9 @@ function CaseDetail() {
           <PhasePanel courseId={courseId} courseCase={courseCase} onChanged={setCourseCase} />
 
           {/* The card for where the case is; earlier phases' cards move to their own tabs. */}
-          {courseCase.status !== 'draft' && courseCase.phase === 'deposition' ? (
+          {courseCase.status !== 'draft' && courseCase.phase === 'final_steps' ? (
+            <ExhibitCard courseId={courseId} courseCase={courseCase} />
+          ) : courseCase.status !== 'draft' && courseCase.phase === 'deposition' ? (
             <DepositionCard courseId={courseId} courseCase={courseCase} />
           ) : courseCase.status !== 'draft' && courseCase.phase === 'investigate' ? (
             <InvestigatorCard courseId={courseId} courseCase={courseCase} />
@@ -305,7 +310,8 @@ function CaseDetail() {
             {TABS.filter(
               (t) =>
                 (t.id !== 'student-view' || courseCase.setupCompletedAt !== null) &&
-                (t.id !== 'exchange' || courseCase.exchangeReady),
+                (t.id !== 'exchange' || courseCase.exchangeReady) &&
+                (t.id !== 'final-steps' || pastDeposition),
             ).map((t) => (
               <button
                 key={t.id}
@@ -335,7 +341,10 @@ function CaseDetail() {
               <MaterialsSection courseId={courseId} caseId={courseCase.id} onChange={contentChanged} />
             )}
             {tab === 'witnesses' && (
-              <WitnessesSection courseId={courseId} courseCase={courseCase} onCaseChange={setCourseCase} />
+              <>
+                <WitnessesSection courseId={courseId} courseCase={courseCase} onCaseChange={setCourseCase} />
+                {pastDeposition && <DepositionCard courseId={courseId} courseCase={courseCase} inTab />}
+              </>
             )}
             {tab === 'investigator' && (
               <>
@@ -352,6 +361,9 @@ function CaseDetail() {
                 onEdit={setExchangeStep}
                 summary={pastExchange ? exchangeCard(courseCase, true) : undefined}
               />
+            )}
+            {tab === 'final-steps' && pastDeposition && (
+              <FinalStepsTab courseId={courseId} courseCase={courseCase} onCaseChange={setCourseCase} />
             )}
             {tab === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
             {tab === 'student-view' && (

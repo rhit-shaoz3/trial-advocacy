@@ -19,8 +19,12 @@ export type MaterialAudience = (typeof MATERIAL_AUDIENCES)[number]
 /** Whether a file's transcription for the AI witnesses is running, done, failed, or not needed. */
 export type TextStatus = 'pending' | 'ready' | 'failed' | 'none'
 
-/** Where a case file came from: the instructor's upload, or a subpoena response approved in one case world. */
-export const MATERIAL_SOURCES = ['instructor', 'subpoena'] as const
+/**
+ * Where a case file came from: the instructor's upload, a subpoena response
+ * approved in one case world, or a record or illustrative aid the
+ * investigator made for a team in one world.
+ */
+export const MATERIAL_SOURCES = ['instructor', 'subpoena', 'investigator'] as const
 export type MaterialSource = (typeof MATERIAL_SOURCES)[number]
 
 /** The audiences someone on `side` can see; with no side yet, only shared items. */
@@ -285,12 +289,28 @@ export async function listStorageKeys(scope: { caseId: string } | { courseId: st
     'caseId' in scope
       ? `SELECT storage_key AS key FROM case_materials WHERE case_id = $1 AND storage_key IS NOT NULL
          UNION ALL
-         SELECT avatar_key FROM case_witnesses WHERE case_id = $1 AND avatar_key IS NOT NULL`
+         SELECT avatar_key FROM case_witnesses WHERE case_id = $1 AND avatar_key IS NOT NULL
+         UNION ALL
+         SELECT admitted_key FROM exhibits WHERE case_id = $1 AND admitted_key IS NOT NULL
+         UNION ALL
+         SELECT offered_key FROM exhibits WHERE case_id = $1 AND offered_key IS NOT NULL
+         UNION ALL
+         SELECT i.redacted_key FROM exhibit_list_items i JOIN exhibit_lists l ON l.id = i.list_id
+         WHERE l.case_id = $1 AND i.redacted_key IS NOT NULL`
       : `SELECT m.storage_key AS key FROM case_materials m JOIN cases c ON c.id = m.case_id
          WHERE c.course_id = $1 AND m.storage_key IS NOT NULL
          UNION ALL
          SELECT w.avatar_key FROM case_witnesses w JOIN cases c ON c.id = w.case_id
-         WHERE c.course_id = $1 AND w.avatar_key IS NOT NULL`,
+         WHERE c.course_id = $1 AND w.avatar_key IS NOT NULL
+         UNION ALL
+         SELECT x.admitted_key FROM exhibits x JOIN cases c ON c.id = x.case_id
+         WHERE c.course_id = $1 AND x.admitted_key IS NOT NULL
+         UNION ALL
+         SELECT x.offered_key FROM exhibits x JOIN cases c ON c.id = x.case_id
+         WHERE c.course_id = $1 AND x.offered_key IS NOT NULL
+         UNION ALL
+         SELECT i.redacted_key FROM exhibit_list_items i JOIN exhibit_lists l ON l.id = i.list_id JOIN cases c ON c.id = l.case_id
+         WHERE c.course_id = $1 AND i.redacted_key IS NOT NULL`,
     ['caseId' in scope ? scope.caseId : scope.courseId],
   )
   return rows.map((r) => r.key)
@@ -375,13 +395,17 @@ export interface MaterialText {
 /**
  * The case file an AI reads, with each file's transcription: every file the
  * instructor uploaded, plus the subpoena responses approved in this case world
- * only (never another world's); with no world, only the instructor's files.
+ * and the investigator's records and aids allowed in it (never another
+ * world's); with no world, only the instructor's files.
  */
 export async function listMaterialTexts(caseId: string, matchupId: string | null = null) {
   const { rows } = await pool.query<MaterialText>(
     `SELECT id, audience, filename, description, text_status AS "textStatus", text_content AS text, initial
      FROM case_materials
-     WHERE case_id = $1 AND (source = 'instructor' OR (source = 'subpoena' AND matchup_id = $2))
+     WHERE case_id = $1 AND (source = 'instructor' OR (source = 'subpoena' AND matchup_id = $2)
+       -- A record or aid the investigator made counts once the instructor allows it (or review lite did).
+       OR (source = 'investigator' AND matchup_id = $2 AND EXISTS (
+         SELECT 1 FROM review_documents d WHERE d.material_id = case_materials.id AND d.decision = 'allow')))
      ORDER BY uploaded_at, filename`,
     [caseId, matchupId],
   )

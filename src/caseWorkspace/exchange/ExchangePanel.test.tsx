@@ -130,14 +130,25 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
     expect(onSend).toHaveBeenCalledWith('interrogatories', ['Was it replaced, (a) when and (b) by whom?', 'Who inspected it?'], undefined, undefined)
   })
 
+  it('gets the AI mentor ready when a form it can check opens', async () => {
+    const onWarmCheck = vi.fn()
+    const user = renderPanel(open, { onSend: vi.fn(), onCheck: vi.fn(), onWarmCheck })
+    await user.click(screen.getByRole('button', { name: /^Interrogatories/ }))
+    expect(onWarmCheck).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Write interrogatories' }))
+    expect(onWarmCheck).toHaveBeenCalledExactlyOnceWith({ kind: 'interrogatories', mode: 'draft' })
+  })
+
   it('leaves out Check with AI when the instructor turned AI feedback off', async () => {
     const onCheck = vi.fn()
-    const user = renderPanel({ ...open, interrogatories: part({ aiFeedback: { enabled: false, rounds: null } }) }, { onSend: vi.fn(), onCheck })
+    const onWarmCheck = vi.fn()
+    const user = renderPanel({ ...open, interrogatories: part({ aiFeedback: { enabled: false, rounds: null } }) }, { onSend: vi.fn(), onCheck, onWarmCheck })
     await user.click(screen.getByRole('button', { name: /^Interrogatories/ }))
     await user.click(screen.getByRole('button', { name: 'Write interrogatories' }))
     await user.type(screen.getByLabelText('Question 1'), 'Who inspected it?')
     expect(screen.queryByRole('button', { name: /Check with AI/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send to Team 2' })).toHaveClass('ws-btn-primary')
+    expect(onWarmCheck).not.toHaveBeenCalled()
   })
 
   it('greys out writing more once the team is out', async () => {

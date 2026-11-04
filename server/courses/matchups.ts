@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto'
 import type { PoolClient } from 'pg'
 import { HttpError } from '../httpError.ts'
-import { changeTeams, listTeams, partnerKey } from './teams.ts'
+import { changeTeams, listTeams, lockedWorlds, partnerKey } from './teams.ts'
 
 export type Side = 'plaintiff' | 'defense'
 
@@ -58,9 +58,11 @@ export function deleteMatchup(courseId: string, caseId: string, matchupId: strin
   })
 }
 
+/** Deletes every world but the locked ones. */
 export function clearMatchups(courseId: string, caseId: string) {
   return changeTeams(courseId, caseId, async (client) => {
-    await client.query('DELETE FROM matchups WHERE case_id = $1', [caseId])
+    const kept = (await lockedWorlds(client, caseId)).map((w) => w.id)
+    await client.query('DELETE FROM matchups WHERE case_id = $1 AND NOT (id = ANY($2::uuid[]))', [caseId, kept])
   })
 }
 

@@ -19,7 +19,8 @@ import { dueLabel, shortDate } from '../../courses/caseLabels'
 import {
   DEFAULT_AI_FEEDBACK,
   questionWeight,
-  type CheckInput,
+  type CheckDiscovery,
+  type CheckProgress,
   type DiscoveryCheck,
   type DiscoveryDraft,
   type ExchangeKind,
@@ -27,6 +28,7 @@ import {
   type ItemResponse,
   type KeyedCheck,
   type StudentPart,
+  type WarmCheckInput,
 } from '../../courses/types'
 import { DictationTextarea } from '../../components/Dictation'
 import { AiCheck } from './AiCheck'
@@ -89,6 +91,7 @@ export function RequestsSection({
   onSend,
   onRespond,
   onCheck,
+  onWarmCheck,
   onTeach,
   initialRequestId,
   drafts,
@@ -107,7 +110,9 @@ export function RequestsSection({
   onSend?(items: string[], checkId?: string, draftId?: string): Promise<void>
   onRespond?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
   /** Has the AI check a draft (a set, or answers) before it's sent; leave out to send without one. */
-  onCheck?(input: CheckInput): Promise<DiscoveryCheck>
+  onCheck?: CheckDiscovery
+  /** A form that can be checked was opened, to get the mentor ready. */
+  onWarmCheck?(input: WarmCheckInput): void
   onTeach(): void
   /** A request to open on (read), as when a notice links to its response. */
   initialRequestId?: string
@@ -145,7 +150,8 @@ export function RequestsSection({
           await onSend(items, checkId, draftId)
           back()
         }}
-        onCheck={check && ((items, previousCheckId) => check({ kind, mode: 'draft', draft: { items }, previousCheckId }))}
+        onCheck={check && ((items, previousCheckId, onProgress) => check({ kind, mode: 'draft', draft: { items }, previousCheckId }, onProgress))}
+        onWarm={check && onWarmCheck && (() => onWarmCheck({ kind, mode: 'draft' }))}
         rounds={ai.rounds}
         onBack={back}
         onTeach={onTeach}
@@ -161,7 +167,8 @@ export function RequestsSection({
           await onRespond(request.id, responses, checkId)
           setView({ mode: 'read', id: request.id })
         }}
-        onCheck={check && ((responses) => check({ kind, mode: 'answer', requestId: request.id, draft: { responses } }))}
+        onCheck={check && ((responses, onProgress) => check({ kind, mode: 'answer', requestId: request.id, draft: { responses } }, onProgress))}
+        onWarm={check && onWarmCheck && (() => onWarmCheck({ kind, mode: 'answer', requestId: request.id }))}
         rounds={ai.rounds}
         onBack={back}
         onTeach={onTeach}
@@ -388,6 +395,7 @@ function Compose({
   onOpenDraft,
   onSend,
   onCheck,
+  onWarm,
   rounds,
   onBack,
   onTeach,
@@ -400,7 +408,8 @@ function Compose({
   actions?: DraftActions
   onOpenDraft?(draftId: string | null): void
   onSend(items: string[], checkId?: string, draftId?: string): Promise<void>
-  onCheck?(items: string[], previousCheckId?: string): Promise<DiscoveryCheck>
+  onCheck?(items: string[], previousCheckId?: string, onProgress?: (progress: CheckProgress) => void): Promise<DiscoveryCheck>
+  onWarm?(): void
   /** How many checks one draft gets; null for unlimited. */
   rounds: number | null
   onBack(): void
@@ -547,7 +556,8 @@ function Compose({
         ready={filled.length > 0}
         blocked={over}
         draftKey={JSON.stringify(items())}
-        onCheck={onCheck && ((previousCheckId) => onCheck(items(), previousCheckId))}
+        onCheck={onCheck && ((previousCheckId, onProgress) => onCheck(items(), previousCheckId, onProgress))}
+        onWarm={onWarm}
         rounds={rounds}
         initialCheck={draft?.lastCheck}
         onCheckChange={setLastCheck}
@@ -586,6 +596,7 @@ function Respond({
   request,
   onRespond,
   onCheck,
+  onWarm,
   rounds,
   onBack,
   onTeach,
@@ -595,7 +606,8 @@ function Respond({
   request: TeamRequest
   onRespond(responses: ItemResponse[], checkId?: string): Promise<void>
   /** Answers' checks are counted by the set, so there's no earlier check to name. */
-  onCheck?(responses: ItemResponse[]): Promise<DiscoveryCheck>
+  onCheck?(responses: ItemResponse[], onProgress?: (progress: CheckProgress) => void): Promise<DiscoveryCheck>
+  onWarm?(): void
   rounds: number | null
   onBack(): void
   onTeach(): void
@@ -711,7 +723,8 @@ function Respond({
         info={`${answered} of ${request.items.length} answered`}
         ready={answered === request.items.length}
         draftKey={JSON.stringify(drafts)}
-        onCheck={onCheck && (() => onCheck(responses()))}
+        onCheck={onCheck && ((_previousCheckId, onProgress) => onCheck(responses(), onProgress))}
+        onWarm={onWarm}
         rounds={rounds}
         roundsUsed={request.checkRounds ?? 0}
         onSubmit={(checkId) => onRespond(responses(), checkId)}

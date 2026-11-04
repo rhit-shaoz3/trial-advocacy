@@ -1340,6 +1340,30 @@
   overflow-wrap: anywhere;
 }
 
+/* Feedback as the mentor writes it, with a cursor at the end. */
+.ai-check-writing::after {
+  display: inline-block;
+  width: 0.45em;
+  height: 1em;
+  margin-left: 0.1em;
+  background: currentColor;
+  vertical-align: -0.12em;
+  content: '';
+  animation: ai-check-caret 1s steps(1) infinite;
+}
+
+@keyframes ai-check-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-check-writing::after {
+    animation: none;
+  }
+}
+
 .ex-justification-hint {
   color: var(--ws-muted);
   font-size: 0.82rem;

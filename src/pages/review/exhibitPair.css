@@ -1,0 +1,168 @@
+/* Two versions of one document, ruled on together (the Review page). */
+
+.xl-pair-versions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.xl-pair-version {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.55rem;
+}
+
+.xl-pair-detail {
+  margin: 0;
+  font-weight: 600;
+}
+
+.xl-pair-choices {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.xl-pair-choices legend {
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+
+.xl-pair-choices label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.xl-pair-choices input {
+  margin-top: 0.2rem;
+}
+
+.xl-pair-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.review-card-header .btn-secondary svg {
+  width: 1rem;
+  height: 1rem;
+  vertical-align: -0.15em;
+}
+
+/* Side by side: a heading per version, then a row per page of the original. */
+
+.xl-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.xl-compare-head {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.xl-compare-row {
+  display: contents;
+}
+
+.xl-compare-wide {
+  grid-column: 1 / -1;
+}
+
+.xl-compare-row .xl-compare-label {
+  margin-top: 0.75rem;
+}
+
+.xl-compare-cell {
+  margin: 0;
+}
+
+.xl-compare-cell img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border-strong);
+  background: #fff;
+}
+
+/* A page only one version has: edged in its version's color. */
+.xl-compare-cell.xl-only-1,
+.xl-compare-cell.xl-only-2 {
+  padding: 0.35rem;
+  border-radius: 0.4rem;
+}
+
+.xl-compare-cell figcaption {
+  padding-top: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.xl-compare-missing {
+  display: grid;
+  place-items: center;
+  min-height: 6rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 0.4rem;
+  color: var(--fg-soft);
+  font-size: 0.85rem;
+}
+
+.xl-compare-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--fg-soft);
+}
+
+/* What only one version has: amber for version 1, blue for version 2. */
+.xl-only-1 {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.xl-only-2 {
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+}
+
+.xl-compare-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+}
+
+.xl-compare-legend span {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.35rem;
+}
+
+.xl-compare-text {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.xl-compare-text li {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.45rem;
+  line-height: 1.5;
+}

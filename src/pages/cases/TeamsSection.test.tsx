@@ -11,8 +11,8 @@ const ben: RosterEntry = { email: 'ben@example.com', name: 'Ben Counsel', joined
 const cy: RosterEntry = { email: 'cy@example.com', name: null, joined: false }
 const dee: RosterEntry = { email: 'dee@example.com', name: 'Dee Judge', joined: true }
 
-const unpairedOnly: CaseTeams = { teams: [], unpaired: [ada, ben, cy], matchups: [] }
-const oneTeam: CaseTeams = { teams: [{ id: 't1', number: 1, members: [ada, ben] }], unpaired: [cy, dee], matchups: [] }
+const unpairedOnly: CaseTeams = { teams: [], unpaired: [ada, ben, cy], matchups: [], worldsLocked: false }
+const oneTeam: CaseTeams = { teams: [{ id: 't1', number: 1, members: [ada, ben] }], unpaired: [cy, dee], matchups: [], worldsLocked: false }
 
 function renderSection(initial: CaseTeams, overrides: Partial<CourseService> = {}, closed = false) {
   const service = fakeCourseService({ listTeams: vi.fn().mockResolvedValue(initial), ...overrides })
@@ -45,7 +45,7 @@ describe('TeamsSection', () => {
   it('asks how many students per team, then auto-pairs and shows the teams', async () => {
     const autoPair = vi.fn().mockResolvedValue({
       teams: [{ id: 't1', number: 1, members: [ada, ben, cy] }],
-      unpaired: [], matchups: []
+      unpaired: [], matchups: [], worldsLocked: false
     })
     const { user } = renderSection(unpairedOnly, { autoPair })
 
@@ -87,7 +87,7 @@ describe('TeamsSection', () => {
   it('pairs the selected students', async () => {
     const createTeam = vi.fn().mockResolvedValue({
       teams: [{ id: 't1', number: 1, members: [ada, cy] }],
-      unpaired: [ben], matchups: []
+      unpaired: [ben], matchups: [], worldsLocked: false
     })
     const { user } = renderSection(unpairedOnly, { createTeam })
 
@@ -106,11 +106,11 @@ describe('TeamsSection', () => {
   it('adds and removes team members', async () => {
     const addTeamMember = vi.fn().mockResolvedValue({
       teams: [{ id: 't1', number: 1, members: [ada, ben, dee] }],
-      unpaired: [cy], matchups: []
+      unpaired: [cy], matchups: [], worldsLocked: false
     })
     const removeTeamMember = vi.fn().mockResolvedValue({
       teams: [{ id: 't1', number: 1, members: [ben, dee] }],
-      unpaired: [ada, cy], matchups: []
+      unpaired: [ada, cy], matchups: [], worldsLocked: false
     })
     const { user } = renderSection(oneTeam, { addTeamMember, removeTeamMember })
 
@@ -129,7 +129,7 @@ describe('TeamsSection', () => {
 
   it('deletes a team after confirming', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const deleteTeam = vi.fn().mockResolvedValue({ teams: [], unpaired: [ada, ben, cy, dee], matchups: [] })
+    const deleteTeam = vi.fn().mockResolvedValue({ teams: [], unpaired: [ada, ben, cy, dee], matchups: [], worldsLocked: false })
     const { user } = renderSection(oneTeam, { deleteTeam })
 
     await screen.findByText('Ada Lawyer')
@@ -142,7 +142,7 @@ describe('TeamsSection', () => {
 
   it('clears every team only after confirming', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
-    const clearTeams = vi.fn().mockResolvedValue({ teams: [], unpaired: [ada, ben, cy, dee], matchups: [] })
+    const clearTeams = vi.fn().mockResolvedValue({ teams: [], unpaired: [ada, ben, cy, dee], matchups: [], worldsLocked: false })
     const { user } = renderSection(oneTeam, { clearTeams })
 
     await user.click(await screen.findByRole('button', { name: 'Clear all teams' }))
@@ -175,4 +175,45 @@ describe('TeamsSection', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
+
+  it("keeps a locked world's teams, and the last student on each", async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const locked: CaseTeams = {
+      teams: [
+        { id: 't1', number: 1, members: [ada, ben] },
+        { id: 't2', number: 2, members: [cy] },
+        { id: 't3', number: 3, members: [dee] },
+      ],
+      unpaired: [],
+      matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't1', defenseTeamId: 't2', locked: true }],
+      worldsLocked: false,
+    }
+    const clearTeams = vi.fn().mockResolvedValue({ ...locked, teams: locked.teams.slice(0, 2), unpaired: [dee] })
+    const { user } = renderSection(locked, { clearTeams })
+
+    await screen.findByRole('listitem', { name: 'Team 1' })
+    expect(within(team(1)).queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(within(team(1)).getByRole('button', { name: 'Remove Ada Lawyer from Team 1' })).toBeInTheDocument()
+    // Team 2's only student stays.
+    expect(within(team(2)).queryByRole('button', { name: /Remove/ })).not.toBeInTheDocument()
+    expect(team(2)).toHaveTextContent('A locked world’s team keeps at least one student.')
+    expect(within(team(3)).getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Clear unlocked teams' }))
+    expect(clearTeams).toHaveBeenCalledWith('c1', 'k1')
+    expect(screen.queryByRole('button', { name: /Clear/ })).not.toBeInTheDocument()
+  })
+
+  it('still makes new teams once the case is past Introduction, and places students', async () => {
+    const addTeamMember = vi.fn().mockResolvedValue(oneTeam)
+    const { user } = renderSection({ ...oneTeam, worldsLocked: true }, { addTeamMember })
+
+    await screen.findByRole('listitem', { name: 'Team 1' })
+    expect(screen.getByRole('button', { name: /Auto-pair/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Pair selected/ })).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Add a student to Team 1'), 'Dee Judge')
+    expect(addTeamMember).toHaveBeenCalledWith('c1', 'k1', 't1', dee.email)
+  })
+
 })

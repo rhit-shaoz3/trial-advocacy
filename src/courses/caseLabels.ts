@@ -12,6 +12,7 @@ export const AUDIENCE_LABEL: Record<MaterialAudience, string> = {
 export const SOURCE_LABEL: Record<MaterialSource, string> = {
   instructor: 'Instructor Uploaded',
   subpoena: 'Subpoena Response',
+  investigator: 'From the Investigator',
 }
 
 /** The broad kinds of file in a case file, in the order they're listed. */
@@ -89,6 +90,7 @@ export const PHASE_LABEL: Record<CasePhase, string> = {
   information_exchange: 'Information exchange',
   investigate: 'Investigate',
   deposition: 'Deposition',
+  final_steps: 'Final steps',
 }
 
 /** What a team does in each phase, as the team reads it. */
@@ -97,4 +99,5 @@ export const STUDENT_PHASE_TEXT: Record<CasePhase, string> = {
   information_exchange: "Serve subpoenas, send interrogatories and requests for admission, and answer the other side's.",
   investigate: "Send the background investigator assignments. The other side's witnesses are still off-limits.",
   deposition: "Every witness is open to both sides. Depose the other side's witnesses.",
+  final_steps: 'Build your exhibit list for trial, exchange it with the other side, and settle what gets admitted.',
 }

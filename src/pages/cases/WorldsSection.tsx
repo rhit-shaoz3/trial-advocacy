@@ -4,6 +4,7 @@ import { useCourseService } from '../../courses/CourseServiceContext'
 import type { CaseTeams, Side, Team } from '../../courses/types'
 import { worldLabel } from '../../courses/worldLabel'
 import { Draggable, DropZone } from './dnd'
+import { LockedBadge } from './LockedBadge'
 import { useDragSensors } from './useDragSensors'
 
 /** Drop targets for the new world's two sides. */
@@ -20,7 +21,8 @@ function teamSummary(team: Team) {
  * into the new world's Plaintiff and Defense slots (or choose them from the
  * menus); once both are filled, the world is made. Shares the pairing state
  * (and the request runner) with the Teams section above it, since changing
- * teams can remove a world.
+ * teams can remove a world. A locked world can't be swapped or deleted, and
+ * once the case leaves Introduction no new worlds are made.
  */
 export function WorldsSection({
   courseId,
@@ -48,6 +50,8 @@ export function WorldsSection({
   const teamById = new Map(data.teams.map((t) => [t.id, t]))
   const matched = new Set(data.matchups.flatMap((m) => [m.plaintiffTeamId, m.defenseTeamId]))
   const waiting = data.teams.filter((t) => !matched.has(t.id))
+  const lockedCount = data.matchups.filter((m) => m.locked).length
+  const canCreate = !closed
   // Drop a choice that is no longer waiting (e.g. matched by auto-match).
   const plaintiffId = waiting.some((t) => t.id === plaintiff) ? plaintiff : ''
   const defenseId = waiting.some((t) => t.id === defense) ? defense : ''
@@ -85,7 +89,10 @@ export function WorldsSection({
   }
 
   function handleClear() {
-    if (!window.confirm('Delete every case world? The teams stay as they are.')) return
+    const message = lockedCount
+      ? 'Delete every case world that isn’t locked? The teams stay as they are.'
+      : 'Delete every case world? The teams stay as they are.'
+    if (!window.confirm(message)) return
     run(() => service.clearMatchups(courseId, caseId))
   }
 
@@ -100,12 +107,12 @@ export function WorldsSection({
         <h2 id="worlds-heading">Case worlds</h2>
         {!closed && (
           <div className="teams-actions">
-            {data.matchups.length > 0 && (
+            {data.matchups.length > lockedCount && (
               <button type="button" className="btn-danger" onClick={handleClear} disabled={busy}>
-                Clear all worlds
+                {lockedCount ? 'Clear unlocked worlds' : 'Clear all worlds'}
               </button>
             )}
-            {waiting.length >= 2 && (
+            {canCreate && waiting.length >= 2 && (
               <button
                 type="button"
                 className="btn-primary"
@@ -124,6 +131,10 @@ export function WorldsSection({
         {closed
           ? 'This case is closed, so its worlds are kept as they are.'
           : 'Each world sets a plaintiff team against a defense team. Auto-match avoids opponents students faced in earlier cases and gives each team the side it has argued less.'}
+        {!closed &&
+          (data.worldsLocked
+            ? ' The worlds made before the case left Introduction are locked; a new world locks once it has facts or files of its own, and starts in the phase the case is in.'
+            : ' A world locks once it has facts or files of its own, and every world locks when the case leaves Introduction.')}
       </p>
 
       {error && (
@@ -142,7 +153,7 @@ export function WorldsSection({
               <ul className="waiting-list">
                 {waiting.map((t) => (
                   <li key={t.id}>
-                    {closed ? (
+                    {!canCreate ? (
                       teamSummary(t)
                     ) : (
                       <Draggable
@@ -157,7 +168,7 @@ export function WorldsSection({
                   </li>
                 ))}
               </ul>
-              {!closed && waiting.length >= 2 && (
+              {canCreate && waiting.length >= 2 && (
                 <form className="world-form world-builder" onSubmit={handleCreate} aria-label="New case world">
                   <h4>New world</h4>
                   <p className="muted">Drag a team into each side, or choose them below.</p>
@@ -214,7 +225,8 @@ export function WorldsSection({
               <li key={m.id} className="team-card" aria-label={`World ${worldLabel(m.number)}`}>
                 <div className="team-card-header">
                   <h3>World {worldLabel(m.number)}</h3>
-                  {!closed && (
+                  {m.locked && <LockedBadge />}
+                  {!closed && !m.locked && (
                     <span className="world-actions">
                       <button
                         type="button"

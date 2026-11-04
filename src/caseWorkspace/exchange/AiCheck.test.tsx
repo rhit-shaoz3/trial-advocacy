@@ -1,8 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { DiscoveryCheck } from '../../courses/types'
+import type { CheckProgress, DiscoveryCheck } from '../../courses/types'
 import { AiCheck } from './AiCheck'
 
 /** A one-field draft with the check under it. */
@@ -11,11 +11,13 @@ function Draft({
   onSubmit,
   rounds = null,
   roundsUsed,
+  onWarm,
 }: {
-  onCheck?(previousCheckId?: string): Promise<DiscoveryCheck>
+  onCheck?(previousCheckId?: string, onProgress?: (progress: CheckProgress) => void): Promise<DiscoveryCheck>
   onSubmit(checkId?: string): Promise<void>
   rounds?: number | null
   roundsUsed?: number
+  onWarm?(): void
 }) {
   const [text, setText] = useState('Who inspected it?')
   return (
@@ -34,6 +36,7 @@ function Draft({
         anywayLabel="Send anyway"
         rounds={rounds}
         roundsUsed={roundsUsed}
+        onWarm={onWarm}
       />
     </>
   )
@@ -96,17 +99,17 @@ describe('Check with AI', () => {
     render(<Draft onCheck={onCheck} onSubmit={onSubmit} rounds={3} />)
 
     await user.click(screen.getByRole('button', { name: 'Check with AI, 3 rounds left' }))
-    expect(onCheck).toHaveBeenLastCalledWith(undefined)
+    expect(onCheck).toHaveBeenLastCalledWith(undefined, expect.any(Function))
     await user.click(await screen.findByRole('button', { name: 'Check again, 2 rounds left' }))
     // Checking again names the check it follows.
-    expect(onCheck).toHaveBeenLastCalledWith('chk1')
+    expect(onCheck).toHaveBeenLastCalledWith('chk1', expect.any(Function))
     const last = await screen.findByRole('button', { name: 'Check again, last round' })
     expect(last).toHaveTextContent('Last round')
     expect(last).toHaveClass('ws-btn-primary')
     expect(screen.getByRole('button', { name: 'Send anyway' })).toHaveClass('ws-btn-secondary')
 
     await user.click(last)
-    expect(onCheck).toHaveBeenLastCalledWith('chk2')
+    expect(onCheck).toHaveBeenLastCalledWith('chk2', expect.any(Function))
     const spent = await screen.findByRole('button', { name: 'Check again, 0 rounds left' })
     expect(spent).toBeDisabled()
     expect(spent).toHaveClass('ws-btn-secondary')
@@ -156,5 +159,44 @@ describe('Check with AI', () => {
     expect(screen.queryByRole('button', { name: 'Check with AI' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Send' }))
     expect(onSubmit).toHaveBeenCalled()
+  })
+
+  it('shows the feedback as it’s written, then the finished check', async () => {
+    let progress!: (p: CheckProgress) => void
+    let resolve!: (c: DiscoveryCheck) => void
+    const onCheck = vi.fn(
+      (_id?: string, onProgress?: (p: CheckProgress) => void) =>
+        new Promise<DiscoveryCheck>((r) => {
+          progress = onProgress!
+          resolve = r
+        }),
+    )
+    const user = userEvent.setup()
+    render(<Draft onCheck={onCheck} onSubmit={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Check with AI' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Checking your draft…')
+
+    act(() => progress({ tag: 'SMALL_EDITS', text: 'Interrogatory 1: ' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Small edits…')
+    expect(screen.getByLabelText('AI feedback, as it’s written')).toHaveTextContent('Interrogatory 1:')
+    act(() => progress({ tag: 'SMALL_EDITS', text: 'Interrogatory 1: Knowledge of what?' }))
+    expect(screen.getByLabelText('AI feedback, as it’s written')).toHaveTextContent('Interrogatory 1: Knowledge of what?')
+
+    act(() => resolve(check('SMALL_EDITS')))
+    expect(await screen.findByLabelText('AI feedback')).toHaveTextContent('Interrogatory 1: Knowledge of what?')
+    expect(screen.getByRole('status')).toHaveTextContent('Small edits')
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled()
+  })
+
+  it('gets the mentor ready once when the form opens, while checks are left', () => {
+    const onWarm = vi.fn()
+    const { rerender } = render(<Draft onCheck={vi.fn()} onSubmit={vi.fn()} onWarm={onWarm} />)
+    rerender(<Draft onCheck={vi.fn()} onSubmit={vi.fn()} onWarm={onWarm} />)
+    expect(onWarm).toHaveBeenCalledTimes(1)
+
+    const noneLeft = vi.fn()
+    render(<Draft onCheck={vi.fn()} onSubmit={vi.fn()} rounds={2} roundsUsed={2} onWarm={noneLeft} />)
+    render(<Draft onSubmit={vi.fn()} onWarm={noneLeft} />)
+    expect(noneLeft).not.toHaveBeenCalled()
   })
 })

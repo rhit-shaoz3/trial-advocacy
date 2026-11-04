@@ -268,6 +268,7 @@ describe('MaterialsSection', () => {
       'All2',
       'Instructor Uploaded1',
       'Subpoena Response1',
+      'From the Investigator0',
     ])
     expect(within(filter).getByRole('button', { name: /All/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('cell', { name: 'Subpoena Response · World A' })).toBeInTheDocument()
@@ -389,7 +390,8 @@ describe('MaterialsSection sharing', () => {
       { id: 't2', number: 2, members: [] },
     ],
     unpaired: [],
-    matchups: [{ id: 'w1', number: 1, plaintiffTeamId: 't1', defenseTeamId: 't2' }],
+    matchups: [{ id: 'w1', number: 1, plaintiffTeamId: 't1', defenseTeamId: 't2', locked: false }],
+    worldsLocked: false,
   }
 
   it('shares a file with chosen worlds and teams, keeping it to instructors otherwise', async () => {
@@ -815,7 +817,8 @@ describe('StudentViewSection', () => {
           { id: 't2', number: 2, members: [] },
         ],
         unpaired: [],
-        matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't2', defenseTeamId: 't1' }],
+        matchups: [{ id: 'm1', number: 1, plaintiffTeamId: 't2', defenseTeamId: 't1', locked: false }],
+        worldsLocked: false,
       }),
       previewWorkspace,
     })

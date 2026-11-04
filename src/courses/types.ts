@@ -53,10 +53,14 @@ export interface AddStudentsResult {
  * instructor's initial disclosures are shared, and teams send interrogatories
  * and requests for admission (only once it's set up). Investigate: the
  * background investigator opens (only cases with one). Deposition: every
- * witness is revealed to both sides.
+ * witness is revealed to both sides. Final steps: each case world's sides
+ * build and exchange their joint exhibit list.
  */
-export const CASE_PHASES = ['introduction', 'information_exchange', 'investigate', 'deposition'] as const
+export const CASE_PHASES = ['introduction', 'information_exchange', 'investigate', 'deposition', 'final_steps'] as const
 export type CasePhase = (typeof CASE_PHASES)[number]
+
+/** Whether `phase` is `from` or a later one. */
+export const phaseAtLeast = (phase: CasePhase, from: CasePhase) => CASE_PHASES.indexOf(phase) >= CASE_PHASES.indexOf(from)
 
 /**
  * A case's phases: no information exchange phase until it's set up, and no
@@ -132,6 +136,8 @@ export interface CourseCase {
   reviewMode?: ReviewMode
   /** Whether the information exchange setup is finished (students see it, and the case has its phase). */
   exchangeReady?: boolean
+  /** Whether students get the joint exhibit list in the final steps phase; leaving it out means they do. */
+  exhibitListEnabled?: boolean
   /** A copy whose guided setup is just its teams and worlds, until finished. */
   copySetup?: boolean
   /** The case it was copied from, and whose it was; null for a case made from scratch. */
@@ -198,6 +204,8 @@ export interface Matchup {
   number: number
   plaintiffTeamId: string
   defenseTeamId: string
+  /** The world has facts or files of its own, so its teams can't change (students can still move between teams). */
+  locked: boolean
 }
 
 /** How a case is paired: its teams, the roster students not on one yet, and the case worlds. */
@@ -205,6 +213,8 @@ export interface CaseTeams {
   teams: Team[]
   unpaired: RosterEntry[]
   matchups: Matchup[]
+  /** The case has left Introduction: every world is locked, and no new teams or worlds can be made. */
+  worldsLocked: boolean
 }
 
 export type MyTeamMember = RosterEntry & { you: boolean }
@@ -257,8 +267,8 @@ export interface CaseMaterial {
   source?: MaterialSource
 }
 
-/** Where a case file came from: the instructor's upload, or a subpoena response approved in one case world. */
-export const MATERIAL_SOURCES = ['instructor', 'subpoena'] as const
+/** Where a case file came from: the instructor's upload, a subpoena response, or a record or aid the investigator made (each in one case world). */
+export const MATERIAL_SOURCES = ['instructor', 'subpoena', 'investigator'] as const
 export type MaterialSource = (typeof MATERIAL_SOURCES)[number]
 
 export interface MaterialShares {
@@ -401,7 +411,15 @@ export interface InterviewReview {
   /** The investigator's report had no list of its new facts and files, so read it before finishing. */
   reviewBlockMissing?: boolean
   /** Case files the investigator would unlock for the team. */
-  documents?: { materialId: string; title: string; decision: DocumentDecision | null; auto?: boolean }[]
+  documents?: {
+    materialId: string
+    title: string
+    decision: DocumentDecision | null
+    auto?: boolean
+    /** A record or illustrative aid the investigator made, rather than a case file he could get. */
+    made?: boolean
+    contentType?: string
+  }[]
 }
 
 /** Similar new facts from different reviews, to rule on together. */
@@ -600,6 +618,8 @@ export interface CaseWorkspace {
   investigatorAvailable: boolean
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady?: boolean
+  /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
+  exhibitListEnabled?: boolean
   /**
    * Soonest due first; completion is the team's. `auto` tasks come from the
    * information exchange (initial disclosures, responding to a set) and
@@ -742,6 +762,18 @@ export interface DiscoveryCheck {
   /** Which check of the same draft this is: 1 for the first. */
   round?: number
 }
+
+/** A check as it's being written: its tag once the mentor has decided, and the feedback so far. */
+export interface CheckProgress {
+  tag?: CheckTag
+  text: string
+}
+
+/** Has the mentor check a draft, showing its feedback as it's written (`onProgress`). */
+export type CheckDiscovery = (input: CheckInput, onProgress?: (progress: CheckProgress) => void) => Promise<DiscoveryCheck>
+
+/** A form that can be checked with AI was opened: which kind of draft (and, for answers, which set). */
+export type WarmCheckInput = { kind: 'subpoena' | ExchangeKind; mode: 'draft' } | { kind: ExchangeKind; mode: 'answer'; requestId: string }
 
 /** A check as a draft keeps it: with the key of the draft it checked, to tell when it's been edited since. */
 export type KeyedCheck = DiscoveryCheck & { key: string }
@@ -1033,6 +1065,231 @@ export interface DepositionOverview {
   reviewsWaiting: number
 }
 
+// The joint exhibit list (final steps); matches server/exhibits/exhibits.ts.
+
+/** A file, a deposition transcript the team took, or one of its investigator reports. */
+export type ExhibitSourceKind = 'material' | 'deposition' | 'report'
+
+/** A transcript turn or a report paragraph. */
+export interface ExhibitPart {
+  /** The turn's position, or the paragraph's index. */
+  n: number
+  /** The witness's answer, or the paragraph. */
+  text: string
+  question?: string
+  objection?: string | null
+}
+
+/** Something a team can put on its exhibit list. */
+export interface ExhibitOption {
+  kind: ExhibitSourceKind
+  id: string
+  title: string
+  group: 'case-file' | 'investigator' | 'depositions'
+  contentType?: string
+  filename?: string
+  /** A transcript's turns, or a text file's paragraphs, to choose from. */
+  parts?: ExhibitPart[]
+  /** A PDF or picture, which the team can black parts out of. */
+  markable?: 'pdf' | 'image'
+}
+
+/**
+ * An item on a list: the parts are a PDF's pages (from 1), a text file's
+ * paragraphs, or a transcript's turns; null is all of it. A PDF or picture
+ * can have parts blacked out (`marks`), with its blacked-out copy: a new
+ * `uploadKey`, or the `redactedKey` it was saved with.
+ */
+export interface ExhibitListItem {
+  kind: ExhibitSourceKind
+  id: string
+  parts: number[] | null
+  marks?: PageRedactionMarks | null
+  uploadKey?: string
+  redactedKey?: string | null
+}
+
+export interface ExhibitList {
+  side: Side
+  items: (ExhibitListItem & { title: string })[]
+  updatedAt: string | null
+  submittedAt: string | null
+  submittedBy: string | null
+}
+
+export type ExhibitStatus =
+  | 'awaiting_authenticity'
+  | 'authenticity_review'
+  | 'inauthentic'
+  | 'awaiting_admission'
+  | 'objection_response'
+  | 'admission_review'
+  | 'dropped'
+  | 'admitted'
+  | 'excluded'
+
+export interface Exhibit {
+  id: string
+  offeredBy: Side
+  /** Both sides listed it, so it was admitted at once (as the plaintiff's). */
+  joint: boolean
+  position: number
+  kind: ExhibitSourceKind
+  sourceId: string
+  parts: number[] | null
+  title: string
+  /**
+   * The chosen turns or paragraphs, as they were at the exchange; once
+   * admitted with a redaction, the redacted ones (and, for a text file, its
+   * paragraphs).
+   */
+  excerpt: ExhibitPart[] | null
+  contentType: string | null
+  status: ExhibitStatus
+  authenticated: boolean
+  authenticityNote: string | null
+  authenticityRuling: 'authenticated' | 'inauthentic' | null
+  authenticityRulingNote: string | null
+  objection: string | null
+  response: string | null
+  acceptsRedaction: string | null
+  ruling: 'overruled' | 'sustained' | 'partial' | null
+  rulingNote: string | null
+  redaction: string | null
+  /** Admitted with the instructor's marks: opening it shows the redacted version. Older servers leave it out. */
+  redacted?: boolean
+  /** A larger admitted exhibit from the same source took this one's place. */
+  supersededBy: string | null
+  /** "1", "2", … for the plaintiff and "A", "B", … for the defense, once the list is final. */
+  label: string | null
+  updatedAt: string
+  ruledAt: string | null
+}
+
+/** What changed since the student last looked. */
+export interface ExhibitNotices {
+  exchanged: boolean
+  objections: number
+  rulings: number
+  finalized: boolean
+}
+
+export interface StudentExhibits {
+  side: Side
+  options: ExhibitOption[]
+  mine: ExhibitList
+  /** Whether the other side has submitted; its items once both lists are in. */
+  theirs: ExhibitList
+  exhibits: Exhibit[]
+  finalizedAt: string | null
+  notices: ExhibitNotices
+}
+
+/** A team's move on an exhibit. */
+export type ExhibitMove =
+  | { step: 'authenticity'; decision: 'agree' | 'challenge'; note?: string }
+  | { step: 'admission'; decision: 'admit' | 'challenge'; objection?: string }
+  | { step: 'response'; decision: 'drop' | 'review'; response?: string; acceptsRedaction?: string }
+
+/** One case world's lists and exhibits, for the instructor. */
+export interface WorldExhibits {
+  matchupId: string
+  worldNumber: number
+  teams: { plaintiff: number | null; defense: number | null }
+  plaintiff: ExhibitList
+  defense: ExhibitList
+  exhibits: Exhibit[]
+  finalizedAt: string | null
+}
+
+/** For the case dashboard in the final steps phase. */
+export interface ExhibitOverview {
+  teams: number
+  teamsSubmitted: number
+  worlds: number
+  worldsFinalized: number
+  /** Challenges waiting for the instructor's ruling. */
+  reviewsWaiting: number
+}
+
+/** A challenge for the instructor to rule on (or one ruled on). */
+export interface ExhibitReview extends Exhibit {
+  caseId: string
+  caseTitle: string
+  worldNumber: number
+  teams: { plaintiff: number | null; defense: number | null }
+  ruledBy: string | null
+  /** The other side's version of the same document, also waiting for a ruling (ruled on together). */
+  pairedWith?: string | null
+  /** The document's own title, without this version's parts or redactions. */
+  sourceTitle?: string
+  /** The offering team blacked parts out of this version. */
+  offeredRedacted?: boolean
+}
+
+/** One ruling on two versions of a document: the whole of it, one side's version, a part marked on the original, or none. */
+export interface ExhibitVersionsRuling {
+  decision: 'whole' | 'plaintiff' | 'defense' | 'partial' | 'exclude'
+  note?: string
+  /** For `partial`: the marks on the whole original, and its redacted copy (a PDF or picture). */
+  marks?: RedactionMarks
+  uploadKey?: string
+  redaction?: string
+}
+
+export type ExhibitRuling =
+  | { step: 'authenticity'; decision: 'authenticate' | 'reject'; note?: string }
+  | {
+      step: 'admission'
+      decision: 'overrule' | 'sustain' | 'partial'
+      redaction?: string
+      note?: string
+      /** For a partial admission, the instructor's marks on the exhibit. */
+      marks?: RedactionMarks
+      /** The redacted copy of a PDF or picture, from `uploadRedactedExhibit`. */
+      uploadKey?: string
+    }
+
+// Marking a redaction; matches server/exhibits/exhibitFiles.ts.
+
+/** Whether the marks show what's redacted or what's admitted. */
+export type RedactionMode = 'redact' | 'admit'
+
+/** A box on a page, as fractions (0 to 1) of its width and height from the top left. */
+export interface RedactionBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** Boxes on a PDF's pages (counting from 1 through the exhibit as listed) or a picture (page 1). */
+export interface PageRedactionMarks {
+  mode: RedactionMode
+  pages: { page: number; removed: boolean; boxes: RedactionBox[] }[]
+}
+
+export interface TextRedactionRange {
+  field: 'question' | 'text'
+  start: number
+  end: number
+}
+
+/** Ranges of a transcript's turns or a report's or text file's paragraphs. */
+export interface TextRedactionMarks {
+  mode: RedactionMode
+  parts: { n: number; removed: boolean; ranges: TextRedactionRange[] }[]
+}
+
+export type RedactionMarks = PageRedactionMarks | TextRedactionMarks
+
+/** How an exhibit can be marked: boxes on a PDF or picture, ranges of text, or not at all (audio, video). */
+export interface ExhibitMarking {
+  markable: 'pdf' | 'image' | 'text' | null
+  /** A text exhibit's turns or paragraphs. */
+  parts: ExhibitPart[] | null
+}
+
 /** A likely witness the AI read from the initial file; matches server/witness/suggest.ts. */
 export interface WitnessSuggestion {
   name: string
@@ -1109,6 +1366,8 @@ export interface CourseService {
   clearTeams(courseId: string, caseId: string): Promise<CaseTeams>
   deleteTeam(courseId: string, caseId: string, teamId: string): Promise<CaseTeams>
   addTeamMember(courseId: string, caseId: string, teamId: string, email: string): Promise<CaseTeams>
+  /** Moves a student from their team onto this one, in one step. */
+  moveTeamMember(courseId: string, caseId: string, teamId: string, email: string): Promise<CaseTeams>
   /** A team left with nobody is deleted. */
   removeTeamMember(courseId: string, caseId: string, teamId: string, email: string): Promise<CaseTeams>
   // Case worlds (matchups). Changes also resolve to the case's teams.
@@ -1243,8 +1502,10 @@ export interface CourseService {
     responses: ItemResponse[],
     checkId?: string,
   ): Promise<StudentExchange>
-  /** Has the discovery mentor check a draft before it's sent. */
-  checkDiscovery(courseId: string, caseId: string, input: CheckInput): Promise<DiscoveryCheck>
+  /** Has the discovery mentor check a draft before it's sent; with `onProgress`, its feedback shows as it's written. */
+  checkDiscovery(courseId: string, caseId: string, input: CheckInput, onProgress?: (progress: CheckProgress) => void): Promise<DiscoveryCheck>
+  /** Gets the mentor ready for a form the team just opened, so its first check is quicker. */
+  warmDiscoveryCheck(courseId: string, caseId: string, input: WarmCheckInput): Promise<void>
   /** Serves a subpoena on a person or organization. */
   serveSubpoena(courseId: string, caseId: string, subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<StudentExchange>
   /** Saves a new draft. `lastCheck` is kept by its id and key. */
@@ -1293,4 +1554,39 @@ export interface CourseService {
   getReviewTranscript(courseId: string, reviewId: string): Promise<ReviewTranscript>
   /** One of the student's team's completed reviews, with what rests on denied facts struck out. */
   getMyReviewTranscript(courseId: string, caseId: string, reviewId: string): Promise<ReviewTranscript>
+
+  // The joint exhibit list
+  /** The team's exhibits, or null when there are none for it (not the final steps phase, or turned off). */
+  getMyExhibits(courseId: string, caseId: string): Promise<StudentExhibits | null>
+  saveExhibitList(courseId: string, caseId: string, items: ExhibitListItem[]): Promise<StudentExhibits>
+  submitExhibitList(courseId: string, caseId: string, items: ExhibitListItem[]): Promise<StudentExhibits>
+  moveExhibit(courseId: string, caseId: string, exhibitId: string, move: ExhibitMove): Promise<StudentExhibits>
+  markExhibitsSeen(courseId: string, caseId: string): Promise<void>
+  listCaseExhibits(courseId: string, caseId: string): Promise<WorldExhibits[]>
+  getExhibitOverview(courseId: string, caseId: string): Promise<ExhibitOverview>
+  setExhibitListEnabled(courseId: string, caseId: string, enabled: boolean): Promise<CourseCase>
+  listExhibitReviews(courseId: string, status: 'open' | 'completed'): Promise<ExhibitReview[]>
+  ruleOnExhibit(courseId: string, exhibitId: string, ruling: ExhibitRuling): Promise<void>
+  /** An exhibit's file for a student: its listed pages, or the redacted version once admitted with one. */
+  myExhibitFileUrl(courseId: string, caseId: string, exhibitId: string): string
+  myExhibitText(courseId: string, caseId: string, exhibitId: string): Promise<{ status: string; text: string | null }>
+  /** The same, for the instructor. */
+  caseExhibitFileUrl(courseId: string, caseId: string, exhibitId: string): string
+  caseExhibitText(courseId: string, caseId: string, exhibitId: string): Promise<{ status: string; text: string | null }>
+  /** An exhibit under review, as offered, for marking a redaction. */
+  reviewExhibitFileUrl(courseId: string, exhibitId: string): string
+  /** How an exhibit can be marked, as offered, or (`whole`) the whole original document. */
+  getExhibitMarking(courseId: string, exhibitId: string, whole?: boolean): Promise<ExhibitMarking>
+  /** The whole original file behind an exhibit, sent by the API itself. */
+  reviewExhibitOriginalUrl(courseId: string, exhibitId: string): string
+  /** One ruling on two versions of the same document (`ids`: the two exhibits). */
+  ruleOnExhibitVersions(courseId: string, ids: [string, string], ruling: ExhibitVersionsRuling): Promise<void>
+  /** Uploads the redacted copy of a PDF or picture; returns the key to rule with. */
+  uploadRedactedExhibit(courseId: string, exhibitId: string, file: Blob): Promise<string>
+  /** A PDF or picture the team can list, sent by the API itself, for blacking out parts of it. */
+  myExhibitSourceUrl(courseId: string, caseId: string, materialId: string): string
+  /** An exhibit under review as offered, sent by the API itself, for marking a redaction. */
+  reviewExhibitBytesUrl(courseId: string, exhibitId: string): string
+  /** Uploads a team's blacked-out copy of a PDF or picture it's listing; returns the key to save with. */
+  uploadExhibitCopy(courseId: string, caseId: string, materialId: string, file: Blob): Promise<string>
 }

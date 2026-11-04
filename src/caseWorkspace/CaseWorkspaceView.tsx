@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Megaphone,
   ScrollText,
+  Scale,
   Search,
   Share2,
   Users,
@@ -54,8 +55,12 @@ import {
   type Side,
   type StudentExchange,
   type SubpoenaInput,
-  type CheckInput,
-  type DiscoveryCheck,
+  type CheckDiscovery,
+  type WarmCheckInput,
+  type ExhibitListItem,
+  type ExhibitMove,
+  type StudentExhibits,
+  phaseAtLeast,
 } from '../courses/types'
 import { sideLabel, titleParties, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
@@ -67,6 +72,7 @@ import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { CaseFileTable } from './CaseFileTable'
 import { CATEGORY_ICON } from './categoryIcons'
 import { ExchangePanel } from './exchange/ExchangePanel'
+import { ExhibitListSection, type CopyActions } from './finalSteps/ExhibitListSection'
 import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
@@ -105,10 +111,14 @@ export function CaseWorkspaceView({
   onRespondToRequest,
   onServeSubpoena,
   onCheckDiscovery,
+  onWarmCheck,
   onOpenExchange,
   exchangeDrafts,
   initialDraftId,
   onOpenDraft,
+  exhibits,
+  exhibitActions,
+  onOpenExhibits,
   initialTab = 'overview',
   loadText,
   now = new Date(),
@@ -140,7 +150,9 @@ export function CaseWorkspaceView({
   onRespondToRequest?(requestId: string, responses: ItemResponse[], checkId?: string): Promise<void>
   onServeSubpoena?(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
   /** "Check with AI" before sending discovery; leave out (the preview) to send without it. */
-  onCheckDiscovery?(input: CheckInput): Promise<DiscoveryCheck>
+  onCheckDiscovery?: CheckDiscovery
+  /** A form that can be checked with AI was opened: gets the mentor ready, so the first check is quicker. */
+  onWarmCheck?(input: WarmCheckInput): void
   /** Called when the student opens the Information exchange tab, to mark the responses and subpoena answers read. */
   onOpenExchange?(): void
   /** Saves and deletes the team's drafts of new subpoenas and sets; leave out (the preview) to not keep drafts. */
@@ -149,6 +161,21 @@ export function CaseWorkspaceView({
   initialDraftId?: string
   /** Called with the open draft's id, and null on leaving it. */
   onOpenDraft?(draftId: string | null): void
+  /** The team's joint exhibit list (final steps); leave out (the preview, or not open) to hide its tab. */
+  exhibits?: StudentExhibits | null
+  /** Saves, submits and moves on the exhibit list; leave out to make it read-only. */
+  exhibitActions?: {
+    save(items: ExhibitListItem[]): Promise<void>
+    submit(items: ExhibitListItem[]): Promise<void>
+    move(exhibitId: string, move: ExhibitMove): Promise<void>
+    /** An exhibit's file (its listed pages, or the redacted version), and its text version. */
+    fileUrl(exhibitId: string): string
+    loadText(exhibitId: string): Promise<{ status: string; text: string | null }>
+    /** Blacking out parts of a PDF or picture the team lists. */
+    copy: CopyActions
+  }
+  /** Called when the student opens the Final steps tab, to mark what changed there read. */
+  onOpenExhibits?(): void
   /** The tab to open on, as when a notice links straight to a report. */
   initialTab?: CaseTab
   /** A case file's text version, for the viewer to show a document the browser can't. */
@@ -156,8 +183,10 @@ export function CaseWorkspaceView({
   now?: Date
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
-  /** The case file open in the viewer. */
-  const [viewing, setViewing] = useState<ViewableFile | null>(null)
+  /** The case file open in the viewer, or an exhibit's file (with its own links). */
+  const [viewing, setViewing] = useState<
+    (ViewableFile & { url?: string; text?(): Promise<{ status: string; text: string | null }> }) | null
+  >(null)
   const openMaterial = (m: CaseMaterial) =>
     setViewing({ id: m.id, title: m.description || m.filename, filename: m.filename, contentType: m.contentType, sizeBytes: m.sizeBytes })
   /** The response "See responses" opens straight to; cleared on leaving the tab. */
@@ -181,12 +210,28 @@ export function CaseWorkspaceView({
   const newAnswers = exchange?.subpoenas?.served.filter((sp) => sp.respondedAt && !sp.seen) ?? []
   /** Subpoenas the other team served that this student hasn't seen notice of. */
   const newNotices = exchange?.subpoenas?.notices.filter((n) => n.seen === false) ?? []
+  /** What changed in the joint exhibit list since this student last looked, and what waits on the team. */
+  const exhibitNotices = exhibits?.notices
+  const exhibitNews = exhibitNotices
+    ? Number(exhibitNotices.exchanged) + exhibitNotices.objections + exhibitNotices.rulings + Number(exhibitNotices.finalized)
+    : 0
+  const exhibitsWaiting =
+    exhibits && !exhibits.finalizedAt
+      ? exhibits.exhibits.filter((x) =>
+          x.offeredBy === exhibits.side
+            ? x.status === 'objection_response'
+            : x.status === 'awaiting_authenticity' || x.status === 'awaiting_admission',
+        ).length
+      : 0
   // Being on the Reviews, Investigator, or Information exchange tab marks what's there read, however the student got there.
   useEffect(() => {
     if (tab === 'reviews' && unseen > 0) onOpenReviews?.()
     if (tab === 'investigator' && unseenReports > 0) onOpenInvestigator?.()
     if (tab === 'exchange' && newResponses.length + newAnswers.length + newNotices.length > 0) onOpenExchange?.()
+    if (tab === 'final-steps' && exhibitNews > 0) onOpenExhibits?.()
   }, [
+    exhibitNews,
+    onOpenExhibits,
     tab,
     unseen,
     unseenReports,
@@ -217,6 +262,7 @@ export function CaseWorkspaceView({
       ? [{ id: 'exchange' as const, label: 'Information exchange', count: toRespond + newResponses.length + newAnswers.length + newNotices.length }]
       : []),
     ...(investigator ? [{ id: 'investigator' as const, label: 'Investigator', count: unseenReports }] : []),
+    ...(exhibits ? [{ id: 'final-steps' as const, label: 'Final steps', count: exhibitsWaiting + exhibitNews }] : []),
     { id: 'tasks', label: 'Tasks', count: openTasks.length },
     ...(reviews ? [{ id: 'reviews' as const, label: 'Reviews', count: unseen }] : []),
   ]
@@ -301,6 +347,21 @@ export function CaseWorkspaceView({
                 setTab('exchange')
               },
             }}
+          />
+        )}
+        {exhibitNotices && exhibitNews > 0 && tab !== 'final-steps' && (
+          <Toast
+            icon={<Scale />}
+            title={
+              exhibitNotices.finalized
+                ? 'The joint exhibit list is final'
+                : exhibitNotices.objections > 0
+                  ? `The other side objected to ${exhibitNotices.objections === 1 ? 'one of your exhibits' : `${exhibitNotices.objections} of your exhibits`}`
+                  : exhibitNotices.rulings > 0
+                    ? `Your instructor ruled on ${exhibitNotices.rulings === 1 ? 'an exhibit' : `${exhibitNotices.rulings} exhibits`}`
+                    : 'Exhibit lists exchanged: the other side’s list is ready to review'
+            }
+            action={{ label: 'Open Final steps', onClick: () => setTab('final-steps') }}
           />
         )}
       </Toasts>
@@ -490,7 +551,7 @@ export function CaseWorkspaceView({
           <ListPanel
             title="Witnesses"
             sub={
-              c.phase === 'deposition'
+              phaseAtLeast(c.phase, 'deposition')
                 ? `People in ${c.title}. Interview your side's AI witnesses with your partner, and depose the other side's.`
                 : witnesses.some((w) => w.disclosed)
                   ? `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's disclosed witnesses show here; you can depose them in the deposition phase.`
@@ -562,6 +623,7 @@ export function CaseWorkspaceView({
             onRespond={c.status === 'active' ? onRespondToRequest : undefined}
             onServeSubpoena={c.status === 'active' ? onServeSubpoena : undefined}
             onCheck={c.status === 'active' ? onCheckDiscovery : undefined}
+            onWarmCheck={c.status === 'active' ? onWarmCheck : undefined}
             drafts={c.status === 'active' ? exchangeDrafts : undefined}
             initialDraftId={initialDraftId}
             onOpenDraft={onOpenDraft}
@@ -579,6 +641,32 @@ export function CaseWorkspaceView({
           />
         )}
 
+        {tab === 'final-steps' && exhibits && (
+          <ExhibitListSection
+            exhibits={exhibits}
+            onSave={c.status === 'active' ? exhibitActions?.save : undefined}
+            onSubmit={c.status === 'active' ? exhibitActions?.submit : undefined}
+            onMove={c.status === 'active' ? exhibitActions?.move : undefined}
+            onOpenFile={(id) => {
+              const file = materials.find((m) => m.id === id)
+              if (file) openMaterial(file)
+            }}
+            copyActions={exhibitActions?.copy}
+            onOpenExhibit={(x) =>
+              exhibitActions &&
+              setViewing({
+                id: x.id,
+                title: x.title,
+                filename: x.title,
+                // A redacted picture is stored as a PNG.
+                contentType: x.redacted && x.contentType?.startsWith('image/') ? 'image/png' : (x.contentType ?? 'application/pdf'),
+                url: exhibitActions.fileUrl(x.id),
+                text: () => exhibitActions.loadText(x.id),
+              })
+            }
+          />
+        )}
+
         {tab === 'reviews' && reviews && <ReviewsPanel reviews={reviews} loadTranscript={loadTranscript} lite={c.reviewMode === 'lite'} />}
 
         {tab === 'tasks' && (
@@ -592,8 +680,8 @@ export function CaseWorkspaceView({
       {viewing && (
         <FileViewer
           file={viewing}
-          downloadUrl={downloadUrl(viewing.id)}
-          loadText={loadText && (() => loadText(viewing.id))}
+          downloadUrl={viewing.url ?? downloadUrl(viewing.id)}
+          loadText={viewing.text ?? (loadText && (() => loadText(viewing.id)))}
           onClose={() => setViewing(null)}
         />
       )}

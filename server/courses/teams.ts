@@ -25,6 +25,8 @@ export interface Matchup {
   number: number
   plaintiffTeamId: string
   defenseTeamId: string
+  /** The world has facts or files of its own, so its teams are set. */
+  locked: boolean
 }
 
 /** Everything about how a case is paired. Every team or matchup change responds with this. */
@@ -33,10 +35,99 @@ export interface CaseTeams {
   /** Roster students not on a team for this case yet. */
   unpaired: RosterEntry[]
   matchups: Matchup[]
+  /** The case has left the introduction phase: every world is locked, and no new teams or worlds can be made. */
+  worldsLocked: boolean
+}
+
+type Db = Pick<PoolClient, 'query'>
+
+/** The case world's letter: 1 → "A", 27 → "AA" (like worldLabel in src/courses). */
+export const worldLetter = (number: number) => {
+  let label = ''
+  for (let n = number; n > 0; n = Math.floor((n - 1) / 26)) label = String.fromCharCode(65 + ((n - 1) % 26)) + label
+  return label
+}
+
+/** Whether the case has left the introduction phase, which locks the worlds it had then for good. */
+async function caseLocked(db: Db, caseId: string) {
+  const { rows } = await db.query<{ locked: boolean }>(
+    'SELECT worlds_locked_at IS NOT NULL AS locked FROM cases WHERE id = $1',
+    [caseId],
+  )
+  return rows[0]?.locked ?? false
+}
+
+/**
+ * The case's locked worlds: every world made before the case left the
+ * introduction phase, and otherwise each world with something of its own,
+ * since changing its teams would strand it: an interview a team has had
+ * answers in, a review or investigator request, a subpoena or exchange
+ * request, or a file only that world has. Instructor test interviews (with no
+ * team) don't count.
+ */
+export async function lockedWorlds(db: Db, caseId: string) {
+  const { rows } = await db.query<{ id: string; number: number; plaintiffTeamId: string; defenseTeamId: string }>(
+    `SELECT mu.id, mu.number, p.team_id AS "plaintiffTeamId", d.team_id AS "defenseTeamId"
+     FROM matchups mu
+     JOIN cases c ON c.id = mu.case_id
+     JOIN matchup_teams p ON p.matchup_id = mu.id AND p.side = 'plaintiff'
+     JOIN matchup_teams d ON d.matchup_id = mu.id AND d.side = 'defense'
+     WHERE mu.case_id = $1 AND (
+       mu.created_at <= c.worlds_locked_at
+       OR EXISTS (SELECT 1 FROM interview_reviews r WHERE r.matchup_id = mu.id OR r.team_id IN (p.team_id, d.team_id))
+       OR EXISTS (SELECT 1 FROM interviews i JOIN interview_turns it ON it.interview_id = i.id
+                  WHERE i.team_id IN (p.team_id, d.team_id))
+       OR EXISTS (SELECT 1 FROM subpoenas s WHERE s.matchup_id = mu.id OR s.team_id IN (p.team_id, d.team_id))
+       OR EXISTS (SELECT 1 FROM exchange_requests e
+                  WHERE e.from_team_id IN (p.team_id, d.team_id) OR e.to_team_id IN (p.team_id, d.team_id))
+       OR EXISTS (SELECT 1 FROM case_materials cm WHERE cm.matchup_id = mu.id)
+     )
+     ORDER BY mu.number`,
+    [caseId],
+  )
+  return rows
+}
+
+/** Throws if a change left a locked world with different teams. */
+async function assertLockedKept(db: Db, caseId: string, before: Awaited<ReturnType<typeof lockedWorlds>>) {
+  if (before.length === 0) return
+  const { rows } = await db.query<{ matchupId: string; teamId: string; side: string }>(
+    'SELECT matchup_id AS "matchupId", team_id AS "teamId", side FROM matchup_teams WHERE case_id = $1',
+    [caseId],
+  )
+  for (const world of before) {
+    const sides = rows.filter((r) => r.matchupId === world.id)
+    if (
+      sides.find((r) => r.side === 'plaintiff')?.teamId !== world.plaintiffTeamId ||
+      sides.find((r) => r.side === 'defense')?.teamId !== world.defenseTeamId
+    ) {
+      throw new HttpError(
+        409,
+        `World ${worldLetter(world.number)} is locked because it already has its own facts, so its teams can't change. You can still move students between teams.`,
+      )
+    }
+  }
+}
+
+/** Throws if taking a student off `teamId` left it empty while its world is locked (an empty team is deleted). */
+async function assertNotEmptied(db: Db, caseId: string, teamId: string) {
+  const { rows } = await db.query<{ number: number; members: number }>(
+    `SELECT t.number, (SELECT count(*)::int FROM team_members m WHERE m.team_id = t.id) AS members
+     FROM teams t WHERE t.id = $1`,
+    [teamId],
+  )
+  if (!rows[0] || rows[0].members > 0) return
+  const world = (await lockedWorlds(db, caseId)).find((w) => w.plaintiffTeamId === teamId || w.defenseTeamId === teamId)
+  if (world) {
+    throw new HttpError(
+      409,
+      `Team ${rows[0].number} is in World ${worldLetter(world.number)}, which is locked, so it needs at least one student.`,
+    )
+  }
 }
 
 /** The case's teams by number, everyone on the roster still unpaired, and the matchups. */
-export async function listTeams(courseId: string, caseId: string, db: Pick<PoolClient, 'query'> = pool) {
+export async function listTeams(courseId: string, caseId: string, db: Db = pool) {
   const { rows: teams } = await db.query<Team>(
     `SELECT t.id, t.number,
             coalesce(
@@ -63,7 +154,7 @@ export async function listTeams(courseId: string, caseId: string, db: Pick<PoolC
      ORDER BY e.user_id IS NULL, lower(u.name), e.email`,
     [courseId, caseId],
   )
-  const { rows: matchups } = await db.query<Matchup>(
+  const { rows: worlds } = await db.query<Omit<Matchup, 'locked'>>(
     `SELECT mu.id, mu.number, p.team_id AS "plaintiffTeamId", d.team_id AS "defenseTeamId"
      FROM matchups mu
      JOIN matchup_teams p ON p.matchup_id = mu.id AND p.side = 'plaintiff'
@@ -72,14 +163,17 @@ export async function listTeams(courseId: string, caseId: string, db: Pick<PoolC
      ORDER BY mu.number`,
     [caseId],
   )
-  return { teams, unpaired, matchups } satisfies CaseTeams
+  const locked = new Set((await lockedWorlds(db, caseId)).map((w) => w.id))
+  const matchups = worlds.map((m) => ({ ...m, locked: locked.has(m.id) }))
+  return { teams, unpaired, matchups, worldsLocked: await caseLocked(db, caseId) } satisfies CaseTeams
 }
 
 /**
  * Runs `change` in a transaction holding the case's row lock, so concurrent
  * edits to one case's teams and matchups (and their numbers) happen one at a
  * time, and returns the pairing afterwards. A matchup that lost a team is
- * deleted, putting its other team back in the pool.
+ * deleted, putting its other team back in the pool. A locked world must come
+ * out with the same teams on the same sides, each with someone on it.
  */
 export async function changeTeams(
   courseId: string,
@@ -90,7 +184,9 @@ export async function changeTeams(
   try {
     await client.query('BEGIN')
     await client.query('SELECT 1 FROM cases WHERE id = $1 FOR UPDATE', [caseId])
+    const locked = await lockedWorlds(client, caseId)
     await change(client)
+    await assertLockedKept(client, caseId, locked)
     await client.query(
       `DELETE FROM matchups mu
        WHERE mu.case_id = $1 AND (SELECT count(*) FROM matchup_teams mt WHERE mt.matchup_id = mu.id) < 2`,
@@ -155,19 +251,44 @@ export function createTeam(courseId: string, caseId: string, emails: string[]) {
   })
 }
 
+/** Throws unless the team is in the case and has room for one more. */
+async function assertRoom(client: PoolClient, caseId: string, teamId: string) {
+  const { rows } = await client.query<{ size: number }>(
+    `SELECT (SELECT count(*)::int FROM team_members m WHERE m.team_id = t.id) AS size
+     FROM teams t WHERE t.id = $1 AND t.case_id = $2`,
+    [teamId, caseId],
+  )
+  if (!rows[0]) throw new HttpError(404, 'Team not found.')
+  if (rows[0].size >= MAX_TEAM_SIZE) {
+    throw new HttpError(409, `A team can have at most ${MAX_TEAM_SIZE} students.`)
+  }
+}
+
 export function addMember(courseId: string, caseId: string, teamId: string, email: string) {
   return changeTeams(courseId, caseId, async (client) => {
-    const { rows } = await client.query<{ size: number }>(
-      `SELECT (SELECT count(*)::int FROM team_members m WHERE m.team_id = t.id) AS size
-       FROM teams t WHERE t.id = $1 AND t.case_id = $2`,
-      [teamId, caseId],
-    )
-    if (!rows[0]) throw new HttpError(404, 'Team not found.')
-    if (rows[0].size >= MAX_TEAM_SIZE) {
-      throw new HttpError(409, `A team can have at most ${MAX_TEAM_SIZE} students.`)
-    }
+    await assertRoom(client, caseId, teamId)
     await assertUnpaired(client, courseId, caseId, [email])
     await insertMembers(client, courseId, caseId, teamId, [email])
+  })
+}
+
+/**
+ * Moves a student from their team onto `teamId` in one step, so a locked
+ * world's team is never empty in between. They take on the new team's world.
+ */
+export function moveMember(courseId: string, caseId: string, teamId: string, email: string) {
+  return changeTeams(courseId, caseId, async (client) => {
+    await assertRoom(client, caseId, teamId)
+    const { rows } = await client.query<{ teamId: string }>(
+      'SELECT team_id AS "teamId" FROM team_members WHERE case_id = $1 AND email = $2',
+      [caseId, email],
+    )
+    if (!rows[0]) throw new HttpError(404, 'That student is not on a team for this case.')
+    if (rows[0].teamId === teamId) return
+    await client.query('DELETE FROM team_members WHERE case_id = $1 AND email = $2', [caseId, email])
+    await insertMembers(client, courseId, caseId, teamId, [email])
+    await assertNotEmptied(client, caseId, rows[0].teamId)
+    await deleteEmptyTeams(client, caseId)
   })
 }
 
@@ -179,6 +300,7 @@ export function removeMember(courseId: string, caseId: string, teamId: string, e
       [teamId, caseId, email],
     )
     if (rowCount !== 1) throw new HttpError(404, 'That student is not on this team.')
+    await assertNotEmptied(client, caseId, teamId)
     await deleteEmptyTeams(client, caseId)
   })
 }
@@ -194,10 +316,11 @@ export function deleteTeam(courseId: string, caseId: string, teamId: string) {
   })
 }
 
-/** Unpairs everyone in the case, which also removes the matchups. */
+/** Unpairs everyone in the case, which also removes the matchups, except the teams of locked worlds. */
 export function clearTeams(courseId: string, caseId: string) {
   return changeTeams(courseId, caseId, async (client) => {
-    await client.query('DELETE FROM teams WHERE case_id = $1', [caseId])
+    const kept = (await lockedWorlds(client, caseId)).flatMap((w) => [w.plaintiffTeamId, w.defenseTeamId])
+    await client.query('DELETE FROM teams WHERE case_id = $1 AND NOT (id = ANY($2::uuid[]))', [caseId, kept])
   })
 }
 

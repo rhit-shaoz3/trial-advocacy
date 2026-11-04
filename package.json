@@ -35,6 +35,8 @@
     "express-session": "^1.19.0",
     "lucide-react": "^0.577.0",
     "mustache": "^4.2.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.5.438",
     "pg": "^8.23.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

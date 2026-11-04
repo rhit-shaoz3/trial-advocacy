@@ -1,0 +1,219 @@
+/* Marking a redaction on an exhibit (the instructor's partial admission). */
+
+.rx {
+  display: grid;
+  gap: 0.75rem;
+  font-variant-ligatures: none;
+}
+
+.rx-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.rx-preview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.rx-help {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.rx-summary {
+  margin-right: auto;
+  font-size: 0.85rem;
+}
+
+.rx-pages,
+.rx-parts {
+  display: grid;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rx-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.rx-page-head label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+/* The page, with its marks painted over it and a layer on top to draw on. */
+.rx-sheet {
+  position: relative;
+  max-width: 52rem;
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  line-height: 0;
+}
+
+.rx-sheet img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+/* (.rx-sheet raises these above the workspace's own size for icons.) */
+.rx-sheet .rx-paint,
+.rx-sheet .rx-draw {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rx-draw {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.rx-page-dropped .rx-sheet img {
+  opacity: 0.35;
+}
+
+.rx-page-dropped .rx-draw {
+  cursor: default;
+}
+
+/* Black, in the preview (and in the redacted copy). */
+.rx-black {
+  fill: #000;
+}
+
+/* What's redacted, while marking: dark enough to see, light enough to read through. */
+.rx-cover {
+  fill: rgb(0 0 0 / 0.55);
+  stroke: #000;
+  stroke-width: 0.002;
+}
+
+/* Admit mode: the page outside the boxes is shaded, and the boxes outlined. */
+.rx-shade {
+  fill: rgb(0 0 0 / 0.35);
+}
+
+.rx-keep {
+  fill: none;
+  stroke: #15803d;
+  stroke-width: 0.003;
+}
+
+.rx-box-remove {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  transform: translate(-60%, -40%);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.rx-sheet .rx-box-remove svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.rx-sheet-out {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--subtle);
+  color: var(--fg-soft);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* Text */
+
+.rx-mark-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  background: var(--surface);
+  font-size: 0.85rem;
+}
+
+.rx-part {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.5rem;
+}
+
+.rx-part-dropped {
+  opacity: 0.6;
+}
+
+.rx-parts .xl-turn {
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.rx-hl {
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.rx-hl-redact {
+  background: rgb(0 0 0 / 0.7);
+  color: #fff;
+}
+
+.rx-hl-admit {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+  box-shadow: inset 0 -2px 0 var(--tint-green-fg);
+}
+
+/* The card, once marks are made. */
+.rx-marked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.rx-marked > span {
+  flex: 1 1 14rem;
+}
+
+.review-card .rx-marked svg {
+  width: 1rem;
+  height: 1rem;
+  vertical-align: -0.15em;
+  color: var(--tint-green-fg);
+}

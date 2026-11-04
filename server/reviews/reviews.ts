@@ -66,8 +66,11 @@ export interface InterviewReview {
   recordsRequested: string[]
   /** The investigator left off his review block, so his new facts and files weren't listed. */
   reviewBlockMissing: boolean
-  /** Case files the investigator would unlock for the team, and the instructor's call on each. */
-  documents: { materialId: string; title: string; decision: DocumentDecision | null; auto: boolean }[]
+  /**
+   * Case files the investigator would unlock for the team, and records and
+   * illustrative aids he made for it (`made`), with the instructor's call on each.
+   */
+  documents: { materialId: string; title: string; decision: DocumentDecision | null; auto: boolean; made: boolean; contentType: string }[]
 }
 
 /** What students see of a completed review: only whether each fact stands. */
@@ -251,7 +254,9 @@ const REVIEW_SELECT = `
          r.review_block_missing AS "reviewBlockMissing",
          coalesce((SELECT json_agg(json_build_object('materialId', d.material_id,
                                                      'title', coalesce(nullif(cm.description, ''), cm.filename),
-                                                     'decision', d.decision, 'auto', d.auto) ORDER BY d.position)
+                                                     'decision', d.decision, 'auto', d.auto,
+                                                     'made', cm.source = 'investigator', 'contentType', cm.content_type)
+                                   ORDER BY d.position)
                    FROM review_documents d JOIN case_materials cm ON cm.id = d.material_id
                    WHERE d.review_id = r.id), '[]') AS documents
   FROM interview_reviews r

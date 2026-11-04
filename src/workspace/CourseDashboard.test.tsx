@@ -511,7 +511,7 @@ describe("the instructor's own dashboard", () => {
     expect(within(draft).getByRole('link', { name: 'Set up case: Practice case' })).toHaveAttribute('href', '/courses/c1/cases/k2')
 
     const active = screen.getByRole('article', { name: 'Rivera v. Thrill Park' })
-    expect(within(active).getByRole('list', { name: 'Phase 2 of 3: Investigate' })).toBeInTheDocument()
+    expect(within(active).getByRole('list', { name: 'Phase 2 of 4: Investigate' })).toBeInTheDocument()
     expect(within(active).getByText('Investigate', { selector: '[aria-current="step"]' })).toBeInTheDocument()
     expect(within(active).getByRole('progressbar', { name: 'Teams done with tasks due so far' })).toHaveAttribute('aria-valuenow', '9')
     expect(active).toHaveTextContent('9 of 16 teams')

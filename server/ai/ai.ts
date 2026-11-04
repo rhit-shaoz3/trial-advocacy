@@ -6,8 +6,8 @@ import { findNewFacts, type NewFact, type NewFactsInput } from '../witness/newFa
 import { suggestFromComplaint, type ComplaintSuggestions, type SuggestInput } from '../witness/suggest.ts'
 import { respondToSubpoena } from '../exchange/subpoenaResponse.ts'
 import type { SubpoenaContext } from '../exchange/subpoenaPrompt.ts'
-import { reviewDiscovery } from '../exchange/mentor.ts'
-import type { MentorContext, MentorTag } from '../exchange/mentorPrompt.ts'
+import { reviewDiscovery, warmMentorCache, type MentorProgress, type MentorReview } from '../exchange/mentor.ts'
+import type { MentorContext } from '../exchange/mentorPrompt.ts'
 import { groupFacts, type FactGroupProposal, type PendingFact } from '../reviews/factsAi.ts'
 import { transcribeFile, type FileToTranscribe } from './transcribe.ts'
 
@@ -43,7 +43,11 @@ export const ai = {
   /** A subpoena's response as its recipient drafts it, tag lines and all, for the instructor to review. */
   respondToSubpoena: (context: SubpoenaContext): Promise<string> => respondToSubpoena(anthropic(), context),
   /** The discovery mentor's tag and Socratic feedback on a team's draft requests or answers. */
-  reviewDiscovery: (context: MentorContext): Promise<{ tag: MentorTag; feedback: string }> => reviewDiscovery(anthropic(), context),
+  reviewDiscovery: (context: MentorContext, progress?: MentorProgress): Promise<MentorReview> =>
+    reviewDiscovery(anthropic(), context, progress),
+  /** Loads the mentor's prompt for a team into the cache, so its first check reads it from there. */
+  warmMentor: (context: MentorContext): Promise<{ cacheReadTokens: number; cacheWriteTokens: number }> =>
+    warmMentorCache(anthropic(), context),
   /** Everything setup can start from, in one read of the complaint: who will likely testify, and text for the case's own fields. */
   suggestFromComplaint: (input: SuggestInput): Promise<ComplaintSuggestions> => suggestFromComplaint(anthropic(), input),
   /** Which pending new facts are alike enough to rule on together. */

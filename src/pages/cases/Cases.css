@@ -1662,6 +1662,11 @@ a.case-row:hover {
   color: var(--tint-amber-fg);
 }
 
+.source-investigator {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
 /* A field filled in with the AI's suggestion from the case file */
 
 .suggested-note {
@@ -1675,4 +1680,23 @@ a.case-row:hover {
   width: 0.85rem;
   height: 0.85rem;
   color: var(--tint-amber-fg);
+}
+
+/* A case world whose teams can't change any more. */
+.badge-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
+}
+
+.badge-locked svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.team-locked-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
 }

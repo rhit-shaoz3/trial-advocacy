@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Sparkles, X } from 'lucide-react'
-import type { CheckTag, DiscoveryCheck, KeyedCheck } from '../../courses/types'
+import type { CheckProgress, CheckTag, DiscoveryCheck, KeyedCheck } from '../../courses/types'
 
 const TAG_LABEL: Record<CheckTag, string> = {
   LOOKS_GOOD: 'Looks good',
@@ -18,7 +18,8 @@ const TAG_LABEL: Record<CheckTag, string> = {
  * just the send button. A draft opened again starts with its last check
  * (`initialCheck`). When the case limits the rounds of feedback, the check
  * button says how many are left; after the last one it greys out and the send
- * button takes over.
+ * button takes over. The feedback shows as the mentor writes it, and opening
+ * the form gets the mentor ready (`onWarm`), so the first check is quicker.
  */
 export function AiCheck({
   info,
@@ -36,6 +37,7 @@ export function AiCheck({
   extra,
   rounds = null,
   roundsUsed = 0,
+  onWarm,
 }: {
   /** What the footer says on the left (deadlines, what happens next). */
   info?: ReactNode
@@ -43,8 +45,8 @@ export function AiCheck({
   ready: boolean
   /** The draft as a string, to tell when it's been edited since the check. */
   draftKey: string
-  /** Checks the draft; `previousCheckId` is the check shown, when checking again. */
-  onCheck?(previousCheckId?: string): Promise<DiscoveryCheck>
+  /** Checks the draft; `previousCheckId` is the check shown, when checking again. `onProgress` gets the feedback as it's written. */
+  onCheck?(previousCheckId?: string, onProgress?: (progress: CheckProgress) => void): Promise<DiscoveryCheck>
   /** Sends it, with the last check's id; throws to show an error. */
   onSubmit(checkId?: string): Promise<void>
   submitIcon?: ReactNode
@@ -64,9 +66,13 @@ export function AiCheck({
   rounds?: number | null
   /** Checks already used before any shown here (answers to a set, after a refresh). */
   roundsUsed?: number
+  /** Called once the form opens (while checks are left), to get the mentor ready. */
+  onWarm?(): void
 }) {
   const [check, setCheck] = useState<KeyedCheck | null>(initialCheck)
   const [checking, setChecking] = useState(false)
+  /** The check being written: its tag once decided, and the feedback so far. */
+  const [live, setLive] = useState<CheckProgress | null>(null)
   const [checkFailed, setCheckFailed] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,13 +82,22 @@ export function AiCheck({
   const left = rounds === null ? null : Math.max(0, rounds - used)
   const outOfRounds = left === 0
 
+  // Once, when the form opens: there's no point warming up with no checks left.
+  const warmed = useRef(false)
+  useEffect(() => {
+    if (warmed.current || !onCheck || !onWarm || outOfRounds) return
+    warmed.current = true
+    onWarm()
+  }, [onCheck, onWarm, outOfRounds])
+
   async function runCheck() {
     if (!onCheck) return
     setChecking(true)
     setError(null)
     setCheckFailed(false)
+    setLive(null)
     try {
-      const result = await onCheck(check?.id)
+      const result = await onCheck(check?.id, setLive)
       const keyed = { ...result, key: draftKey }
       setCheck(keyed)
       onCheckChange?.(keyed)
@@ -91,6 +106,7 @@ export function AiCheck({
       setCheckFailed(true)
     } finally {
       setChecking(false)
+      setLive(null)
     }
   }
 
@@ -160,12 +176,16 @@ export function AiCheck({
   return (
     <div className="ai-check">
       {(checking || check) && (
-        <div className={`ai-check-result${check && !checking ? ` ai-check-${check.tag.toLowerCase()}` : ''}`}>
+        <div
+          className={`ai-check-result${
+            checking ? (live?.tag ? ` ai-check-${live.tag.toLowerCase()}` : '') : check ? ` ai-check-${check.tag.toLowerCase()}` : ''
+          }`}
+        >
           <p className="ai-check-status" role="status">
             {checking ? (
               <>
                 <span className="ai-check-icon ai-check-spinner" aria-hidden="true" />
-                Checking your draft…
+                {live?.tag ? `${TAG_LABEL[live.tag]}…` : live ? 'Writing feedback…' : 'Checking your draft…'}
               </>
             ) : (
               check && (
@@ -179,11 +199,20 @@ export function AiCheck({
               )
             )}
           </p>
-          {check && !checking && check.tag !== 'LOOKS_GOOD' && check.feedback && (
-            <div className="ai-check-feedback" aria-label="AI feedback">
-              {check.feedback}
-            </div>
-          )}
+          {checking
+            ? live?.text &&
+              live.tag !== 'LOOKS_GOOD' && (
+                <div className="ai-check-feedback ai-check-writing" aria-label="AI feedback, as it’s written">
+                  {live.text}
+                </div>
+              )
+            : check &&
+              check.tag !== 'LOOKS_GOOD' &&
+              check.feedback && (
+                <div className="ai-check-feedback" aria-label="AI feedback">
+                  {check.feedback}
+                </div>
+              )}
         </div>
       )}
       <div className="ex-footer">

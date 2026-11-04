@@ -4,7 +4,7 @@ import { Modal } from '../../components/Modal'
 import { SUBPOENA_TYPE_LABEL } from '../../courses/subpoenaForm'
 import { FEDERAL, type PartSettings, type SubpoenaType } from '../../courses/types'
 
-export type TeachTopic = 'disclosures' | 'subpoenas' | 'interrogatories' | 'rfas'
+export type TeachTopic = 'disclosures' | 'subpoenas' | 'interrogatories' | 'rfas' | 'exhibits'
 
 /**
  * The "Teach me" guide for one part of the information exchange: the rule
@@ -26,6 +26,84 @@ export function TeachMe({
       Got it
     </button>
   )
+  if (topic === 'exhibits') {
+    return (
+      <Modal eyebrow="Teach me · FRCP 26(a)(3)" title="What is an exhibit list?" icon={<BookOpen />} onClose={onClose} footer={close}>
+        <div className="teach">
+          <p>
+            Before a federal trial, each side serves a written list of every exhibit it may use: documents, photos,
+            electronic records, recordings, even physical objects (FRCP 26(a)(3)(A)(iii)). It comes long after your initial
+            disclosures under FRCP 26(a)(1), and it&rsquo;s much more pointed: this is what you&rsquo;ll actually put in
+            front of the jury.
+          </p>
+          <div className="teach-rules">
+            <Rule icon={<Clock />} big="30 days" detail="before trial to serve the list, unless the court sets another date" />
+            <Rule icon={<MessageSquare />} big="14 days" detail="for the other side to object to what’s on it (FRCP 26(a)(3)(B))" />
+          </div>
+          <Fact icon={<Lock />}>
+            Off the list means out. Courts usually exclude an exhibit that wasn&rsquo;t listed, apart from narrow exceptions:
+            using it only to impeach or rebut, an honest omission that hurts no one, or critical evidence found too late to
+            list.
+          </Fact>
+          <div className="teach-pair">
+            <div className="teach-risk teach-risk-rose">
+              <strong>
+                <Lock aria-hidden="true" /> List too little
+              </strong>
+              <p>Anything you leave off may be off-limits at trial, however much you need it.</p>
+            </div>
+            <div className="teach-risk teach-risk-amber">
+              <strong>
+                <TriangleAlert aria-hidden="true" /> List too much
+              </strong>
+              <p>A padded list gives away your strategy, invites objections, and tries the judge&rsquo;s patience.</p>
+            </div>
+          </div>
+          <h3>Two separate questions</h3>
+          <ul className="teach-types">
+            <li>
+              <strong>1. Is it authentic?</strong> Is it what it claims to be (FRE 901 and 902)? That&rsquo;s often shown by
+              a records custodian, by the exhibit itself (letterhead, signatures, a certification), or by the circumstances.
+            </li>
+            <li>
+              <strong>2. Is it admissible?</strong> It has to be relevant (FRE 401 and 402) and not so unfairly prejudicial
+              that it should be kept out (FRE 403). It can&rsquo;t be inadmissible hearsay (FRE 801 to 807) or privileged. It
+              has to satisfy the best evidence rule (FRE 1001 to 1008), and a witness with personal knowledge has to lay the
+              foundation for it (FRE 602).
+            </li>
+          </ul>
+          <Fact icon={<Check />}>
+            Agreeing that an exhibit is authentic isn&rsquo;t agreeing that it&rsquo;s admissible. You can concede one and
+            still fight the other.
+          </Fact>
+          <h3>Objecting, and answering objections</h3>
+          <Tips
+            tips={[
+              'Object where it matters. Objecting for the sake of it costs you credibility with the judge.',
+              'A hearsay problem can sometimes be solved: offer the exhibit for another purpose (like notice, or someone’s state of mind), fit it into an FRE 803 exception such as a business record, or redact just the objectionable part.',
+              'Never agree to plainly inadmissible evidence just to reach a deal, and insist on a ruling for an exhibit your case depends on.',
+            ]}
+          />
+          <h3>Building your list</h3>
+          <Tips
+            tips={[
+              'Include every exhibit you need to prove each element of your claims or defenses.',
+              'Leave out duplicates, cumulative exhibits, and anything that contradicts your own story.',
+              'Read long documents all the way through for harmful passages, and list just the part you need when that’s enough.',
+              'For each exhibit, know which witness can testify about it.',
+            ]}
+          />
+          <p className="teach-note">
+            In this course: anything both sides list counts as authentic and admitted. For the rest, the other side first agrees to
+            or challenges authenticity, then admits or objects, and your instructor rules on every challenge as the
+            judge. When the list is final, the plaintiff&rsquo;s exhibits are numbered 1, 2, 3 and the defense&rsquo;s are
+            lettered A, B, C.
+          </p>
+        </div>
+      </Modal>
+    )
+  }
+
   if (topic === 'disclosures') {
     return (
       <Modal eyebrow="Teach me · FRCP 26(a)(1)" title="What are initial disclosures?" icon={<BookOpen />} onClose={onClose} footer={close}>

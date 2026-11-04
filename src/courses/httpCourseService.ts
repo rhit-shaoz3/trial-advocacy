@@ -1,5 +1,5 @@
 import { apiRequest } from '../api/request'
-import type { CourseService, InterviewAs } from './types'
+import type { CheckProgress, CheckTag, CourseService, DiscoveryCheck, InterviewAs } from './types'
 
 const coursePath = (courseId: string) => `/courses/${encodeURIComponent(courseId)}`
 const casePath = (courseId: string, caseId: string) =>
@@ -14,6 +14,51 @@ function interviewPath(courseId: string, caseId: string, witnessId: string, as: 
   const base = as === 'team' ? myCasePath(courseId, caseId) : casePath(courseId, caseId)
   const path = `${base}/witnesses/${encodeURIComponent(witnessId)}/interview${action}`
   return as === 'team' ? path : `${path}?side=${as}`
+}
+
+/**
+ * A streamed check, one JSON object a line: the tag, pieces of feedback as
+ * they're written (passed on as the feedback so far), and the saved check
+ * last, or an error.
+ */
+async function readCheckStream(body: ReadableStream<Uint8Array>, onProgress: (progress: CheckProgress) => void): Promise<DiscoveryCheck> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  const progress: CheckProgress = { text: '' }
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (value) buffer += decoder.decode(value, { stream: true })
+    let newline: number
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newline).trim()
+      buffer = buffer.slice(newline + 1)
+      if (!line) continue
+      const message = JSON.parse(line) as { type: string; tag?: CheckTag; text?: string; check?: DiscoveryCheck; error?: string }
+      if (message.type === 'tag' && message.tag) onProgress({ ...progress, tag: (progress.tag = message.tag) })
+      else if (message.type === 'text' && message.text) onProgress({ ...progress, text: (progress.text += message.text) })
+      else if (message.type === 'done' && message.check) return message.check
+      else if (message.type === 'error') throw new Error(message.error ?? 'Something went wrong.')
+    }
+    if (done) break
+  }
+  throw new Error('The check was cut off. Try again.')
+}
+
+/**
+ * A blacked-out copy of an exhibit, uploaded like a case file: the API returns
+ * a signed link, and the file goes straight to storage. Returns its key.
+ */
+async function uploadCopy(path: string, body: object, file: Blob): Promise<string> {
+  const { upload } = await apiRequest(path, { method: 'POST', body: JSON.stringify(body) })
+  let res: Response
+  try {
+    res = await fetch(upload.url, { method: 'PUT', headers: upload.headers, body: file })
+  } catch {
+    throw new Error('Could not reach file storage. Check your connection and try again.')
+  }
+  if (!res.ok) throw new Error(`File storage refused the upload (${res.status}). Try again.`)
+  return upload.key
 }
 
 export const httpCourseService: CourseService = {
@@ -173,6 +218,11 @@ export const httpCourseService: CourseService = {
       method: 'POST',
       body: JSON.stringify({ email }),
     })
+  },
+
+  async moveTeamMember(courseId, caseId, teamId, email) {
+    const path = `${teamsPath(courseId, caseId)}/${encodeURIComponent(teamId)}/members/${encodeURIComponent(email)}`
+    return apiRequest(path, { method: 'PUT' })
   },
 
   async removeTeamMember(courseId, caseId, teamId, email) {
@@ -550,12 +600,30 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ responses, checkId }) })).exchange
   },
 
-  async checkDiscovery(courseId, caseId, input) {
-    const body = await apiRequest(`${myCasePath(courseId, caseId)}/exchange/check`, {
-      method: 'POST',
-      body: JSON.stringify(input),
-    })
-    return body.check
+  async checkDiscovery(courseId, caseId, input, onProgress) {
+    const path = `${myCasePath(courseId, caseId)}/exchange/check`
+    if (!onProgress) return (await apiRequest(path, { method: 'POST', body: JSON.stringify(input) })).check
+    let res: Response
+    try {
+      res = await fetch(`/api${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
+        body: JSON.stringify(input),
+      })
+    } catch {
+      throw new Error('Could not reach the server. Check your connection and try again.')
+    }
+    // Refusals (out of rounds, AI feedback off) come back as plain JSON.
+    if (!res.ok || !res.body || !res.headers.get('Content-Type')?.includes('ndjson')) {
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status}).`)
+      return body.check
+    }
+    return readCheckStream(res.body, onProgress)
+  },
+
+  async warmDiscoveryCheck(courseId, caseId, input) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/exchange/check/warm`, { method: 'POST', body: JSON.stringify(input) })
   },
 
   async serveSubpoena(courseId, caseId, subpoena, checkId, draftId) {
@@ -649,6 +717,97 @@ export const httpCourseService: CourseService = {
 
   async getCaseFacts(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/facts`)).facts
+  },
+
+  async getMyExhibits(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/exhibits`)).exhibits
+  },
+
+  async saveExhibitList(courseId, caseId, items) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/exhibits/list`, { method: 'PUT', body: JSON.stringify({ items }) })).exhibits
+  },
+
+  async submitExhibitList(courseId, caseId, items) {
+    const path = `${myCasePath(courseId, caseId)}/exhibits/list/submit`
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify({ items }) })).exhibits
+  },
+
+  async moveExhibit(courseId, caseId, exhibitId, { step, ...body }) {
+    const path = `${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/${step}`
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify(body) })).exhibits
+  },
+
+  async markExhibitsSeen(courseId, caseId) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/exhibits/seen`, { method: 'POST' })
+  },
+
+  async listCaseExhibits(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/exhibits`)).worlds
+  },
+
+  async getExhibitOverview(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/exhibits/overview`)).overview
+  },
+
+  async setExhibitListEnabled(courseId, caseId, enabled) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/exhibit-list`, { method: 'PUT', body: JSON.stringify({ enabled }) })).case
+  },
+
+  async listExhibitReviews(courseId, status) {
+    return (await apiRequest(`${coursePath(courseId)}/exhibit-reviews?status=${status}`)).reviews
+  },
+
+  async ruleOnExhibit(courseId, exhibitId, { step, ...body }) {
+    const path = `${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/${step}`
+    await apiRequest(path, { method: 'POST', body: JSON.stringify(body) })
+  },
+
+  myExhibitFileUrl(courseId, caseId, exhibitId) {
+    return `/api${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file`
+  },
+
+  async myExhibitText(courseId, caseId, exhibitId) {
+    return apiRequest(`${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/text`)
+  },
+
+  caseExhibitFileUrl(courseId, caseId, exhibitId) {
+    return `/api${casePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file`
+  },
+
+  async caseExhibitText(courseId, caseId, exhibitId) {
+    return apiRequest(`${casePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/text`)
+  },
+
+  reviewExhibitFileUrl(courseId, exhibitId) {
+    return `/api${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/file`
+  },
+
+  async getExhibitMarking(courseId, exhibitId, whole = false) {
+    return apiRequest(`${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/marking${whole ? '?whole=1' : ''}`)
+  },
+
+  reviewExhibitOriginalUrl(courseId, exhibitId) {
+    return `/api${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/original`
+  },
+
+  async ruleOnExhibitVersions(courseId, ids, ruling) {
+    await apiRequest(`${coursePath(courseId)}/exhibit-reviews/versions`, { method: 'POST', body: JSON.stringify({ ids, ...ruling }) })
+  },
+
+  async uploadRedactedExhibit(courseId, exhibitId, file) {
+    return uploadCopy(`${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/uploads`, { size: file.size }, file)
+  },
+
+  myExhibitSourceUrl(courseId, caseId, materialId) {
+    return `/api${myCasePath(courseId, caseId)}/exhibits/sources/${encodeURIComponent(materialId)}`
+  },
+
+  reviewExhibitBytesUrl(courseId, exhibitId) {
+    return `/api${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/file?stream=1`
+  },
+
+  async uploadExhibitCopy(courseId, caseId, materialId, file) {
+    return uploadCopy(`${myCasePath(courseId, caseId)}/exhibits/uploads`, { materialId, size: file.size }, file)
   },
 
   async setReviewMode(courseId, caseId, reviewMode) {

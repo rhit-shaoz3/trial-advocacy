@@ -10,6 +10,8 @@ export const PHASE_HINT: Record<CasePhase, string> = {
     'Your initial disclosures are shared with both sides. Teams serve subpoenas, and send each other interrogatories and requests for admission.',
   investigate: "Teams can use the background investigator. The other side's witnesses can't be interviewed yet.",
   deposition: 'Every witness is revealed to both sides and can be deposed.',
+  final_steps:
+    'Each case world builds and exchanges its joint exhibit list. You rule on the challenges from the Review page. Witnesses and the investigator stay open.',
 }
 
 /** Asked before moving to `phase`; it applies to every case world at once. */
@@ -21,6 +23,8 @@ export const PHASE_CONFIRM: Record<CasePhase, string> = {
     "Move every case world to the investigate phase? Teams get the background investigator, and the other side's witnesses stay closed to interviews.",
   deposition:
     'Move every case world to the deposition phase? This reveals every witness to both sides, and teams can depose them.',
+  final_steps:
+    'Move every case world to the final steps phase? Teams build and exchange their exhibit lists for trial (if the joint exhibit list is on).',
 }
 
 /** The hint and confirmation for a phase. */

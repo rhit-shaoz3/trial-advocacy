@@ -9,7 +9,7 @@ import { modelFor } from '../ai/models.ts'
 
 /** The source tags the investigator puts on each finding (for the instructor's review). */
 // The title is optional: he sometimes leaves it off.
-const SOURCE_TAG = /\s*\[(?:CASE FILE|NEW ACCESS)(?:\s*:[^\]]*)?\]|\s*\[(?:NEW|EXISTING) FACT\]/gi
+const SOURCE_TAG = /\s*\[(?:CASE FILE|NEW ACCESS|NEW RECORD|NEW AID)(?:\s*:[^\]]*)?\]|\s*\[(?:NEW|EXISTING) FACT\]/gi
 
 /** The report with its source tags removed. */
 export const stripTags = (body: string) =>
@@ -38,12 +38,12 @@ const INSTRUCTIONS = `You edit a background investigator's report before the leg
 
 Remove:
 - every statement of a fact the instructor denied (listed below), and anything that depends on it
-- everything taken from a document the team may not have (listed below): its contents, its title, and any mention that it exists
+- everything taken from a document the team may not have (listed below): its contents, its title, and any mention that it exists. This includes records and illustrative aids the investigator says he made: if one is listed, take out the finding that describes it, and any mention of it.
 
 Then:
 - Keep every other sentence word for word, in the same voice (first person, from the investigator).
 - Renumber the findings so they run 1, 2, 3 without gaps. If a finding loses all its content, drop it.
-- Remove the source tags in square brackets, such as [NEW FACT], [EXISTING FACT], [CASE FILE: ...] and [NEW ACCESS: ...].
+- Remove the source tags in square brackets, such as [NEW FACT], [EXISTING FACT], [CASE FILE: ...], [NEW ACCESS: ...], [NEW RECORD: ...] and [NEW AID: ...].
 - If nothing is left, write one sentence saying the investigator found nothing more he can report on this assignment.
 
 Write only the edited report, in plain text, with no notes about your changes.`

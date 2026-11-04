@@ -186,7 +186,7 @@ describe('asking the investigator', () => {
     const [review] = await openReviews()
     expect(review).toMatchObject({ status: 'open', reviewBlockMissing: true, facts: [] })
     // The file is offered to allow, and its name is out of the report text.
-    expect(review.documents).toEqual([{ materialId: maintenanceLog, title: 'Maintenance log', decision: null, auto: false }])
+    expect(review.documents).toEqual([{ materialId: maintenanceLog, title: 'Maintenance log', decision: null, auto: false, made: false, contentType: 'application/pdf' }])
     expect(review.report).toBe('I found the brake records.')
   })
 
@@ -227,8 +227,8 @@ describe('asking the investigator', () => {
     ])
     // The fact pattern is already the team's, so only the two new files are proposed.
     expect(review.documents).toEqual([
-      { materialId: maintenanceLog, title: 'Maintenance log', decision: null, auto: false },
-      { materialId: dispatchLog, title: 'Dispatch log', decision: null, auto: false },
+      { materialId: maintenanceLog, title: 'Maintenance log', decision: null, auto: false, made: false, contentType: 'application/pdf' },
+      { materialId: dispatchLog, title: 'Dispatch log', decision: null, auto: false, made: false, contentType: 'application/pdf' },
     ])
 
     const reviewUrl = `/api/courses/${course.id}/reviews/${review.id}`
@@ -344,5 +344,118 @@ describe('review lite', () => {
     const [after] = (await plaintiff.get(`${myCaseUrl()}/investigator`)).body.investigations
     expect(after).toMatchObject({ report: 'Rewritten.', unlocked: [{ id: maintenanceLog }] })
     expect((await plaintiff.get(`${myCaseUrl()}/flags`)).body.flags).toMatchObject([{ status: 'resolved', resolution: 'changed' }])
+  })
+})
+
+describe('records and illustrative aids the investigator makes', () => {
+  const MADE = `1. The county lists Northstar Transit as the bus's registered owner. [NEW FACT] [NEW RECORD: Vehicle registration, bus 4417]
+2. Drivers on that route typically brake from 30 mph in about 45 feet. This is an estimate. [NEW FACT] [NEW AID: Typical stopping distances, city buses]
+
+<record title="Vehicle registration, bus 4417">
+STATE DMV - REGISTRATION RECORD
+Vehicle: 2019 New Flyer XD40, unit 4417
+Registered owner: Northstar Transit Authority
+</record>
+
+<aid title="Typical stopping distances, city buses">
+SUMMARY: Published figures put a city bus's stop from 30 mph at about 40 to 50 feet, an estimate.
+UNIT: feet
+DATA:
+- Dry pavement, new brakes | 40 ft | [1]
+- Dry pavement, worn brakes | 50 ft | [1, 2]
+SOURCES:
+1. Federal Transit Administration, Bus Braking Study (2021)
+2. Transit Safety Journal, "Brake wear and stopping" (2022)
+</aid>
+
+<review>
+NEW FACTS
+- The county lists Northstar Transit as the bus's registered owner.
+- A city bus typically stops from 30 mph in about 40 to 50 feet (an estimate).
+NEW ACCESS
+none
+RECORDS REQUESTED
+none
+</review>`
+
+  it('makes each a PDF in the team’s world, for the instructor to allow with the report', async () => {
+    await toInvestigate()
+    ai.investigate = async () => MADE
+    let edit: FinalizeInput | undefined
+    ai.finalizeReport = async (input) => {
+      edit = input
+      return 'The clean report.'
+    }
+    await sendAndWait(plaintiff, 'Who owns the bus, and how fast can it stop?')
+    const [review] = await openReviews()
+    // The blocks come out of the report; the files are listed to allow.
+    expect(review.report).not.toContain('<record')
+    expect(review.report).not.toContain('DMV')
+    expect(review.documents.map((d: { title: string; made: boolean; decision: string | null }) => [d.title, d.made, d.decision])).toEqual([
+      ['Vehicle registration, bus 4417', true, null],
+      ['Typical stopping distances, city buses', true, null],
+    ])
+    const [record, aid] = review.documents.map((d: { materialId: string }) => d.materialId)
+    const { rows } = await pool.query(
+      `SELECT id, audience, source, matchup_id AS "matchupId", content_type AS "contentType", text_status AS "textStatus", text_content AS text
+       FROM case_materials WHERE id = ANY($1) ORDER BY description DESC`,
+      [[record, aid]],
+    )
+    expect(rows.map((m) => [m.audience, m.source, m.matchupId, m.contentType, m.textStatus])).toEqual([
+      ['instructor', 'investigator', teams.matchupId, 'application/pdf', 'ready'],
+      ['instructor', 'investigator', teams.matchupId, 'application/pdf', 'ready'],
+    ])
+    expect(rows[0].text).toContain('Registered owner: Northstar Transit Authority')
+    expect(rows[1].text).toContain('ILLUSTRATIVE AID: Typical stopping distances, city buses')
+    expect(rows[1].text).toContain('1. Federal Transit Administration, Bus Braking Study (2021)')
+    // The instructor can open it; the team can't yet.
+    expect((await prof.get(`${caseUrl()}/materials/${record}/file`)).status).not.toBe(404)
+    expect((await plaintiff.get(`${myCaseUrl()}/materials/${record}/file`)).status).toBe(404)
+
+    const reviewUrl = `/api/courses/${course.id}/reviews/${review.id}`
+    for (const f of review.facts) await prof.put(`${reviewUrl}/facts/${f.id}`).send({ decision: 'accept_world' })
+    await prof.put(`${reviewUrl}/documents/${record}`).send({ decision: 'allow' })
+    await prof.put(`${reviewUrl}/documents/${aid}`).send({ decision: 'deny' })
+    await investigationsSettled()
+
+    // The denied aid comes out of the team's report.
+    expect(edit).toMatchObject({ deniedTitles: ['Typical stopping distances, city buses'] })
+    const [done] = (await plaintiff.get(`${myCaseUrl()}/investigator`)).body.investigations
+    expect(done.unlocked.map((f: { title: string; contentType: string }) => [f.title, f.contentType])).toEqual([
+      ['Vehicle registration, bus 4417', 'application/pdf'],
+    ])
+    expect((await plaintiff.get(`${myCaseUrl()}/materials/${record}/file`)).status).not.toBe(404)
+    expect((await plaintiff.get(`${myCaseUrl()}/materials/${aid}/file`)).status).toBe(404)
+    // It's a file the team can list as an exhibit, from its investigator.
+    await prof.put(`${caseUrl()}/phase`).send({ phase: 'deposition' })
+    await prof.put(`${caseUrl()}/phase`).send({ phase: 'final_steps' })
+    const options = (await plaintiff.get(`${myCaseUrl()}/exhibits`)).body.exhibits.options
+    expect(options.find((o: { id: string }) => o.id === record)).toMatchObject({ group: 'investigator', markable: 'pdf' })
+
+    // The allowed record is part of the world now; the denied aid isn't.
+    let next: InvestigationInput | undefined
+    ai.investigate = async (input) => {
+      next = structuredClone(input)
+      return 'Nothing new.'
+    }
+    await sendAndWait(plaintiff, 'Anything else?')
+    const titles = next!.context.documents.map((d) => d.title)
+    expect(titles).toContain('Vehicle registration, bus 4417')
+    expect(titles).not.toContain('Typical stopping distances, city buses')
+  })
+
+  it('in review lite, gives the team the files at once', async () => {
+    await prof.put(`${caseUrl()}/review-mode`).send({ reviewMode: 'lite' })
+    await toInvestigate()
+    ai.investigate = async () => MADE
+    await sendAndWait(plaintiff, 'Who owns the bus?')
+    const [done] = (await plaintiff.get(`${myCaseUrl()}/investigator`)).body.investigations
+    expect(done.unlocked.map((f: { title: string; auto: boolean }) => [f.title, f.auto])).toEqual([
+      ['Vehicle registration, bus 4417', true],
+      ['Typical stopping distances, city buses', true],
+    ])
+    const count = async () =>
+      Number((await pool.query(`SELECT count(*) FROM case_materials WHERE source = 'investigator'`)).rows[0].count)
+    expect(await count()).toBe(2)
   })
 })

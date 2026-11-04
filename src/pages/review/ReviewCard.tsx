@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FileViewer, type ViewableFile } from '../../components/FileViewer'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import { FACT_DECISIONS, INVESTIGATOR_AVATAR_URL, type InterviewReview } from '../../courses/types'
 import { ROLE_LABEL, worldLabel } from '../../courses/worldLabel'
@@ -9,8 +10,8 @@ import { Transcript } from './Transcript'
 
 /**
  * One conversation a team ended, as the new facts the witness added, or one
- * background investigator report, with its new facts and the case files he'd
- * unlock. The instructor rules on each fact (one in a group is ruled with its
+ * background investigator report, with its new facts, the case files he'd
+ * unlock, and the records and illustrative aids he made. The instructor rules on each fact (one in a group is ruled with its
  * group); the review finishes once everything in it is ruled. A finished
  * review's rulings can still be changed.
  */
@@ -29,6 +30,8 @@ export function ReviewCard({
   const [busy, setBusy] = useState(false)
   /** Rulings being changed on a finished review: fact ids, and file ids. */
   const [changing, setChanging] = useState<string[]>([])
+  /** A case file or record open in the viewer. */
+  const [viewing, setViewing] = useState<ViewableFile | null>(null)
   // Finished by the instructor, even while the team's report is still being written.
   const done = r.status === 'completed' || r.status === 'finalizing'
   const investigation = r.kind === 'investigation'
@@ -185,14 +188,23 @@ export function ReviewCard({
         <section className="review-documents" aria-label="Case files">
           <h3>Case files</h3>
           <p className="muted">
-            The investigator could get these for {team}. If you don&rsquo;t allow one, everything from it comes out of
-            the report.
+            The investigator could get these for {team}, or made them (a record of what he found, or an illustrative aid
+            behind an estimate). If you don&rsquo;t allow one, everything from it comes out of the report.
           </p>
           <ol className="review-facts review-doc-list">
             {documents.map((d) => (
               <li key={d.materialId}>
                 <p className="review-fact-text">
-                  Allow {team} access to <em>{d.title}</em>
+                  {d.made ? 'Give' : 'Allow'} {team} {d.made ? 'the file he made,' : 'access to'} <em>{d.title}</em>{' '}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() =>
+                      setViewing({ id: d.materialId, title: d.title, filename: d.title, contentType: d.contentType ?? 'application/pdf' })
+                    }
+                  >
+                    View
+                  </button>
                 </p>
                 {done && !changing.includes(d.materialId) ? (
                   <div className="review-ruled">
@@ -203,7 +215,11 @@ export function ReviewCard({
                     {change(d.materialId)}
                   </div>
                 ) : (
-                  <div className="review-choices" role="radiogroup" aria-label={`Allow ${team} access to ${d.title}`}>
+                  <div
+                    className="review-choices"
+                    role="radiogroup"
+                    aria-label={d.made ? `Give ${team} ${d.title}` : `Allow ${team} access to ${d.title}`}
+                  >
                     {(['allow', 'deny'] as const).map((choice) => (
                       <label key={choice} className={`review-choice review-choice-${choice}`}>
                         <input
@@ -274,6 +290,17 @@ export function ReviewCard({
             </div>
           ))}
       </footer>
+      {viewing && (
+        <FileViewer
+          file={viewing}
+          downloadUrl={service.materialDownloadUrl(courseId, r.caseId, viewing.id)}
+          loadText={async () => {
+            const res = await fetch(service.materialTextUrl(courseId, r.caseId, viewing.id), { credentials: 'same-origin' })
+            return res.ok ? { status: 'ready', text: await res.text() } : { status: 'none', text: null }
+          }}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </article>
   )
 }

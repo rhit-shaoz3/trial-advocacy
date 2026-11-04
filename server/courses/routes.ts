@@ -42,6 +42,8 @@ import { myExchangeRouter } from '../exchange/exchangeRoutes.ts'
 import { subpoenasRouter } from '../exchange/subpoenaRoutes.ts'
 import { openSubpoenaCount } from '../exchange/subpoenas.ts'
 import { markFlagsSeen, openFlagCount, raiseFlag, teamFlags } from '../reviews/flags.ts'
+import { exhibitReviewsRouter, myExhibitsRouter } from '../exhibits/exhibitRoutes.ts'
+import { openExhibitReviewCount } from '../exhibits/exhibits.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -183,9 +185,12 @@ coursesRouter.get('/:courseId/home', async (req, res) => {
           cases: await homeCasesForInstructor(course.id),
           upcoming: [],
           stats: { tasksCompleted: 0, tasksCompletedThisWeek: 0 },
-          // Subpoenas waiting for an answer are on the Review page too.
+          // Subpoenas waiting for an answer, and exhibit challenges, are on the Review page too.
           reviewCount:
-            (await openReviewCount(course.id)) + (await openSubpoenaCount(course.id)) + (await openFlagCount(course.id)),
+            (await openReviewCount(course.id)) +
+            (await openSubpoenaCount(course.id)) +
+            (await openFlagCount(course.id)) +
+            (await openExhibitReviewCount(course.id)),
           instructor: await instructorHome(course.id),
         }
       : {
@@ -393,6 +398,7 @@ coursesRouter.post('/:courseId/my-cases/:caseId/flags/seen', async (req, res) =>
 })
 
 coursesRouter.use('/:courseId/my-cases/:caseId/exchange', myExchangeRouter)
+coursesRouter.use('/:courseId/my-cases/:caseId/exhibits', myExhibitsRouter)
 coursesRouter.use('/:courseId/calendar', calendarRouter)
 
 // Everything below manages one course and is only for the instructor who teaches it.
@@ -415,5 +421,6 @@ courseRouter.use('/roster', rosterRouter)
 courseRouter.use('/cases', casesRouter)
 courseRouter.use('/reviews', reviewsRouter)
 courseRouter.use('/subpoenas', subpoenasRouter)
+courseRouter.use('/exhibit-reviews', exhibitReviewsRouter)
 
 coursesRouter.use('/:courseId', courseRouter)

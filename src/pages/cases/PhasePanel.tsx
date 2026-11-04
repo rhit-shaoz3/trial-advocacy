@@ -1,5 +1,5 @@
 import { useState, type ReactElement } from 'react'
-import { ArrowLeft, ArrowRight, FolderOpen, ListChecks, Send, Share2, Users, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, ArrowRight, FolderOpen, ListChecks, Lock, Send, Share2, Users, TriangleAlert } from 'lucide-react'
 import { Modal } from '../../components/Modal'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import { casePhases, investigatorOf, type CasePhase, type CourseCase, type ExchangeOverview } from '../../courses/types'
@@ -57,7 +57,8 @@ export function PhasePanel({
       }
       return
     }
-    if (window.confirm(phaseText(phase).confirm)) await move(phase)
+    const confirm = phaseText(phase).confirm + (courseCase.phase === 'introduction' ? ` ${LOCK_NOTE}` : '')
+    if (window.confirm(confirm)) await move(phase)
   }
 
   return (
@@ -115,6 +116,9 @@ export function PhasePanel({
   )
 }
 
+/** Leaving Introduction locks the case worlds it has (see Matchup.locked). */
+const LOCK_NOTE = "This locks the teams and sides of every case world made so far, even if you move back. You can still add worlds, and move students between teams."
+
 const list = (names: string[]) => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')}, and ${names.at(-1)}`)
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
@@ -150,6 +154,11 @@ function ExchangePhaseDialog({
       detail: 'Each student sees how their picks compare with yours.',
     },
     { icon: <Send />, title: 'Requests open', detail: 'Teams can serve subpoenas, and send interrogatories and requests for admission.' },
+    {
+      icon: <Lock />,
+      title: 'Case worlds lock',
+      detail: "Today's worlds keep their teams and sides, even if you move back. You can still add worlds, and move students between teams.",
+    },
   ].filter((c): c is { icon: ReactElement; title: string; detail: string } => Boolean(c))
 
   return (

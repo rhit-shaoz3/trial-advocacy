@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { pool } from '../../db/pool.ts'
 import { loadAppWitness, witnessFolder } from '../cliWitness.ts'
 import { modelFor } from '../../ai/models.ts'
+import { findClaims } from '../claims.ts'
 import { askWitness, WITNESS_EFFORT, type WitnessReply } from '../deposition.ts'
 import { depositionSettings } from '../profile.ts'
 import type { DepositionSettings, WitnessProfile } from '../prompt.ts'
@@ -24,6 +25,7 @@ import { checkReply, type CheckFailure, type EvalCase } from './checks.ts'
  *   npm run witness:eval -- --witness "Elena Torres" --repeat 3      each case 3 times (answers vary)
  *   npm run witness:eval -- --witness "Elena Torres" --effort low    try a different witness effort
  *   npm run witness:eval -- --witness "Elena Torres" --set consistency   the cases across sessions
+ *   npm run witness:eval -- --witness "Elena Torres" --set consistency --no-memory   the same, without memory
  *
  * Cases come from .material/witnesses/<name>/eval-cases.json (or <set>-cases.json); results are
  * saved next to it (both git-ignored). Exits non-zero if any case fails.
@@ -35,6 +37,7 @@ const { values } = parseArgs({
     repeat: { type: 'string', default: '1' },
     effort: { type: 'string' },
     set: { type: 'string', default: 'eval' },
+    'no-memory': { type: 'boolean', default: false },
   },
 })
 
@@ -124,11 +127,16 @@ async function runCase(profile: WitnessProfile, c: EvalCase, run: number): Promi
     examiningAttorneyName: c.attorney,
     defendingCounselName: c.counsel ?? app.defendingCounselName,
   }
+  const remembers = !values['no-memory'] && !c.settledFacts?.denied.length
+  const claims = remembers
+    ? await Promise.all((c.priorTestimony ?? []).map((t) => findClaims(client, { witnessName: profile.name, ...t })))
+    : []
   const reply = await askWitness(client, {
     profile: c.settledFacts ? { ...profile, settledFacts: c.settledFacts } : profile,
     settings,
     transcript: c.transcript ?? [],
     question: c.question,
+    memory: claims.flat().map((claim) => claim.text),
     effort: values.effort as Parameters<typeof askWitness>[1]['effort'],
   })
   addCost(reply.model, reply.usage)

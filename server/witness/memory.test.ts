@@ -6,6 +6,7 @@ import { pool } from '../db/pool.ts'
 import { reviewsSettled } from '../reviews/reviews.ts'
 import { createCourseAs, resetDatabase, sampleFacts, signedInAgent, uploadCaseFile } from '../test/helpers.ts'
 import type { ClaimsInput } from './claims.ts'
+import type { askWitness } from './deposition.ts'
 import { claimsSettled, resumeClaims, testimonyMemory } from './memory.ts'
 import type { NewFact } from './newFacts.ts'
 
@@ -23,6 +24,7 @@ let witnessId: string
 let worldA: string
 let worldB: string
 let claimInputs: ClaimsInput[]
+let asked: Parameters<typeof askWitness>[1][]
 let nextFacts: NewFact[]
 
 const email = (n: number) => `s${n}@example.com`
@@ -60,8 +62,10 @@ beforeEach(async () => {
   await prof.put(`${caseUrl()}/phase`).send({ phase: 'deposition' })
 
   claimInputs = []
+  asked = []
   nextFacts = []
   ai.askWitness = async (options) => {
+    asked.push(structuredClone(options))
     const answer = `Answer to: ${options.question}`
     return { reply: answer, objection: null, answer, model: 'fake', usage: {} as never }
   }
@@ -191,6 +195,73 @@ describe('what the witness remembers', () => {
     await ask(ada, 'Nothing new?')
     await end(ada) // no new facts, so the review finishes at once
     expect(await testimonyMemory(witnessId, worldA)).toEqual([{ kind: 'statement', text: 'Claim: Nothing new?', settled: true }])
+  })
+})
+
+describe('past the limit', () => {
+  it('keeps the claims closest to the question, in the order they were said', async () => {
+    await ask(ada, 'Where did you park the truck?', 'What did you eat?', 'Which truck did you drive?')
+    const closest = await testimonyMemory(witnessId, worldA, null, 'Tell me about the truck', 2)
+    expect(closest.map((c) => c.text)).toEqual(['Claim: Where did you park the truck?', 'Claim: Which truck did you drive?'])
+  })
+
+  it('still answers a question with no words to search on', async () => {
+    await ask(ada, 'First?', 'Second?')
+    const closest = await testimonyMemory(witnessId, worldA, null, '???', 1)
+    expect(closest.map((c) => c.text)).toEqual(['Claim: First?'])
+  })
+})
+
+describe('in an interview', () => {
+  it('gives the witness what it said to the other side, and records that it did', async () => {
+    await ask(ada, 'Where were you?')
+    await ask(cy, 'Tell me again?')
+    expect(asked[0].memory).toEqual([])
+    expect(asked[1].memory).toEqual(['Claim: Where were you?'])
+    const { rows } = await pool.query('SELECT memory FROM interview_turns ORDER BY created_at')
+    expect(rows.map((r) => r.memory)).toEqual([null, ['Claim: Where were you?']])
+  })
+
+  it('doesn’t repeat the interview under way, or reach another world', async () => {
+    await ask(ada, 'One?', 'Two?')
+    await ask(eve, 'Three?')
+    expect(asked.map((a) => a.memory)).toEqual([[], [], []])
+  })
+
+  it('stops using a denied fact on the very next question, mid-interview', async () => {
+    await ask(ada, 'Denied?')
+    await end(ada, [{ text: 'Torres was on break.', producedBy: [0], builtOn: [] }])
+    await ask(cy, 'Before?')
+    expect(asked.at(-1)!.memory).toEqual(['Claim: Denied?'])
+    const review = await onlyReview()
+    await rule(review.id, review.facts[0].id, 'deny_world')
+    await ask(cy, 'After?')
+    expect(asked.at(-1)!.memory).toEqual([])
+  })
+
+  it('gives the instructor’s tests no memory', async () => {
+    await ask(ada, 'Where were you?')
+    await prof.post(`${caseUrl()}/witnesses/${witnessId}/interview/questions?side=plaintiff`).send({ question: 'Test?' })
+    expect(asked.at(-1)!.memory).toEqual([])
+  })
+
+  it('answers without memory when it can’t be read, or is turned off', async () => {
+    await ask(ada, 'Where were you?')
+    vi.stubEnv('WITNESS_MEMORY', 'off')
+    await ask(cy, 'Off?')
+    vi.unstubAllEnvs()
+    expect(asked.at(-1)!.memory).toEqual([])
+
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const query = pool.query.bind(pool)
+    const failing = vi.spyOn(pool, 'query').mockImplementation(((text: string, ...rest: never[]) =>
+      typeof text === 'string' && text.includes('testimony_claims c') ? Promise.reject(new Error('down')) : (query as never as (...a: unknown[]) => unknown)(text, ...rest)) as never)
+    const res = await cy.post(`${interview()}/questions`).send({ question: 'Still there?' })
+    failing.mockRestore()
+    expect(res.status).toBe(200)
+    expect(asked.at(-1)!.memory).toEqual([])
+    expect(log).toHaveBeenCalled()
+    log.mockRestore()
   })
 })
 

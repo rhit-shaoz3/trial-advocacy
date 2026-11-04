@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { modelFor } from '../ai/models.ts'
-import { buildSystemPrompt, type DepositionSettings, type WitnessProfile } from './prompt.ts'
+import { buildMemoryNote, buildSystemPrompt, type DepositionSettings, type WitnessProfile } from './prompt.ts'
 
 /**
  * Thinking depth per answer. Answers are short, but the witness has a lot of
@@ -51,15 +51,29 @@ export interface MessagesClient {
 
 /**
  * The conversation so far as API messages: each question is a user turn, each
- * reply an assistant turn, and the new question last.
+ * reply an assistant turn, and the new question last. Earlier testimony comes
+ * after the question, where it leaves the history as it was, and as a system
+ * message, which a student can't fake by typing it into a question. The cache
+ * point sits on the question, so the next question reads everything before
+ * the note.
  */
-export function buildMessages(transcript: TranscriptTurn[], question: string): Anthropic.Beta.Messages.BetaMessageParam[] {
+export function buildMessages(
+  transcript: TranscriptTurn[],
+  question: string,
+  memory: string[] = [],
+): Anthropic.Beta.Messages.BetaMessageParam[] {
+  const asked: Anthropic.Beta.Messages.BetaMessageParam[] = memory.length
+    ? [
+        { role: 'user', content: [{ type: 'text', text: question, cache_control: { type: 'ephemeral' } }] },
+        { role: 'system', content: buildMemoryNote(memory) } as unknown as Anthropic.Beta.Messages.BetaMessageParam,
+      ]
+    : [{ role: 'user', content: question }]
   return [
     ...transcript.flatMap((turn): Anthropic.Beta.Messages.BetaMessageParam[] => [
       { role: 'user', content: turn.question },
       { role: 'assistant', content: turn.reply },
     ]),
-    { role: 'user', content: question },
+    ...asked,
   ]
 }
 
@@ -68,6 +82,8 @@ export function buildRequest(options: {
   settings: DepositionSettings
   transcript: TranscriptTurn[]
   question: string
+  /** What the witness said in earlier sessions in this case world. */
+  memory?: string[]
   model?: string
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 }): Anthropic.Beta.Messages.MessageCreateParamsNonStreaming {
@@ -94,8 +110,8 @@ export function buildRequest(options: {
         cache_control: { type: 'ephemeral', ttl: '1h' },
       },
     ],
-    cache_control: { type: 'ephemeral' },
-    messages: buildMessages(options.transcript, options.question),
+    ...(!options.memory?.length && { cache_control: { type: 'ephemeral' as const } }),
+    messages: buildMessages(options.transcript, options.question, options.memory),
   }
 }
 

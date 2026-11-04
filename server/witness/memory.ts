@@ -16,6 +16,12 @@ import type { ClaimKind } from './claims.ts'
 const COUNTS = `i.team_id IS NOT NULL
   AND (i.ended_at IS NULL OR EXISTS (SELECT 1 FROM interview_reviews r WHERE r.interview_id = i.id))`
 
+/**
+ * The most claims one question carries. A witness rarely has this many; past
+ * it, the ones closest to the question go in.
+ */
+export const MAX_MEMORY_CLAIMS = 300
+
 const running = new Map<string, Promise<void>>()
 
 /** Reads an interview's unread answers in the background, one run at a time. */
@@ -106,14 +112,24 @@ export interface RememberedClaim {
 
 /**
  * What the witness has said in this case world, oldest first, leaving out the
- * interview under way (its turns are already in the conversation). A denied
+ * interview under way (its turns are already in the conversation). Past the
+ * limit, full-text search keeps the claims closest to the question. A denied
  * fact takes out the claims in the exchanges that stated it and the ones whose
  * answers relied on it, the same exchanges struck from the transcript
  * (markedTranscript), so another claim in such an exchange goes with it.
  */
-export async function testimonyMemory(witnessId: string, matchupId: string, currentInterviewId: string | null = null) {
+export async function testimonyMemory(
+  witnessId: string,
+  matchupId: string,
+  currentInterviewId: string | null = null,
+  question = '',
+  limit = MAX_MEMORY_CLAIMS,
+) {
   const { rows } = await pool.query<RememberedClaim>(
-    `SELECT c.kind, c.text, coalesce(rv.status = 'completed', false) AS settled
+    `SELECT kind, text, settled FROM (
+       SELECT c.kind, c.text, coalesce(rv.status = 'completed', false) AS settled,
+              i.created_at, c.position, c.number,
+              ts_rank(to_tsvector('english', c.text), replace(plainto_tsquery('english', $4)::text, '&', '|')::tsquery) AS rank
      FROM testimony_claims c
      JOIN interviews i ON i.id = c.interview_id
      JOIN matchup_teams mt ON mt.team_id = i.team_id
@@ -124,8 +140,11 @@ export async function testimonyMemory(witnessId: string, matchupId: string, curr
          WHERE f.review_id = rv.id AND f.decision LIKE 'deny%'
            AND (f.links->'producedBy' @> to_jsonb(c.position)
                 OR f.links->'builtOn' @> jsonb_build_array(jsonb_build_object('turn', c.position, 'answer', true))))
-     ORDER BY i.created_at, c.position, c.number`,
-    [witnessId, matchupId, currentInterviewId],
+       ORDER BY rank DESC, i.created_at, c.position, c.number
+       LIMIT $5
+     ) closest
+     ORDER BY created_at, position, number`,
+    [witnessId, matchupId, currentInterviewId, question, limit],
   )
   return rows
 }

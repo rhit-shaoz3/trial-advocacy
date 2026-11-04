@@ -1046,3 +1046,7 @@ CREATE TABLE IF NOT EXISTS testimony_claims (
   PRIMARY KEY (interview_id, position, number),
   FOREIGN KEY (interview_id, position) REFERENCES interview_turns (interview_id, position) ON DELETE CASCADE
 );
+
+-- The earlier testimony the witness was given for this answer, for the
+-- instructor to check. Null when it had none.
+ALTER TABLE interview_turns ADD COLUMN IF NOT EXISTS memory jsonb;

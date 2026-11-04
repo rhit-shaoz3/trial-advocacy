@@ -17,9 +17,10 @@ export interface EvalCase {
   counsel?: string
   transcript?: TranscriptTurn[]
   /**
-   * What the witness said in earlier sessions in this world. The grader sees
-   * it; the witness doesn't until it can read its memory, so a run today is
-   * the baseline.
+   * What the witness said in earlier sessions in this world. It's read into
+   * claims and given to the witness as in the app, unless the rulings below
+   * deny something (then it's left out, as a denial takes it out of memory)
+   * or the run has --no-memory. The grader always sees it.
    */
   priorTestimony?: { side: PartyRole; question: string; answer: string }[]
   /** Rulings in force for this moment, in place of the witness's own. */

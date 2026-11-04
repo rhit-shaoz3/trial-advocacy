@@ -149,6 +149,8 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     ruleOnExhibit: vi.fn().mockResolvedValue(undefined),
     myExhibitFileUrl: vi.fn((_c: string, _k: string, id: string) => `/my-exhibits/${id}/file`),
     myExhibitText: vi.fn().mockResolvedValue({ status: 'none', text: null }),
+    listTrialPackets: vi.fn().mockResolvedValue([]),
+    trialPacketsUrl: vi.fn((_c: string, _k: string, teamId?: string) => `/packets/${teamId ?? 'all'}`),
     caseExhibitFileUrl: vi.fn((_c: string, _k: string, id: string) => `/case-exhibits/${id}/file`),
     caseExhibitText: vi.fn().mockResolvedValue({ status: 'none', text: null }),
     reviewExhibitFileUrl: vi.fn((_c: string, id: string) => `/exhibit-reviews/${id}/file`),

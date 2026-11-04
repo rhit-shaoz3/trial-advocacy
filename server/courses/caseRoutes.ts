@@ -37,6 +37,7 @@ import { depositionOverview, investigatorOverview } from './phaseOverview.ts'
 import { contentSuggestions, finishWitnessSuggestions, witnessSuggestions } from '../witness/suggestions.ts'
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 import { caseExhibitsRouter } from '../exhibits/exhibitRoutes.ts'
+import { packetsRouter } from '../packets/packetRoutes.ts'
 import { duplicateCase, shareCase } from './caseCopy.ts'
 import { caseFacts } from '../reviews/caseFacts.ts'
 
@@ -179,6 +180,7 @@ caseRouter.use('/witnesses', witnessesRouter)
 caseRouter.use('/tasks', tasksRouter)
 caseRouter.use('/exchange', exchangeRouter)
 caseRouter.use('/exhibits', caseExhibitsRouter)
+caseRouter.use('/packets', packetsRouter)
 
 /** The witnesses the AI suggests from the initial file, offered once while setting up the case. */
 caseRouter.get('/witness-suggestions', async (req, res) => {

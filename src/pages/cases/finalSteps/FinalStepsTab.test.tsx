@@ -70,6 +70,30 @@ describe('the instructor’s Final steps tab', () => {
     expect(screen.getByText(/Only you can see this view/)).toBeInTheDocument()
   })
 
+  it('offers each team’s trial packet and all of them at once, and says what isn’t finished', async () => {
+    const packet = {
+      teamId: 't1',
+      teamNumber: 1,
+      side: 'plaintiff' as const,
+      worldNumber: 1,
+      members: ['Ada Lawyer', 'Ben Brief'],
+      exhibits: 2,
+      depositions: 1,
+      files: 5,
+      reports: 0,
+      discovery: 3,
+      warnings: ['The joint exhibit list isn’t final.'],
+    }
+    renderTab({
+      listTrialPackets: vi.fn().mockResolvedValue([packet, { ...packet, teamId: 't2', teamNumber: 2, side: 'defense', warnings: [] }]),
+    })
+    expect(await screen.findByRole('link', { name: 'Download Team 1’s packet' })).toHaveAttribute('href', '/packets/t1')
+    expect(screen.getByRole('link', { name: /Download all/ })).toHaveAttribute('href', '/packets/all')
+    expect(screen.getAllByText(/1 deposition · 2 admitted exhibits · 5 case files · 0 investigator reports · 3 discovery sets/)).toHaveLength(2)
+    expect(screen.getByText('The joint exhibit list isn’t final.')).toBeInTheDocument()
+    expect(screen.getByText(/1 packet isn’t finished yet/)).toBeInTheDocument()
+  })
+
   it('turns the joint exhibit list off for students', async () => {
     const off = { ...rivera, exhibitListEnabled: false }
     const { user, service, onCaseChange } = renderTab({ setExhibitListEnabled: vi.fn().mockResolvedValue(off) })

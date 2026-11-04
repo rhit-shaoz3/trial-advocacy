@@ -770,6 +770,14 @@ export const httpCourseService: CourseService = {
     return apiRequest(`${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/text`)
   },
 
+  async listTrialPackets(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/packets`)).packets
+  },
+
+  trialPacketsUrl(courseId, caseId, teamId) {
+    return `/api${casePath(courseId, caseId)}/packets/${teamId ? `${encodeURIComponent(teamId)}/` : ''}download`
+  },
+
   caseExhibitFileUrl(courseId, caseId, exhibitId) {
     return `/api${casePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file`
   },

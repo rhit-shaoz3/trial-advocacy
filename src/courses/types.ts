@@ -1212,6 +1212,23 @@ export interface ExhibitOverview {
   reviewsWaiting: number
 }
 
+/** What one team's trial packet holds so far. */
+export interface TrialPacket {
+  teamId: string
+  teamNumber: number
+  side: Side
+  worldNumber: number
+  members: string[]
+  /** Admitted exhibits. */
+  exhibits: number
+  depositions: number
+  files: number
+  reports: number
+  discovery: number
+  /** What isn't finished yet, like a joint exhibit list that isn't final. */
+  warnings: string[]
+}
+
 /** A challenge for the instructor to rule on (or one ruled on). */
 export interface ExhibitReview extends Exhibit {
   caseId: string
@@ -1572,6 +1589,9 @@ export interface CourseService {
   myExhibitText(courseId: string, caseId: string, exhibitId: string): Promise<{ status: string; text: string | null }>
   /** The same, for the instructor. */
   caseExhibitFileUrl(courseId: string, caseId: string, exhibitId: string): string
+  listTrialPackets(courseId: string, caseId: string): Promise<TrialPacket[]>
+  /** The zip of every team's packet, or of one team's with `teamId`. */
+  trialPacketsUrl(courseId: string, caseId: string, teamId?: string): string
   caseExhibitText(courseId: string, caseId: string, exhibitId: string): Promise<{ status: string; text: string | null }>
   /** An exhibit under review, as offered, for marking a redaction. */
   reviewExhibitFileUrl(courseId: string, exhibitId: string): string

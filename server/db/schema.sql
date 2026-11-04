@@ -1026,3 +1026,23 @@ ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS marks jsonb;
 ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS redacted_key text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_marks jsonb;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_key text;
+
+-- Witness memory -------------------------------------------------------------
+
+-- When an answer's claims were read; null until then, so a restart can pick up
+-- where it left off.
+ALTER TABLE interview_turns ADD COLUMN IF NOT EXISTS claims_read_at timestamptz;
+
+-- What an AI witness committed to in one answer of a team's interview, so
+-- later sessions in the case world stay consistent with it. Whether a claim
+-- still stands comes from the rulings on its turn (server/witness/memory.ts).
+CREATE TABLE IF NOT EXISTS testimony_claims (
+  interview_id uuid        NOT NULL,
+  position     integer     NOT NULL,
+  number       integer     NOT NULL,
+  kind         text        NOT NULL CHECK (kind IN ('statement', 'denial', 'no_recall')),
+  text         text        NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (interview_id, position, number),
+  FOREIGN KEY (interview_id, position) REFERENCES interview_turns (interview_id, position) ON DELETE CASCADE
+);

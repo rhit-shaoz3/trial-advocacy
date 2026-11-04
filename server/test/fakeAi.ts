@@ -6,6 +6,7 @@ import { warmsSettled } from '../exchange/discoveryChecks.ts'
 import { investigationsSettled } from '../investigator/requests.ts'
 import { reviewsSettled } from '../reviews/reviews.ts'
 import { groupingSettled } from '../reviews/grouping.ts'
+import { claimsSettled } from '../witness/memory.ts'
 import { witnessSuggestionsSettled } from '../witness/suggestions.ts'
 
 // Server tests never call Claude. By default a file's "transcription" is its
@@ -19,6 +20,7 @@ beforeEach(() => {
     throw new Error('This test did not set up a fake witness.')
   }
   ai.findNewFacts = async () => []
+  ai.findClaims = async () => []
   ai.investigate = async () => {
     throw new Error('This test did not set up a fake investigator.')
   }
@@ -37,6 +39,7 @@ afterEach(async () => {
   // Uploads start transcriptions in the background; let them finish before the next test resets the database.
   await transcriptionsSettled()
   await reviewsSettled()
+  await claimsSettled()
   await investigationsSettled()
   await witnessSuggestionsSettled()
   await subpoenasSettled()

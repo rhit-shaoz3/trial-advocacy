@@ -1,5 +1,5 @@
 import type { TranscriptTurn } from '../deposition.ts'
-import type { PartyRole } from '../prompt.ts'
+import type { PartyRole, SettledFacts } from '../prompt.ts'
 
 /**
  * One scripted moment in a deposition: optional earlier turns, then a
@@ -16,6 +16,14 @@ export interface EvalCase {
   /** The witness's own lawyer, who may object (only applies to the opposing side). */
   counsel?: string
   transcript?: TranscriptTurn[]
+  /**
+   * What the witness said in earlier sessions in this world. The grader sees
+   * it; the witness doesn't until it can read its memory, so a run today is
+   * the baseline.
+   */
+  priorTestimony?: { side: PartyRole; question: string; answer: string }[]
+  /** Rulings in force for this moment, in place of the witness's own. */
+  settledFacts?: SettledFacts
   question: string
   checks?: RuleChecks
   /** What a passing answer does, with the facts the grader needs. */

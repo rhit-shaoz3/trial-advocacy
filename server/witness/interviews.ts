@@ -9,6 +9,7 @@ import { HttpError } from '../httpError.ts'
 import { createReview, settledFacts } from '../reviews/reviews.ts'
 import { readString } from '../validation.ts'
 import { WitnessRefusalError } from './deposition.ts'
+import { queueClaims } from './memory.ts'
 import { depositionSettings, isAiWitness, loadProfile, WitnessNotReadyError } from './profile.ts'
 
 // A team's interview of an AI witness, stored turn by turn, before the
@@ -124,7 +125,9 @@ async function closeInterview(interviewId: string, teamId: string | null) {
     interviewId,
   ])
   if (rowCount !== 1 || !teamId) return false
-  return (await createReview(interviewId, teamId)) !== null
+  const sent = (await createReview(interviewId, teamId)) !== null
+  queueClaims(interviewId)
+  return sent
 }
 
 /** Ends every team interview past its hour and sends it for review. Run every minute by the server. */
@@ -300,5 +303,6 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
     }
     throw err
   }
+  if (ctx.owner.teamId) queueClaims(interviewId)
   return { ...(await view(ctx.witness, ctx.owner, interviewId, ctx.closed)), exhibits: ctx.exhibits }
 }

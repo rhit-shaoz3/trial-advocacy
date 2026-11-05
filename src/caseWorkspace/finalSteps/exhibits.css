@@ -583,3 +583,10 @@
     animation: none;
   }
 }
+
+/* The card's heading, with Teach me at its top left. */
+.ex-section-head.xl-head {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.9rem;
+}

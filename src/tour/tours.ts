@@ -329,7 +329,7 @@ const PHASE_STEPS: Record<CasePhase, TourStep[]> = {
     {
       target: '[data-tour="ex-teach"]',
       title: 'New to discovery?',
-      body: 'Teach me explains each part in plain English, with examples.',
+      body: 'Stuck? The Teach me lightbulb explains whichever part you’re on, in plain English, with examples.',
       go: { tab: 'exchange', section: 'disclosures' },
       ifMissing: 'skip',
     },
@@ -442,7 +442,7 @@ const PHASE_STEPS: Record<CasePhase, TourStep[]> = {
     {
       target: '[data-tour="exhibit-teach"]',
       title: 'Authentic, then admissible',
-      body: 'Teach me walks through exhibit lists, authenticity, and objections.',
+      body: 'The Teach me lightbulb walks through exhibit lists, authenticity, and objections.',
       go: { tab: 'final-steps' },
       ifMissing: 'skip',
     },
@@ -469,16 +469,24 @@ export function caseTour(caseId: string, phase: CasePhase): Tour {
   }
 }
 
-/** A case's new phase: what just opened, and where to find it. */
-export function phaseTour(caseId: string, phase: CasePhase): Tour {
+/**
+ * A case's new phase: what just opened, and where to find it. When the phase
+ * has its own welcome animation (`welcomed`, see caseWorkspace/intro), that
+ * announced it, so the tour goes straight to what's new.
+ */
+export function phaseTour(caseId: string, phase: CasePhase, welcomed = false): Tour {
   return {
     key: phaseTourKey(caseId, phase),
     title: `${PHASE_TITLE[phase]} phase`,
     steps: [
-      {
-        title: `New phase! 🎉`,
-        body: `${PHASE_TITLE[phase]} is open. Here’s what that means for your team.`,
-      },
+      ...(welcomed
+        ? []
+        : [
+            {
+              title: `New phase! 🎉`,
+              body: `${PHASE_TITLE[phase]} is open. Here’s what that means for your team.`,
+            },
+          ]),
       ...PHASE_STEPS[phase],
     ],
   }
@@ -488,17 +496,23 @@ export function phaseTour(caseId: string, phase: CasePhase): Tour {
  * A student's case page tours. The tour button always replays the whole case
  * tour (every tab, then the current phase). On its own, the first time in any
  * case, that whole tour starts; after that, a short tour each time this case
- * moves to a phase they haven't seen in it. A closed case starts nothing.
+ * moves to a phase they haven't seen in it (without its "New phase!" step
+ * when the phase's welcome animation announced it). A closed case starts
+ * nothing.
  */
 export function pickCaseTour(
   seen: (key: string) => boolean,
   caseId: string,
   phase: CasePhase,
   status: CourseCaseStatus,
+  welcomed = false,
 ): { tour: Tour; startWith: Tour | null } {
   const full = caseTour(caseId, phase)
   if (status !== 'active') return { tour: full, startWith: null }
   if (!seen(full.key)) return { tour: full, startWith: full }
-  if (!seen(phaseTourKey(caseId, phase))) return { tour: full, startWith: phaseTour(caseId, phase) }
+  if (!seen(phaseTourKey(caseId, phase))) {
+    const short = phaseTour(caseId, phase, welcomed)
+    return { tour: full, startWith: short.steps.length ? short : null }
+  }
   return { tour: full, startWith: null }
 }

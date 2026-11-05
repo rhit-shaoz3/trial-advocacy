@@ -1,11 +1,12 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useId, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import './Modal.css'
 
 /**
  * A dialog over the page (the browser's own <dialog>, so Escape and focus
  * work): an icon, a small label, a title, the content, and buttons at the
- * bottom. Closing it any way calls `onClose`.
+ * bottom. Closing it any way calls `onClose`. Given `from` (where on screen it
+ * was opened from, like a button), it grows out of that spot.
  */
 export function Modal({
   eyebrow,
@@ -13,6 +14,7 @@ export function Modal({
   icon,
   footer,
   wide = false,
+  from,
   onClose,
   children,
 }: {
@@ -23,15 +25,26 @@ export function Modal({
   footer?: ReactNode
   /** Nearly the full window, for showing a document. */
   wide?: boolean
+  /** The button (or anything) it opens from, to grow out of; leave out to just appear. */
+  from?: DOMRect | null
   onClose(): void
   children: ReactNode
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
 
-  useEffect(() => {
+  // Before the first paint, so it can start from `from`: grow from that point of the dialog's own box.
+  const fromRef = useRef(from)
+  useLayoutEffect(() => {
     const dialog = dialogRef.current
-    if (dialog && !dialog.open) dialog.showModal()
+    if (!dialog || dialog.open) return
+    dialog.showModal()
+    const at = fromRef.current
+    if (!at) return
+    const box = dialog.getBoundingClientRect()
+    dialog.style.setProperty('--from-x', `${at.left + at.width / 2 - box.left}px`)
+    dialog.style.setProperty('--from-y', `${at.top + at.height / 2 - box.top}px`)
+    dialog.classList.add('modal-from')
   }, [])
 
   return (

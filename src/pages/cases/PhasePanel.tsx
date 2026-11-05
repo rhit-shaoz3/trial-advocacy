@@ -75,7 +75,7 @@ export function PhasePanel({
               <span className="phase-step-number" aria-hidden="true">
                 {i + 1}
               </span>
-              {PHASE_LABEL[phase]}
+              {phase === 'information_exchange' ? 'Info exchange' : PHASE_LABEL[phase]}
             </li>
           ))}
         </ol>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, ChevronRight, Clock, FileText, Lock, Megaphone, Plus, ScrollText, Send } from 'lucide-react'
+import { ChevronRight, Clock, FileText, Lock, Megaphone, Plus, ScrollText, Send } from 'lucide-react'
 import { DictationTextarea } from '../../components/Dictation'
 import { SubpoenaForm } from '../../components/SubpoenaForm'
 import { shortDate } from '../../courses/caseLabels'
@@ -62,7 +62,6 @@ export function SubpoenasSection({
   onCheck,
   onWarmCheck,
   onOpenDocument,
-  onTeach,
   initialSubpoenaId,
   drafts,
   initialDraftId,
@@ -82,7 +81,6 @@ export function SubpoenasSection({
   onWarmCheck?(input: WarmCheckInput): void
   /** Opens a produced case file in the viewer. */
   onOpenDocument?(materialId: string): void
-  onTeach(): void
   /** A subpoena to open on, as when a notice links to its answer. */
   initialSubpoenaId?: string
   /** Saves and deletes the team's drafts; leave out to not keep drafts. */
@@ -116,13 +114,12 @@ export function SubpoenasSection({
         onCheck={part.aiFeedback?.enabled === false ? undefined : onCheck}
         onWarm={part.aiFeedback?.enabled === false || !onCheck || !onWarmCheck ? undefined : () => onWarmCheck({ kind: 'subpoena', mode: 'draft' })}
         onBack={back}
-        onTeach={onTeach}
       />
     )
   }
   const reading = view.mode === 'read' ? part.served.find((s) => s.id === view.id) : undefined
   if (reading) {
-    return <ReadSubpoena subpoena={reading} form={form} onOpenDocument={onOpenDocument} onBack={back} onTeach={onTeach} now={now} />
+    return <ReadSubpoena subpoena={reading} form={form} onOpenDocument={onOpenDocument} onBack={back} now={now} />
   }
 
   const canServe = Boolean(onServe) && open && part.remaining > 0
@@ -139,10 +136,6 @@ export function SubpoenasSection({
             </p>
           </div>
           <div className="ex-head-actions">
-            <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach} data-tour="ex-teach">
-              <BookOpen aria-hidden="true" />
-              Teach me
-            </button>
             {onServe && (
               <button
                 type="button"
@@ -271,7 +264,6 @@ function Compose({
   onCheck,
   onWarm,
   onBack,
-  onTeach,
 }: {
   part: StudentSubpoenas
   form: SubpoenaFormContext
@@ -283,7 +275,6 @@ function Compose({
   onCheck?: CheckDiscovery
   onWarm?(): void
   onBack(): void
-  onTeach(): void
 }) {
   const saved = draft?.content as SubpoenaDraftContent | undefined
   const [recipient, setRecipient] = useState(saved?.recipient ?? '')
@@ -322,7 +313,6 @@ function Compose({
         title="Serve a subpoena"
         sub="Name the recipient and ask narrowly: what, about whom, and from which dates."
         onBack={onBack}
-        onTeach={onTeach}
       />
       <div className="ex-tally">
         <p>
@@ -465,14 +455,12 @@ function ReadSubpoena({
   form,
   onOpenDocument,
   onBack,
-  onTeach,
   now,
 }: {
   subpoena: TeamSubpoena
   form: SubpoenaFormContext
   onOpenDocument?(materialId: string): void
   onBack(): void
-  onTeach(): void
   now: Date
 }) {
   return (
@@ -484,7 +472,6 @@ function ReadSubpoena({
           s.respondedAt ? `answered ${shortDate(s.respondedAt, now)}` : `due ${shortDate(s.dueAt, now)}`
         }`}
         onBack={onBack}
-        onTeach={onTeach}
         aside={<StatusBadge subpoena={s} now={now} />}
       />
       <details className="ex-subpoena-served" open={!s.respondedAt}>

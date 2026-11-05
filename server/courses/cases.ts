@@ -208,6 +208,7 @@ export async function completeSetup(courseId: string, id: string) {
 export async function setCasePhase(courseId: string, id: string, phase: CasePhase) {
   const { rows } = await pool.query<CourseCase>(
     `UPDATE cases SET phase = $3, updated_at = now(),
+       phase_entered_at = CASE WHEN phase IS DISTINCT FROM $3 THEN now() ELSE phase_entered_at END,
        worlds_locked_at = CASE WHEN $3 = 'introduction' THEN worlds_locked_at ELSE coalesce(worlds_locked_at, now()) END
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,

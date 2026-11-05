@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -215,6 +215,46 @@ describe('the case dashboard card for each phase', () => {
     expect(within(column as HTMLElement).queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
     expect(within(column as HTMLElement).queryByRole('button', { name: /Edit settings/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /See the exchanges/ })).not.toBeInTheDocument()
+  })
+
+  it('orders the tabs by phase', async () => {
+    renderAt('/courses/c1/cases/k1', {
+      getCase: vi.fn().mockResolvedValue({ ...launched, phase: 'final_steps' }),
+      getExhibitOverview: vi.fn(pending),
+      listCaseExhibits: vi.fn(pending),
+      ...exchangeMocks,
+    })
+    await screen.findByRole('tab', { name: 'Final steps' })
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Teams & worlds',
+      'Case file',
+      'Information exchange',
+      'Investigator',
+      'Witnesses',
+      'Final steps',
+      'Tasks',
+      'Student view',
+    ])
+  })
+
+  it('keeps a tracker current as students work, without a page refresh', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const overview = vi
+      .fn()
+      .mockResolvedValueOnce({ teams: 4, teamsUsed: 1, requests: 1, waiting: 0 })
+      .mockResolvedValue({ teams: 4, teamsUsed: 3, requests: 4, waiting: 0 })
+    renderAt('/courses/c1/cases/k1', {
+      getCase: vi.fn().mockResolvedValue({ ...launched, phase: 'investigate' }),
+      getInvestigatorOverview: overview,
+      ...exchangeMocks,
+    })
+    const card = (await screen.findByRole('heading', { name: 'Assignments to John Hastings' })).closest('section')!
+    expect(await within(card).findByLabelText('1 of 4 teams')).toBeInTheDocument()
+    await act(async () => {
+      vi.advanceTimersByTime(15000)
+    })
+    expect(await within(card).findByLabelText('3 of 4 teams')).toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('shows the deposition card in the deposition phase, and moves the investigator card to its tab', async () => {

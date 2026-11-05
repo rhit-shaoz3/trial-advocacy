@@ -8,6 +8,7 @@ import { ExhibitRecord } from '../../../caseWorkspace/finalSteps/ExhibitListSect
 import { useExhibitViewer } from './useExhibitViewer'
 import '../exchange/exchange.css'
 import '../../../caseWorkspace/finalSteps/exhibits.css'
+import { useLiveTick } from '../../../workspace/useLiveTick'
 
 /** Where a world's list stands, in a word. */
 function worldStatus(w: WorldExhibits) {
@@ -32,6 +33,8 @@ export function FinalStepsTab({
   onCaseChange(updated: CourseCase): void
 }) {
   const service = useCourseService()
+  // Kept current as students work (see useLiveTick).
+  const tick = useLiveTick()
   const [worlds, setWorlds] = useState<WorldExhibits[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -47,7 +50,7 @@ export function FinalStepsTab({
     return () => {
       cancelled = true
     }
-  }, [service, courseId, courseCase.id])
+  }, [service, courseId, courseCase.id, tick])
 
   async function toggle(next: boolean) {
     setSaving(true)

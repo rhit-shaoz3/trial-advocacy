@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { BadgeCheck, BookOpen, Check, Eye, Gavel, Highlighter, Info, ListChecks, Lock, Scale, Send, TriangleAlert, X } from 'lucide-react'
+import { BadgeCheck, Check, Eye, Gavel, Highlighter, Info, ListChecks, Lock, Scale, Send, TriangleAlert, X } from 'lucide-react'
 import { Modal } from '../../components/Modal'
 import { RedactionEditor } from '../../components/redaction/RedactionEditor'
 import { cutPdf } from '../../components/redaction/redactFile'
@@ -16,6 +16,7 @@ import type {
 } from '../../courses/types'
 import { exhibitLabel, pagesText, parsePages } from '../../courses/exhibitLabels'
 import { TeachMe } from '../exchange/TeachMe'
+import { TeachMeButton } from '../exchange/TeachMeButton'
 import '../exchange/exchange.css'
 import './exhibits.css'
 
@@ -75,7 +76,8 @@ export function ExhibitListSection({
   /** Lets the team black out parts of a PDF or picture it lists; leave out to list files only as they are. */
   copyActions?: CopyActions
 }) {
-  const [teach, setTeach] = useState(false)
+  /** The guide open, and where its bulb was, to grow out of. */
+  const [teach, setTeach] = useState<DOMRect | null>(null)
   const [excerpt, setExcerpt] = useState<{ title: string; kind: Exhibit['kind']; parts: ExhibitPart[]; redacted?: boolean } | null>(null)
   const { mine, theirs, side } = exhibits
   const exchanged = Boolean(mine.submittedAt && theirs.submittedAt)
@@ -88,7 +90,8 @@ export function ExhibitListSection({
   return (
     <div className="xl">
       <section className="cw-card ex-section" aria-labelledby="xl-title">
-        <header className="ex-section-head">
+        <header className="ex-section-head xl-head">
+          <TeachMeButton variant="compact" about="Exhibit lists" tour="exhibit-teach" onOpen={setTeach} />
           <div>
             <span className="ws-eyebrow">Final steps · Joint exhibit list</span>
             <h2 id="xl-title">
@@ -101,10 +104,6 @@ export function ExhibitListSection({
                     : 'Build your exhibit list for trial'}
             </h2>
           </div>
-          <button type="button" className="ws-btn ws-btn-secondary" onClick={() => setTeach(true)} data-tour="exhibit-teach">
-            <BookOpen aria-hidden="true" />
-            Teach me
-          </button>
         </header>
 
         {exhibits.finalizedAt ? (
@@ -135,7 +134,7 @@ export function ExhibitListSection({
 
       {exchanged && <Exchanged exhibits={exhibits} onMove={onMove} onOpen={open} />}
 
-      {teach && <TeachMe topic="exhibits" onClose={() => setTeach(false)} />}
+      {teach && <TeachMe topic="exhibits" from={teach} onClose={() => setTeach(null)} />}
       {excerpt && <ExcerptModal {...excerpt} onClose={() => setExcerpt(null)} />}
     </div>
   )

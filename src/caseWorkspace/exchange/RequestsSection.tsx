@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  BookOpen,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -92,7 +91,6 @@ export function RequestsSection({
   onRespond,
   onCheck,
   onWarmCheck,
-  onTeach,
   initialRequestId,
   drafts,
   initialDraftId,
@@ -113,7 +111,6 @@ export function RequestsSection({
   onCheck?: CheckDiscovery
   /** A form that can be checked was opened, to get the mentor ready. */
   onWarmCheck?(input: WarmCheckInput): void
-  onTeach(): void
   /** A request to open on (read), as when a notice links to its response. */
   initialRequestId?: string
   /** Saves and deletes the team's drafts; leave out to not keep drafts. */
@@ -154,7 +151,6 @@ export function RequestsSection({
         onWarm={check && onWarmCheck && (() => onWarmCheck({ kind, mode: 'draft' }))}
         rounds={ai.rounds}
         onBack={back}
-        onTeach={onTeach}
       />
     )
   }
@@ -171,13 +167,12 @@ export function RequestsSection({
         onWarm={check && onWarmCheck && (() => onWarmCheck({ kind, mode: 'answer', requestId: request.id }))}
         rounds={ai.rounds}
         onBack={back}
-        onTeach={onTeach}
         now={now}
       />
     )
   }
   if (view.mode === 'read' && request) {
-    return <ReadSet kind={kind} request={request} onBack={back} onTeach={onTeach} now={now} />
+    return <ReadSet kind={kind} request={request} onBack={back} now={now} />
   }
 
   const toRespond = part.requests.filter((r) => r.direction === 'received' && !r.respondedAt)
@@ -195,10 +190,6 @@ export function RequestsSection({
             <p className="cw-section-sub">{copy.about}</p>
           </div>
           <div className="ex-head-actions">
-            <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach} data-tour="ex-teach">
-              <BookOpen aria-hidden="true" />
-              Teach me
-            </button>
             {onSend && (
               <button
                 type="button"
@@ -351,14 +342,12 @@ export function SubHead({
   title,
   sub,
   onBack,
-  onTeach,
   aside,
 }: {
   eyebrow: string
   title: string
   sub: string
   onBack(): void
-  onTeach(): void
   aside?: ReactNode
 }) {
   return (
@@ -375,10 +364,6 @@ export function SubHead({
         </div>
         <div className="ex-head-actions">
           {aside}
-          <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach} data-tour="ex-teach">
-            <BookOpen aria-hidden="true" />
-            Teach me
-          </button>
         </div>
       </header>
     </>
@@ -398,7 +383,6 @@ function Compose({
   onWarm,
   rounds,
   onBack,
-  onTeach,
 }: {
   kind: ExchangeKind
   part: StudentPart
@@ -413,7 +397,6 @@ function Compose({
   /** How many checks one draft gets; null for unlimited. */
   rounds: number | null
   onBack(): void
-  onTeach(): void
 }) {
   const copy = COPY[kind]
   const [lines, setLines] = useState<string[]>(() => {
@@ -469,7 +452,6 @@ function Compose({
             : 'One statement per line, written so the other side can agree or disagree with it.'
         }
         onBack={onBack}
-        onTeach={onTeach}
       />
       <div className={over || left === 0 ? 'ex-tally ex-tally-full' : 'ex-tally'}>
         <p>
@@ -599,7 +581,6 @@ function Respond({
   onWarm,
   rounds,
   onBack,
-  onTeach,
   now,
 }: {
   kind: ExchangeKind
@@ -610,7 +591,6 @@ function Respond({
   onWarm?(): void
   rounds: number | null
   onBack(): void
-  onTeach(): void
   now: Date
 }) {
   const copy = COPY[kind]
@@ -635,7 +615,6 @@ function Respond({
             : 'For each statement, agree, disagree, or agree in part. Anything you agree with is treated as settled.'
         }
         onBack={onBack}
-        onTeach={onTeach}
         aside={
           <span className={new Date(request.dueAt) < now ? 'ex-due-chip ex-due-late' : 'ex-due-chip'}>
             <strong>Due {shortDate(request.dueAt, now)}</strong>
@@ -742,13 +721,11 @@ function ReadSet({
   kind,
   request: r,
   onBack,
-  onTeach,
   now,
 }: {
   kind: ExchangeKind
   request: TeamRequest
   onBack(): void
-  onTeach(): void
   now: Date
 }) {
   const copy = COPY[kind]
@@ -770,7 +747,6 @@ function ReadSet({
           r.respondedAt ? ` · responded ${shortDate(r.respondedAt, now)}` : ` · due ${shortDate(r.dueAt, now)}`
         }`}
         onBack={onBack}
-        onTeach={onTeach}
       />
       {r.respondedAt && (
         <p className="ex-summary">

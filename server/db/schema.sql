@@ -1026,3 +1026,8 @@ ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS marks jsonb;
 ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS redacted_key text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_marks jsonb;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_key text;
+
+-- When the case last moved into its phase, so each student gets that phase's
+-- welcome once each time the case enters it (moving back and forth counts).
+-- Null until the instructor first changes the phase.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS phase_entered_at timestamptz;

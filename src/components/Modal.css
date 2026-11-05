@@ -108,3 +108,22 @@
   justify-content: flex-end;
   gap: 0.6rem;
 }
+
+/* Growing out of the button it was opened from (Modal's `from`). */
+.modal-from {
+  transform-origin: var(--from-x) var(--from-y);
+  animation: modal-grow 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.08) both;
+}
+
+@keyframes modal-grow {
+  from {
+    opacity: 0.2;
+    transform: scale(0.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-from {
+    animation: none;
+  }
+}

@@ -5,6 +5,7 @@ import { useCourseService } from '../../courses/CourseServiceContext'
 import type { CourseCase, DepositionOverview, ExhibitOverview, InvestigatorOverview } from '../../courses/types'
 import { investigatorOf } from '../../courses/types'
 import './exchange/exchange.css'
+import { useLiveTick } from '../../workspace/useLiveTick'
 
 // The case dashboard's card for the investigate, deposition and final steps
 // phases, in the style of the information exchange card. Once the case moves
@@ -67,6 +68,8 @@ export function InvestigatorCard({
   inTab?: boolean
 }) {
   const service = useCourseService()
+  // Kept current as students work (see useLiveTick).
+  const tick = useLiveTick()
   const [overview, setOverview] = useState<InvestigatorOverview | null>(null)
   const current = courseCase.phase === 'investigate'
 
@@ -76,7 +79,7 @@ export function InvestigatorCard({
     return () => {
       cancelled = true
     }
-  }, [service, courseId, courseCase.id, courseCase.phase])
+  }, [service, courseId, courseCase.id, courseCase.phase, tick])
 
   return (
     <section
@@ -129,6 +132,8 @@ export function DepositionCard({
   inTab?: boolean
 }) {
   const service = useCourseService()
+  // Kept current as students work (see useLiveTick).
+  const tick = useLiveTick()
   const [overview, setOverview] = useState<DepositionOverview | null>(null)
   const current = courseCase.phase === 'deposition'
 
@@ -138,7 +143,7 @@ export function DepositionCard({
     return () => {
       cancelled = true
     }
-  }, [service, courseId, courseCase.id, courseCase.phase])
+  }, [service, courseId, courseCase.id, courseCase.phase, tick])
 
   return (
     <section className={inTab ? 'exchange-card exchange-card-in-tab' : 'exchange-card'} aria-labelledby="deposition-card-title">
@@ -184,6 +189,8 @@ export function DepositionCard({
 /** How the case worlds are settling their joint exhibit lists. Like the exchanges, it's the teams' work; challenges come to Review. */
 export function ExhibitCard({ courseId, courseCase }: { courseId: string; courseCase: CourseCase }) {
   const service = useCourseService()
+  // Kept current as students work (see useLiveTick).
+  const tick = useLiveTick()
   const [overview, setOverview] = useState<ExhibitOverview | null>(null)
   const enabled = courseCase.exhibitListEnabled !== false
 
@@ -193,7 +200,7 @@ export function ExhibitCard({ courseId, courseCase }: { courseId: string; course
     return () => {
       cancelled = true
     }
-  }, [service, courseId, courseCase.id, courseCase.phase])
+  }, [service, courseId, courseCase.id, courseCase.phase, tick])
 
   return (
     <section className="exchange-card" aria-labelledby="exhibit-card-title">

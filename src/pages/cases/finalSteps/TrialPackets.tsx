@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Download, FolderArchive } from 'lucide-react'
+import { AlertTriangle, Download, FileText, FolderArchive } from 'lucide-react'
+import { PacketChooser } from '../../../caseWorkspace/finalSteps/PacketChooser'
+import { Modal } from '../../../components/Modal'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { EXHIBIT_SIDE } from '../../../courses/exhibitLabels'
 import { worldLabel } from '../../../courses/worldLabel'
-import type { TrialPacket } from '../../../courses/types'
+import type { PacketContents, TrialPacket } from '../../../courses/types'
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
@@ -18,15 +20,51 @@ function holds(p: TrialPacket) {
   ].join(' · ')
 }
 
+/** Picks what goes in a team's single PDF, starting from the team's own choices. Changes here are only for this download. */
+function PacketPdfModal({ courseId, caseId, packet, onClose }: { courseId: string; caseId: string; packet: TrialPacket; onClose(): void }) {
+  const service = useCourseService()
+  const [contents, setContents] = useState<PacketContents | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    service
+      .getTrialPacketContents(courseId, caseId, packet.teamId)
+      .then((c) => !cancelled && setContents(c))
+      .catch((err: Error) => !cancelled && setError(err.message))
+    return () => {
+      cancelled = true
+    }
+  }, [service, courseId, caseId, packet.teamId])
+
+  return (
+    <Modal eyebrow={`World ${worldLabel(packet.worldNumber)}`} title={`Team ${packet.teamNumber}’s PDF`} icon={<FileText aria-hidden="true" />} onClose={onClose}>
+      <p className="muted">This starts from what the team chose. Your changes are only for this download; the team’s choices stay as they are.</p>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      {contents ? (
+        <PacketChooser contents={contents} pdfUrl={(leftOut) => service.trialPacketPdfUrl(courseId, caseId, packet.teamId, leftOut)} />
+      ) : (
+        !error && <p className="muted">Loading…</p>
+      )}
+    </Modal>
+  )
+}
+
 /**
- * The end of the case: each team's trial packet to download, to read through
- * and hand to the team. It can be downloaded any time in final steps; what
- * isn't finished yet is pointed out here and in the packet.
+ * The end of the case: each team's trial packet to download, as a zip or as a
+ * single PDF. It can be downloaded any time in final steps; what isn't
+ * finished yet is pointed out here and in the packet. Teams get their own once
+ * they submit their exhibit list.
  */
 export function TrialPackets({ courseId, caseId }: { courseId: string; caseId: string }) {
   const service = useCourseService()
   const [packets, setPackets] = useState<TrialPacket[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [choosing, setChoosing] = useState<TrialPacket | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -57,7 +95,8 @@ export function TrialPackets({ courseId, caseId }: { courseId: string; caseId: s
       <p className="muted">
         Each team’s packet has its admitted exhibits and the joint exhibit list, every deposition taken in its case world, and
         the case files, investigator reports, discovery, and ruled facts it gathered. Nothing from the other team’s private work
-        is included, so each packet is ready to hand to its team.
+        is included. Teams can download their own once they submit their exhibit list, and can choose what goes in a single
+        PDF for court. You can download that PDF too.
       </p>
       {error && (
         <p className="form-error" role="alert">
@@ -97,19 +136,28 @@ export function TrialPackets({ courseId, caseId }: { courseId: string; caseId: s
                     </small>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  className="btn-secondary tp-download"
+                  onClick={() => setChoosing(p)}
+                  aria-label={`Choose what goes in Team ${p.teamNumber}’s PDF`}
+                >
+                  <FileText aria-hidden="true" /> PDF
+                </button>
                 <a
                   className="btn-secondary tp-download"
                   href={service.trialPacketsUrl(courseId, caseId, p.teamId)}
                   download
                   aria-label={`Download Team ${p.teamNumber}’s packet`}
                 >
-                  <Download aria-hidden="true" /> Download
+                  <Download aria-hidden="true" /> Zip
                 </a>
               </li>
             ))}
           </ul>
         </>
       )}
+      {choosing && <PacketPdfModal courseId={courseId} caseId={caseId} packet={choosing} onClose={() => setChoosing(null)} />}
     </section>
   )
 }

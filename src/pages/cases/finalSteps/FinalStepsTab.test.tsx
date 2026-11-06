@@ -94,6 +94,37 @@ describe('the instructor’s Final steps tab', () => {
     expect(screen.getByText(/1 packet isn’t finished yet/)).toBeInTheDocument()
   })
 
+  it('lets the instructor choose what goes in a team’s PDF, starting from the team’s choices', async () => {
+    const packet = {
+      teamId: 't1',
+      teamNumber: 1,
+      side: 'plaintiff' as const,
+      worldNumber: 1,
+      members: [],
+      exhibits: 0,
+      depositions: 0,
+      files: 2,
+      reports: 0,
+      discovery: 0,
+      warnings: [],
+    }
+    const items = [
+      { id: 'file:a', section: 'Case file', title: 'Waiver.pdf', printable: true },
+      { id: 'file:b', section: 'Case file', title: 'Records.pdf', printable: true },
+    ]
+    const { user, service } = renderTab({
+      listTrialPackets: vi.fn().mockResolvedValue([packet]),
+      getTrialPacketContents: vi.fn().mockResolvedValue({ items, leftOut: ['file:b'], warnings: [] }),
+    })
+    await user.click(await screen.findByRole('button', { name: 'Choose what goes in Team 1’s PDF' }))
+    expect(await screen.findByRole('checkbox', { name: 'Records.pdf' })).not.toBeChecked()
+    expect(screen.getByRole('link', { name: 'Download PDF' })).toHaveAttribute('href', '/packets/t1/pdf?out=file:b')
+
+    await user.click(screen.getByRole('checkbox', { name: 'Waiver.pdf' }))
+    expect(screen.getByText('Choose at least one thing for the PDF.')).toBeInTheDocument()
+    expect(service.saveMyPacketChoices).not.toHaveBeenCalled()
+  })
+
   it('turns the joint exhibit list off for students', async () => {
     const off = { ...rivera, exhibitListEnabled: false }
     const { user, service, onCaseChange } = renderTab({ setExhibitListEnabled: vi.fn().mockResolvedValue(off) })

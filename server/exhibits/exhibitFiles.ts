@@ -196,12 +196,13 @@ export async function exhibitFile(x: ExhibitSource) {
   if (!x.materialId) throw new HttpError(404, 'This exhibit has no file.')
   const file = await findMaterialFile(x.caseId, x.materialId)
   if (!file) throw new HttpError(404, 'File not found.')
-  const stored = (key: string, type: string) => ({ filename: redactedName(file.filename, type), read: () => storage.read(key) })
+  const stored = (key: string, type: string) => ({ filename: redactedName(file.filename, type), contentType: type, read: () => storage.read(key) })
   if (x.admittedKey) return stored(x.admittedKey, x.admittedContentType ?? file.contentType)
   const kind = markable(x)
   if (x.offeredKey && (kind === 'pdf' || kind === 'image')) return stored(x.offeredKey, redactedType(kind))
-  if (x.parts && file.contentType.startsWith('application/pdf')) return { filename: file.filename, read: () => exhibitPdf(x) }
-  return { filename: file.filename, read: () => materialBytes(file) }
+  const { filename, contentType } = file
+  if (x.parts && contentType.startsWith('application/pdf')) return { filename, contentType, read: () => exhibitPdf(x) }
+  return { filename, contentType, read: () => materialBytes(file) }
 }
 
 /**

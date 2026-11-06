@@ -61,6 +61,9 @@ async function uploadCopy(path: string, body: object, file: Blob): Promise<strin
   return upload.key
 }
 
+/** What a packet's PDF leaves out, for its link. */
+const leftOutQuery = (leftOut: string[]) => (leftOut.length > 0 ? `?leftOut=${encodeURIComponent(leftOut.join(','))}` : '')
+
 export const httpCourseService: CourseService = {
   async listMyCourses() {
     return (await apiRequest('/courses')).courses
@@ -776,6 +779,30 @@ export const httpCourseService: CourseService = {
 
   trialPacketsUrl(courseId, caseId, teamId) {
     return `/api${casePath(courseId, caseId)}/packets/${teamId ? `${encodeURIComponent(teamId)}/` : ''}download`
+  },
+
+  async getTrialPacketContents(courseId, caseId, teamId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/packets/${encodeURIComponent(teamId)}/contents`)).contents
+  },
+
+  trialPacketPdfUrl(courseId, caseId, teamId, leftOut) {
+    return `/api${casePath(courseId, caseId)}/packets/${encodeURIComponent(teamId)}/pdf${leftOutQuery(leftOut)}`
+  },
+
+  async getMyPacket(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/packet`)).contents
+  },
+
+  async saveMyPacketChoices(courseId, caseId, leftOut) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/packet/choices`, { method: 'PUT', body: JSON.stringify({ leftOut }) })
+  },
+
+  myPacketUrl(courseId, caseId) {
+    return `/api${myCasePath(courseId, caseId)}/packet/download`
+  },
+
+  myPacketPdfUrl(courseId, caseId, leftOut) {
+    return `/api${myCasePath(courseId, caseId)}/packet/pdf${leftOutQuery(leftOut)}`
   },
 
   caseExhibitFileUrl(courseId, caseId, exhibitId) {

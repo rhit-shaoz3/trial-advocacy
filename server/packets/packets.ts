@@ -1,6 +1,6 @@
 import type { Response } from 'express'
 import { ZipArchive } from 'archiver'
-import { findMaterialFile, listMaterialsFor, type CaseMaterial } from '../courses/caseContent.ts'
+import { findMaterialFile, findMaterialText, listMaterialsFor, type CaseMaterial } from '../courses/caseContent.ts'
 import type { CourseCase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { listTeams, worldLetter } from '../courses/teams.ts'
@@ -8,22 +8,27 @@ import { pool } from '../db/pool.ts'
 import { listCaseRequests, type ExchangeRequest } from '../exchange/exchange.ts'
 import { subpoenaNotices, teamSubpoenas, type SubpoenaNotice, type TeamSubpoena } from '../exchange/subpoenas.ts'
 import { exhibitFile, findExhibitSource, type TextPart } from '../exhibits/exhibitFiles.ts'
-import { investigatorFileIds, listCaseExhibits, type Exhibit, type ExhibitStatus, type WorldExhibits } from '../exhibits/exhibits.ts'
+import { investigatorFileIds, listCaseExhibits, type Exhibit, type ExhibitList, type ExhibitStatus, type WorldExhibits } from '../exhibits/exhibits.ts'
 import { HttpError } from '../httpError.ts'
 import { markedTranscript, type MarkedTurn } from '../reviews/reviews.ts'
 import { attachmentHeader } from '../storage/shared.ts'
 import { storage } from '../storage/storage.ts'
+import { mergedPdf } from './packetPdf.ts'
 import { TextPdf } from './textPdf.ts'
 
 // The trial packets, the course's last step: once the case reaches final
-// steps, the instructor downloads a zip with a folder for each team: the
-// world's exhibits, every deposition taken in the world (both teams', as in
-// real litigation, with testimony resting on a denied fact marked as struck),
-// and what the team itself gathered: its case file, investigator reports,
-// discovery, and the facts it can rely on. A packet goes to the team, so it
-// holds nothing the team couldn't see or wouldn't be served with: never the
-// other team's investigator reports, prep interviews, or subpoena results,
+// steps, the instructor downloads a zip with a folder for each team, and a
+// team downloads its own once it has submitted its exhibit list. A packet has
+// the world's exhibits, every deposition taken in the world (both teams', as
+// in real litigation, with testimony resting on a denied fact marked as
+// struck), and what the team itself gathered: its case file, investigator
+// reports, discovery, and the facts it can rely on. A packet goes to the team,
+// so it holds nothing the team couldn't see or wouldn't be served with: never
+// the other team's investigator reports, prep interviews, or subpoena results,
 // the AI mentor's feedback, or instructor-only files.
+//
+// The same packet can come as one PDF for court, holding what the team or the
+// instructor chose from it, with a table of contents (see packetPdf.ts).
 
 const SIDE_LABEL: Record<Side, string> = { plaintiff: 'Plaintiff', defense: 'Defense' }
 
@@ -208,6 +213,17 @@ async function exhibitListPdf(courseCase: CourseCase, team: PacketTeam, world: W
   return pdf.save()
 }
 
+/** The team's own list, until the other side's is in: no exhibits exist yet, and the other side's list stays private. */
+async function teamListPdf(courseCase: CourseCase, team: PacketTeam, list: ExhibitList) {
+  const pdf = await TextPdf.create(`Exhibit list · ${courseCase.title}`)
+  pdf.title(`Team ${team.number}’s exhibit list`).text(courseCase.title)
+  pdf.text(`${SIDE_LABEL[team.side]}, case world ${worldLetter(team.worldNumber)}`)
+  pdf.text(`Submitted ${longDay(list.submittedAt!)}. The other side’s list isn’t in yet, so nothing has been exchanged or ruled on.`, { gray: true }).space(10)
+  if (list.items.length === 0) pdf.text('None.', { gray: true })
+  list.items.forEach((item, i) => pdf.text(`${i + 1}. ${item.title}`))
+  return pdf.save()
+}
+
 /** An exhibit that's text: a transcript's turns, or a report's or text file's paragraphs, as admitted. */
 async function excerptPdf(courseCase: CourseCase, x: Exhibit) {
   const pdf = await TextPdf.create(`${exhibitName(x)} · ${courseCase.title}`)
@@ -225,17 +241,38 @@ async function excerptPdf(courseCase: CourseCase, x: Exhibit) {
   return pdf.save()
 }
 
+/** A file that isn't a PDF or a picture, printed from its text (a Word file's, say). */
+async function textFilePdf(courseCase: CourseCase, title: string, text: string) {
+  const pdf = await TextPdf.create(`${title} · ${courseCase.title}`)
+  pdf.title(title).text(text)
+  return pdf.save()
+}
+
+/** PDFs and the pictures a PDF can hold go in the single PDF as they are. */
+const PRINTS_AS_IS = /^(application\/pdf|image\/(png|jpe?g))/i
+/** Other pictures, audio, and video have no pages, and a transcript of one isn't the file. */
+const NO_PAGES = /^(image|audio|video)\//i
+
 /** How an admitted exhibit goes in the packet: only what was admitted of it, never the whole source. */
 async function admittedExhibit(courseCase: CourseCase, matchupId: string, x: Exhibit) {
   const source = await findExhibitSource(x.id, { matchupId })
-  if (!source.materialId || (x.excerpt && !source.admittedKey)) return { extension: '.pdf', load: () => excerptPdf(courseCase, x) }
+  if (!source.materialId || (x.excerpt && !source.admittedKey)) return { extension: '.pdf', load: () => excerptPdf(courseCase, x), print: undefined }
   const file = await exhibitFile(source)
-  return { extension: extensionOf(file.filename), load: file.read }
+  const { textContent } = source
+  // The source's text is the whole file, so it can't stand in for a redacted copy.
+  const whole = !source.admittedKey && !source.offeredKey
+  const print = PRINTS_AS_IS.test(file.contentType)
+    ? undefined
+    : whole && textContent && !NO_PAGES.test(file.contentType)
+      ? () => textFilePdf(courseCase, `${exhibitName(x)}: ${x.title}`, textContent)
+      : null
+  return { extension: extensionOf(file.filename), load: file.read, print }
 }
 
 // What the team gathered --------------------------------------------------------
 
 interface Report {
+  id: string
   assignment: string
   askedBy: string | null
   report: string
@@ -245,7 +282,7 @@ interface Report {
 
 async function teamReports(caseId: string, teamId: string) {
   const { rows } = await pool.query<Report>(
-    `SELECT r.assignment, u.name AS "askedBy", r.final_report AS report, r.completed_at AS "completedAt", r.created_at AS "createdAt"
+    `SELECT r.id, r.assignment, u.name AS "askedBy", r.final_report AS report, r.completed_at AS "completedAt", r.created_at AS "createdAt"
      FROM interview_reviews r LEFT JOIN users u ON u.id = r.asked_by
      WHERE r.case_id = $1 AND r.team_id = $2 AND r.kind = 'investigation' AND r.status = 'completed' AND r.final_report IS NOT NULL
      ORDER BY r.created_at`,
@@ -356,9 +393,16 @@ async function factsPdf(courseCase: CourseCase, team: PacketTeam, facts: RuledFa
 // The packet ------------------------------------------------------------------
 
 interface Entry {
+  /** Stays the same from one download to the next, so a team's choices keep. */
+  id: string
+  /** Where it's listed in the single PDF. */
+  section: string
+  title: string
   /** Within the team's folder. */
   path: string
   load(): Promise<Uint8Array>
+  /** Its pages in the single PDF; null when it has none, like a video. */
+  print: (() => Promise<Uint8Array>) | null
 }
 
 interface Packet {
@@ -367,16 +411,23 @@ interface Packet {
   entries: Entry[]
   counts: { exhibits: number; depositions: number; files: number; reports: number; discovery: number }
   warnings: string[]
+  /** The top of the first page: whose packet it is, and what isn't finished. */
+  cover(pdf: TextPdf, unreadable: string[]): void
   contents(unreadable: string[]): Promise<Uint8Array>
 }
 
-/** Adds an entry under its own path (two files can share a name). */
-function addEntry(entries: Entry[], path: string, load: Entry['load']) {
+/** Adds an entry under its own path (two files can share a name). It prints as it loads unless `print` says otherwise. */
+function addEntry(
+  entries: Entry[],
+  path: string,
+  load: Entry['load'],
+  { print = load, ...item }: Pick<Entry, 'id' | 'section' | 'title'> & { print?: Entry['print'] },
+) {
   const extension = extensionOf(path)
   const base = path.slice(0, path.length - extension.length)
   let unique = path
   for (let n = 2; entries.some((e) => e.path.toLowerCase() === unique.toLowerCase()); n++) unique = `${base} (${n})${extension}`
-  entries.push({ path: unique, load })
+  entries.push({ ...item, path: unique, load, print })
 }
 
 async function materialBytes(caseId: string, id: string) {
@@ -389,6 +440,13 @@ async function materialBytes(caseId: string, id: string) {
 function fileFolder(m: CaseMaterial, fromInvestigator: Set<string>) {
   if (m.source === 'subpoena') return '3 Case file/Subpoena responses'
   return fromInvestigator.has(m.id) ? '3 Case file/From the investigator' : '3 Case file'
+}
+
+/** How a case file prints: as it is, from its text, or not at all. */
+function filePrint(courseCase: CourseCase, m: CaseMaterial, load: Entry['load']): Entry['print'] {
+  if (PRINTS_AS_IS.test(m.contentType)) return load
+  if (NO_PAGES.test(m.contentType) || m.textStatus !== 'ready') return null
+  return async () => textFilePdf(courseCase, m.filename, (await findMaterialText(courseCase.id, m.id))?.text ?? '')
 }
 
 interface Shared {
@@ -411,25 +469,57 @@ async function buildPacket(courseCase: CourseCase, team: PacketTeam, viewerId: s
 
   const world = worlds.get(team.matchupId)
   const admitted = world?.exhibits.filter((x) => x.status === 'admitted' && !x.supersededBy) ?? []
+  const myList = world?.[team.side]
+  if (world && myList?.submittedAt && !world[team.side === 'plaintiff' ? 'defense' : 'plaintiff'].submittedAt) {
+    addEntry(entries, '1 Exhibits/Team exhibit list.pdf', () => teamListPdf(courseCase, team, myList), {
+      id: 'exhibit-list',
+      section: 'Exhibits',
+      title: `Team ${team.number}’s exhibit list`,
+    })
+  }
   if (world && world.exhibits.length > 0) {
-    addEntry(entries, '1 Exhibits/Joint exhibit list.pdf', () => exhibitListPdf(courseCase, team, world))
+    addEntry(entries, '1 Exhibits/Joint exhibit list.pdf', () => exhibitListPdf(courseCase, team, world), {
+      id: 'exhibit-list',
+      section: 'Exhibits',
+      title: 'Joint exhibit list',
+    })
     for (const x of admitted) {
-      const { extension, load } = await admittedExhibit(courseCase, team.matchupId, x)
-      addEntry(entries, `1 Exhibits/${safeName(`${exhibitName(x)} - ${x.title.replace(EXTENSION, '')}`)}${extension}`, load)
+      const { extension, load, print } = await admittedExhibit(courseCase, team.matchupId, x)
+      addEntry(entries, `1 Exhibits/${safeName(`${exhibitName(x)} - ${x.title.replace(EXTENSION, '')}`)}${extension}`, load, {
+        id: `exhibit:${x.id}`,
+        section: 'Exhibits',
+        title: `${exhibitName(x)}: ${x.title}`,
+        print,
+      })
     }
   }
 
   for (const d of depositions) {
     const name = safeName(`${d.witness} - Team ${d.teamNumber} - ${shortDay(d.takenAt)}`)
-    addEntry(entries, `2 Depositions/${name}.pdf`, () => depositionPdf(courseCase, team, d))
+    addEntry(entries, `2 Depositions/${name}.pdf`, () => depositionPdf(courseCase, team, d), {
+      id: `deposition:${d.id}`,
+      section: 'Depositions',
+      title: `${d.witness}, taken by Team ${d.teamNumber} on ${longDay(d.takenAt)}`,
+    })
   }
 
   for (const m of materials) {
-    addEntry(entries, `${fileFolder(m, investigatorFiles)}/${safeName(m.filename)}`, () => materialBytes(caseId, m.id))
+    const load = () => materialBytes(caseId, m.id)
+    addEntry(entries, `${fileFolder(m, investigatorFiles)}/${safeName(m.filename)}`, load, {
+      id: `file:${m.id}`,
+      section: 'Case file',
+      title: m.filename,
+      print: filePrint(courseCase, m, load),
+    })
   }
 
   reports.forEach((r, i) => {
-    addEntry(entries, `4 Investigator reports/Report ${i + 1} - ${shortDay(r.completedAt ?? r.createdAt)}.pdf`, () => reportPdf(courseCase, r, i + 1))
+    const returned = r.completedAt ?? r.createdAt
+    addEntry(entries, `4 Investigator reports/Report ${i + 1} - ${shortDay(returned)}.pdf`, () => reportPdf(courseCase, r, i + 1), {
+      id: `report:${r.id}`,
+      section: 'Investigator reports',
+      title: `Report ${i + 1}, returned ${longDay(returned)}`,
+    })
   })
 
   const sets = requests
@@ -437,20 +527,39 @@ async function buildPacket(courseCase: CourseCase, team: PacketTeam, viewerId: s
     .sort((a, b) => a.sentAt.getTime() - b.sentAt.getTime())
   for (const r of sets) {
     const title = `${r.kind === 'rfas' ? 'Requests for admission' : 'Interrogatories'} from Team ${r.fromTeam.number} to Team ${r.toTeam.number}`
-    addEntry(entries, `5 Discovery/${title}.pdf`, () => requestPdf(courseCase, r, title))
+    addEntry(entries, `5 Discovery/${title}.pdf`, () => requestPdf(courseCase, r, title), { id: `request:${r.id}`, section: 'Discovery', title })
   }
   for (const s of [...subpoenas].reverse()) {
-    addEntry(entries, `5 Discovery/${safeName(`Subpoena to ${s.recipient}`)}.pdf`, () => subpoenaPdf(courseCase, s))
+    const title = `Subpoena to ${s.recipient}`
+    addEntry(entries, `5 Discovery/${safeName(title)}.pdf`, () => subpoenaPdf(courseCase, s), { id: `subpoena:${s.id}`, section: 'Discovery', title })
   }
-  if (notices.length > 0) addEntry(entries, '5 Discovery/Notices of the other side’s subpoenas.pdf', () => noticesPdf(courseCase, notices))
+  if (notices.length > 0) {
+    addEntry(entries, '5 Discovery/Notices of the other side’s subpoenas.pdf', () => noticesPdf(courseCase, notices), {
+      id: 'notices',
+      section: 'Discovery',
+      title: 'Notices of the other side’s subpoenas',
+    })
+  }
 
-  if (facts.length > 0) addEntry(entries, '6 Ruled facts.pdf', () => factsPdf(courseCase, team, facts))
+  if (facts.length > 0) addEntry(entries, '6 Ruled facts.pdf', () => factsPdf(courseCase, team, facts), { id: 'facts', section: 'Ruled facts', title: 'Ruled facts' })
 
   const underReview = depositions.filter((d) => !d.ended || d.reviewStatus !== 'completed').length
   const warnings = [
     ...(courseCase.exhibitListEnabled && !world?.finalizedAt ? ['The joint exhibit list isn’t final.'] : []),
     ...(underReview > 0 ? [`${underReview} ${underReview === 1 ? 'deposition is' : 'depositions are'} still open or under review.`] : []),
   ]
+
+  const cover: Packet['cover'] = (pdf, unreadable) => {
+    pdf.title('Trial packet').text(courseCase.title, { bold: true })
+    pdf.text(`Team ${team.number} (${SIDE_LABEL[team.side]}), case world ${worldLetter(team.worldNumber)}, against Team ${team.opponent.number}`)
+    if (team.members.length > 0) pdf.text(team.members.join(', '))
+    pdf.text(`Made ${longDay(new Date())}`, { gray: true })
+    if (warnings.length > 0 || unreadable.length > 0) {
+      pdf.heading('Not finished')
+      for (const w of warnings) pdf.text(w)
+      for (const path of unreadable) pdf.text(`Couldn’t be included: ${path}`)
+    }
+  }
 
   return {
     team,
@@ -464,17 +573,10 @@ async function buildPacket(courseCase: CourseCase, team: PacketTeam, viewerId: s
       discovery: sets.length + subpoenas.length,
     },
     warnings,
+    cover,
     async contents(unreadable) {
       const pdf = await TextPdf.create(`Trial packet · ${courseCase.title}`)
-      pdf.title('Trial packet').text(courseCase.title, { bold: true })
-      pdf.text(`Team ${team.number} (${SIDE_LABEL[team.side]}), case world ${worldLetter(team.worldNumber)}, against Team ${team.opponent.number}`)
-      if (team.members.length > 0) pdf.text(team.members.join(', '))
-      pdf.text(`Made ${longDay(new Date())}`, { gray: true })
-      if (warnings.length > 0 || unreadable.length > 0) {
-        pdf.heading('Not finished')
-        for (const w of warnings) pdf.text(w)
-        for (const path of unreadable) pdf.text(`Couldn’t be included: ${path}`)
-      }
+      cover(pdf, unreadable)
       pdf.heading('What’s in this packet')
       for (const e of entries) if (!unreadable.includes(e.path)) pdf.text(e.path, { size: 10 })
       return pdf.save()
@@ -503,6 +605,44 @@ export async function packetOverview(courseId: string, courseCase: CourseCase, v
     ...p.counts,
     warnings: p.warnings,
   }))
+}
+
+/** Whether a team has submitted its exhibit list, which opens its packet to it. */
+export async function packetOpen(matchupId: string, side: Side) {
+  const { rowCount } = await pool.query('SELECT 1 FROM exhibit_lists WHERE matchup_id = $1 AND side = $2 AND submitted_at IS NOT NULL', [matchupId, side])
+  return Boolean(rowCount)
+}
+
+/** What can go in a team's PDF. Matches `PacketContents` in src/courses/types.ts. */
+export async function packetContents(courseId: string, courseCase: CourseCase, viewerId: string, teamId: string) {
+  const [[packet], { rows }] = await Promise.all([
+    buildPackets(courseId, courseCase, viewerId, teamId),
+    pool.query<{ leftOut: string[] }>('SELECT packet_left_out AS "leftOut" FROM teams WHERE id = $1', [teamId]),
+  ])
+  return {
+    items: packet.entries.map((e) => ({ id: e.id, section: e.section, title: e.title, printable: e.print !== null })),
+    leftOut: rows[0]?.leftOut ?? [],
+    warnings: packet.warnings,
+  }
+}
+
+/** Keeps what a team left out of its PDF. */
+export async function savePacketChoices(teamId: string, leftOut: string[]) {
+  await pool.query('UPDATE teams SET packet_left_out = $2 WHERE id = $1', [teamId, leftOut])
+}
+
+/** One team's packet as a single PDF, without what's in `leftOut`. */
+export async function sendPacketPdf(res: Response, courseId: string, courseCase: CourseCase, viewerId: string, teamId: string, leftOut: string[]) {
+  const [packet] = await buildPackets(courseId, courseCase, viewerId, teamId)
+  const out = new Set(leftOut)
+  const parts = packet.entries.flatMap((e) => (e.print && !out.has(e.id) ? [{ section: e.section, title: e.title, print: e.print }] : []))
+  if (parts.length === 0) throw new HttpError(400, 'Choose at least one thing for the PDF.')
+  const pdf = await mergedPdf(`Trial packet · ${courseCase.title}`, parts, packet.cover)
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': attachmentHeader(`${safeName(courseCase.title)} - ${packet.folder} - Trial packet.pdf`),
+  })
+  res.send(Buffer.from(pdf))
 }
 
 /**

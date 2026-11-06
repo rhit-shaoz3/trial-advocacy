@@ -73,6 +73,7 @@ import { CaseFileTable } from './CaseFileTable'
 import { CATEGORY_ICON } from './categoryIcons'
 import { ExchangePanel } from './exchange/ExchangePanel'
 import { ExhibitListSection, type CopyActions } from './finalSteps/ExhibitListSection'
+import { TrialPacketSection, type PacketActions } from './finalSteps/TrialPacketSection'
 import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
@@ -118,6 +119,7 @@ export function CaseWorkspaceView({
   onOpenDraft,
   exhibits,
   exhibitActions,
+  packetActions,
   onOpenExhibits,
   initialTab = 'overview',
   loadText,
@@ -163,6 +165,8 @@ export function CaseWorkspaceView({
   onOpenDraft?(draftId: string | null): void
   /** The team's joint exhibit list (final steps); leave out (the preview, or not open) to hide its tab. */
   exhibits?: StudentExhibits | null
+  /** The team's trial packet, offered once it submits its exhibit list; leave out (the preview) to hide it. */
+  packetActions?: PacketActions
   /** Saves, submits and moves on the exhibit list; leave out to make it read-only. */
   exhibitActions?: {
     save(items: ExhibitListItem[]): Promise<void>
@@ -664,6 +668,14 @@ export function CaseWorkspaceView({
                 text: () => exhibitActions.loadText(x.id),
               })
             }
+          />
+        )}
+
+        {tab === 'final-steps' && exhibits?.mine.submittedAt && packetActions && (
+          <TrialPacketSection
+            // What's in the packet follows the exhibits as they settle.
+            key={[exhibits.theirs.submittedAt, ...exhibits.exhibits.map((x) => x.status)].join()}
+            actions={c.status === 'active' ? packetActions : { ...packetActions, save: undefined }}
           />
         )}
 

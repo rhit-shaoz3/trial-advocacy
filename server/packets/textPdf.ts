@@ -46,6 +46,10 @@ export class TextPdf {
     return new TextPdf(doc, regular, bold, footer)
   }
 
+  get pageCount() {
+    return this.doc.getPageCount()
+  }
+
   private addPage() {
     this.page = this.doc.addPage([PAGE.width, PAGE.height])
     this.y = PAGE.height - MARGIN
@@ -127,7 +131,35 @@ export class TextPdf {
     return this
   }
 
-  async save() {
+  /**
+   * A line of a table of contents: `text`, dots, and `page` at the right edge.
+   * Says where it landed, for a link to the page.
+   */
+  contentsLine(text: string, page: number) {
+    const size = 11
+    const leading = size * 1.35
+    const left = MARGIN + 14
+    const right = PAGE.width - MARGIN
+    const number = String(page)
+    const lines = this.wrap(this.printable(text.replace(/\s+/g, ' ')), this.regular, size, right - left - 44)
+    if (this.y - leading * lines.length < BOTTOM) this.addPage()
+    const top = this.y
+    for (const line of lines) {
+      this.y -= leading
+      this.drawLine(line, left, this.regular, size, BLACK, false)
+    }
+    const numberAt = right - this.regular.widthOfTextAtSize(number, size)
+    const end = left + this.width(lines[lines.length - 1], this.regular, size) + 4
+    const dots = Math.floor((numberAt - 4 - end) / this.regular.widthOfTextAtSize('.', size))
+    if (dots > 0) this.page.drawText('.'.repeat(dots), { x: end, y: this.y, size, font: this.regular, color: GRAY })
+    this.page.drawText(number, { x: numberAt, y: this.y, size, font: this.regular, color: BLACK })
+    this.space(2)
+    return { pageIndex: this.doc.getPageCount() - 1, rect: [left, this.y, right, top] }
+  }
+
+  /** The pages as a file; `footer: false` leaves their feet empty, for pages numbered with another document's. */
+  async save({ footer: withFooter = true } = {}) {
+    if (!withFooter) return Buffer.from(await this.doc.save())
     const pages = this.doc.getPages()
     const footer = this.printable(this.footer.replace(/\s+/g, ' '))
     pages.forEach((page, i) => {

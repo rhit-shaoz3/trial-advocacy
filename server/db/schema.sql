@@ -1029,6 +1029,10 @@ ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_key text;
 
 -- Witness memory -------------------------------------------------------------
 
+-- What the team left out of its trial packet's PDF, by item (see packets.ts).
+-- Leaving things out, rather than listing what's in, keeps anything new in.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS packet_left_out text[] NOT NULL DEFAULT '{}';
+
 -- When an answer's claims were read; null until then, so a restart can pick up
 -- where it left off.
 ALTER TABLE interview_turns ADD COLUMN IF NOT EXISTS claims_read_at timestamptz;

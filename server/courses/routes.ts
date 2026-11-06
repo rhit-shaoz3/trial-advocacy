@@ -43,6 +43,7 @@ import { subpoenasRouter } from '../exchange/subpoenaRoutes.ts'
 import { openSubpoenaCount } from '../exchange/subpoenas.ts'
 import { markFlagsSeen, openFlagCount, raiseFlag, teamFlags } from '../reviews/flags.ts'
 import { exhibitReviewsRouter, myExhibitsRouter } from '../exhibits/exhibitRoutes.ts'
+import { myPacketRouter } from '../packets/packetRoutes.ts'
 import { openExhibitReviewCount } from '../exhibits/exhibits.ts'
 
 declare module 'express-serve-static-core' {
@@ -399,6 +400,7 @@ coursesRouter.post('/:courseId/my-cases/:caseId/flags/seen', async (req, res) =>
 
 coursesRouter.use('/:courseId/my-cases/:caseId/exchange', myExchangeRouter)
 coursesRouter.use('/:courseId/my-cases/:caseId/exhibits', myExhibitsRouter)
+coursesRouter.use('/:courseId/my-cases/:caseId/packet', myPacketRouter)
 coursesRouter.use('/:courseId/calendar', calendarRouter)
 
 // Everything below manages one course and is only for the instructor who teaches it.

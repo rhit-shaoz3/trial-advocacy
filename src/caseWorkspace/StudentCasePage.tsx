@@ -192,6 +192,16 @@ export function StudentCasePage() {
   }
 
   /** The joint exhibit list's actions; each returns the list as it now stands. */
+  const packetActions = useMemo(
+    () => ({
+      load: () => service.getMyPacket(courseId, caseId),
+      save: (leftOut: string[]) => service.saveMyPacketChoices(courseId, caseId, leftOut),
+      zipUrl: service.myPacketUrl(courseId, caseId),
+      pdfUrl: (leftOut: string[]) => service.myPacketPdfUrl(courseId, caseId, leftOut),
+    }),
+    [service, courseId, caseId],
+  )
+
   const exhibitActions = useMemo(
     () => ({
       async save(items: ExhibitListItem[]) {
@@ -344,6 +354,7 @@ export function StudentCasePage() {
               onOpenDraft={openDraft}
               exhibits={exhibits}
               exhibitActions={exhibitActions}
+              packetActions={packetActions}
               onOpenExhibits={openExhibits}
               initialTab={initialTab}
             />

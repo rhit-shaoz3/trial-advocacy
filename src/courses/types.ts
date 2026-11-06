@@ -1229,6 +1229,22 @@ export interface TrialPacket {
   warnings: string[]
 }
 
+/** One thing in a team's trial packet, as it's offered for the single PDF. */
+export interface PacketItem {
+  id: string
+  section: string
+  title: string
+  /** False for what has no pages, like a video: it's only in the zip. */
+  printable: boolean
+}
+
+/** What can go in a team's single PDF, and what the team left out so far. */
+export interface PacketContents {
+  items: PacketItem[]
+  leftOut: string[]
+  warnings: string[]
+}
+
 /** A challenge for the instructor to rule on (or one ruled on). */
 export interface ExhibitReview extends Exhibit {
   caseId: string
@@ -1592,6 +1608,17 @@ export interface CourseService {
   listTrialPackets(courseId: string, caseId: string): Promise<TrialPacket[]>
   /** The zip of every team's packet, or of one team's with `teamId`. */
   trialPacketsUrl(courseId: string, caseId: string, teamId?: string): string
+  /** What can go in a team's single PDF, for the instructor. */
+  getTrialPacketContents(courseId: string, caseId: string, teamId: string): Promise<PacketContents>
+  /** A team's packet as a single PDF, without `leftOut`. */
+  trialPacketPdfUrl(courseId: string, caseId: string, teamId: string, leftOut: string[]): string
+  /** What can go in the student's team's PDF; null until the joint exhibit list is final. */
+  getMyPacket(courseId: string, caseId: string): Promise<PacketContents | null>
+  saveMyPacketChoices(courseId: string, caseId: string, leftOut: string[]): Promise<void>
+  /** The student's team's whole packet as a zip. */
+  myPacketUrl(courseId: string, caseId: string): string
+  /** The student's team's packet as a single PDF, without `leftOut`. */
+  myPacketPdfUrl(courseId: string, caseId: string, leftOut: string[]): string
   caseExhibitText(courseId: string, caseId: string, exhibitId: string): Promise<{ status: string; text: string | null }>
   /** An exhibit under review, as offered, for marking a redaction. */
   reviewExhibitFileUrl(courseId: string, exhibitId: string): string

@@ -636,6 +636,57 @@
   color: var(--tint-amber-fg);
 }
 
+/* Choosing what goes in a team's single PDF. */
+.tp-chooser {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.tp-chooser-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.tp-group {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tp-group legend {
+  padding: 0;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.tp-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  overflow-wrap: anywhere;
+}
+
+.tp-item small {
+  flex: none;
+  color: var(--muted);
+}
+
+.tp-item-off {
+  color: var(--muted);
+}
+
+.tp-chooser-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 @media (max-width: 560px) {
   .tp-row {
     flex-wrap: wrap;

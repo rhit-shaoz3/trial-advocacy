@@ -1,4 +1,5 @@
 import type request from 'supertest'
+import { PDFArray, PDFDict, PDFDocument, PDFName, degrees } from 'pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { transcriptionsSettled } from '../courses/materialText.ts'
@@ -104,17 +105,43 @@ async function pdfText(data: Buffer) {
   return pages.join('\n')
 }
 
+/** The body of a download, as bytes. */
+const bytes = (req: request.Test) =>
+  req.buffer(true).parse((r, done) => {
+    const chunks: Buffer[] = []
+    r.on('data', (c: Buffer) => chunks.push(c))
+    r.on('end', () => done(null, Buffer.concat(chunks)))
+  })
+
 async function download(path = 'download') {
-  const res = await prof
-    .get(`${caseUrl()}/packets/${path}`)
-    .buffer(true)
-    .parse((r, done) => {
-      const chunks: Buffer[] = []
-      r.on('data', (c: Buffer) => chunks.push(c))
-      r.on('end', () => done(null, Buffer.concat(chunks)))
-    })
+  const res = await bytes(prof.get(`${caseUrl()}/packets/${path}`))
   return { res, files: res.status === 200 ? readZip(res.body as Buffer) : new Map<string, Buffer>() }
 }
+
+/** A PDF that can be opened, with `pages` pages. */
+async function realPdf(pages = 1, rotate = 0) {
+  const doc = await PDFDocument.create()
+  for (let i = 0; i < pages; i++) doc.addPage([612, 792]).setRotation(degrees(rotate))
+  return Buffer.from(await doc.save())
+}
+
+const myPacketUrl = () => `/api/courses/${course.id}/my-cases/${caseId}/packet`
+
+/** Takes the case to final steps with a final joint exhibit list. */
+async function finishList() {
+  await toFinalSteps()
+  await ada.post(`${exhibitsUrl()}/list/submit`).send({ items: [] })
+  await cy.post(`${exhibitsUrl()}/list/submit`).send({ items: [] })
+  await pool.query('UPDATE exhibit_lists SET finalized_at = now()')
+}
+
+interface PacketItem {
+  id: string
+  title: string
+  printable: boolean
+}
+
+const itemId = (items: PacketItem[], title: string) => items.find((i) => i.title.startsWith(title))!.id
 
 const paths = (files: Map<string, Buffer>, folder: string) =>
   [...files.keys()].filter((p) => p.startsWith(`${folder}/`)).map((p) => p.slice(folder.length + 1)).sort()
@@ -324,6 +351,204 @@ describe('downloading', () => {
     expect(packets.map((p: { teamNumber: number; side: string }) => `${p.teamNumber} ${p.side}`)).toEqual(['1 plaintiff', '2 defense'])
     expect(packets[0]).toMatchObject({ worldNumber: 1, depositions: 1, files: 1, exhibits: 0, members: ['Ada Lawyer', email(2)] })
     expect(packets[0].warnings).toEqual(['The joint exhibit list isn’t final.', '1 deposition is still open or under review.'])
+  })
+})
+
+describe('the single PDF', () => {
+  const contentsOf = async (team = 0) => (await prof.get(`${caseUrl()}/packets/${teams[team].id}/contents`)).body.contents
+  const pdfOf = (leftOut: string[] = [], team = 0) =>
+    bytes(prof.get(`${caseUrl()}/packets/${teams[team].id}/pdf`).query(leftOut.length ? { leftOut: leftOut.join(',') } : {}))
+
+  it('holds what was chosen behind a table of contents, numbered through the whole PDF', async () => {
+    await upload('Waiver.pdf', 'all', await realPdf(3))
+    await upload('Medical records.pdf', 'plaintiff', await realPdf(2))
+    await addInterview(tom, 1, 'plaintiff', ['the light was red'])
+    await pool.query(`DELETE FROM case_materials WHERE id = $1`, [complaint])
+    await toFinalSteps()
+
+    const { items } = await contentsOf()
+    const res = await pdfOf([itemId(items, 'Medical records')])
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toContain('application/pdf')
+    expect(res.headers['content-disposition']).toContain('World A - Team 1 (Plaintiff) - Trial packet.pdf')
+
+    const text = await pdfText(res.body as Buffer)
+    expect(text).toContain('Table of contents')
+    expect(text).toContain('Waiver.pdf')
+    expect(text).toContain('Tom Becker, taken by Team 1')
+    expect(text).toContain('the light was red')
+    expect(text).not.toContain('Medical records')
+    // The first page, the deposition, and the three pages of the waiver.
+    const doc = await PDFDocument.load(res.body as Buffer)
+    expect(doc.getPageCount()).toBe(5)
+    expect(text).toContain('Packet page 5 of 5')
+    const [, waiverLine] = /Waiver\.pdf[ .]*(\d+)/.exec(text)!
+    expect(waiverLine).toBe('3')
+  })
+
+  it('links each line of the table of contents to its page', async () => {
+    await upload('Waiver.pdf', 'all', await realPdf(2))
+    await pool.query(`DELETE FROM case_materials WHERE id = $1`, [complaint])
+    await toFinalSteps()
+
+    const doc = await PDFDocument.load((await pdfOf()).body as Buffer)
+    const [first, target] = doc.getPages()
+    const annots = first.node.Annots()!
+    expect(annots.size()).toBe(1)
+    const link = doc.context.lookup(annots.get(0), PDFDict)
+    expect(link.lookup(PDFName.of('Dest'), PDFArray).get(0)).toBe(target.ref)
+  })
+
+  it('stamps a turned page along the foot its reader sees', async () => {
+    await upload('Sideways.pdf', 'all', await realPdf(1, 90))
+    await pool.query(`DELETE FROM case_materials WHERE id = $1`, [complaint])
+    await toFinalSteps()
+
+    const doc = await getDocument({ data: new Uint8Array((await pdfOf()).body as Buffer), useSystemFonts: true }).promise
+    const page = await doc.getPage(2)
+    const { items } = await page.getTextContent()
+    const stamp = items.find((i) => 'str' in i && i.str.startsWith('Packet page'))
+    if (!stamp || !('transform' in stamp)) throw new Error('No stamp.')
+    // Read upright: the page's own x axis runs up the turned page.
+    const [, , , , x] = stamp.transform as number[]
+    expect(x).toBeGreaterThan(590)
+  })
+
+  it('puts a picture on a page, prints a text file, and keeps video to the zip', async () => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64',
+    )
+    await upload('Scene.png', 'all', png)
+    await upload('Notes.docx', 'all', Buffer.from('word'))
+    await upload('Ride.mp4', 'all', Buffer.from('video'))
+    await pool.query(`DELETE FROM case_materials WHERE id = $1`, [complaint])
+    await pool.query(
+      `UPDATE case_materials SET content_type = CASE filename WHEN 'Scene.png' THEN 'image/png' WHEN 'Ride.mp4' THEN 'video/mp4' ELSE content_type END`,
+    )
+    await pool.query(`UPDATE case_materials SET text_status = 'ready', text_content = 'The operator skipped the checklist.' WHERE filename <> 'Scene.png'`)
+    await toFinalSteps()
+
+    const { items } = await contentsOf()
+    expect(items.map((i: PacketItem) => [i.title, i.printable])).toEqual([
+      ['Scene.png', true],
+      ['Notes.docx', true],
+      ['Ride.mp4', false],
+    ])
+    const res = await pdfOf()
+    const text = await pdfText(res.body as Buffer)
+    expect(text).toContain('The operator skipped the checklist.')
+    expect(text).not.toContain('Ride.mp4')
+    expect((await PDFDocument.load(res.body as Buffer)).getPageCount()).toBe(3)
+  })
+
+  it('prints a redacted copy, never the whole file’s text', async () => {
+    await upload('Notes.docx', 'all', Buffer.from('word'))
+    await pool.query(`UPDATE case_materials SET text_status = 'ready', text_content = 'The secret part.' WHERE filename = 'Notes.docx'`)
+    const { rows: [notes] } = await pool.query<{ id: string }>(`SELECT id FROM case_materials WHERE filename = 'Notes.docx'`)
+    await toFinalSteps()
+    await ada.post(`${exhibitsUrl()}/list/submit`).send({ items: [{ kind: 'material', id: notes.id, parts: null }] })
+    await cy.post(`${exhibitsUrl()}/list/submit`).send({ items: [] })
+    // A copy of a kind that can't be printed, so all that's left to print is the source's text.
+    await pool.query(
+      `UPDATE exhibits x SET status = 'admitted', admitted_key = m.storage_key, admitted_content_type = 'application/octet-stream'
+       FROM case_materials m WHERE m.id = x.material_id`,
+    )
+    await pool.query(`DELETE FROM case_materials WHERE id = $1`, [complaint])
+
+    const { items } = await contentsOf()
+    const exhibit = items.find((i: PacketItem) => i.id.startsWith('exhibit:'))
+    expect(exhibit.printable).toBe(false)
+    const out = items.filter((i: PacketItem) => i.id === 'exhibit-list' || i.id.startsWith('file:')).map((i: PacketItem) => i.id)
+    expect((await pdfOf(out)).status).toBe(400)
+  })
+
+  it('leaves out a file it can’t read and names it on the first page', async () => {
+    // The complaint from `beforeEach` isn't a real PDF.
+    await upload('Waiver.pdf', 'all', await realPdf(1))
+    await toFinalSteps()
+    const text = await pdfText((await pdfOf()).body as Buffer)
+    expect(text).toContain('included: Amended complaint.pdf')
+    expect(text).toContain('Waiver.pdf')
+  })
+
+  it('needs something in it', async () => {
+    await toFinalSteps()
+    const { items } = await contentsOf()
+    expect((await pdfOf(items.map((i: PacketItem) => i.id))).status).toBe(400)
+  })
+})
+
+describe('a team’s own packet', () => {
+  it('opens once the team submits its list, before the other side does', async () => {
+    await toFinalSteps()
+    expect((await ada.get(myPacketUrl())).body.contents).toBeNull()
+    expect((await ada.get(`${myPacketUrl()}/download`)).status).toBe(409)
+    expect((await ada.get(`${myPacketUrl()}/pdf`)).status).toBe(409)
+    expect((await ada.put(`${myPacketUrl()}/choices`).send({ leftOut: [] })).status).toBe(409)
+
+    await ada.post(`${exhibitsUrl()}/list/submit`).send({ items: [{ kind: 'material', id: complaint, parts: null }] })
+    const { contents } = (await ada.get(myPacketUrl())).body
+    expect(contents.warnings).toContain('The joint exhibit list isn’t final.')
+    expect((await bytes(ada.get(`${myPacketUrl()}/download`))).status).toBe(200)
+    expect((await cy.get(myPacketUrl())).body.contents).toBeNull()
+    expect((await cy.get(`${myPacketUrl()}/download`)).status).toBe(409)
+  })
+
+  it('holds the team’s own list until the other side’s is in, then the joint list', async () => {
+    const waiver = await upload('Waiver.pdf', 'all', await realPdf(1))
+    await toFinalSteps()
+    await ada.post(`${exhibitsUrl()}/list/submit`).send({ items: [{ kind: 'material', id: complaint, parts: null }] })
+    await cy.put(`${exhibitsUrl()}/list`).send({ items: [{ kind: 'material', id: waiver, parts: null }] })
+
+    const zip = readZip((await bytes(ada.get(`${myPacketUrl()}/download`))).body as Buffer)
+    expect(paths(zip, FOLDER_1).filter((p) => p.startsWith('1 Exhibits/'))).toEqual(['1 Exhibits/Team exhibit list.pdf'])
+    const list = await pdfText(zip.get(`${FOLDER_1}/1 Exhibits/Team exhibit list.pdf`)!)
+    expect(list).toContain('Amended complaint')
+    expect(list).not.toContain('Waiver')
+
+    await cy.post(`${exhibitsUrl()}/list/submit`).send({ items: [{ kind: 'material', id: waiver, parts: null }] })
+    const after = readZip((await bytes(ada.get(`${myPacketUrl()}/download`))).body as Buffer)
+    expect(paths(after, FOLDER_1)).toContain('1 Exhibits/Joint exhibit list.pdf')
+    expect(paths(after, FOLDER_1)).not.toContain('1 Exhibits/Team exhibit list.pdf')
+  })
+
+  it('gives each team its own, as a zip', async () => {
+    await addReport('The plaintiff skis.')
+    await finishList()
+    const zip = async (agent: request.Agent) => readZip((await bytes(agent.get(`${myPacketUrl()}/download`))).body as Buffer)
+    const mine = await zip(ada)
+    expect(paths(mine, FOLDER_1)).toContain('Contents.pdf')
+    expect(paths(mine, FOLDER_2)).toEqual([])
+    expect(paths(mine, FOLDER_1).some((p) => p.startsWith('4 Investigator reports'))).toBe(false)
+    expect(paths(await zip(cy), FOLDER_2).some((p) => p.startsWith('4 Investigator reports'))).toBe(true)
+  })
+
+  it('keeps out students who aren’t on a team in the case', async () => {
+    await finishList()
+    const stranger = (await signedInAgent('student', 'stranger@example.com', 'Stranger')).agent
+    expect((await stranger.get(`${myPacketUrl()}/pdf`)).status).toBe(409)
+  })
+
+  it('remembers what the team left out, for teammates and the instructor', async () => {
+    await upload('Waiver.pdf', 'all', await realPdf(1))
+    await finishList()
+    const { items } = (await ada.get(myPacketUrl())).body.contents
+    const waiver = itemId(items, 'Waiver')
+    expect((await ada.put(`${myPacketUrl()}/choices`).send({ leftOut: [waiver] })).status).toBe(204)
+
+    const teammate = (await signedInAgent('student', email(2), 'Ben Brief')).agent
+    expect((await teammate.get(myPacketUrl())).body.contents.leftOut).toEqual([waiver])
+    expect((await prof.get(`${caseUrl()}/packets/${teams[0].id}/contents`)).body.contents.leftOut).toEqual([waiver])
+    expect((await cy.get(myPacketUrl())).body.contents.leftOut).toEqual([])
+  })
+
+  it('doesn’t take junk for choices, or save on a closed case', async () => {
+    await finishList()
+    expect((await ada.put(`${myPacketUrl()}/choices`).send({ leftOut: 'all' })).status).toBe(400)
+    await pool.query(`UPDATE cases SET status = 'closed' WHERE id = $1`, [caseId])
+    expect((await ada.put(`${myPacketUrl()}/choices`).send({ leftOut: [] })).status).toBe(409)
+    expect((await ada.get(myPacketUrl())).body.contents).not.toBeNull()
   })
 })
 

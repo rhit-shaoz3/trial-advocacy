@@ -6,6 +6,7 @@ import { worldLabel } from '../../../courses/worldLabel'
 import type { CourseCase, ExchangeOverview, ExchangeSettings } from '../../../courses/types'
 import { partSummary, subpoenaSummary } from './exchangeLabels'
 import './exchange.css'
+import { useLiveTick } from '../../../workspace/useLiveTick'
 
 const PARTS = [
   { icon: Users, name: 'Initial disclosures', detail: 'What each side must share' },
@@ -37,6 +38,8 @@ export function ExchangeCard({
   inTab?: boolean
 }) {
   const service = useCourseService()
+  // Kept current as students work (see useLiveTick).
+  const tick = useLiveTick()
   const ready = courseCase.exchangeReady ?? false
   const [settings, setSettings] = useState<ExchangeSettings | null>(null)
   const [overview, setOverview] = useState<ExchangeOverview | null>(null)
@@ -49,7 +52,7 @@ export function ExchangeCard({
     return () => {
       cancelled = true
     }
-  }, [service, courseId, courseCase.id, ready, courseCase.phase])
+  }, [service, courseId, courseCase.id, ready, courseCase.phase, tick])
 
   if (!ready) {
     return (

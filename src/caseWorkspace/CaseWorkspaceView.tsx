@@ -73,6 +73,8 @@ import { CaseFileTable } from './CaseFileTable'
 import { CATEGORY_ICON } from './categoryIcons'
 import { ExchangePanel } from './exchange/ExchangePanel'
 import { ExhibitListSection, type CopyActions } from './finalSteps/ExhibitListSection'
+import { CaseIntroStage } from './intro/CaseIntroStage'
+import type { CaseIntro } from './intro/caseIntro'
 import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
@@ -120,6 +122,7 @@ export function CaseWorkspaceView({
   exhibitActions,
   onOpenExhibits,
   initialTab = 'overview',
+  intro,
   loadText,
   now = new Date(),
 }: {
@@ -178,6 +181,8 @@ export function CaseWorkspaceView({
   onOpenExhibits?(): void
   /** The tab to open on, as when a notice links straight to a report. */
   initialTab?: CaseTab
+  /** A welcome to play first: the case's launch, or a new phase (see intro/caseIntro.ts). */
+  intro?: { intro: CaseIntro; onDone(): void }
   /** A case file's text version, for the viewer to show a document the browser can't. */
   loadText?(materialId: string): Promise<{ status: string; text: string | null }>
   now?: Date
@@ -677,6 +682,17 @@ export function CaseWorkspaceView({
           </ListPanel>
         )}
       </div>
+      {intro && (
+        <CaseIntroStage
+          intro={intro.intro}
+          caseTitle={c.title}
+          email={exchange ? <TeamEmail workspace={workspace} exchange={exchange} onOpenFile={openMaterial} /> : <p>{c.summary}</p>}
+          onEnter={(to) => {
+            setTab(to)
+            intro.onDone()
+          }}
+        />
+      )}
       {viewing && (
         <FileViewer
           file={viewing}

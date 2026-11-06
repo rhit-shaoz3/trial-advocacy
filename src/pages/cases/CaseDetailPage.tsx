@@ -28,12 +28,13 @@ import { INSTRUCTOR_CASE } from '../../tour/tours'
 import '../CoursePage.css'
 import './Cases.css'
 
+// The phases' tabs in phase order: information exchange, investigate, deposition (witnesses), final steps.
 const TABS = [
   { id: 'teams', label: 'Teams & worlds' },
   { id: 'materials', label: 'Case file' },
-  { id: 'witnesses', label: 'Witnesses' },
-  { id: 'investigator', label: 'Investigator' },
   { id: 'exchange', label: 'Information exchange' },
+  { id: 'investigator', label: 'Investigator' },
+  { id: 'witnesses', label: 'Witnesses' },
   { id: 'final-steps', label: 'Final steps' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'student-view', label: 'Student view' },

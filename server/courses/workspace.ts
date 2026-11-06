@@ -73,6 +73,8 @@ export interface CaseWorkspace {
     parties: { plaintiff: string; defendant: string }
     /** How the instructor reviews the case; in lite, the AI's calls stand and students flag what's wrong. */
     reviewMode: 'all' | 'lite'
+    /** When the case last moved into its phase; null if the phase has never changed (for the phase's welcome). */
+    phaseEnteredAt: Date | null
   }
   team: MyCase['team']
   world: MyCase['world']
@@ -112,7 +114,7 @@ async function findCaseRow(courseId: string, caseId: string) {
   const { rows } = await pool.query<CaseRow>(
     `SELECT id, title, summary, status, phase, instructor_note AS "instructorNote",
             json_build_object('plaintiff', plaintiff_name, 'defendant', defendant_name) AS parties,
-            review_mode AS "reviewMode",
+            review_mode AS "reviewMode", phase_entered_at AS "phaseEnteredAt",
             investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName",
             exhibit_list_enabled AS "exhibitListEnabled",
             EXISTS (SELECT 1 FROM information_exchange ie

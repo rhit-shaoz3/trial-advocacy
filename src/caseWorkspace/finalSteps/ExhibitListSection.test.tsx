@@ -120,6 +120,15 @@ describe('building the list', () => {
     expect(screen.getByRole('button', { name: 'Teach me' })).toBeInTheDocument()
   })
 
+  it('opens the exhibit-list guide from the lightbulb at the top left of its card', async () => {
+    const { user } = renderSection(base)
+    const header = screen.getByRole('heading', { name: 'Build your exhibit list for trial' }).closest('header')!
+    const teach = within(header).getByRole('button', { name: 'Teach me' })
+    expect(header.firstElementChild).toBe(teach)
+    await user.click(teach)
+    expect(await screen.findByRole('dialog', { name: 'What is an exhibit list?' })).toBeInTheDocument()
+  })
+
   it('saves a draft with whole items, a PDF’s chosen pages, and a text file’s chosen paragraphs', async () => {
     const { user, onSave, onOpenFile } = renderSection(base)
     await user.click(screen.getByRole('button', { name: 'View Amended complaint.pdf' }))

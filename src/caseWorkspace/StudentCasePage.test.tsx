@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
+import { AuthContext, type AuthContextValue } from '../auth/AuthContext'
 import { CourseServiceContext } from '../courses/CourseServiceContext'
 import type { CaseWorkspace, CourseService, StudentExchange } from '../courses/types'
 import { fakeCourseService } from '../test/fakeCourseService'
@@ -215,6 +216,58 @@ describe('StudentCasePage: review results', () => {
       await user.click(screen.getByRole('button', { name: 'Save as draft' }))
       expect(service.createExchangeDraft).toHaveBeenCalledWith('c1', 'k1', 'interrogatories', { items: ['Who inspected it?'] }, null)
       await waitFor(() => expect(screen.getByRole('region', { name: 'Drafts' })).toHaveTextContent('Who inspected it?'))
+    })
+  })
+
+  describe('the welcome', () => {
+    function renderSignedIn(toursSeen: Record<string, string>) {
+      const marked: string[] = []
+      const auth: AuthContextValue = {
+        user: { id: 'u1', name: 'Ada Lawyer', email: 'ada@example.com', role: 'student', theme: 'navy', avatarUrl: null, toursSeen, createdAt: '' },
+        loading: false,
+        signUp: vi.fn(),
+        logIn: vi.fn(),
+        logOut: vi.fn(),
+        updateProfile: vi.fn(),
+        uploadAvatar: vi.fn(),
+        removeAvatar: vi.fn(),
+        markTourSeen: async (key) => {
+          marked.push(key)
+        },
+      }
+      // Reduced motion: the card is there at once.
+      vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('reduce'), addEventListener() {}, removeEventListener() {} }))
+      const service = fakeCourseService({ getMyCaseWorkspace: vi.fn().mockResolvedValue(workspace) })
+      render(
+        <MemoryRouter initialEntries={['/courses/c1/cases/k1']}>
+          <AuthContext.Provider value={auth}>
+            <CourseServiceContext.Provider value={service}>
+              <Routes>
+                <Route path="courses/:courseId/cases/:caseId" element={<StudentCasePage />} />
+              </Routes>
+            </CourseServiceContext.Provider>
+          </AuthContext.Provider>
+        </MemoryRouter>,
+      )
+      return { marked, user: userEvent.setup() }
+    }
+
+    it('opens a just-launched case once, then dives into the overview', async () => {
+      const { marked, user } = renderSignedIn({})
+      const dialog = await screen.findByRole('dialog', { name: 'Rivera v. Thrill Park' })
+      expect(dialog).toHaveTextContent('Your case is open')
+      expect(marked).toContain('intro:k1:introduction:start')
+      await user.click(within(dialog).getByRole('button', { name: 'Dive in' }))
+      expect(screen.queryByRole('dialog', { name: 'Rivera v. Thrill Park' })).not.toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Overview', selected: true })).toBeInTheDocument()
+      vi.unstubAllGlobals()
+    })
+
+    it('doesn’t play again until the case enters a phase again', async () => {
+      renderSignedIn({ 'intro:k1:introduction:start': 'earlier', 'student-case': 'earlier', 'phase:k1:introduction': 'earlier' })
+      expect(await screen.findByRole('heading', { level: 1, name: 'Rivera v. Thrill Park' })).toBeInTheDocument()
+      expect(screen.queryByRole('dialog', { name: 'Rivera v. Thrill Park' })).not.toBeInTheDocument()
+      vi.unstubAllGlobals()
     })
   })
 })

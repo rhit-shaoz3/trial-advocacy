@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { BookOpen, Check, FileText, Info, Minus, PartyPopper, Plus, Send } from 'lucide-react'
+import { Check, FileText, Info, Minus, PartyPopper, Plus, Send } from 'lucide-react'
 import { WitnessAvatar } from '../../components/WitnessAvatar'
 import { shortDate } from '../../courses/caseLabels'
 import type { DisclosureItem, DisclosureOption, DisclosurePick, StudentExchange } from '../../courses/types'
@@ -16,12 +16,10 @@ type Disclosures = NonNullable<StudentExchange['disclosures']>
 export function DisclosuresSection({
   disclosures,
   onSubmit,
-  onTeach,
 }: {
   disclosures: Disclosures
   /** Leave out to make it read-only (a closed case). */
   onSubmit?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
-  onTeach(): void
 }) {
   const { submission, review, open } = disclosures
   return (
@@ -37,10 +35,6 @@ export function DisclosuresSection({
                 : 'Select what to submit in initial disclosures'}
           </h2>
         </div>
-        <button type="button" className="ws-btn ws-btn-secondary" onClick={onTeach} data-tour="ex-teach">
-          <BookOpen aria-hidden="true" />
-          Teach me
-        </button>
       </header>
       {review ? (
         <Review review={review} submitted={Boolean(submission)} />

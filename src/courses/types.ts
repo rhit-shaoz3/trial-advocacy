@@ -605,6 +605,8 @@ export interface CaseWorkspace {
     parties?: CaseParties
     /** Leaving it out means the instructor reviews everything. */
     reviewMode?: ReviewMode
+    /** When the case last moved into its phase; null or missing if it never has (for the phase's welcome). */
+    phaseEnteredAt?: string | null
   }
   team: MyCase['team']
   world: MyCase['world']

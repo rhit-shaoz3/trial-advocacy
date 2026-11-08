@@ -1,4 +1,9 @@
 import { pool } from '../db/pool.ts'
+import { HttpError } from '../httpError.ts'
+
+/** SQL: some world of the case has exchanged its exhibit lists. */
+const EXHIBITS_EXCHANGED = `EXISTS (SELECT 1 FROM exhibit_lists l WHERE l.case_id = cases.id AND l.submitted_at IS NOT NULL
+  GROUP BY l.matchup_id HAVING count(*) = 2)`
 
 export const CASE_STATUSES = ['draft', 'active', 'closed'] as const
 export type CaseStatus = (typeof CASE_STATUSES)[number]
@@ -76,6 +81,10 @@ export interface CourseCase {
   exchangeReady: boolean
   /** Whether students get the joint exhibit list in the final steps phase. */
   exhibitListEnabled: boolean
+  /** Whether the instructor rules on the exhibit challenges teams keep (otherwise the judge does, in person). */
+  exhibitJudicialReview: boolean
+  /** Whether a case world's lists have been exchanged, after which the judicial review setting is fixed. */
+  exhibitsExchanged: boolean
   /** A copy whose guided setup is just its teams and worlds, until finished. */
   copySetup: boolean
   /** The case it was copied from, and whose it was; null for a case made from scratch. */
@@ -116,7 +125,9 @@ const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "ins
   review_mode AS "reviewMode",
   EXISTS (SELECT 1 FROM information_exchange ie
           WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
-  exhibit_list_enabled AS "exhibitListEnabled", copy_setup AS "copySetup",
+  exhibit_list_enabled AS "exhibitListEnabled", exhibit_judicial_review AS "exhibitJudicialReview",
+  ${EXHIBITS_EXCHANGED} AS "exhibitsExchanged",
+  copy_setup AS "copySetup",
   CASE WHEN copied_from_title IS NULL THEN NULL
        ELSE json_build_object('title', copied_from_title, 'owner', copied_from_name) END AS "copiedFrom",
   created_at AS "createdAt", updated_at AS "updatedAt"`
@@ -249,6 +260,24 @@ export async function setExhibitListEnabled(courseId: string, id: string, enable
     [courseId, id, enabled],
   )
   return rows[0] ?? null
+}
+
+/**
+ * Turns judicial review of exhibit challenges on or off. It's fixed once any
+ * world's lists are exchanged, so no world is caught between the two. Returns
+ * null if there was no such case.
+ */
+export async function setExhibitJudicialReview(courseId: string, id: string, enabled: boolean) {
+  const { rows } = await pool.query<CourseCase>(
+    `UPDATE cases SET exhibit_judicial_review = $3, updated_at = now()
+     WHERE course_id = $1 AND id = $2 AND NOT ${EXHIBITS_EXCHANGED}
+     RETURNING ${CASE_COLUMNS}`,
+    [courseId, id, enabled],
+  )
+  if (rows[0]) return rows[0]
+  const { rows: found } = await pool.query('SELECT 1 FROM cases WHERE course_id = $1 AND id = $2', [courseId, id])
+  if (found.length > 0) throw new HttpError(409, 'Judicial review can’t change once a case world has exchanged its exhibit lists.')
+  return null
 }
 
 /** Returns false if there was no such case. */

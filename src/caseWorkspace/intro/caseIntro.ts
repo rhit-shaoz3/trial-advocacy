@@ -12,7 +12,8 @@ export type CaseIntro =
   | { kind: 'information_exchange'; parts: ExchangePart[] }
   | { kind: 'investigate'; investigator: { name: string; avatarUrl: string } }
   | { kind: 'deposition'; witnesses: { id: string; name: string; role: string; avatarUrl: string | null }[] }
-  | { kind: 'final_steps' }
+  /** `judging`: the instructor rules on the challenges teams keep (otherwise the judge does, at trial). */
+  | { kind: 'final_steps'; judging: boolean }
 
 /**
  * Recorded with the guided tours (users.tours_seen): one per student each time
@@ -47,6 +48,6 @@ export function pickIntro(workspace: CaseWorkspace, exchange: StudentExchange | 
       return witnesses.length ? { kind: 'deposition', witnesses } : null
     }
     case 'final_steps':
-      return workspace.exhibitListEnabled === false ? null : { kind: 'final_steps' }
+      return workspace.exhibitListEnabled === false ? null : { kind: 'final_steps', judging: workspace.exhibitJudicialReview !== false }
   }
 }

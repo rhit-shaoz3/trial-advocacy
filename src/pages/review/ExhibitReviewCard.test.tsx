@@ -67,13 +67,35 @@ describe('ExhibitReviewCard', () => {
     expect(onRuled).toHaveBeenCalled()
   })
 
+  it('says what follows authenticating: the objection the teams kept, or the version they agreed to', () => {
+    renderCard(review({ objectionKept: true, objection: 'Hearsay.' }))
+    expect(screen.getByText(/you rule on that next/)).toBeInTheDocument()
+  })
+
+  it('opens the redacted version the offering team proposed', async () => {
+    const { user } = renderCard(
+      review({
+        status: 'admission_review',
+        authenticated: true,
+        objection: 'Hearsay.',
+        response: 'Only page 1.',
+        proposalMarked: true,
+        objectionKept: true,
+      }),
+    )
+    expect(screen.getByRole('article')).toHaveTextContent('Proposed redactionMarked on the exhibit.')
+    expect(screen.getByRole('article')).toHaveTextContent('Objection keptThe teams didn’t settle it.')
+    await user.click(screen.getByRole('button', { name: 'View proposed version' }))
+    expect(await screen.findByRole('dialog', { name: /Medical records.pdf · proposed version/ })).toBeInTheDocument()
+  })
+
   it('overrules, sustains, or partly overrules an objection with the redaction', async () => {
     const { user, service } = renderCard(
       review({ status: 'admission_review', authenticated: true, objection: 'Hearsay.', response: 'Business records.', acceptsRedaction: 'Page 4' }),
     )
     expect(screen.getByRole('article')).toHaveTextContent('ObjectionHearsay.')
     expect(screen.getByRole('article')).toHaveTextContent('ResponseBusiness records.')
-    expect(screen.getByRole('article')).toHaveTextContent('Would accept redactingPage 4')
+    expect(screen.getByRole('article')).toHaveTextContent('Proposed redactionPage 4')
     await user.click(screen.getByRole('button', { name: 'Partially overrule' }))
     expect(screen.getByRole('button', { name: 'Admit with this redaction' })).toBeDisabled()
     await user.type(screen.getByRole('textbox', { name: /What’s redacted/ }), 'Page 4')

@@ -19,9 +19,11 @@ function worldStatus(w: WorldExhibits) {
 }
 
 /**
- * The case's Final steps tab: whether students get the joint exhibit list,
+ * The case's Final steps tab: whether students get the joint exhibit list and
+ * whether the instructor rules on the challenges teams keep (judicial review),
  * and a read-only look at every world's lists and exhibits. Like the
- * information exchange, it's the teams' work; challenges come to Review.
+ * information exchange, it's the teams' work; with judicial review on, each
+ * world's list comes to Review once its teams are done.
  */
 export function FinalStepsTab({
   courseId,
@@ -39,6 +41,9 @@ export function FinalStepsTab({
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const enabled = courseCase.exhibitListEnabled !== false
+  const judging = courseCase.exhibitJudicialReview !== false
+  // Fixed once a world's lists are exchanged, so no world is caught between the two.
+  const judgingFixed = courseCase.exhibitsExchanged === true
   const viewer = useExhibitViewer(courseId, courseCase.id)
 
   useEffect(() => {
@@ -52,11 +57,15 @@ export function FinalStepsTab({
     }
   }, [service, courseId, courseCase.id, tick])
 
-  async function toggle(next: boolean) {
+  async function toggle(setting: 'list' | 'judging', next: boolean) {
     setSaving(true)
     setError(null)
     try {
-      onCaseChange(await service.setExhibitListEnabled(courseId, courseCase.id, next))
+      onCaseChange(
+        await (setting === 'list'
+          ? service.setExhibitListEnabled(courseId, courseCase.id, next)
+          : service.setExhibitJudicialReview(courseId, courseCase.id, next)),
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -124,8 +133,10 @@ export function FinalStepsTab({
             </ul>
           )}
           <p className="muted exchange-note">
-            <Eye aria-hidden="true" className="exchange-inline-icon" /> Only you can see this view. Challenges to authenticity
-            or admission come to the Review page for your ruling, even in review lite.
+            <Eye aria-hidden="true" className="exchange-inline-icon" /> Only you can see this view.{' '}
+            {judging
+              ? 'Once a world’s teams have settled what they can, its list comes to the Review page with the challenges they kept, for your ruling, even in review lite.'
+              : 'Judicial review is off: what the teams don’t settle stays on the final list, marked disputed, for the judge at trial.'}
           </p>
         </section>
       </div>
@@ -135,13 +146,28 @@ export function FinalStepsTab({
           <h2 id="final-settings-heading">Settings</h2>
         </div>
         <label className="investigator-toggle">
-          <input type="checkbox" checked={enabled} disabled={saving} onChange={(e) => toggle(e.target.checked)} />
+          <input type="checkbox" checked={enabled} disabled={saving} onChange={(e) => toggle('list', e.target.checked)} />
           Students build a joint exhibit list
         </label>
         <p className="muted exchange-note">
           {enabled
-            ? 'In the final steps phase, each side lists its exhibits for trial, the lists are exchanged, and the sides settle authenticity and admission.'
+            ? 'In the final steps phase, each side lists its exhibits for trial, the lists are exchanged, and the sides settle authenticity and admission: each challenge gets an answer, then the challenger withdraws, agrees, or keeps it.'
             : 'Students don’t see the joint exhibit list. Turning it back on keeps whatever teams already did.'}
+        </p>
+        <label className="investigator-toggle">
+          <input
+            type="checkbox"
+            checked={judging}
+            disabled={saving || judgingFixed}
+            onChange={(e) => toggle('judging', e.target.checked)}
+          />
+          Judicial review
+        </label>
+        <p className="muted exchange-note">
+          {judging
+            ? 'You rule on what the teams keep: once every exhibit in a case world is settled between its teams, the whole list comes to Review.'
+            : 'You don’t rule here. Every exhibit gets its number or letter, and both teams get the record of what’s disputed, to argue before the judge in person.'}
+          {judgingFixed && ' It can’t change now: a case world has exchanged its lists.'}
         </p>
       </section>
       {viewer.element}
@@ -171,7 +197,8 @@ function ListPeek({ list }: { list: ExhibitList }) {
   )
 }
 
-function PeekRow({ exhibit: x, onOpen }: { exhibit: Exhibit; onOpen(): void }) {
+/** One exhibit, read-only, with where it stands and its record. */
+export function PeekRow({ exhibit: x, onOpen }: { exhibit: Exhibit; onOpen(): void }) {
   const label = exhibitLabel(x)
   return (
     <li className="xl-row">

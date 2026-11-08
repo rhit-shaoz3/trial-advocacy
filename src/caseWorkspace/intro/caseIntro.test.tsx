@@ -78,7 +78,8 @@ describe('pickIntro', () => {
   })
 
   it('opens final steps only when the exhibit list is on', () => {
-    expect(pickIntro(workspace({}, 'final_steps'), null)).toEqual({ kind: 'final_steps' })
+    expect(pickIntro(workspace({}, 'final_steps'), null)).toEqual({ kind: 'final_steps', judging: true })
+    expect(pickIntro(workspace({ exhibitJudicialReview: false }, 'final_steps'), null)).toEqual({ kind: 'final_steps', judging: false })
     expect(pickIntro(workspace({ exhibitListEnabled: false }, 'final_steps'), null)).toBeNull()
   })
 })

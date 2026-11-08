@@ -507,12 +507,10 @@
   white-space: normal;
 }
 
-/* A redaction in admitted text: black in either theme, edged so it shows on a dark page. */
+/* A redaction in admitted text: plain white in either theme, like correction tape. */
 .xl-bar {
-  color: #000;
-  background: #000;
-  box-shadow: 0 0 0 1px var(--border-strong);
-  border-radius: 1px;
+  color: #fff;
+  background: #fff;
   user-select: none;
   letter-spacing: -0.05em;
 }

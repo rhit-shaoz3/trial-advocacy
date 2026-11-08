@@ -99,8 +99,9 @@ export function TeachMe({
           />
           <p className="teach-note">
             In this course: anything both sides list counts as authentic and admitted. For the rest, the other side first agrees to
-            or challenges authenticity, then admits or objects, and your instructor rules on every challenge as the
-            judge. When the list is final, the plaintiff&rsquo;s exhibits are numbered 1, 2, 3 and the defense&rsquo;s are
+            or challenges authenticity, then admits or objects. The side that listed it answers each challenge (an objection,
+            perhaps with a redacted version), and the challenger then withdraws or agrees, or keeps it. What&rsquo;s kept goes to
+            the judge: your instructor, once your case world is settled, or the judge at trial. When the list is final, the plaintiff&rsquo;s exhibits are numbered 1, 2, 3 and the defense&rsquo;s are
             lettered A, B, C.
           </p>
         </div>

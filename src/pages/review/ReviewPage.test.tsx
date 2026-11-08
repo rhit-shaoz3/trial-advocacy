@@ -10,6 +10,7 @@ import type {
   CourseService,
   CourseSubpoena,
   ExhibitReview,
+  ExhibitReviewWorld,
   FactDecision,
   FactGroup,
   InterviewReview,
@@ -354,8 +355,8 @@ describe('ReviewPage: flags and the facts panel', () => {
   })
 })
 
-describe('ReviewPage: exhibit challenges', () => {
-  it('shows two versions of one document as one card, and each lone challenge on its own', async () => {
+describe('ReviewPage: exhibit lists', () => {
+  it('shows each case world’s list as one card: two versions of one document together, each lone challenge on its own, and the rest of the list', async () => {
     const base = {
       joint: false,
       position: 0,
@@ -389,12 +390,17 @@ describe('ReviewPage: exhibit challenges', () => {
       { ...base, id: 'p1', offeredBy: 'plaintiff', parts: [1, 2], title: 'Shift log.pdf — pages 1–2', pairedWith: 'd1' },
       { ...base, id: 'd1', offeredBy: 'defense', parts: [3, 4], title: 'Shift log.pdf — pages 3–4', pairedWith: 'p1' },
       { ...base, id: 'x9', offeredBy: 'defense', sourceId: 'm9', parts: null, title: 'Waiver.pdf', sourceTitle: 'Waiver.pdf', pairedWith: null },
+      { ...base, id: 'a1', offeredBy: 'plaintiff', sourceId: 'm5', parts: null, title: 'Photo.png', status: 'admitted', objection: null, response: null },
     ]
-    renderPage({ listExhibitReviews: vi.fn().mockResolvedValue(reviews) })
-    const list = await screen.findByRole('list', { name: 'Exhibit challenges to rule on' })
-    const cards = within(list).getAllByRole('article')
-    expect(cards.map((c) => c.getAttribute('aria-labelledby'))).toEqual(['pair-p1', 'exhibit-x9'])
-    expect(cards[0]).toHaveTextContent('Two versions of one document')
+    const world: ExhibitReviewWorld = { matchupId: 'w1', caseId: 'k1', caseTitle: 'Winston v. Thrillville', worldNumber: 1, teams: { plaintiff: 1, defense: 2 }, exhibits: reviews }
+    renderPage({ listExhibitReviews: vi.fn().mockResolvedValue([world]) })
+    const lists = await screen.findByRole('list', { name: 'Exhibit lists to rule on' })
+    const card = within(lists).getByRole('article', { name: 'Case world A' })
+    expect(card).toHaveTextContent('Team 1 (Plaintiff) v. Team 2 (Defense) · 3 exhibits to rule on')
+    const rulings = within(card).getByRole('list', { name: 'Exhibits to rule on' })
+    expect(within(rulings).getAllByRole('article').map((c) => c.getAttribute('aria-labelledby'))).toEqual(['pair-p1', 'exhibit-x9'])
+    expect(within(rulings).getAllByRole('article')[0]).toHaveTextContent('Two versions of one document')
+    expect(within(card).getByText('The rest of the list (1)')).toBeInTheDocument()
   })
 })
 

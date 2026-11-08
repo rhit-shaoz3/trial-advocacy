@@ -96,9 +96,9 @@
   cursor: default;
 }
 
-/* Black, in the preview (and in the redacted copy). */
-.rx-black {
-  fill: #000;
+/* Plain white, in the preview (and in the redacted copy). */
+.rx-white {
+  fill: #fff;
 }
 
 /* What's redacted, while marking: dark enough to see, light enough to read through. */

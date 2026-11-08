@@ -1,18 +1,18 @@
 import type { PageRedactionMarks, RedactionBox, RedactionMode, TextRedactionMarks, ExhibitPart } from '../../courses/types'
 
 // Making the redacted copy of a partly admitted exhibit, in the instructor's
-// browser. A page with marks is drawn to a canvas, blacked out there, and
-// saved as a picture of the page, so nothing under the black can be copied
+// browser. A page with marks is drawn to a canvas, whited out there, and
+// saved as a picture of the page, so nothing under the white can be copied
 // out; a page with nothing redacted is copied as it is, and a page left out
 // is dropped. The server checks the copy and keeps it (see
 // server/exhibits/exhibitFiles.ts).
 
-export type PagePlan = 'copy' | 'black' | 'drop'
+export type PagePlan = 'copy' | 'cover' | 'drop'
 
 /**
  * What becomes of each page (from 1). Marking what's redacted: a page left
- * out is dropped and one with boxes is blacked out. Marking what's admitted:
- * a page with no box is dropped, and the rest blacked out around the boxes.
+ * out is dropped and one with boxes is redacted. Marking what's admitted:
+ * a page with no box is dropped, and the rest redacted around the boxes.
  */
 export function planPages(marks: PageRedactionMarks, pageCount: number): PagePlan[] {
   const byPage = new Map(marks.pages.map((p) => [p.page, p]))
@@ -20,8 +20,8 @@ export function planPages(marks: PageRedactionMarks, pageCount: number): PagePla
     const m = byPage.get(i + 1)
     if (m?.removed) return 'drop'
     const boxes = m?.boxes.length ?? 0
-    if (marks.mode === 'admit') return boxes > 0 ? 'black' : 'drop'
-    return boxes > 0 ? 'black' : 'copy'
+    if (marks.mode === 'admit') return boxes > 0 ? 'cover' : 'drop'
+    return boxes > 0 ? 'cover' : 'copy'
   })
 }
 
@@ -29,16 +29,17 @@ export function planPages(marks: PageRedactionMarks, pageCount: number): PagePla
 export function paintRedaction(ctx: CanvasRenderingContext2D, width: number, height: number, boxes: RedactionBox[], mode: RedactionMode) {
   const rect = (b: RedactionBox) => [b.x * width, b.y * height, b.w * width, b.h * height] as const
   ctx.save()
-  ctx.fillStyle = '#000'
+  // Redactions are plain white, like correction tape.
+  ctx.fillStyle = '#fff'
   if (mode === 'redact') {
     for (const b of boxes) ctx.fillRect(...rect(b))
   } else {
-    // Black everywhere, then the page shows through the boxes: draw the black on its own layer with the boxes cut out.
+    // White everywhere, then the page shows through the boxes: draw the white on its own layer with the boxes cut out.
     const layer = document.createElement('canvas')
     layer.width = width
     layer.height = height
     const l = layer.getContext('2d')!
-    l.fillStyle = '#000'
+    l.fillStyle = '#fff'
     l.fillRect(0, 0, width, height)
     l.globalCompositeOperation = 'destination-out'
     for (const b of boxes) l.fillRect(...rect(b))
@@ -133,7 +134,7 @@ function bar(run: string) {
   return inside ? before + '█'.repeat(Math.min(Math.max(inside.length, 3), 40)) + after : run
 }
 
-/** `text` with the marked ranges (redact) or everything but them (admit) blacked out. */
+/** `text` with the marked ranges (redact) or everything but them (admit) redacted. */
 export function redactField(text: string, ranges: { start: number; end: number }[], mode: RedactionMode) {
   const sorted = [...ranges].sort((a, b) => a.start - b.start)
   const merged: { start: number; end: number }[] = []

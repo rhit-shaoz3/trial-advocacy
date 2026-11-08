@@ -21,19 +21,25 @@ import {
   redactedType,
   splitParagraphs,
   textParts,
+  type ExhibitSource,
 } from './exhibitFiles.ts'
 
 // The joint exhibit list, in the final steps phase. Each side of a case world
 // lists what it may use at trial: case files it can see (a PDF's chosen pages,
-// a text file's chosen paragraphs, a PDF or picture with parts blacked out)
+// a text file's chosen paragraphs, a PDF or picture with parts redacted)
 // and transcripts of the depositions it took (whole, or chosen turns). The
 // investigator's reports themselves aren't exhibits: what he found that's a
 // record comes as a file he made. Once both sides submit, the lists are exchanged: what both
 // listed is admitted (the plaintiff's, since the plaintiff goes first), and
-// each side reviews the other's: authenticity first, then admissibility. The
-// instructor rules on every challenge, even in review lite. When nothing is
-// left open the list is final: the plaintiff's exhibits are numbered, the
-// defense's lettered.
+// each side reviews the other's: authenticity first, then admissibility. A
+// challenge gets one round between the teams: the offering team responds (an
+// objection, perhaps with a proposed redacted version), and the challenger
+// withdraws it, agrees, or keeps it. A kept authenticity challenge still goes
+// on to admission. Once nothing in the world waits on a team, what's kept goes
+// to the instructor, who rules on the whole world's list, even in review lite;
+// or with judicial review off, it stays on the list as disputed, for the
+// judge in person. When nothing is left open the list is final: the
+// plaintiff's exhibits are numbered, the defense's lettered.
 
 type Db = Pick<PoolClient, 'query'>
 
@@ -42,25 +48,40 @@ export type SourceKind = (typeof SOURCE_KINDS)[number]
 
 export const EXHIBIT_STATUSES = [
   'awaiting_authenticity',
+  'authenticity_response',
+  'authenticity_reconsider',
   'authenticity_review',
   'inauthentic',
   'awaiting_admission',
   'objection_response',
+  'objection_reconsider',
   'admission_review',
   'dropped',
   'admitted',
   'excluded',
+  'disputed',
 ] as const
 export type ExhibitStatus = (typeof EXHIBIT_STATUSES)[number]
 
-/** Still waiting on a side or the instructor. */
-const OPEN_STATUSES: ExhibitStatus[] = [
+/** Waiting on one of the teams. */
+const TEAM_OPEN: ExhibitStatus[] = [
   'awaiting_authenticity',
-  'authenticity_review',
+  'authenticity_response',
+  'authenticity_reconsider',
   'awaiting_admission',
   'objection_response',
-  'admission_review',
+  'objection_reconsider',
 ]
+
+/** Kept for the judge. */
+const REVIEW_STATUSES: ExhibitStatus[] = ['authenticity_review', 'admission_review']
+
+/** Still waiting on a side or the instructor. */
+const OPEN_STATUSES: ExhibitStatus[] = [...TEAM_OPEN, ...REVIEW_STATUSES]
+
+/** SQL: nothing in the exhibit `x`'s world waits on a team, so what's kept is ready for the judge. */
+export const WORLD_SETTLED = `NOT EXISTS (SELECT 1 FROM exhibits t WHERE t.matchup_id = x.matchup_id
+  AND t.status IN (${TEAM_OPEN.map((s) => `'${s}'`).join(', ')}))`
 
 export const MAX_NOTE_LENGTH = 2000
 export const MAX_LIST_ITEMS = 100
@@ -78,9 +99,9 @@ export interface ListItem {
   kind: SourceKind
   id: string
   parts: number[] | null
-  /** A PDF's or picture's black-outs, drawn by the team (see exhibitFiles.ts). */
+  /** A PDF's or picture's redactions, drawn by the team (see exhibitFiles.ts). */
   marks?: PageMarks | null
-  /** The blacked-out copy the team's browser made, once kept. */
+  /** The redacted copy the team's browser made, once kept. */
   redactedKey?: string | null
 }
 
@@ -108,7 +129,7 @@ export interface ExhibitOption {
   filename?: string
   /** For a transcript (or an older report), its turns or paragraphs to choose from; for a text file, its paragraphs. */
   parts?: Part[]
-  /** A PDF or picture, which the team can black parts out of. */
+  /** A PDF or picture, which the team can redact parts of. */
   markable?: 'pdf' | 'image'
 }
 
@@ -134,13 +155,26 @@ export interface Exhibit {
   authenticityNote: string | null
   authenticityRuling: 'authenticated' | 'inauthentic' | null
   authenticityRulingNote: string | null
+  /** The offering team's answer to an authenticity challenge. */
+  authenticityResponse: string | null
+  /** The challenger kept its authenticity challenge for the judge. */
+  authenticityDisputed: boolean
   objection: string | null
   response: string | null
+  /** The redacted version the offering team proposed, in words. */
   acceptsRedaction: string | null
+  /** The offering team marked a proposed redacted version (a file, or `proposalExcerpt` for text). */
+  proposalMarked: boolean
+  /** The proposed version's turns or paragraphs, for a text exhibit. */
+  proposalExcerpt: Part[] | null
+  /** The challenger kept its objection for the judge. */
+  objectionKept: boolean
+  /** How the teams settled admission: the original, or the proposed version. */
+  agreed: 'original' | 'proposal' | null
   ruling: 'overruled' | 'sustained' | 'partial' | null
   rulingNote: string | null
   redaction: string | null
-  /** Admitted with the instructor's marks: its file or excerpt is the redacted version. */
+  /** Admitted with marks (the judge's, or a proposal the teams agreed to): its file or excerpt is the redacted version. */
   redacted: boolean
   /** An admitted excerpt a larger admitted exhibit from the same source took the place of. */
   supersededBy: string | null
@@ -237,7 +271,7 @@ async function textFileParts(db: Db, materials: { id: string; contentType: strin
 /**
  * Everything the team can put on its list: the case files it can see (a text
  * file with its paragraphs to choose from; a PDF or picture can have parts
- * blacked out), and its depositions. Its investigator's reports aren't on it:
+ * redacted), and its depositions. Its investigator's reports aren't on it:
  * the records he found come as files.
  */
 export async function exhibitOptions(team: ExhibitTeam, db: Db = pool): Promise<ExhibitOption[]> {
@@ -295,14 +329,14 @@ export function partsLabel(kind: SourceKind, parts: number[] | null, all: Part[]
 /** The parts of a source that `parts` picks (all of them for null). */
 const pick = (all: Part[], parts: number[] | null) => (parts ? all.filter((p) => parts.includes(p.n)) : all)
 
-/** A listed item as read from the request, before its blacked-out copy is kept. */
+/** A listed item as read from the request, before its redacted copy is kept. */
 type ReadItem = ListItem & { title: string; uploadKey?: string | null }
 
 /**
  * Reads a list from the request: `{ items: [{ kind, id, parts, marks?,
  * uploadKey?, redactedKey? }] }`, checked against what the team can list. A
  * PDF or picture with `marks` comes with the `uploadKey` of its new
- * blacked-out copy, or the `redactedKey` of the one kept before.
+ * redacted copy, or the `redactedKey` of the one kept before.
  */
 function readItems(body: unknown, options: ExhibitOption[]): ReadItem[] {
   const raw = (body as Record<string, unknown> | undefined)?.items
@@ -334,7 +368,7 @@ function readItems(body: unknown, options: ExhibitOption[]): ReadItem[] {
     }
     let marks: PageMarks | null = null
     if (e?.marks !== null && e?.marks !== undefined) {
-      if (!option.markable) throw new HttpError(400, 'Only a PDF or a picture can have parts blacked out.')
+      if (!option.markable) throw new HttpError(400, 'Only a PDF or a picture can have parts redacted.')
       // Checked against the pages once the copy is kept (see keepRedactions).
       marks = e.marks as PageMarks
     }
@@ -365,7 +399,7 @@ const canonical = (v: unknown): string =>
 const sameMarks = (a: PageMarks | null | undefined, b: PageMarks | null | undefined) => canonical(a ?? null) === canonical(b ?? null)
 
 /**
- * Keeps each blacked-out copy the team uploaded (after checking its marks
+ * Keeps each redacted copy the team uploaded (after checking its marks
  * against the file's pages, and the copy against its marks), or reuses the
  * copy an unchanged item already had. Returns the items with their keys, the
  * new keys (to remove if the save fails), and the keys no longer used.
@@ -393,7 +427,7 @@ async function keepRedactions(team: ExhibitTeam, items: ReadItem[], options: Exh
         kept.push(redactedKey)
       } else {
         if (!same?.redactedKey || (!uploadKey && same.redactedKey !== item.redactedKey)) {
-          throw new HttpError(400, `Black out the parts of ${item.title} again.`)
+          throw new HttpError(400, `Redact the parts of ${item.title} again.`)
         }
         redactedKey = same.redactedKey
       }
@@ -545,7 +579,7 @@ async function storeList(team: ExhibitTeam, body: unknown, submit: boolean) {
     await removeStoredFiles(kept)
     throw err
   }
-  // Copies the list no longer uses (blacked out again, or taken off).
+  // Copies the list no longer uses (redacted again, or taken off).
   await removeStoredFiles(unused)
 }
 
@@ -590,7 +624,7 @@ async function sourceDetails(db: Db, caseId: string, item: ListItem) {
  * side listed goes to the other side for authenticity. A source both listed
  * is authentic: the parts both chose are admitted at once (the plaintiff's),
  * and whatever more a side chose goes to the other side for admissibility.
- * When either side blacked parts out by hand, only the very same version is
+ * When either side redacted parts by hand, only the very same version is
  * admitted at once; otherwise each side's version goes on for admissibility.
  */
 async function exchangeLists(client: PoolClient, caseId: string, matchupId: string) {
@@ -600,7 +634,7 @@ async function exchangeLists(client: PoolClient, caseId: string, matchupId: stri
   const defenseByKey = new Map(defense.map((item, position) => [sourceKey(item), { item, position }]))
   const plaintiffKeys = new Set(plaintiff.map(sourceKey))
 
-  /** One exhibit from a side's item; `drawn` keeps the item's black-outs (its parts must be the item's). */
+  /** One exhibit from a side's item; `drawn` keeps the item's redactions (its parts must be the item's). */
   async function insert(item: ListItem, parts: number[] | null, side: Side, position: number, status: ExhibitStatus, joint = false, drawn = true) {
     const source = await sourceDetails(client, caseId, item)
     // A text file listed whole is served as the file; chosen paragraphs, turns or a report's paragraphs as text.
@@ -637,7 +671,7 @@ async function exchangeLists(client: PoolClient, caseId: string, matchupId: stri
       continue
     }
     if (item.marks || other.item.marks) {
-      // Blacked out by hand: the file is authentic, but drawings aren't merged. The same version is
+      // Redacted by hand: the file is authentic, but drawings aren't merged. The same version is
       // admitted; otherwise each side's version goes to the other side for admission.
       if (sameParts(item.parts, other.item.parts) && sameMarks(item.marks, other.item.marks)) {
         await insert(item, item.parts, 'plaintiff', position, 'admitted', true)
@@ -692,50 +726,163 @@ function readDecision<T extends string>(body: unknown, allowed: readonly T[]) {
   return decision
 }
 
-/**
- * A team's move on an exhibit in its world: `authenticity` (agree or
- * challenge, with a note) and `admission` (admit or challenge, with an
- * objection) on the other side's; `response` (drop, or review with a
- * response and any redaction it accepts) on its own, once objected to.
- */
-export async function teamMove(team: ExhibitTeam, exhibitId: string, step: 'authenticity' | 'admission' | 'response', body: unknown) {
-  if (!isUuid(exhibitId)) throw new HttpError(404, 'Exhibit not found.')
-  await inTransaction(async (client) => {
-    await lockWorld(client, team.matchupId)
-    const exhibit = await lockExhibit(client, exhibitId)
-    if (!exhibit || exhibit.matchupId !== team.matchupId) throw new HttpError(404, 'Exhibit not found.')
-    const theirs = exhibit.offeredBy !== team.side
-    const set = (sql: string, params: unknown[]) =>
-      client.query(`UPDATE exhibits SET ${sql}, updated_at = now() WHERE id = $1`, [exhibit.id, ...params])
+/** A team's steps on an exhibit in its world: the status each answers, and whether the challenger (the other side) or the offering side takes it. */
+export const TEAM_STEPS = {
+  authenticity: { status: 'awaiting_authenticity', by: 'challenger' },
+  'authenticity-response': { status: 'authenticity_response', by: 'offering' },
+  'authenticity-reconsider': { status: 'authenticity_reconsider', by: 'challenger' },
+  admission: { status: 'awaiting_admission', by: 'challenger' },
+  response: { status: 'objection_response', by: 'offering' },
+  reconsider: { status: 'objection_reconsider', by: 'challenger' },
+} as const satisfies Record<string, { status: ExhibitStatus; by: 'challenger' | 'offering' }>
+export type TeamStep = keyof typeof TEAM_STEPS
 
-    if (step === 'authenticity') {
-      if (!theirs || exhibit.status !== 'awaiting_authenticity') throw new HttpError(409, "This exhibit isn't waiting on your team's view of its authenticity.")
-      if (readDecision(body, ['agree', 'challenge'] as const) === 'agree') {
-        await set(`status = 'awaiting_admission', authenticated = true`, [])
-      } else {
-        const note = readNote(body, 'note', 'Say why you challenge its authenticity.')
-        await set(`status = 'authenticity_review', authenticity_note = $2`, [note])
+const NOT_WAITING: Record<TeamStep, string> = {
+  authenticity: "This exhibit isn't waiting on your team's view of its authenticity.",
+  'authenticity-response': 'This exhibit has no authenticity challenge waiting on your team.',
+  'authenticity-reconsider': "This exhibit isn't waiting on your team to withdraw or keep its challenge.",
+  admission: "This exhibit isn't waiting on your team's view of its admission.",
+  response: 'This exhibit has no objection waiting on your team.',
+  reconsider: "This exhibit isn't waiting on your team to settle its objection.",
+}
+
+/**
+ * A team's move on an exhibit in its world (see TEAM_STEPS):
+ * - `authenticity` (the other side's): agree, or challenge with a `note`;
+ * - `authenticity-response` (its own, challenged): drop, or respond with a `note`;
+ * - `authenticity-reconsider`: withdraw the challenge, or keep it for the judge
+ *   (the exhibit still goes on to admission);
+ * - `admission` (the other side's): admit, or challenge with an `objection`;
+ * - `response` (its own, objected to): drop, or respond with a `response`, and
+ *   perhaps a proposed redacted version: `marks` (with the `uploadKey` of the
+ *   copy for a PDF or picture) and/or a description, `acceptsRedaction`;
+ * - `reconsider`: agree to the `original`, to the `proposal`, or `keep` the objection.
+ */
+export async function teamMove(team: ExhibitTeam, exhibitId: string, step: TeamStep, body: unknown) {
+  if (!isUuid(exhibitId) || !Object.hasOwn(TEAM_STEPS, step)) throw new HttpError(404, 'Exhibit not found.')
+  // A proposed version's file, kept during the move, and removed if the move fails.
+  let proposal: Redaction | null = null
+  try {
+    await inTransaction(async (client) => {
+      await lockWorld(client, team.matchupId)
+      const exhibit = await lockExhibit(client, exhibitId)
+      if (!exhibit || exhibit.matchupId !== team.matchupId) throw new HttpError(404, 'Exhibit not found.')
+      const want = TEAM_STEPS[step]
+      const challenger = exhibit.offeredBy !== team.side
+      if ((want.by === 'challenger') !== challenger || exhibit.status !== want.status) throw new HttpError(409, NOT_WAITING[step])
+      const set = (sql: string, params: unknown[] = []) =>
+        client.query(`UPDATE exhibits SET ${sql}, updated_at = now() WHERE id = $1`, [exhibit.id, ...params])
+
+      switch (step) {
+        case 'authenticity':
+          if (readDecision(body, ['agree', 'challenge'] as const) === 'agree') {
+            await set(`status = 'awaiting_admission', authenticated = true`)
+          } else {
+            const note = readNote(body, 'note', 'Say why you challenge its authenticity.')
+            await set(`status = 'authenticity_response', authenticity_note = $2`, [note])
+          }
+          break
+        case 'authenticity-response':
+          if (readDecision(body, ['drop', 'respond'] as const) === 'drop') {
+            await set(`status = 'dropped'`)
+          } else {
+            const note = readNote(body, 'note', 'Write your response to the challenge.')
+            await set(`status = 'authenticity_reconsider', authenticity_response = $2`, [note])
+          }
+          break
+        case 'authenticity-reconsider':
+          if (readDecision(body, ['withdraw', 'keep'] as const) === 'withdraw') {
+            await set(`status = 'awaiting_admission', authenticated = true`)
+          } else {
+            await set(`status = 'awaiting_admission', authenticity_disputed = true`)
+          }
+          break
+        case 'admission':
+          if (readDecision(body, ['admit', 'challenge'] as const) === 'admit') {
+            await set(`agreed = 'original'`)
+            await settle(client, exhibit.id)
+          } else {
+            const objection = readNote(body, 'objection', 'Write your objection.')
+            await set(`status = 'objection_response', objection = $2`, [objection])
+          }
+          break
+        case 'response':
+          if (readDecision(body, ['drop', 'respond'] as const) === 'drop') {
+            await set(`status = 'dropped'`)
+          } else {
+            const response = readNote(body, 'response', 'Write your response to the objection.')
+            const marks = (body as Record<string, unknown> | undefined)?.marks
+            if (marks != null) proposal = await makeRedaction(await findExhibitSource(exhibit.id, { matchupId: team.matchupId }, client), body)
+            const accepts = readNote(body, 'acceptsRedaction', null)
+            await set(
+              `status = 'objection_reconsider', response = $2, accepts_redaction = $3, proposal_marks = $4, proposal_key = $5,
+               proposal_content_type = $6, proposal_excerpt = $7`,
+              [
+                response,
+                accepts,
+                proposal ? JSON.stringify(proposal.marks) : null,
+                proposal?.key ?? null,
+                proposal?.contentType ?? null,
+                proposal?.excerpt ? JSON.stringify(proposal.excerpt) : null,
+              ],
+            )
+          }
+          break
+        case 'reconsider': {
+          const decision = readDecision(body, ['original', 'proposal', 'keep'] as const)
+          if (decision === 'keep') {
+            await set(`objection_kept = true`)
+          } else {
+            if (decision === 'proposal') {
+              const { rows } = await client.query('SELECT 1 FROM exhibits WHERE id = $1 AND (proposal_marks IS NOT NULL OR accepts_redaction IS NOT NULL)', [
+                exhibit.id,
+              ])
+              if (rows.length === 0) throw new HttpError(400, 'They didn’t propose another version.')
+            }
+            await set(`agreed = $2`, [decision])
+          }
+          await settle(client, exhibit.id)
+          break
+        }
       }
-    } else if (step === 'admission') {
-      if (!theirs || exhibit.status !== 'awaiting_admission') throw new HttpError(409, "This exhibit isn't waiting on your team's view of its admission.")
-      if (readDecision(body, ['admit', 'challenge'] as const) === 'admit') {
-        await admit(client, exhibit.id, '', [])
-      } else {
-        const objection = readNote(body, 'objection', 'Write your objection.')
-        await set(`status = 'objection_response', objection = $2`, [objection])
-      }
-    } else {
-      if (theirs || exhibit.status !== 'objection_response') throw new HttpError(409, 'This exhibit has no objection waiting on your team.')
-      if (readDecision(body, ['drop', 'review'] as const) === 'drop') {
-        await set(`status = 'dropped'`, [])
-      } else {
-        const response = readNote(body, 'response', 'Write your response to the objection.')
-        const accepts = readNote(body, 'acceptsRedaction', null)
-        await set(`status = 'admission_review', response = $2, accepts_redaction = $3`, [response, accepts])
-      }
-    }
-    await maybeFinalize(client, team.matchupId)
-  })
+      await maybeFinalize(client, team.matchupId)
+    })
+  } catch (err) {
+    const kept = (proposal as Redaction | null)?.key
+    if (kept) await removeStoredFiles([kept])
+    throw err
+  }
+}
+
+/**
+ * The teams are done with an exhibit: it's admitted as they agreed, unless a
+ * challenge was kept. A kept authenticity challenge goes to the judge first,
+ * then any kept objection.
+ */
+async function settle(client: PoolClient, id: string) {
+  const { rows } = await client.query<{ disputed: boolean; kept: boolean }>(
+    'SELECT authenticity_disputed AS disputed, objection_kept AS kept FROM exhibits WHERE id = $1',
+    [id],
+  )
+  const { disputed, kept } = rows[0]
+  if (disputed || kept) {
+    await client.query('UPDATE exhibits SET status = $2, updated_at = now() WHERE id = $1', [id, disputed ? 'authenticity_review' : 'admission_review'])
+  } else {
+    await admitAgreed(client, id, '', [])
+  }
+}
+
+/** Admits an exhibit as the teams agreed: as the offering team's proposed version, when they agreed to that. */
+async function admitAgreed(client: PoolClient, id: string, extra: string, params: unknown[]) {
+  const proposed = (column: string, otherwise = 'NULL') => `CASE WHEN agreed = 'proposal' THEN ${column} ELSE ${otherwise} END`
+  await admit(
+    client,
+    id,
+    `, redaction_marks = ${proposed('proposal_marks')}, admitted_key = ${proposed('proposal_key')},
+     admitted_content_type = ${proposed('proposal_content_type')}, admitted_excerpt = ${proposed('proposal_excerpt')},
+     redaction = ${proposed('accepts_redaction', 'redaction')}${extra}`,
+    params,
+  )
 }
 
 /**
@@ -768,7 +915,11 @@ async function admit(client: PoolClient, id: string, extra: string, params: unkn
   }
 }
 
-/** The instructor's ruling on an authenticity challenge: `{ decision: authenticate | reject, note }`. */
+/**
+ * The instructor's ruling on a kept authenticity challenge: `{ decision:
+ * authenticate | reject, note }`. Authenticated, it's admitted as the teams
+ * agreed, or its kept objection comes up next.
+ */
 export async function ruleOnAuthenticity(courseId: string, exhibitId: string, userId: string, body: unknown) {
   if (!isUuid(exhibitId)) throw new HttpError(404, 'Exhibit not found.')
   return inTransaction(async (client) => {
@@ -776,19 +927,27 @@ export async function ruleOnAuthenticity(courseId: string, exhibitId: string, us
     if (exhibit.status !== 'authenticity_review') throw new HttpError(409, 'This exhibit has no authenticity challenge waiting.')
     const decision = readDecision(body, ['authenticate', 'reject'] as const)
     const note = readNote(body, 'note', null)
-    await client.query(
-      `UPDATE exhibits SET status = $2, authenticated = $3, authenticity_ruling = $4, authenticity_ruling_note = $5,
-         ruled_by = $6, ruled_at = now(), updated_at = now()
-       WHERE id = $1`,
-      [
+    const ruled = `authenticity_ruling = $2, authenticity_ruling_note = $3, ruled_by = $4, ruled_at = now()`
+    if (decision === 'reject') {
+      await client.query(`UPDATE exhibits SET status = 'inauthentic', ${ruled}, updated_at = now() WHERE id = $1`, [
         exhibit.id,
-        decision === 'authenticate' ? 'awaiting_admission' : 'inauthentic',
-        decision === 'authenticate',
-        decision === 'authenticate' ? 'authenticated' : 'inauthentic',
+        'inauthentic',
         note,
         userId,
-      ],
-    )
+      ])
+    } else {
+      const { rows } = await client.query<{ kept: boolean }>('SELECT objection_kept AS kept FROM exhibits WHERE id = $1', [exhibit.id])
+      if (rows[0].kept) {
+        await client.query(`UPDATE exhibits SET status = 'admission_review', authenticated = true, ${ruled}, updated_at = now() WHERE id = $1`, [
+          exhibit.id,
+          'authenticated',
+          note,
+          userId,
+        ])
+      } else {
+        await admitAgreed(client, exhibit.id, `, ${ruled}`, ['authenticated', note, userId])
+      }
+    }
     await maybeFinalize(client, exhibit.matchupId)
     return exhibit.id
   })
@@ -799,7 +958,7 @@ export async function ruleOnAuthenticity(courseId: string, exhibitId: string, us
  * partial, redaction, note }`. A partial admission can carry the instructor's
  * `marks` on the exhibit (see exhibitFiles.ts): for a PDF or picture, with the
  * `uploadKey` of the redacted copy their browser made; for text, the server
- * blacks it out. With marks, the written `redaction` is optional.
+ * redacts it. With marks, the written `redaction` is optional.
  */
 export async function ruleOnAdmission(courseId: string, exhibitId: string, userId: string, body: unknown) {
   if (!isUuid(exhibitId)) throw new HttpError(404, 'Exhibit not found.')
@@ -841,10 +1000,21 @@ export async function ruleOnAdmission(courseId: string, exhibitId: string, userI
   })
 }
 
+/** Marks on an exhibit, read and made into its redacted version. */
+type Redaction = Awaited<ReturnType<typeof makeRedaction>>
+
 /** Reads the instructor's marks for a partial admission, and makes the redacted version. */
 async function readRedaction(client: PoolClient, courseId: string, exhibitId: string, body: unknown) {
+  return makeRedaction(await findExhibitSource(exhibitId, { courseId }, client), body)
+}
+
+/**
+ * Reads marks on an exhibit (the judge's partial admission, or the redacted
+ * version a team proposes) and makes the redacted version: text is redacted
+ * here, and a PDF's or picture's copy, made in the browser, is kept.
+ */
+async function makeRedaction(source: ExhibitSource, body: unknown) {
   const { marks: raw, uploadKey } = body as Record<string, unknown>
-  const source = await findExhibitSource(exhibitId, { courseId }, client)
   const kind = markable(source)
   if (!kind) throw new HttpError(400, "This exhibit can't be marked. Describe the redaction instead.")
   if (kind === 'text') {
@@ -950,7 +1120,7 @@ export async function ruleOnVersions(courseId: string, userId: string, body: unk
   })
 }
 
-/** An exhibit in one of the instructor's cases, locked. */
+/** An exhibit in one of the instructor's cases, locked; the judge rules once nothing in its world waits on a team. */
 async function courseExhibit(client: PoolClient, courseId: string, exhibitId: string) {
   const exhibit = await lockExhibit(client, exhibitId)
   const { rows } = exhibit
@@ -958,27 +1128,39 @@ async function courseExhibit(client: PoolClient, courseId: string, exhibitId: st
     : { rows: [] }
   if (!exhibit || rows.length === 0) throw new HttpError(404, 'Exhibit not found.')
   await lockWorld(client, exhibit.matchupId)
+  const { rows: open } = await client.query('SELECT 1 FROM exhibits WHERE matchup_id = $1 AND status = ANY($2) LIMIT 1', [
+    exhibit.matchupId,
+    TEAM_OPEN,
+  ])
+  if (open.length > 0) throw new HttpError(409, 'The teams are still settling this case world’s exhibits.')
   return exhibit
 }
 
 /**
  * Once both lists are in and no exhibit is waiting on anyone, the list is
- * final: the plaintiff's admitted exhibits (joint ones first) are numbered
- * and the defense's lettered, each in list order. Superseded excerpts get no
- * label.
+ * final: the plaintiff's exhibits (joint ones first) are numbered and the
+ * defense's lettered, each in list order: the admitted ones, and with judicial
+ * review off, the disputed ones too (what the teams kept, once nothing waits
+ * on them). Superseded excerpts get no label.
  */
 async function maybeFinalize(client: PoolClient, matchupId: string) {
   const lists = await findLists(client, matchupId)
   if (!lists.plaintiff?.submittedAt || !lists.defense?.submittedAt || lists.plaintiff.finalizedAt) return
-  const { rows: open } = await client.query('SELECT 1 FROM exhibits WHERE matchup_id = $1 AND status = ANY($2) LIMIT 1', [
-    matchupId,
-    OPEN_STATUSES,
-  ])
-  if (open.length > 0) return
+  const waiting = async (statuses: ExhibitStatus[]) =>
+    (await client.query('SELECT 1 FROM exhibits WHERE matchup_id = $1 AND status = ANY($2) LIMIT 1', [matchupId, statuses])).rows.length > 0
+  if (await waiting(TEAM_OPEN)) return
+  if (!(await judicialReview(client, matchupId))) {
+    await client.query(`UPDATE exhibits SET status = 'disputed', updated_at = now() WHERE matchup_id = $1 AND status = ANY($2)`, [
+      matchupId,
+      REVIEW_STATUSES,
+    ])
+  } else if (await waiting(OPEN_STATUSES)) {
+    return
+  }
   for (const side of ['plaintiff', 'defense'] as const) {
     const { rows } = await client.query<{ id: string }>(
       `SELECT id FROM exhibits
-       WHERE matchup_id = $1 AND offered_by = $2 AND status = 'admitted' AND superseded_by IS NULL
+       WHERE matchup_id = $1 AND offered_by = $2 AND status IN ('admitted', 'disputed') AND superseded_by IS NULL
        ORDER BY joint DESC, position, id`,
       [matchupId, side],
     )
@@ -989,6 +1171,15 @@ async function maybeFinalize(client: PoolClient, matchupId: string) {
   await client.query('UPDATE exhibit_lists SET finalized_at = now() WHERE matchup_id = $1', [matchupId])
 }
 
+/** Whether the instructor rules on what the teams of a world keep (judicial review), rather than the judge in person. */
+async function judicialReview(db: Db, matchupId: string) {
+  const { rows } = await db.query<{ on: boolean }>(
+    'SELECT c.exhibit_judicial_review AS "on" FROM matchups mu JOIN cases c ON c.id = mu.case_id WHERE mu.id = $1',
+    [matchupId],
+  )
+  return rows[0]?.on ?? true
+}
+
 // Reading ---------------------------------------------------------------------
 
 const EXHIBIT_COLUMNS = `x.id, x.offered_by AS "offeredBy", x.joint, x.position,
@@ -997,8 +1188,10 @@ const EXHIBIT_COLUMNS = `x.id, x.offered_by AS "offeredBy", x.joint, x.position,
   coalesce(x.admitted_excerpt, x.snapshot) AS excerpt, x.redaction_marks IS NOT NULL AS redacted,
   (SELECT m.content_type FROM case_materials m WHERE m.id = x.material_id) AS "contentType",
   x.status, x.authenticated, x.authenticity_note AS "authenticityNote", x.authenticity_ruling AS "authenticityRuling",
-  x.authenticity_ruling_note AS "authenticityRulingNote", x.objection, x.response, x.accepts_redaction AS "acceptsRedaction",
-  x.ruling, x.ruling_note AS "rulingNote", x.redaction, x.superseded_by AS "supersededBy", x.label,
+  x.authenticity_ruling_note AS "authenticityRulingNote", x.authenticity_response AS "authenticityResponse",
+  x.authenticity_disputed AS "authenticityDisputed", x.objection, x.response, x.accepts_redaction AS "acceptsRedaction",
+  x.proposal_marks IS NOT NULL AS "proposalMarked", x.proposal_excerpt AS "proposalExcerpt", x.objection_kept AS "objectionKept",
+  x.agreed, x.ruling, x.ruling_note AS "rulingNote", x.redaction, x.superseded_by AS "supersededBy", x.label,
   x.updated_at AS "updatedAt", x.ruled_at AS "ruledAt"`
 
 /** The plaintiff's first (joint ones leading), then the defense's, each in list order. */
@@ -1020,7 +1213,7 @@ async function describeList(db: Db, row: ListRow | null, side: Side): Promise<Ex
 export interface ExhibitNotices {
   /** Both lists are in, and the other side's exhibits are here to review. */
   exchanged: boolean
-  /** The other side objected to this many of the team's exhibits. */
+  /** The other side's moves that wait on the team: challenges to its exhibits, and answers to its challenges. */
   objections: number
   /** The instructor ruled on this many exhibits in the world. */
   rulings: number
@@ -1037,14 +1230,21 @@ export interface StudentExhibits {
   theirs: ExhibitList
   exhibits: Exhibit[]
   finalizedAt: Date | null
+  /** The instructor rules on what the teams keep; otherwise the judge does, in person. */
+  judicialReview: boolean
   notices: ExhibitNotices
 }
 
+/** Statuses that wait on a team because of the other side's move: on its own exhibits, and on the other side's. */
+const REPLIES_TO_OWN: ExhibitStatus[] = ['authenticity_response', 'objection_response']
+const REPLIES_TO_THEIRS: ExhibitStatus[] = ['authenticity_reconsider', 'objection_reconsider']
+
 export async function getStudentExhibits(team: ExhibitTeam): Promise<StudentExhibits> {
-  const [options, lists, exhibits, seen] = await Promise.all([
+  const [options, lists, exhibits, judging, seen] = await Promise.all([
     exhibitOptions(team),
     findLists(pool, team.matchupId),
     worldExhibits(pool, team.matchupId),
+    judicialReview(pool, team.matchupId),
     pool.query<{ seenAt: Date }>('SELECT seen_at AS "seenAt" FROM exhibit_seen WHERE matchup_id = $1 AND user_id = $2', [
       team.matchupId,
       team.userId,
@@ -1064,9 +1264,12 @@ export async function getStudentExhibits(team: ExhibitTeam): Promise<StudentExhi
     theirs: exchanged ? theirs : { ...theirs, items: [] },
     exhibits,
     finalizedAt: mineRow?.finalizedAt ?? null,
+    judicialReview: judging,
     notices: {
       exchanged: exchanged && after(mineRow!.submittedAt! > theirsRow!.submittedAt! ? mineRow!.submittedAt : theirsRow!.submittedAt),
-      objections: exhibits.filter((x) => x.offeredBy === team.side && x.status === 'objection_response' && after(x.updatedAt)).length,
+      objections: exhibits.filter(
+        (x) => (x.offeredBy === team.side ? REPLIES_TO_OWN : REPLIES_TO_THEIRS).includes(x.status) && after(x.updatedAt),
+      ).length,
       rulings: exhibits.filter((x) => after(x.ruledAt)).length,
       finalized: after(mineRow?.finalizedAt ?? null),
     },
@@ -1127,14 +1330,14 @@ export async function exhibitOverview(caseId: string) {
             (SELECT count(*)::int FROM matchups mu WHERE mu.case_id = $1
                AND (SELECT count(*) FROM matchup_teams mt WHERE mt.matchup_id = mu.id) = 2) AS worlds,
             (SELECT count(DISTINCT matchup_id)::int FROM exhibit_lists WHERE case_id = $1 AND finalized_at IS NOT NULL) AS "worldsFinalized",
-            (SELECT count(*)::int FROM exhibits WHERE case_id = $1
-               AND status IN ('authenticity_review', 'admission_review')) AS "reviewsWaiting"`,
+            (SELECT count(*)::int FROM exhibits x WHERE x.case_id = $1
+               AND x.status IN ('authenticity_review', 'admission_review') AND ${WORLD_SETTLED}) AS "reviewsWaiting"`,
     [caseId],
   )
   return rows[0]
 }
 
-/** A challenge for the instructor to rule on. Matches `ExhibitReview` in src/courses/types.ts. */
+/** An exhibit in a world the instructor reviews. Matches `ExhibitReview` in src/courses/types.ts. */
 export interface ExhibitReview extends Exhibit {
   caseId: string
   caseTitle: string
@@ -1145,14 +1348,29 @@ export interface ExhibitReview extends Exhibit {
   pairedWith: string | null
   /** The document's own title, without the parts or redactions of this version. */
   sourceTitle: string
-  /** The offering team blacked parts out of this version. */
+  /** The offering team redacted parts of this version. */
   offeredRedacted: boolean
 }
 
-/** Open: challenges waiting for a ruling. Completed: exhibits the instructor ruled on, newest first. */
-export async function listExhibitReviews(courseId: string, which: 'open' | 'completed') {
-  const { rows } = await pool.query<ExhibitReview>(
-    `SELECT ${EXHIBIT_COLUMNS}, c.id AS "caseId", c.title AS "caseTitle", mu.number AS "worldNumber",
+/** One case world's whole exhibit list, for the instructor to rule on as the judge. Matches `ExhibitReviewWorld` in src/courses/types.ts. */
+export interface ExhibitReviewWorld {
+  matchupId: string
+  caseId: string
+  caseTitle: string
+  worldNumber: number
+  teams: { plaintiff: number | null; defense: number | null }
+  /** Every exhibit in the world: the plaintiff's first, then the defense's, each in list order. */
+  exhibits: ExhibitReview[]
+}
+
+/**
+ * The worlds for the instructor. Open: worlds whose teams are done, with
+ * challenges they kept for a ruling (oldest first). Completed: worlds with
+ * rulings (newest first).
+ */
+export async function listExhibitReviews(courseId: string, which: 'open' | 'completed'): Promise<ExhibitReviewWorld[]> {
+  const { rows } = await pool.query<ExhibitReview & { matchupId: string; sortAt: Date }>(
+    `SELECT ${EXHIBIT_COLUMNS}, x.matchup_id AS "matchupId", c.id AS "caseId", c.title AS "caseTitle", mu.number AS "worldNumber",
             json_build_object(
               'plaintiff', (SELECT t.number FROM matchup_teams mt JOIN teams t ON t.id = mt.team_id WHERE mt.matchup_id = mu.id AND mt.side = 'plaintiff'),
               'defense', (SELECT t.number FROM matchup_teams mt JOIN teams t ON t.id = mt.team_id WHERE mt.matchup_id = mu.id AND mt.side = 'defense')) AS teams,
@@ -1165,25 +1383,40 @@ export async function listExhibitReviews(courseId: string, which: 'open' | 'comp
              LIMIT 1) AS "pairedWith",
             coalesce((SELECT coalesce(nullif(m.description, ''), m.filename) FROM case_materials m WHERE m.id = x.material_id), x.title)
               AS "sourceTitle",
-            x.offered_marks IS NOT NULL AS "offeredRedacted"
+            x.offered_marks IS NOT NULL AS "offeredRedacted",
+            ${
+              which === 'open'
+                ? `(SELECT min(r.updated_at) FROM exhibits r WHERE r.matchup_id = x.matchup_id AND r.status IN ('authenticity_review', 'admission_review'))`
+                : '(SELECT max(r.ruled_at) FROM exhibits r WHERE r.matchup_id = x.matchup_id)'
+            } AS "sortAt"
      FROM exhibits x
      JOIN cases c ON c.id = x.case_id
      JOIN matchups mu ON mu.id = x.matchup_id
      LEFT JOIN users u ON u.id = x.ruled_by
-     WHERE c.course_id = $1 AND ${
-       which === 'open' ? `x.status IN ('authenticity_review', 'admission_review')` : 'x.ruled_at IS NOT NULL'
-     }
-     ORDER BY ${which === 'open' ? 'x.updated_at' : 'x.ruled_at DESC'}`,
+     WHERE c.course_id = $1 AND x.matchup_id IN (
+       SELECT x.matchup_id FROM exhibits x WHERE ${
+         which === 'open' ? `x.status IN ('authenticity_review', 'admission_review') AND ${WORLD_SETTLED}` : 'x.ruled_at IS NOT NULL'
+       })
+     ORDER BY "sortAt" ${which === 'open' ? 'ASC' : 'DESC'}, x.matchup_id, x.offered_by = 'defense', x.joint DESC, x.position, x.id`,
     [courseId],
   )
-  return rows
+  const worlds = new Map<string, ExhibitReviewWorld>()
+  for (const row of rows) {
+    const { matchupId, ...x } = row
+    delete (x as Partial<typeof row>).sortAt
+    if (!worlds.has(matchupId)) {
+      worlds.set(matchupId, { matchupId, caseId: x.caseId, caseTitle: x.caseTitle, worldNumber: x.worldNumber, teams: x.teams, exhibits: [] })
+    }
+    worlds.get(matchupId)!.exhibits.push(x)
+  }
+  return [...worlds.values()]
 }
 
-/** How many challenges in the course wait for the instructor. */
+/** How many kept challenges in the course wait for the instructor (in worlds whose teams are done). */
 export async function openExhibitReviewCount(courseId: string) {
   const { rows } = await pool.query<{ count: number }>(
     `SELECT count(*)::int AS count FROM exhibits x JOIN cases c ON c.id = x.case_id
-     WHERE c.course_id = $1 AND x.status IN ('authenticity_review', 'admission_review')`,
+     WHERE c.course_id = $1 AND x.status IN ('authenticity_review', 'admission_review') AND ${WORLD_SETTLED}`,
     [courseId],
   )
   return rows[0].count

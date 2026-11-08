@@ -81,6 +81,11 @@ function renderSection(exhibits: StudentExhibits, actions = true) {
   const onMove = vi.fn().mockResolvedValue(undefined)
   const onOpenFile = vi.fn()
   const onOpenExhibit = vi.fn()
+  const proposalActions = {
+    marking: vi.fn().mockResolvedValue({ markable: null, parts: null }),
+    loadFile: vi.fn(),
+    upload: vi.fn(),
+  }
   const user = userEvent.setup()
   render(
     <ExhibitListSection
@@ -90,9 +95,10 @@ function renderSection(exhibits: StudentExhibits, actions = true) {
       onMove={actions ? onMove : undefined}
       onOpenFile={onOpenFile}
       onOpenExhibit={onOpenExhibit}
+      proposalActions={actions ? proposalActions : undefined}
     />,
   )
-  return { user, onSave, onSubmit, onMove, onOpenFile, onOpenExhibit }
+  return { user, onSave, onSubmit, onMove, onOpenFile, onOpenExhibit, proposalActions }
 }
 
 afterEach(() => {
@@ -170,7 +176,7 @@ describe('building the list', () => {
     expect(onSubmit).toHaveBeenCalledWith([{ kind: 'material', id: 'm1', parts: null }])
   })
 
-  it('blacks out parts of a PDF it lists, with the copy, and saves them; changing the pages undoes it', async () => {
+  it('redacts parts of a PDF it lists, with the copy, and saves them; changing the pages undoes it', async () => {
     const copyActions = { loadFile: vi.fn(), upload: vi.fn() }
     const onSave = vi.fn().mockResolvedValue(undefined)
     const user = userEvent.setup()
@@ -200,9 +206,9 @@ describe('building the list', () => {
         copyActions={copyActions}
       />,
     )
-    // Unchecked files offer nothing yet; the listed PDF shows its black-outs.
-    expect(screen.queryAllByRole('button', { name: 'Black out parts' })).toHaveLength(0)
-    expect(screen.getByText(/Parts blacked out/)).toBeInTheDocument()
+    // Unchecked files offer nothing yet; the listed PDF shows its redactions.
+    expect(screen.queryAllByRole('button', { name: 'Redact parts' })).toHaveLength(0)
+    expect(screen.getByText(/Parts redacted/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Save draft' }))
     expect(onSave).toHaveBeenLastCalledWith([
       {
@@ -214,12 +220,12 @@ describe('building the list', () => {
       },
     ])
 
-    // New pages need new black-outs.
+    // New pages need new redactions.
     await user.type(screen.getByRole('textbox', { name: 'Pages of Amended complaint.pdf' }), ', 4')
-    expect(screen.queryByText(/Parts blacked out/)).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Black out parts' }))
+    expect(screen.queryByText(/Parts redacted/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Redact parts' }))
     expect(screen.getByRole('dialog')).toHaveTextContent('Your exhibit · Amended complaint.pdf')
-    expect(within(screen.getByRole('dialog')).getByRole('radio', { name: 'Mark what to black out' })).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByRole('radio', { name: 'Mark what to redact' })).toBeInTheDocument()
     expect(copyActions.loadFile).toHaveBeenCalledWith('m1')
   })
 
@@ -279,23 +285,85 @@ describe('after the exchange', () => {
   it('needs a reason to challenge authenticity', async () => {
     const { user, onMove } = renderSection(exchanged([exhibit({})]))
     await user.click(screen.getByRole('button', { name: 'Challenge authenticity' }))
-    expect(screen.getByRole('button', { name: 'Send challenge to the judge' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send challenge' })).toBeDisabled()
     await user.type(screen.getByRole('textbox', { name: /Why isn’t it what it claims to be/ }), 'Unsigned.')
-    await user.click(screen.getByRole('button', { name: 'Send challenge to the judge' }))
+    await user.click(screen.getByRole('button', { name: 'Send challenge' }))
     expect(onMove).toHaveBeenCalledWith('x1', { step: 'authenticity', decision: 'challenge', note: 'Unsigned.' })
   })
 
-  it('lets the team answer an objection to its own exhibit, or drop it', async () => {
+  it('lets the team answer an objection to its own exhibit, with a redaction it would accept', async () => {
     const objected = exhibit({ offeredBy: 'plaintiff', status: 'objection_response', authenticated: true, objection: 'Irrelevant.' })
-    const { user, onMove } = renderSection(exchanged([objected]))
+    const { user, onMove, proposalActions } = renderSection(exchanged([objected]))
+    expect(screen.getByRole('group', { name: /Challenges to your exhibits/ })).toBeInTheDocument()
     expect(screen.getByText('Their objection:').parentElement).toHaveTextContent('Irrelevant.')
 
-    await user.click(screen.getByRole('button', { name: 'Send to the judge' }))
-    await user.type(screen.getByRole('textbox', { name: /Your response to the objection/ }), 'It shows notice.')
-    await user.type(screen.getByRole('textbox', { name: /Would you accept a redaction/ }), 'Page 4')
-    // The form's own button, below the one that opened it.
-    await user.click(screen.getAllByRole('button', { name: 'Send to the judge' }).at(-1)!)
-    expect(onMove).toHaveBeenCalledWith('x1', { step: 'response', decision: 'review', response: 'It shows notice.', acceptsRedaction: 'Page 4' })
+    await user.click(screen.getByRole('button', { name: 'Answer the objection' }))
+    await user.type(screen.getByRole('textbox', { name: /Your answer to the objection/ }), 'It shows notice.')
+    // A file that can't be marked here: the redaction is described instead.
+    await user.click(screen.getByRole('button', { name: 'Propose a redacted version' }))
+    expect(proposalActions.marking).toHaveBeenCalledWith('x1')
+    expect(await screen.findByText(/can’t be marked here/)).toBeInTheDocument()
+    await user.type(screen.getByRole('textbox', { name: /describe a redaction you’d accept/ }), 'Page 4')
+    await user.click(screen.getByRole('button', { name: 'Send answer' }))
+    expect(onMove).toHaveBeenCalledWith('x1', { step: 'response', decision: 'respond', response: 'It shows notice.', acceptsRedaction: 'Page 4' })
+  })
+
+  it('lets the team answer an authenticity challenge to its own exhibit, or drop it', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const challenged = exhibit({ offeredBy: 'plaintiff', status: 'authenticity_response', authenticityNote: 'Unsigned.' })
+    const { user, onMove } = renderSection(exchanged([challenged]))
+    expect(screen.getByText('Their challenge:').parentElement).toHaveTextContent('Unsigned.')
+    await user.click(screen.getByRole('button', { name: 'Answer the challenge' }))
+    await user.type(screen.getByRole('textbox', { name: /Your answer to the challenge/ }), 'Signed on page 2.')
+    await user.click(screen.getByRole('button', { name: 'Send answer' }))
+    expect(onMove).toHaveBeenCalledWith('x1', { step: 'authenticity-response', decision: 'respond', note: 'Signed on page 2.' })
+    await user.click(screen.getByRole('button', { name: 'Drop the exhibit' }))
+    expect(onMove).toHaveBeenLastCalledWith('x1', { step: 'authenticity-response', decision: 'drop' })
+  })
+
+  it('lets the challenger withdraw a challenge once answered, or keep it for the judge (or for trial, without judicial review)', async () => {
+    const answered = exhibit({ status: 'authenticity_reconsider', authenticityNote: 'Unsigned.', authenticityResponse: 'Signed on page 2.' })
+    const { user, onMove } = renderSection(exchanged([answered]))
+    const replies = screen.getByRole('group', { name: /They answered your challenges/ })
+    expect(within(replies).getByText('Their answer:').parentElement).toHaveTextContent('Signed on page 2.')
+    await user.click(within(replies).getByRole('button', { name: 'Withdraw the challenge' }))
+    expect(onMove).toHaveBeenCalledWith('x1', { step: 'authenticity-reconsider', decision: 'withdraw' })
+    await user.click(within(replies).getByRole('button', { name: 'Keep it for the judge' }))
+    expect(onMove).toHaveBeenLastCalledWith('x1', { step: 'authenticity-reconsider', decision: 'keep' })
+  })
+
+  it('says a kept challenge is for trial when there’s no judicial review', () => {
+    const answered = exhibit({ status: 'authenticity_reconsider', authenticityResponse: 'Signed.' })
+    renderSection({ ...exchanged([answered]), judicialReview: false })
+    expect(screen.getByRole('button', { name: 'Keep it for trial' })).toBeInTheDocument()
+    expect(screen.getByText(/marked disputed, for the judge to decide at trial/)).toBeInTheDocument()
+  })
+
+  it('lets the challenger agree to the original, to the proposed version (shown first), or keep its objection', async () => {
+    const answered = exhibit({
+      kind: 'deposition',
+      title: 'Deposition of Ann Lee (Oct 3)',
+      status: 'objection_reconsider',
+      authenticated: true,
+      objection: 'Hearsay.',
+      response: 'Only the light.',
+      acceptsRedaction: 'Just the second answer.',
+      proposalMarked: true,
+      proposalExcerpt: [{ n: 1, question: '████', objection: null, text: 'The light ████████' }],
+    })
+    const { user, onMove } = renderSection(exchanged([answered]))
+    expect(screen.getByText('Their proposed version:').parentElement).toHaveTextContent('Just the second answer.')
+    await user.click(screen.getByRole('button', { name: 'View it' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Deposition transcript · proposed redacted version')
+    await user.click(within(dialog).getAllByRole('button', { name: 'Close' }).at(-1)!)
+
+    await user.click(screen.getByRole('button', { name: 'Agree to their redacted version' }))
+    expect(onMove).toHaveBeenCalledWith('x1', { step: 'reconsider', decision: 'proposal' })
+    await user.click(screen.getByRole('button', { name: 'Admit it as it is' }))
+    expect(onMove).toHaveBeenLastCalledWith('x1', { step: 'reconsider', decision: 'original' })
+    await user.click(screen.getByRole('button', { name: 'Keep the objection for the judge' }))
+    expect(onMove).toHaveBeenLastCalledWith('x1', { step: 'reconsider', decision: 'keep' })
   })
 
   it('sorts every exhibit by where it stands, with a badge for authentic ones', () => {
@@ -303,6 +371,7 @@ describe('after the exchange', () => {
       exchanged([
         exhibit({ id: 'a', title: 'Waiting.pdf' }),
         exhibit({ id: 'b', title: 'Checked.pdf', status: 'admission_review', authenticated: true }),
+        exhibit({ id: 'e', title: 'Doubted.pdf', status: 'awaiting_admission', authenticityDisputed: true }),
         exhibit({ id: 'c', title: 'In.pdf', status: 'admitted', authenticated: true, joint: true, offeredBy: 'plaintiff' }),
         exhibit({ id: 'd', title: 'Out.pdf', status: 'excluded', authenticated: true, ruling: 'sustained' }),
       ]),
@@ -310,9 +379,10 @@ describe('after the exchange', () => {
     )
     const running = screen.getByRole('region', { name: 'Where every exhibit stands' })
     const group = (title: string) => within(running).getByRole('heading', { name: new RegExp(`^${title}`) }).parentElement!
-    expect(group('In review')).toHaveTextContent('Waiting.pdf')
-    expect(group('Authenticated')).toHaveTextContent('Checked.pdf')
-    expect(group('Authenticated')).toHaveTextContent('Authentic')
+    expect(group('Authenticity')).toHaveTextContent('Waiting.pdf')
+    expect(group('Admission')).toHaveTextContent('Checked.pdf')
+    expect(group('Admission')).toHaveTextContent('Authentic')
+    expect(group('Admission')).toHaveTextContent('Doubted.pdf Authenticity disputed')
     expect(group('Admitted')).toHaveTextContent('Joint · Plaintiff’sIn.pdf')
     expect(within(running).getByText('Not admitted (1)')).toBeInTheDocument()
     // Read-only: nothing to do.
@@ -332,7 +402,22 @@ describe('after the exchange', () => {
     expect(screen.getByRole('heading', { name: 'Defense’s exhibits' }).parentElement).toHaveTextContent('D-AIncident report.pdfRedacted: Page 2')
   })
 
-  it('opens a file exhibit as an exhibit, and redacted text with black bars', async () => {
+  it('without judicial review, labels what the teams kept as disputed on the final list, with its record', () => {
+    renderSection({
+      ...exchanged([
+        exhibit({ id: 'a', title: 'Complaint.pdf', status: 'disputed', offeredBy: 'plaintiff', label: '1', objection: 'Hearsay.', objectionKept: true }),
+        exhibit({ id: 'b', title: 'Incident report.pdf', status: 'admitted', label: 'A' }),
+      ]),
+      judicialReview: false,
+      finalizedAt: '2026-11-02T12:00:00Z',
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('the judge decides the disputed ones there')
+    const plaintiff = screen.getByRole('heading', { name: 'Plaintiff’s exhibits' }).parentElement!
+    expect(plaintiff).toHaveTextContent('P-1Complaint.pdfDisputed: for the judge at trial')
+    expect(plaintiff).toHaveTextContent('ObjectionHearsay.')
+  })
+
+  it('opens a file exhibit as an exhibit, and redacted text with white bars', async () => {
     const { user, onOpenExhibit } = renderSection(
       exchanged([
         exhibit({ id: 'a', title: 'Incident report.pdf', status: 'admitted', redacted: true, ruling: 'partial' }),

@@ -1,0 +1,147 @@
+/* The Teach me lightbulb button (TeachMeButton) and the bulb in its guide's corner. */
+
+.teach-me-button {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.teach-me-button:hover {
+  border-color: var(--tint-amber-fg);
+}
+
+.teach-me-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* In the side menu: a card filling the menu's width. */
+.teach-me-card {
+  width: 100%;
+  margin-top: 0.5rem;
+  background: var(--tint-amber-bg);
+  border-color: transparent;
+}
+
+/* In a header: smaller, beside the title. */
+.teach-me-compact {
+  flex: none;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.4rem;
+  border-radius: 999px;
+}
+
+.teach-me-bulb {
+  display: grid;
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  transition: transform 0.18s ease-out;
+}
+
+.teach-me-compact .teach-me-bulb {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.teach-me-bulb .teach-bulb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* It grows a little on hover. When clicked, it leaves the button (teach-flyer) to bounce around the screen. */
+.teach-me-button:hover .teach-me-bulb,
+.teach-me-button:focus-visible .teach-me-bulb {
+  transform: scale(1.12) rotate(-4deg);
+}
+
+.teach-me-bulb.teach-me-flying {
+  visibility: hidden;
+}
+
+.teach-flyer {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.teach-flyer .teach-bulb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.teach-me-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.teach-me-text strong {
+  font-size: 0.95rem;
+}
+
+.teach-me-text small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+/* Its black drawing reaches past the yellow circle; on a dark page, a faint cream edge keeps it visible. */
+:root[data-theme='dark'] .teach-bulb {
+  filter: drop-shadow(0 0 0.6px #f5e9c8) drop-shadow(0 0 0.6px #f5e9c8);
+}
+
+/* The bulb as a guide's header icon, in its upper-left corner. */
+.modal-icon:has(.teach-bulb) {
+  width: 3rem;
+  height: 3rem;
+  background: none;
+}
+
+.modal .modal-icon .teach-bulb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The guide's blocks come in one after another once it has grown out of the bulb. */
+.modal-from .teach > * {
+  animation: teach-block-in 0.35s ease-out both;
+  animation-delay: 0.4s;
+}
+
+.modal-from .teach > :nth-child(2) { animation-delay: 0.47s; }
+.modal-from .teach > :nth-child(3) { animation-delay: 0.54s; }
+.modal-from .teach > :nth-child(4) { animation-delay: 0.61s; }
+.modal-from .teach > :nth-child(5) { animation-delay: 0.68s; }
+.modal-from .teach > :nth-child(6) { animation-delay: 0.75s; }
+.modal-from .teach > :nth-child(7) { animation-delay: 0.82s; }
+.modal-from .teach > :nth-child(8) { animation-delay: 0.89s; }
+.modal-from .teach > :nth-child(n + 9) { animation-delay: 0.96s; }
+
+@keyframes teach-block-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teach-me-bulb,
+  .modal-from .teach > * {
+    transition: none;
+    animation: none;
+  }
+}

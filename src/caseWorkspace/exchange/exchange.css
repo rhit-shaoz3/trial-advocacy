@@ -67,28 +67,6 @@
   font-size: 0.78rem;
 }
 
-.ex-menu-teach {
-  display: grid;
-  gap: 0.25rem;
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  border-radius: 0.55rem;
-  background: var(--tint-blue-bg);
-  color: var(--tint-blue-fg);
-  font-size: 0.8rem;
-}
-
-.ex-menu-teach strong {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.ex-menu-teach svg {
-  width: 0.95rem;
-  height: 0.95rem;
-}
-
 .ex-content,
 .ex-stack {
   display: grid;
@@ -96,7 +74,7 @@
   min-width: 0;
 }
 
-/* A section's heading, with Teach me at the top right */
+/* A section's heading, with its actions at the top right */
 .ex-section {
   display: grid;
   gap: 1rem;

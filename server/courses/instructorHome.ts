@@ -1,6 +1,7 @@
 import { pool } from '../db/pool.ts'
 import type { CasePhase } from './cases.ts'
 import { launchChecks } from './workspace.ts'
+import { WORLD_SETTLED } from '../exhibits/exhibits.ts'
 
 // What the instructor's course home shows, unlike a student's: how the course
 // is doing, every case and how ready it is for its next step, what is waiting
@@ -105,7 +106,7 @@ async function courseStats(courseId: string, now: Date): Promise<InstructorHome[
        (SELECT count(*)::int FROM interview_reviews r JOIN cases c ON c.id = r.case_id
         WHERE c.course_id = $1 AND r.status = 'open')
        + (SELECT count(*)::int FROM exhibits x JOIN cases c ON c.id = x.case_id
-          WHERE c.course_id = $1 AND x.status IN ('authenticity_review', 'admission_review')) AS "reviewsWaiting"`,
+          WHERE c.course_id = $1 AND x.status IN ('authenticity_review', 'admission_review') AND ${WORLD_SETTLED}) AS "reviewsWaiting"`,
     [courseId, new Date(now.getTime() - WEEK)],
   )
   return rows[0]

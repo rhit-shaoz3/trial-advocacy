@@ -34,15 +34,24 @@ const SIDE_LABEL: Record<Side, string> = { plaintiff: 'Plaintiff', defense: 'Def
 
 const EXHIBIT_STATUS: Record<ExhibitStatus, string> = {
   awaiting_authenticity: 'Waiting on the other side (authenticity)',
+  authenticity_response: 'Authenticity challenged, waiting on a response',
+  authenticity_reconsider: 'Authenticity challenge answered, waiting on the challenger',
   authenticity_review: 'Waiting on a ruling (authenticity)',
   inauthentic: 'Not authentic',
   awaiting_admission: 'Waiting on the other side (admission)',
   objection_response: 'Objected to, waiting on a response',
+  objection_reconsider: 'Objection answered, waiting on the challenger',
   admission_review: 'Waiting on a ruling (admission)',
   dropped: 'Dropped',
   admitted: 'Admitted',
   excluded: 'Excluded',
+  disputed: 'Disputed, for the judge at trial',
 }
+
+/** On the final list for trial: admitted, or (with judicial review off) disputed, to be argued in person. */
+const forTrial = (x: Exhibit) => (x.status === 'admitted' || x.status === 'disputed') && !x.supersededBy
+
+const AGREED = { original: 'Admitted as offered', proposal: 'Admitted as the proposed redacted version' }
 
 const REQUEST_TYPE: Record<string, string> = {
   documents: 'Documents or electronically stored information',
@@ -184,6 +193,8 @@ async function depositionPdf(courseCase: CourseCase, team: PacketTeam, d: Deposi
 // Exhibits --------------------------------------------------------------------
 
 const exhibitName = (x: Exhibit) => `${SIDE_LABEL[x.offeredBy]}${x.label ? ` ${x.label}` : ''}`
+/** How an exhibit is named in the packet; a disputed one says so. */
+const exhibitTitle = (x: Exhibit) => `${exhibitName(x)}: ${x.title}${x.status === 'disputed' ? ' (disputed)' : ''}`
 
 /** The joint exhibit list: every exhibit in the world, where it ended up, and why. */
 async function exhibitListPdf(courseCase: CourseCase, team: PacketTeam, world: WorldExhibits) {
@@ -200,9 +211,14 @@ async function exhibitListPdf(courseCase: CourseCase, team: PacketTeam, world: W
       pdf.text(`${EXHIBIT_STATUS[x.status]}${x.redacted ? ', with a redaction' : ''}`, { indent: 14 })
       const notes = [
         ['Authenticity challenge', x.authenticityNote],
+        ['Response to the challenge', x.authenticityResponse],
+        ['Kept for the judge', x.authenticityDisputed ? 'The authenticity challenge' : null],
         ['Ruling on authenticity', x.authenticityRulingNote],
         ['Objection', x.objection],
         ['Response', x.response],
+        ['Proposed redaction', x.acceptsRedaction],
+        ['Kept for the judge', x.objectionKept ? 'The objection' : null],
+        ['Agreed', x.agreed ? AGREED[x.agreed] : null],
         ['Ruling', x.rulingNote],
         ['Redaction', x.redaction],
       ] as const
@@ -227,8 +243,9 @@ async function teamListPdf(courseCase: CourseCase, team: PacketTeam, list: Exhib
 /** An exhibit that's text: a transcript's turns, or a report's or text file's paragraphs, as admitted. */
 async function excerptPdf(courseCase: CourseCase, x: Exhibit) {
   const pdf = await TextPdf.create(`${exhibitName(x)} · ${courseCase.title}`)
-  pdf.title(`${exhibitName(x)}: ${x.title}`)
-  if (x.redacted) pdf.text('Admitted with a redaction.', { gray: true })
+  pdf.title(exhibitTitle(x))
+  if (x.status === 'disputed') pdf.text('Disputed: the judge rules on it at trial.', { gray: true })
+  else if (x.redacted) pdf.text('Admitted with a redaction.', { gray: true })
   pdf.space(10)
   for (const part of (x.excerpt ?? []) as TextPart[]) {
     if (part.question !== undefined) {
@@ -253,7 +270,7 @@ const PRINTS_AS_IS = /^(application\/pdf|image\/(png|jpe?g))/i
 /** Other pictures, audio, and video have no pages, and a transcript of one isn't the file. */
 const NO_PAGES = /^(image|audio|video)\//i
 
-/** How an admitted exhibit goes in the packet: only what was admitted of it, never the whole source. */
+/** How an exhibit for trial goes in the packet: only what was admitted (or, disputed, offered) of it, never the whole source. */
 async function admittedExhibit(courseCase: CourseCase, matchupId: string, x: Exhibit) {
   const source = await findExhibitSource(x.id, { matchupId })
   if (!source.materialId || (x.excerpt && !source.admittedKey)) return { extension: '.pdf', load: () => excerptPdf(courseCase, x), print: undefined }
@@ -264,7 +281,7 @@ async function admittedExhibit(courseCase: CourseCase, matchupId: string, x: Exh
   const print = PRINTS_AS_IS.test(file.contentType)
     ? undefined
     : whole && textContent && !NO_PAGES.test(file.contentType)
-      ? () => textFilePdf(courseCase, `${exhibitName(x)}: ${x.title}`, textContent)
+      ? () => textFilePdf(courseCase, exhibitTitle(x), textContent)
       : null
   return { extension: extensionOf(file.filename), load: file.read, print }
 }
@@ -468,7 +485,7 @@ async function buildPacket(courseCase: CourseCase, team: PacketTeam, viewerId: s
   const entries: Entry[] = []
 
   const world = worlds.get(team.matchupId)
-  const admitted = world?.exhibits.filter((x) => x.status === 'admitted' && !x.supersededBy) ?? []
+  const admitted = world?.exhibits.filter(forTrial) ?? []
   const myList = world?.[team.side]
   if (world && myList?.submittedAt && !world[team.side === 'plaintiff' ? 'defense' : 'plaintiff'].submittedAt) {
     addEntry(entries, '1 Exhibits/Team exhibit list.pdf', () => teamListPdf(courseCase, team, myList), {
@@ -485,10 +502,11 @@ async function buildPacket(courseCase: CourseCase, team: PacketTeam, viewerId: s
     })
     for (const x of admitted) {
       const { extension, load, print } = await admittedExhibit(courseCase, team.matchupId, x)
-      addEntry(entries, `1 Exhibits/${safeName(`${exhibitName(x)} - ${x.title.replace(EXTENSION, '')}`)}${extension}`, load, {
+      const disputed = x.status === 'disputed' ? ' (disputed)' : ''
+      addEntry(entries, `1 Exhibits/${safeName(`${exhibitName(x)} - ${x.title.replace(EXTENSION, '')}${disputed}`)}${extension}`, load, {
         id: `exhibit:${x.id}`,
         section: 'Exhibits',
-        title: `${exhibitName(x)}: ${x.title}`,
+        title: exhibitTitle(x),
         print,
       })
     }

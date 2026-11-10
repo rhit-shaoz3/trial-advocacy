@@ -14,6 +14,7 @@ import { useCourseService } from '../courses/CourseServiceContext'
 import { withSampleData } from './sampleData'
 import type { CourseHome } from './types'
 import type { WorkspaceContext } from './useWorkspace'
+import { useLiveTick } from './useLiveTick'
 
 /**
  * One course, in the app shell with course navigation. Students and the
@@ -54,6 +55,11 @@ export function WorkspaceLayout() {
         .catch(() => {}), // keep showing what we have
     [service, courseId, sample],
   )
+  // For the instructor, the dashboard's counts (reviews waiting, and so on) keep up as students work.
+  const tick = useLiveTick()
+  useEffect(() => {
+    if (isInstructor && tick > 0) void reloadHome()
+  }, [tick, isInstructor, reloadHome])
 
   const base = `/courses/${courseId}`
   const search = sample ? '?sample' : ''

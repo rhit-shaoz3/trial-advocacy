@@ -13,7 +13,7 @@ const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? on
 function holds(p: TrialPacket) {
   return [
     count(p.depositions, 'deposition'),
-    count(p.exhibits, 'admitted exhibit'),
+    count(p.exhibits, 'exhibit for trial', 'exhibits for trial'),
     count(p.files, 'case file'),
     count(p.reports, 'investigator report'),
     count(p.discovery, 'discovery set'),
@@ -93,7 +93,7 @@ export function TrialPackets({ courseId, caseId }: { courseId: string; caseId: s
         )}
       </div>
       <p className="muted">
-        Each team’s packet has its admitted exhibits and the joint exhibit list, every deposition taken in its case world, and
+        Each team’s packet has its exhibits for trial and the joint exhibit list, every deposition taken in its case world, and
         the case files, investigator reports, discovery, and ruled facts it gathered. Nothing from the other team’s private work
         is included. Teams can download their own once they submit their exhibit list, and can choose what goes in a single
         PDF for court. You can download that PDF too.

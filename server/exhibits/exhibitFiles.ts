@@ -13,7 +13,7 @@ import { KEY_PATTERN, MAX_UPLOAD_BYTES, dispositionHeader } from '../storage/sha
 // lists, and, once the instructor admits it with a redaction, the redacted
 // version. Redacting removes what's covered rather than hiding it: a marked
 // page of a file is flattened to a picture in the instructor's browser before
-// it's uploaded, and redacted text is replaced by black bars here.
+// it's uploaded, and redacted text is replaced by bars (drawn white) here.
 
 type Db = Pick<PoolClient, 'query'>
 
@@ -76,8 +76,13 @@ export interface ExhibitSource {
   admittedKey: string | null
   admittedContentType: string | null
   admittedExcerpt: TextPart[] | null
-  /** The copy the offering team blacked parts out of, if it did. */
+  /** The copy the offering team redacted parts of, if it did. */
   offeredKey: string | null
+  offeredBy: 'plaintiff' | 'defense'
+  status: string
+  /** The redacted copy of a PDF or picture the offering team proposed, answering an objection. */
+  proposalKey: string | null
+  proposalContentType: string | null
 }
 
 /** One exhibit, found by the world it's in (a student's) or the course it's in (the instructor's). */
@@ -86,7 +91,8 @@ export async function findExhibitSource(exhibitId: string, scope: { matchupId: s
     `SELECT x.id, x.case_id AS "caseId", x.matchup_id AS "matchupId", x.material_id AS "materialId", x.parts, x.snapshot,
             m.content_type AS "contentType", CASE WHEN m.text_status = 'ready' THEN m.text_content END AS "textContent",
             x.admitted_key AS "admittedKey", x.admitted_content_type AS "admittedContentType",
-            x.admitted_excerpt AS "admittedExcerpt", x.offered_key AS "offeredKey"
+            x.admitted_excerpt AS "admittedExcerpt", x.offered_key AS "offeredKey", x.offered_by AS "offeredBy", x.status,
+            x.proposal_key AS "proposalKey", x.proposal_content_type AS "proposalContentType"
      FROM exhibits x
      JOIN cases c ON c.id = x.case_id
      LEFT JOIN case_materials m ON m.id = x.material_id
@@ -95,6 +101,12 @@ export async function findExhibitSource(exhibitId: string, scope: { matchupId: s
   )
   if (!rows[0]) throw new HttpError(404, 'Exhibit not found.')
   return rows[0]
+}
+
+/** The exhibit as its proposed redacted version: the copy the offering team proposed, served like an admitted redaction. */
+export function asProposal(x: ExhibitSource): ExhibitSource {
+  if (!x.proposalKey) throw new HttpError(404, 'There’s no proposed version of this exhibit.')
+  return { ...x, admittedKey: x.proposalKey, admittedContentType: x.proposalContentType }
 }
 
 /** How the exhibit can be marked, or null (audio or video) for a written description only. */
@@ -138,7 +150,7 @@ export async function materialPdf(caseId: string, materialId: string, pages: num
   }
 }
 
-/** The exhibit's PDF as served: the offering team's blacked-out copy, or the file cut down to its pages. */
+/** The exhibit's PDF as served: the offering team's redacted copy, or the file cut down to its pages. */
 export async function exhibitPdf(x: ExhibitSource) {
   if (x.offeredKey) return new Uint8Array(await storage.read(x.offeredKey))
   if (!x.materialId) throw new HttpError(404, 'File not found.')
@@ -159,7 +171,7 @@ export const exhibitPageCount = async (x: ExhibitSource) => pageCount(await exhi
 
 /**
  * Sends an exhibit's file: the redacted copy once admitted with one, the copy
- * the offering team blacked parts out of, a PDF cut down to its pages, or else
+ * the offering team redacted parts of, a PDF cut down to its pages, or else
  * the case file itself. Stored files are a redirect to storage, unless
  * `stream` (for the marking window; see `sendBytes`).
  */
@@ -215,7 +227,7 @@ function sendBytes(res: Response, data: Uint8Array, type: string, filename: stri
   res.send(Buffer.from(data))
 }
 
-/** A case file's bytes, from the API itself, for a team blacking out parts of it (see `sendBytes`). */
+/** A case file's bytes, from the API itself, for a team redacting parts of it (see `sendBytes`). */
 export async function sendMaterialBytes(res: Response, caseId: string, materialId: string) {
   const file = await findMaterialFile(caseId, materialId)
   if (!file) throw new HttpError(404, 'File not found.')
@@ -239,7 +251,7 @@ export const redactedType = (kind: 'pdf' | 'image') => (kind === 'pdf' ? 'applic
 /**
  * Where a browser uploads the redacted copy of a PDF or picture (`kind`, from
  * `markable`): the instructor's for a partial admission, or a team's for a
- * case file it lists with parts blacked out.
+ * case file it lists with parts redacted.
  */
 export async function startRedactedUpload(caseId: string, kind: Markable | null, body: unknown) {
   if (kind !== 'pdf' && kind !== 'image') throw new HttpError(409, 'Only a PDF or a picture is redacted as a file.')
@@ -366,7 +378,7 @@ export function readTextMarks(body: unknown, parts: TextPart[]): TextMarks {
 
 // Redacting text --------------------------------------------------------------
 
-/** A black bar for a run of redacted text, about as long as what it covers (up to a limit), keeping the spaces around it. */
+/** A bar for a run of redacted text, about as long as what it covers (up to a limit), keeping the spaces around it. */
 function bar(run: string) {
   const [, before, inside, after] = /^(\s*)([\s\S]*?)(\s*)$/.exec(run)!
   return inside ? before + '█'.repeat(Math.min(Math.max(inside.length, 3), 40)) + after : run
@@ -384,7 +396,7 @@ function merge(ranges: { start: number; end: number }[]) {
   return out
 }
 
-/** `text` with the marked ranges (redact) or everything but them (admit) blacked out. */
+/** `text` with the marked ranges (redact) or everything but them (admit) redacted. */
 export function redactField(text: string, ranges: { start: number; end: number }[], mode: MarkMode) {
   const merged = merge(ranges)
   let out = ''
@@ -401,7 +413,7 @@ export function redactField(text: string, ranges: { start: number; end: number }
 
 /**
  * The admitted turns or paragraphs. In redact mode, the marked text is
- * blacked out and parts left out are dropped; in admit mode, only what's
+ * redacted and parts left out are dropped; in admit mode, only what's
  * marked stays, and a part with nothing marked is dropped.
  */
 export function redactText(parts: TextPart[], marks: TextMarks): TextPart[] {

@@ -1,5 +1,5 @@
 import { apiRequest } from '../api/request'
-import type { CheckProgress, CheckTag, CourseService, DiscoveryCheck, InterviewAs } from './types'
+import type { CheckProgress, CheckTag, CourseService, DiscoveryCheck, ExhibitVersion, InterviewAs } from './types'
 
 const coursePath = (courseId: string) => `/courses/${encodeURIComponent(courseId)}`
 const casePath = (courseId: string, caseId: string) =>
@@ -46,7 +46,7 @@ async function readCheckStream(body: ReadableStream<Uint8Array>, onProgress: (pr
 }
 
 /**
- * A blacked-out copy of an exhibit, uploaded like a case file: the API returns
+ * A redacted copy of an exhibit, uploaded like a case file: the API returns
  * a signed link, and the file goes straight to storage. Returns its key.
  */
 async function uploadCopy(path: string, body: object, file: Blob): Promise<string> {
@@ -63,6 +63,8 @@ async function uploadCopy(path: string, body: object, file: Blob): Promise<strin
 
 /** What a packet's PDF leaves out, for its link. */
 const leftOutQuery = (leftOut: string[]) => (leftOut.length > 0 ? `?leftOut=${encodeURIComponent(leftOut.join(','))}` : '')
+/** `?version=proposal` for the proposed redacted version of an exhibit's file. */
+const versionQuery = (version?: ExhibitVersion) => (version ? `?version=${version}` : '')
 
 export const httpCourseService: CourseService = {
   async listMyCourses() {
@@ -756,8 +758,12 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${casePath(courseId, caseId)}/exhibit-list`, { method: 'PUT', body: JSON.stringify({ enabled }) })).case
   },
 
+  async setExhibitJudicialReview(courseId, caseId, enabled) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/exhibit-judicial-review`, { method: 'PUT', body: JSON.stringify({ enabled }) })).case
+  },
+
   async listExhibitReviews(courseId, status) {
-    return (await apiRequest(`${coursePath(courseId)}/exhibit-reviews?status=${status}`)).reviews
+    return (await apiRequest(`${coursePath(courseId)}/exhibit-reviews?status=${status}`)).worlds
   },
 
   async ruleOnExhibit(courseId, exhibitId, { step, ...body }) {
@@ -765,8 +771,20 @@ export const httpCourseService: CourseService = {
     await apiRequest(path, { method: 'POST', body: JSON.stringify(body) })
   },
 
-  myExhibitFileUrl(courseId, caseId, exhibitId) {
-    return `/api${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file`
+  myExhibitFileUrl(courseId, caseId, exhibitId, version) {
+    return `/api${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file${versionQuery(version)}`
+  },
+
+  async getMyExhibitMarking(courseId, caseId, exhibitId) {
+    return apiRequest(`${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/marking`)
+  },
+
+  myExhibitBytesUrl(courseId, caseId, exhibitId) {
+    return `/api${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file?stream=1`
+  },
+
+  async uploadProposedExhibit(courseId, caseId, exhibitId, file) {
+    return uploadCopy(`${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/proposal-uploads`, { size: file.size }, file)
   },
 
   async myExhibitText(courseId, caseId, exhibitId) {
@@ -805,16 +823,16 @@ export const httpCourseService: CourseService = {
     return `/api${myCasePath(courseId, caseId)}/packet/pdf${leftOutQuery(leftOut)}`
   },
 
-  caseExhibitFileUrl(courseId, caseId, exhibitId) {
-    return `/api${casePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file`
+  caseExhibitFileUrl(courseId, caseId, exhibitId, version) {
+    return `/api${casePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file${versionQuery(version)}`
   },
 
   async caseExhibitText(courseId, caseId, exhibitId) {
     return apiRequest(`${casePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/text`)
   },
 
-  reviewExhibitFileUrl(courseId, exhibitId) {
-    return `/api${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/file`
+  reviewExhibitFileUrl(courseId, exhibitId, version) {
+    return `/api${coursePath(courseId)}/exhibit-reviews/${encodeURIComponent(exhibitId)}/file${versionQuery(version)}`
   },
 
   async getExhibitMarking(courseId, exhibitId, whole = false) {

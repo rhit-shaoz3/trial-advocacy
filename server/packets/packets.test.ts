@@ -299,6 +299,21 @@ describe('what a packet holds', () => {
     expect(list).toContain('Admitted')
   })
 
+  it('holds a disputed exhibit, marked for the judge at trial', async () => {
+    await addInterview(tom, 1, 'plaintiff', ['the light was red'])
+    await toFinalSteps()
+    const deposition = (await ada.get(exhibitsUrl())).body.exhibits.options.find((o: { kind: string }) => o.kind === 'deposition')
+    await ada.post(`${exhibitsUrl()}/list/submit`).send({ items: [{ kind: 'deposition', id: deposition.id, parts: [0] }] })
+    await cy.post(`${exhibitsUrl()}/list/submit`).send({ items: [] })
+    await pool.query(`UPDATE exhibits SET status = 'disputed', label = '1'`)
+
+    const { files } = await download()
+    const name = paths(files, FOLDER_1).find((p) => p.startsWith('1 Exhibits/Plaintiff 1'))!
+    expect(name).toContain('(disputed)')
+    expect(await pdfText(files.get(`${FOLDER_1}/${name}`)!)).toContain('Disputed: the judge rules on it at trial.')
+    expect(await pdfText(files.get(`${FOLDER_1}/1 Exhibits/Joint exhibit list.pdf`)!)).toContain('Disputed, for the judge at trial')
+  })
+
   it('renders an excerpt of a text exhibit, never the whole source', async () => {
     await addInterview(tom, 1, 'plaintiff', ['the light was red', 'keep this out'])
     await toFinalSteps()

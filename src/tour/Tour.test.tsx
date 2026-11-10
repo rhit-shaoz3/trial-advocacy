@@ -8,7 +8,7 @@ import { placeCard } from './placement'
 import { TourButton } from './TourButton'
 import { usePageTour, useTourNavigator } from './tourContext'
 import { TourProvider } from './TourProvider'
-import { caseTour, phaseTourKey, pickCaseTour } from './tours'
+import { caseTour, phaseTour, phaseTourKey, pickCaseTour } from './tours'
 import type { Tour } from './tourTypes'
 
 const ada: User = {
@@ -198,6 +198,14 @@ describe('pickCaseTour', () => {
     expect(tour.key).toBe('student-case')
     expect(startWith?.key).toBe('phase:k1:information_exchange')
     expect(startWith?.steps[0].title).toBe('New phase! 🎉')
+  })
+
+  it('skips the "New phase!" step when the phase’s welcome animation announced it', () => {
+    const seen = seenOf(['student-case', 'phase:k1:introduction'])
+    const { startWith } = pickCaseTour(seen, 'k1', 'information_exchange', 'active', true)
+    expect(startWith?.key).toBe('phase:k1:information_exchange')
+    expect(startWith?.steps.map((s) => s.title)).not.toContain('New phase! 🎉')
+    expect(startWith?.steps).toEqual(phaseTour('k1', 'information_exchange').steps.slice(1))
   })
 
   it('starts nothing once seen, or on a closed case, but the button still has the whole tour', () => {

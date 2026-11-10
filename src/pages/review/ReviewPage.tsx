@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useCourseService } from '../../courses/CourseServiceContext'
-import type { CourseCase, CourseFlag, CourseSubpoena, ExhibitReview, FactGroup, InterviewReview } from '../../courses/types'
+import type { CourseCase, CourseFlag, CourseSubpoena, ExhibitReviewWorld, FactGroup, InterviewReview } from '../../courses/types'
 import type { WorkspaceContext } from '../../workspace/useWorkspace'
 import { usePageTour } from '../../tour/tourContext'
 import { INSTRUCTOR_REVIEW } from '../../tour/tours'
 import './Review.css'
-import { ExhibitReviewCard } from './ExhibitReviewCard'
-import { ExhibitPairCard } from './ExhibitPairCard'
+import { ExhibitWorldCard } from './ExhibitWorldCard'
 import { FactGroupCard } from './FactGroupCard'
 import { FactsPanel } from './FactsPanel'
 import { FlagCard } from './FlagCard'
@@ -37,7 +36,7 @@ export function ReviewPage() {
   const [groups, setGroups] = useState<FactGroup[]>([])
   const [flags, setFlags] = useState<CourseFlag[]>([])
   const [subpoenas, setSubpoenas] = useState<CourseSubpoena[] | null>(null)
-  const [exhibits, setExhibits] = useState<ExhibitReview[]>([])
+  const [exhibits, setExhibits] = useState<ExhibitReviewWorld[]>([])
   const [cases, setCases] = useState<CourseCase[]>([])
   const [factsCase, setFactsCase] = useState<string | null>(null)
   /** Bumped after each ruling, so the facts panel catches up. */
@@ -50,8 +49,8 @@ export function ReviewPage() {
 
   const load = useCallback(
     async (which: Tab) => {
-      // Exhibit challenges are extra; the rest of the queue works without them.
-      const exhibitReviews = service.listExhibitReviews(courseId, which).catch(() => [] as ExhibitReview[])
+      // Exhibit lists are extra; the rest of the queue works without them.
+      const exhibitReviews = service.listExhibitReviews(courseId, which).catch(() => [] as ExhibitReviewWorld[])
       if (which === 'open') {
         const [queue, served, exhibits] = await Promise.all([
           service.listReviewQueue(courseId),
@@ -182,8 +181,9 @@ export function ReviewPage() {
             investigator report before the team sees it. Rule on each fact as the judge: it stands or it doesn&rsquo;t,
             for that team&rsquo;s case world or for every world. Similar facts from different teams are grouped so you
             can rule on them once. Subpoenas teams serve come here too, with the AI&rsquo;s draft of the
-            recipient&rsquo;s response. In review lite, only what students flag comes here, along with every challenge
-            to an exhibit in the final steps phase, which always needs your ruling.
+            recipient&rsquo;s response. In the final steps phase, each case world&rsquo;s exhibit list comes here once
+            its teams have settled what they can, with the challenges they kept for your ruling (even in review lite,
+            unless you turn judicial review off).
           </p>
         </div>
       </div>
@@ -228,7 +228,7 @@ export function ReviewPage() {
               <p className="case-empty-title">{tab === 'open' ? 'Nothing to review.' : 'No completed reviews yet.'}</p>
               <p className="ws-subtle">
                 {tab === 'open'
-                  ? 'Conversations show up here when a team ends an interview with an AI witness, reports when the investigator answers a team, subpoenas when a team serves one, and exhibits when a team challenges one.'
+                  ? 'Conversations show up here when a team ends an interview with an AI witness, reports when the investigator answers a team, subpoenas when a team serves one, and exhibit lists when a case world’s teams keep a challenge for the judge.'
                   : 'Reviews you finish, subpoenas you answer, and exhibits you rule on are kept here.'}
               </p>
             </div>
@@ -248,22 +248,13 @@ export function ReviewPage() {
               )}
               {exhibits.length > 0 && (
                 <>
-                  <h2 className="review-section-title">Exhibit challenges</h2>
-                  <ul className="review-list" aria-label={tab === 'open' ? 'Exhibit challenges to rule on' : 'Exhibit rulings'}>
-                    {exhibits.map((x) => {
-                      // Two versions of one document waiting together are ruled on together, under the plaintiff's.
-                      const partner = tab === 'open' && x.pairedWith ? exhibits.find((o) => o.id === x.pairedWith) : undefined
-                      if (partner && x.offeredBy === 'defense') return null
-                      return (
-                        <li key={x.id}>
-                          {partner ? (
-                            <ExhibitPairCard courseId={courseId} versions={[x, partner]} onRuled={refresh} />
-                          ) : (
-                            <ExhibitReviewCard courseId={courseId} review={x} onRuled={tab === 'open' ? refresh : undefined} />
-                          )}
-                        </li>
-                      )
-                    })}
+                  <h2 className="review-section-title">Exhibit lists</h2>
+                  <ul className="review-list" aria-label={tab === 'open' ? 'Exhibit lists to rule on' : 'Exhibit rulings'}>
+                    {exhibits.map((w) => (
+                      <li key={w.matchupId}>
+                        <ExhibitWorldCard courseId={courseId} world={w} onRuled={tab === 'open' ? refresh : undefined} />
+                      </li>
+                    ))}
                   </ul>
                 </>
               )}

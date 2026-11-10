@@ -8,6 +8,7 @@ import type { ExchangeStep } from './ExchangeSetupFlow'
 import { KIND_LABEL, SIDE_LABEL, partSummary, subpoenaSummary } from './exchangeLabels'
 import { CheckSummary } from '../../../components/CheckSummary'
 import './exchange.css'
+import { useLiveTick } from '../../../workspace/useLiveTick'
 
 const ADMISSION: Record<'agree' | 'disagree' | 'partial', string> = {
   agree: 'Agreed',
@@ -41,6 +42,8 @@ export function ExchangeTab({
   now?: Date
 }) {
   const service = useCourseService()
+  // Kept current as students work (see useLiveTick).
+  const tick = useLiveTick()
   const [settings, setSettings] = useState<ExchangeSettings | null>(null)
   const [requests, setRequests] = useState<ExchangeRequest[] | null>(null)
   const [kind, setKind] = useState<ExchangeKind | 'all'>('all')
@@ -57,7 +60,7 @@ export function ExchangeTab({
     return () => {
       cancelled = true
     }
-  }, [service, courseId, courseCase.id])
+  }, [service, courseId, courseCase.id, tick])
 
   const worlds = [...new Set((requests ?? []).map((r) => r.worldNumber))].sort((a, b) => a - b)
   const shown = (requests ?? []).filter((r) => (kind === 'all' || r.kind === kind) && (world === 'all' || r.worldNumber === world))

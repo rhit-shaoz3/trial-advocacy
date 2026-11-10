@@ -11,6 +11,7 @@ import type {
   ExchangeKind,
   ExhibitListItem,
   ExhibitMove,
+  ExhibitVersion,
   Investigation,
   ItemResponse,
   ReviewResult,
@@ -27,6 +28,7 @@ import { FlagsContext, type FlagsContextValue } from './flagsContext'
 import { AuthContext } from '../auth/AuthContext'
 import { usePageTour } from '../tour/tourContext'
 import { phaseTourKey, pickCaseTour } from '../tour/tours'
+import { introKey, pickIntro, type CaseIntro } from './intro/caseIntro'
 
 /** How often the page checks for an investigator report while one is on its way. */
 const INVESTIGATION_POLL_MS = 20000
@@ -61,16 +63,34 @@ export function StudentCasePage() {
   const flagsMarked = useRef(false)
   const myCasesPath = `/courses/${courseId}/cases${workspace?.search ?? ''}`
   // The case tour the first time in any case; after that, one per new phase.
-  const user = useContext(AuthContext)?.user
+  const auth = useContext(AuthContext)
+  const user = auth?.user
   const phase = data?.case.phase
   const status = data?.case.status
   const caseSeen = Boolean(user?.toursSeen?.['student-case'])
   const phaseSeen = Boolean(phase && user?.toursSeen?.[phaseTourKey(caseId, phase)])
+  // A phase with a welcome animation (played now or before) needs no "New phase!" step in its tour.
+  const welcomed = Boolean(data && exchangeLoaded && pickIntro(data, exchange))
   const tours = useMemo(() => {
     if (!phase || !status) return null
-    return pickCaseTour((key) => (key === 'student-case' ? caseSeen : phaseSeen), caseId, phase, status)
-  }, [caseId, phase, status, caseSeen, phaseSeen])
-  usePageTour(tours?.tour ?? null, { ready: Boolean(data) && exchangeLoaded && exhibitsLoaded, startWith: tours?.startWith ?? null })
+    return pickCaseTour((key) => (key === 'student-case' ? caseSeen : phaseSeen), caseId, phase, status, welcomed)
+  }, [caseId, phase, status, caseSeen, phaseSeen, welcomed])
+  const loaded = Boolean(data) && exchangeLoaded && exhibitsLoaded
+
+  // The phase's welcome (the case's launch, or a new phase) once each time the case enters a phase, before any tour.
+  // Picked once per entry, and kept while it plays (marking it seen mustn't end it).
+  const [intro, setIntro] = useState<{ key: string; intro: CaseIntro | null } | null>(null)
+  const introKeyNow = phase ? introKey(caseId, phase, data?.case.phaseEnteredAt) : null
+  if (loaded && introKeyNow && intro?.key !== introKeyNow && data) {
+    const fresh = Boolean(user) && status === 'active' && !user?.toursSeen?.[introKeyNow]
+    setIntro({ key: introKeyNow, intro: fresh ? pickIntro(data, exchange) : null })
+  }
+  const playing = intro?.intro ?? null
+  useEffect(() => {
+    if (playing && introKeyNow) void auth?.markTourSeen(introKeyNow)
+  }, [playing, introKeyNow, auth])
+
+  usePageTour(tours?.tour ?? null, { ready: loaded && intro !== null && !playing, startWith: tours?.startWith ?? null })
 
   useEffect(() => {
     let cancelled = false
@@ -213,11 +233,16 @@ export function StudentCasePage() {
       async move(exhibitId: string, move: ExhibitMove) {
         setExhibits(await service.moveExhibit(courseId, caseId, exhibitId, move))
       },
-      fileUrl: (exhibitId: string) => service.myExhibitFileUrl(courseId, caseId, exhibitId),
+      fileUrl: (exhibitId: string, version?: ExhibitVersion) => service.myExhibitFileUrl(courseId, caseId, exhibitId, version),
       loadText: (exhibitId: string) => service.myExhibitText(courseId, caseId, exhibitId),
       copy: {
         loadFile: (materialId: string) => fetchBytes(service.myExhibitSourceUrl(courseId, caseId, materialId)),
         upload: (materialId: string, file: Blob) => service.uploadExhibitCopy(courseId, caseId, materialId, file),
+      },
+      proposal: {
+        marking: (exhibitId: string) => service.getMyExhibitMarking(courseId, caseId, exhibitId),
+        loadFile: (exhibitId: string) => fetchBytes(service.myExhibitBytesUrl(courseId, caseId, exhibitId)),
+        upload: (exhibitId: string, file: Blob) => service.uploadProposedExhibit(courseId, caseId, exhibitId, file),
       },
     }),
     [service, courseId, caseId],
@@ -329,6 +354,7 @@ export function StudentCasePage() {
           <FlagsContext.Provider value={flagging}>
             <CaseWorkspaceView
               workspace={data}
+              intro={playing && intro ? { intro: playing, onDone: () => setIntro({ key: intro.key, intro: null }) } : undefined}
               downloadUrl={(id) => service.myMaterialDownloadUrl(courseId, caseId, id)}
               loadText={(id) => service.myMaterialText(courseId, caseId, id)}
               onToggleTask={toggleTask}

@@ -59,9 +59,11 @@ import {
   type WarmCheckInput,
   type ExhibitListItem,
   type ExhibitMove,
+  type ExhibitVersion,
   type StudentExhibits,
   phaseAtLeast,
 } from '../courses/types'
+import { waitsOnTeam } from '../courses/exhibitLabels'
 import { sideLabel, titleParties, worldLabel } from '../courses/worldLabel'
 import { caseInitials } from '../workspace/format'
 import { FileViewer, type ViewableFile } from '../components/FileViewer'
@@ -72,8 +74,10 @@ import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
 import { CaseFileTable } from './CaseFileTable'
 import { CATEGORY_ICON } from './categoryIcons'
 import { ExchangePanel } from './exchange/ExchangePanel'
-import { ExhibitListSection, type CopyActions } from './finalSteps/ExhibitListSection'
+import { ExhibitListSection, type CopyActions, type ProposalActions } from './finalSteps/ExhibitListSection'
 import { TrialPacketSection, type PacketActions } from './finalSteps/TrialPacketSection'
+import { CaseIntroStage } from './intro/CaseIntroStage'
+import type { CaseIntro } from './intro/caseIntro'
 import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
@@ -122,6 +126,7 @@ export function CaseWorkspaceView({
   packetActions,
   onOpenExhibits,
   initialTab = 'overview',
+  intro,
   loadText,
   now = new Date(),
 }: {
@@ -172,16 +177,20 @@ export function CaseWorkspaceView({
     save(items: ExhibitListItem[]): Promise<void>
     submit(items: ExhibitListItem[]): Promise<void>
     move(exhibitId: string, move: ExhibitMove): Promise<void>
-    /** An exhibit's file (its listed pages, or the redacted version), and its text version. */
-    fileUrl(exhibitId: string): string
+    /** An exhibit's file (its listed pages, or the redacted version, or the proposed one), and its text version. */
+    fileUrl(exhibitId: string, version?: ExhibitVersion): string
     loadText(exhibitId: string): Promise<{ status: string; text: string | null }>
-    /** Blacking out parts of a PDF or picture the team lists. */
+    /** Redacting parts of a PDF or picture the team lists. */
     copy: CopyActions
+    /** Proposing a redacted version of the team's exhibit, answering an objection. */
+    proposal: ProposalActions
   }
   /** Called when the student opens the Final steps tab, to mark what changed there read. */
   onOpenExhibits?(): void
   /** The tab to open on, as when a notice links straight to a report. */
   initialTab?: CaseTab
+  /** A welcome to play first: the case's launch, or a new phase (see intro/caseIntro.ts). */
+  intro?: { intro: CaseIntro; onDone(): void }
   /** A case file's text version, for the viewer to show a document the browser can't. */
   loadText?(materialId: string): Promise<{ status: string; text: string | null }>
   now?: Date
@@ -219,14 +228,7 @@ export function CaseWorkspaceView({
   const exhibitNews = exhibitNotices
     ? Number(exhibitNotices.exchanged) + exhibitNotices.objections + exhibitNotices.rulings + Number(exhibitNotices.finalized)
     : 0
-  const exhibitsWaiting =
-    exhibits && !exhibits.finalizedAt
-      ? exhibits.exhibits.filter((x) =>
-          x.offeredBy === exhibits.side
-            ? x.status === 'objection_response'
-            : x.status === 'awaiting_authenticity' || x.status === 'awaiting_admission',
-        ).length
-      : 0
+  const exhibitsWaiting = exhibits && !exhibits.finalizedAt ? exhibits.exhibits.filter((x) => waitsOnTeam(x, exhibits.side)).length : 0
   // Being on the Reviews, Investigator, or Information exchange tab marks what's there read, however the student got there.
   useEffect(() => {
     if (tab === 'reviews' && unseen > 0) onOpenReviews?.()
@@ -656,15 +658,16 @@ export function CaseWorkspaceView({
               if (file) openMaterial(file)
             }}
             copyActions={exhibitActions?.copy}
-            onOpenExhibit={(x) =>
+            proposalActions={c.status === 'active' ? exhibitActions?.proposal : undefined}
+            onOpenExhibit={(x, version) =>
               exhibitActions &&
               setViewing({
-                id: x.id,
-                title: x.title,
+                id: version ? `${x.id}:${version}` : x.id,
+                title: version ? `${x.title} · proposed version` : x.title,
                 filename: x.title,
                 // A redacted picture is stored as a PNG.
-                contentType: x.redacted && x.contentType?.startsWith('image/') ? 'image/png' : (x.contentType ?? 'application/pdf'),
-                url: exhibitActions.fileUrl(x.id),
+                contentType: (version || x.redacted) && x.contentType?.startsWith('image/') ? 'image/png' : (x.contentType ?? 'application/pdf'),
+                url: exhibitActions.fileUrl(x.id, version),
                 text: () => exhibitActions.loadText(x.id),
               })
             }
@@ -689,6 +692,17 @@ export function CaseWorkspaceView({
           </ListPanel>
         )}
       </div>
+      {intro && (
+        <CaseIntroStage
+          intro={intro.intro}
+          caseTitle={c.title}
+          email={exchange ? <TeamEmail workspace={workspace} exchange={exchange} onOpenFile={openMaterial} /> : <p>{c.summary}</p>}
+          onEnter={(to) => {
+            setTab(to)
+            intro.onDone()
+          }}
+        />
+      )}
       {viewing && (
         <FileViewer
           file={viewing}

@@ -89,7 +89,7 @@ describe('the instructor’s Final steps tab', () => {
     })
     expect(await screen.findByRole('link', { name: 'Download Team 1’s packet' })).toHaveAttribute('href', '/packets/t1')
     expect(screen.getByRole('link', { name: /Download all/ })).toHaveAttribute('href', '/packets/all')
-    expect(screen.getAllByText(/1 deposition · 2 admitted exhibits · 5 case files · 0 investigator reports · 3 discovery sets/)).toHaveLength(2)
+    expect(screen.getAllByText(/1 deposition · 2 exhibits for trial · 5 case files · 0 investigator reports · 3 discovery sets/)).toHaveLength(2)
     expect(screen.getByText('The joint exhibit list isn’t final.')).toBeInTheDocument()
     expect(screen.getByText(/1 packet isn’t finished yet/)).toBeInTheDocument()
   })
@@ -132,6 +132,22 @@ describe('the instructor’s Final steps tab', () => {
     expect(service.setExhibitListEnabled).toHaveBeenCalledWith('c1', 'k1', false)
     expect(onCaseChange).toHaveBeenCalledWith(off)
   })
+
+  it('turns judicial review off, until a world has exchanged its lists', async () => {
+    const off = { ...rivera, exhibitJudicialReview: false }
+    const { user, service, onCaseChange } = renderTab({ setExhibitJudicialReview: vi.fn().mockResolvedValue(off) })
+    expect(screen.getByText(/once every exhibit in a case world is settled between its teams/)).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Judicial review' }))
+    expect(service.setExhibitJudicialReview).toHaveBeenCalledWith('c1', 'k1', false)
+    expect(onCaseChange).toHaveBeenCalledWith(off)
+  })
+
+  it('fixes judicial review once a world has exchanged its lists', () => {
+    renderTab({}, { ...rivera, exhibitJudicialReview: false, exhibitsExchanged: true })
+    expect(screen.getByRole('checkbox', { name: 'Judicial review' })).toBeDisabled()
+    expect(screen.getByText(/It can’t change now/)).toBeInTheDocument()
+    expect(screen.getByText(/marked disputed, for the judge at trial/)).toBeInTheDocument()
+  })
 })
 
 describe('the case dashboard’s exhibit card', () => {
@@ -149,7 +165,7 @@ describe('the case dashboard’s exhibit card', () => {
     const card = screen.getByRole('region', { name: 'Exhibits for trial' })
     expect(await within(card).findByLabelText('3 of 4 teams')).toBeInTheDocument()
     expect(within(card).getByLabelText('1 of 2 case worlds')).toBeInTheDocument()
-    expect(card).toHaveTextContent('2 challenges waiting for your ruling')
+    expect(card).toHaveTextContent('2 kept challenges waiting for your ruling')
     expect(within(card).getByRole('link', { name: 'Go to Review' })).toHaveAttribute('href', '/courses/c1/review')
   })
 })

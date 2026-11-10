@@ -210,12 +210,23 @@ describe('ExchangePanel: interrogatories and requests for admission', () => {
     expect(screen.queryByText(/You have/)).not.toBeInTheDocument()
   })
 
-  it('teaches the rule and says how the case differs', async () => {
+  it('teaches the rule and says how the case differs, for whichever part is open', async () => {
     const user = renderPanel(open)
+    // One Teach me, in the menu, for the part on screen; none in the parts themselves.
     await user.click(screen.getByRole('button', { name: /^Interrogatories/ }))
-    await user.click(screen.getByRole('button', { name: 'Teach me' }))
-    const dialog = screen.getByRole('dialog', { name: 'What are interrogatories?' })
+    const teach = screen.getByRole('button', { name: 'Teach me' })
+    expect(teach).toHaveAttribute('title', 'Teach me about interrogatories')
+    expect(screen.getByRole('navigation', { name: 'Information exchange' })).toContainElement(teach)
+    await user.click(teach)
+    // The bulb bounces, then the guide grows out of it.
+    const dialog = await screen.findByRole('dialog', { name: 'What are interrogatories?' })
     expect(dialog).toHaveTextContent('Your instructor allows 15 interrogatories per team instead of 25.')
+    await user.click(within(dialog).getByRole('button', { name: 'Got it' }))
+
+    await user.click(screen.getByRole('button', { name: /^Requests for admission/ }))
+    expect(screen.getByRole('button', { name: 'Teach me' })).toHaveAttribute('title', 'Teach me about requests for admission')
+    await user.click(screen.getByRole('button', { name: 'Teach me' }))
+    expect(await screen.findByRole('dialog', { name: 'What are requests for admission?' })).toBeInTheDocument()
   })
 })
 

@@ -274,6 +274,7 @@ describe("a student's case dashboard", () => {
       phase: 'introduction',
       instructorNote: 'Mind the timeline.',
       reviewMode: 'all',
+      phaseEnteredAt: null,
     })
     expect(workspace.side).toBe('plaintiff')
     expect(workspace.preview).toBe(false)
@@ -492,6 +493,20 @@ describe('case phases', () => {
         witnesses: ['Operator', 'Bystander', 'Engineer'],
       })
       expect((await view(unpaired)).witnesses).toEqual(['Bystander'])
+    })
+
+    it('tells students when the case entered its phase, anew each time it moves', async () => {
+      const entered = async () => (await plaintiff.get(myCaseUrl())).body.workspace.case.phaseEnteredAt
+      expect(await entered()).toBeNull()
+      await setPhase('investigate')
+      const first = await entered()
+      expect(first).toEqual(expect.any(String))
+      // Setting the same phase again isn't entering it.
+      await setPhase('investigate')
+      expect(await entered()).toBe(first)
+      await setPhase('introduction')
+      await setPhase('investigate')
+      expect(new Date(await entered()).getTime()).toBeGreaterThan(new Date(first).getTime())
     })
 
     it('opens the investigator in investigate, still hiding the other side', async () => {

@@ -1019,19 +1019,19 @@ ALTER TABLE case_materials DROP CONSTRAINT IF EXISTS case_materials_source_check
 ALTER TABLE case_materials ADD CONSTRAINT case_materials_source_check
   CHECK (source IN ('instructor', 'subpoena', 'investigator'));
 
--- A case file a team lists with parts blacked out (boxes drawn on a PDF's
--- pages or a picture): its marks, and the blacked-out copy its browser made.
+-- A case file a team lists with parts redacted (boxes drawn on a PDF's
+-- pages or a picture): its marks, and the redacted copy its browser made.
 -- The exhibit made from it keeps both, and the other side sees that copy.
 ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS marks jsonb;
 ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS redacted_key text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_marks jsonb;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_key text;
 
--- Witness memory -------------------------------------------------------------
-
 -- What the team left out of its trial packet's PDF, by item (see packets.ts).
 -- Leaving things out, rather than listing what's in, keeps anything new in.
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS packet_left_out text[] NOT NULL DEFAULT '{}';
+
+-- Witness memory -------------------------------------------------------------
 
 -- When an answer's claims were read; null until then, so a restart can pick up
 -- where it left off.
@@ -1054,3 +1054,31 @@ CREATE TABLE IF NOT EXISTS testimony_claims (
 -- The earlier testimony the witness was given for this answer, for the
 -- instructor to check. Null when it had none.
 ALTER TABLE interview_turns ADD COLUMN IF NOT EXISTS memory jsonb;
+
+-- When the case last moved into its phase, so each student gets that phase's
+-- welcome once each time the case enters it (moving back and forth counts).
+-- Null until the instructor first changes the phase.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS phase_entered_at timestamptz;
+
+-- Settling exhibits between the teams before the judge. A challenge goes to
+-- the offering team for a response, then back to the challenger to withdraw or
+-- keep it. A kept authenticity challenge (`authenticity_disputed`) still goes
+-- on to admission. An objection can be answered with a proposed redacted
+-- version (`proposal_*`, made like the judge's partial admission), which the
+-- challenger can agree to (`agreed`) or keep the objection (`objection_kept`).
+-- What's kept goes to the judge once the whole world is settled, or with
+-- judicial review off, onto the final list as `disputed` for review in person.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS exhibit_judicial_review boolean NOT NULL DEFAULT true;
+ALTER TABLE exhibits DROP CONSTRAINT IF EXISTS exhibits_status_check;
+ALTER TABLE exhibits ADD CONSTRAINT exhibits_status_check CHECK (status IN (
+  'awaiting_authenticity', 'authenticity_response', 'authenticity_reconsider', 'authenticity_review', 'inauthentic',
+  'awaiting_admission', 'objection_response', 'objection_reconsider', 'admission_review',
+  'dropped', 'admitted', 'excluded', 'disputed'));
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS authenticity_response text;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS authenticity_disputed boolean NOT NULL DEFAULT false;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS objection_kept boolean NOT NULL DEFAULT false;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_marks jsonb;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_key text;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_content_type text;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_excerpt jsonb;
+ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS agreed text CHECK (agreed IN ('original', 'proposal'));

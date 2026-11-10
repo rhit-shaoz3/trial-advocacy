@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { BookOpen, Check, Clock, ListChecks, Lock, MessageSquare, Sparkles, TriangleAlert } from 'lucide-react'
+import { Check, Clock, ListChecks, Lock, MessageSquare, Sparkles, TriangleAlert } from 'lucide-react'
 import { Modal } from '../../components/Modal'
+import { TeachBulb } from './TeachMeButton'
 import { SUBPOENA_TYPE_LABEL } from '../../courses/subpoenaForm'
 import { FEDERAL, type PartSettings, type SubpoenaType } from '../../courses/types'
 
@@ -14,11 +15,14 @@ export type TeachTopic = 'disclosures' | 'subpoenas' | 'interrogatories' | 'rfas
 export function TeachMe({
   topic,
   part,
+  from,
   onClose,
 }: {
   topic: TeachTopic
   /** The case's limit and days to respond, to compare with the federal rule. */
   part?: (Pick<PartSettings, 'limit' | 'days'> & { types?: SubpoenaType[] }) | null
+  /** Where the Teach me bulb was, for the guide to grow out of. */
+  from?: DOMRect | null
   onClose(): void
 }) {
   const close = (
@@ -28,7 +32,7 @@ export function TeachMe({
   )
   if (topic === 'exhibits') {
     return (
-      <Modal eyebrow="Teach me · FRCP 26(a)(3)" title="What is an exhibit list?" icon={<BookOpen />} onClose={onClose} footer={close}>
+      <Modal eyebrow="Teach me · FRCP 26(a)(3)" title="What is an exhibit list?" icon={<TeachBulb />} from={from} onClose={onClose} footer={close}>
         <div className="teach">
           <p>
             Before a federal trial, each side serves a written list of every exhibit it may use: documents, photos,
@@ -95,8 +99,9 @@ export function TeachMe({
           />
           <p className="teach-note">
             In this course: anything both sides list counts as authentic and admitted. For the rest, the other side first agrees to
-            or challenges authenticity, then admits or objects, and your instructor rules on every challenge as the
-            judge. When the list is final, the plaintiff&rsquo;s exhibits are numbered 1, 2, 3 and the defense&rsquo;s are
+            or challenges authenticity, then admits or objects. The side that listed it answers each challenge (an objection,
+            perhaps with a redacted version), and the challenger then withdraws or agrees, or keeps it. What&rsquo;s kept goes to
+            the judge: your instructor, once your case world is settled, or the judge at trial. When the list is final, the plaintiff&rsquo;s exhibits are numbered 1, 2, 3 and the defense&rsquo;s are
             lettered A, B, C.
           </p>
         </div>
@@ -106,7 +111,7 @@ export function TeachMe({
 
   if (topic === 'disclosures') {
     return (
-      <Modal eyebrow="Teach me · FRCP 26(a)(1)" title="What are initial disclosures?" icon={<BookOpen />} onClose={onClose} footer={close}>
+      <Modal eyebrow="Teach me · FRCP 26(a)(1)" title="What are initial disclosures?" icon={<TeachBulb />} from={from} onClose={onClose} footer={close}>
         <div className="teach">
           <p>
             Early in a federal case, each side has to hand over certain information without being asked. Under FRCP
@@ -154,7 +159,7 @@ export function TeachMe({
   if (topic === 'subpoenas') {
     const allowed = part?.types?.map((t) => SUBPOENA_TYPE_LABEL[t].toLowerCase())
     return (
-      <Modal eyebrow="Teach me · FRCP 45" title="What is a subpoena?" icon={<BookOpen />} onClose={onClose} footer={close}>
+      <Modal eyebrow="Teach me · FRCP 45" title="What is a subpoena?" icon={<TeachBulb />} from={from} onClose={onClose} footer={close}>
         <div className="teach">
           <p>
             A subpoena is a court order, issued by the clerk or signed by an attorney, that makes a person or organization
@@ -235,7 +240,7 @@ export function TeachMe({
       differs.push(`gives ${part.days} days to answer instead of ${FEDERAL.responseDays}`)
     }
     return (
-      <Modal eyebrow="Teach me · FRCP 33" title="What are interrogatories?" icon={<BookOpen />} onClose={onClose} footer={close}>
+      <Modal eyebrow="Teach me · FRCP 33" title="What are interrogatories?" icon={<TeachBulb />} from={from} onClose={onClose} footer={close}>
         <div className="teach">
           <p>
             Interrogatories are written questions one party sends another. The other side has to answer each one
@@ -266,7 +271,7 @@ export function TeachMe({
 
   const differs = part && part.days !== FEDERAL.responseDays
   return (
-    <Modal eyebrow="Teach me · FRCP 36" title="What are requests for admission?" icon={<BookOpen />} onClose={onClose} footer={close}>
+    <Modal eyebrow="Teach me · FRCP 36" title="What are requests for admission?" icon={<TeachBulb />} from={from} onClose={onClose} footer={close}>
       <div className="teach">
         <p>
           A request for admission asks the other side to admit that a fact is true, that a document is genuine, or how the

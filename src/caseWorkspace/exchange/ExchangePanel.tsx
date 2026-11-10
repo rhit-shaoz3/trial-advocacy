@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { BookOpen, CheckCheck, CircleHelp, Lock, ScrollText, Users } from 'lucide-react'
+import { CheckCheck, CircleHelp, Lock, ScrollText, Users } from 'lucide-react'
 import type {
   CaseParties,
   CheckDiscovery,
@@ -13,6 +13,7 @@ import type {
 import { DisclosuresSection } from './DisclosuresSection'
 import { RequestsSection } from './RequestsSection'
 import { SubpoenasSection } from './SubpoenasSection'
+import { TeachMeButton } from './TeachMeButton'
 import { TeachMe, type TeachTopic } from './TeachMe'
 import type { DraftActions } from './useDraft'
 import { useTourNavigator } from '../../tour/tourContext'
@@ -31,8 +32,8 @@ function listOf(labels: string[]) {
 
 /**
  * A team's Information exchange tab: a menu of its parts (initial disclosures,
- * subpoenas, interrogatories, requests for admission) beside the one that's open. Each
- * part has a Teach me guide at its top right.
+ * subpoenas, interrogatories, requests for admission) beside the one that's open. The
+ * menu's Teach me lightbulb opens the guide to whichever part is open.
  */
 export function ExchangePanel({
   exchange,
@@ -129,7 +130,8 @@ export function ExchangePanel({
       parts.find((p) => !p.locked)?.id ??
       parts[0]?.id,
   )
-  const [teach, setTeach] = useState<Exclude<TeachTopic, 'exhibits'> | null>(null)
+  /** The guide open (for the section on screen), and where its bulb was, to grow out of. */
+  const [teach, setTeach] = useState<{ topic: Exclude<TeachTopic, 'exhibits'>; from: DOMRect } | null>(null)
   // Guided tours open the section a step is about.
   const sectionIds = parts.map((p) => p.id).join(' ')
   const tourNavigator = useMemo(
@@ -187,16 +189,18 @@ export function ExchangePanel({
         {!exchange.requestsOpen && parts.some((p) => p.locked) && (
           <p className="ex-menu-note">{listOf(parts.filter((p) => p.locked).map((p) => p.label))} open in the information exchange phase.</p>
         )}
-        <div className="ex-menu-teach">
-          <strong>
-            <BookOpen aria-hidden="true" /> New to discovery?
-          </strong>
-          <span>Look for the Teach me button at the top right of each section.</span>
-        </div>
+        {/* One Teach me for whichever section is on screen. */}
+        {section && (
+          <TeachMeButton
+            about={parts.find((p) => p.id === section)?.label}
+            tour="ex-teach"
+            onOpen={(from) => setTeach({ topic: section, from })}
+          />
+        )}
       </nav>
       <div className="ex-content">
         {section === 'disclosures' && exchange.disclosures && (
-          <DisclosuresSection disclosures={exchange.disclosures} onSubmit={onSubmitDisclosures} onTeach={() => setTeach('disclosures')} />
+          <DisclosuresSection disclosures={exchange.disclosures} onSubmit={onSubmitDisclosures} />
         )}
         {section === 'subpoenas' && exchange.subpoenas && (
           <SubpoenasSection
@@ -208,7 +212,6 @@ export function ExchangePanel({
             onCheck={onCheck}
             onWarmCheck={onWarmCheck}
             onOpenDocument={onOpenDocument}
-            onTeach={() => setTeach('subpoenas')}
             initialSubpoenaId={focus?.kind === 'subpoenas' ? focus.id : undefined}
             drafts={drafts}
             initialDraftId={pendingDraft}
@@ -228,7 +231,6 @@ export function ExchangePanel({
             onRespond={onRespond}
             onCheck={onCheck}
             onWarmCheck={onWarmCheck}
-            onTeach={() => setTeach(section)}
             initialRequestId={focus?.kind === section ? focus.id : undefined}
             drafts={drafts}
             initialDraftId={pendingDraft}
@@ -239,8 +241,9 @@ export function ExchangePanel({
       </div>
       {teach && (
         <TeachMe
-          topic={teach}
-          part={teach === 'disclosures' ? null : exchange[teach]}
+          topic={teach.topic}
+          part={teach.topic === 'disclosures' ? null : exchange[teach.topic]}
+          from={teach.from}
           onClose={() => setTeach(null)}
         />
       )}

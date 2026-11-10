@@ -16,6 +16,7 @@ import {
   setCasePhase,
   setInvestigator,
   setExhibitListEnabled,
+  setExhibitJudicialReview,
   setReviewMode,
   SETUP_STEPS,
   updateCase,
@@ -266,6 +267,13 @@ caseRouter.put('/exhibit-list', async (req, res) => {
   const enabled = (req.body as Record<string, unknown> | undefined)?.enabled
   if (typeof enabled !== 'boolean') throw new HttpError(400, 'Say whether students get the joint exhibit list.')
   res.json({ case: await setExhibitListEnabled(req.course!.id, req.courseCase!.id, enabled) })
+})
+
+/** `{ enabled }`: whether the instructor rules on the exhibit challenges teams keep, or the judge does in person. */
+caseRouter.put('/exhibit-judicial-review', async (req, res) => {
+  const enabled = (req.body as Record<string, unknown> | undefined)?.enabled
+  if (typeof enabled !== 'boolean') throw new HttpError(400, 'Say whether you rule on exhibit challenges.')
+  res.json({ case: await setExhibitJudicialReview(req.course!.id, req.courseCase!.id, enabled) })
 })
 
 /** The case's running list of new facts: what's settled for all worlds and each one. */

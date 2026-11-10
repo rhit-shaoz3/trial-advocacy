@@ -21,8 +21,8 @@ function teamSummary(team: Team) {
  * into the new world's Plaintiff and Defense slots (or choose them from the
  * menus); once both are filled, the world is made. Shares the pairing state
  * (and the request runner) with the Teams section above it, since changing
- * teams can remove a world. A locked world can't be swapped or deleted, and
- * once the case leaves Introduction no new worlds are made.
+ * teams can remove a world. A locked world can't be swapped or deleted; new
+ * worlds can still be made in any phase until the case closes.
  */
 export function WorldsSection({
   courseId,

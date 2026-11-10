@@ -194,8 +194,9 @@ export interface Team {
   members: RosterEntry[]
 }
 
-/** Auto-pair makes teams of this many students, as the instructor chooses. */
-export const MIN_AUTO_TEAM_SIZE = 2
+/** Auto-pair makes teams of this many students, as the instructor chooses; two unless they choose otherwise. */
+export const MIN_AUTO_TEAM_SIZE = 1
+export const DEFAULT_AUTO_TEAM_SIZE = 2
 export const MAX_AUTO_TEAM_SIZE = 6
 /** The most a team can hold, leaving room to add a leftover student by hand. */
 export const MAX_TEAM_SIZE = MAX_AUTO_TEAM_SIZE + 1
@@ -217,7 +218,7 @@ export interface CaseTeams {
   teams: Team[]
   unpaired: RosterEntry[]
   matchups: Matchup[]
-  /** The case has left Introduction: every world is locked, and no new teams or worlds can be made. */
+  /** The case has left Introduction: the worlds it had then are locked, though new teams and worlds can still be made. */
   worldsLocked: boolean
 }
 

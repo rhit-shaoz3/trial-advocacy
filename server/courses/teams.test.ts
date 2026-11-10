@@ -166,10 +166,14 @@ describe('auto-pairing', () => {
     await prof.delete(teamsUrl())
     expect(((await prof.post(`${teamsUrl()}/auto`).send({ teamSize: 6 })).body as TeamsBody).teams[0].members).toHaveLength(6)
 
-    for (const teamSize of [1, 7, 2.5, 'three']) {
+    await prof.delete(teamsUrl())
+    const solo = (await prof.post(`${teamsUrl()}/auto`).send({ teamSize: 1 })).body as TeamsBody
+    expect(solo.teams.map((t) => t.members.length)).toEqual([1, 1, 1, 1, 1, 1, 1])
+
+    for (const teamSize of [0, 7, 2.5, 'three']) {
       const bad = await prof.post(`${teamsUrl()}/auto`).send({ teamSize })
       expect(bad.status).toBe(400)
-      expect(bad.body.error).toBe('Choose 2 to 6 students per team.')
+      expect(bad.body.error).toBe('Choose 1 to 6 students per team.')
     }
   })
 

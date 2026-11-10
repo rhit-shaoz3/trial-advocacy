@@ -66,7 +66,7 @@ describe('TeamsSection', () => {
     expect(screen.queryByRole('button', { name: /Auto-pair/ })).not.toBeInTheDocument()
   })
 
-  it("won't make teams bigger than the students left, or outside 2 to 6", async () => {
+  it("won't make teams bigger than the students left, or outside 1 to 6", async () => {
     const { user, service } = renderSection(unpairedOnly)
 
     await user.click(await screen.findByRole('button', { name: 'Auto-pair 3 students' }))
@@ -78,7 +78,7 @@ describe('TeamsSection', () => {
     expect(within(dialog).getByRole('button', { name: 'Make teams' })).toBeDisabled()
     await user.clear(size)
     await user.type(size, '9')
-    expect(dialog).toHaveTextContent('Choose 2 to 6 students per team.')
+    expect(dialog).toHaveTextContent('Choose 1 to 6 students per team.')
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(service.autoPair).not.toHaveBeenCalled()

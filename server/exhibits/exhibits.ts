@@ -242,7 +242,7 @@ async function teamReports(db: Db, caseId: string, teamId: string) {
 }
 
 /** The files the investigator's reports unlocked for the team. */
-async function investigatorFileIds(db: Db, teamId: string) {
+export async function investigatorFileIds(db: Db, teamId: string) {
   const { rows } = await db.query<{ id: string }>(
     `SELECT DISTINCT d.material_id AS id
      FROM review_documents d JOIN interview_reviews r ON r.id = d.review_id

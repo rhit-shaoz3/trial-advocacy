@@ -1027,6 +1027,36 @@ ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS redacted_key text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_marks jsonb;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_key text;
 
+-- How the team arranged its trial packet's PDF: `[{ name, items: [item id] }]`,
+-- its folders and the documents in each, in order (see packets.ts). Null until
+-- the team changes anything: then a folder for each kind of document, all in.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS packet_layout jsonb;
+ALTER TABLE teams DROP COLUMN IF EXISTS packet_left_out;
+
+-- Witness memory -------------------------------------------------------------
+
+-- When an answer's claims were read; null until then, so a restart can pick up
+-- where it left off.
+ALTER TABLE interview_turns ADD COLUMN IF NOT EXISTS claims_read_at timestamptz;
+
+-- What an AI witness committed to in one answer of a team's interview, so
+-- later sessions in the case world stay consistent with it. Whether a claim
+-- still stands comes from the rulings on its turn (server/witness/memory.ts).
+CREATE TABLE IF NOT EXISTS testimony_claims (
+  interview_id uuid        NOT NULL,
+  position     integer     NOT NULL,
+  number       integer     NOT NULL,
+  kind         text        NOT NULL CHECK (kind IN ('statement', 'denial', 'no_recall')),
+  text         text        NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (interview_id, position, number),
+  FOREIGN KEY (interview_id, position) REFERENCES interview_turns (interview_id, position) ON DELETE CASCADE
+);
+
+-- The earlier testimony the witness was given for this answer, for the
+-- instructor to check. Null when it had none.
+ALTER TABLE interview_turns ADD COLUMN IF NOT EXISTS memory jsonb;
+
 -- When the case last moved into its phase, so each student gets that phase's
 -- welcome once each time the case enters it (moving back and forth counts).
 -- Null until the instructor first changes the phase.

@@ -37,7 +37,7 @@ import {
  * that phase, the list is off, or their team isn't matched). Changes need an
  * active case.
  */
-async function studentTeam(req: Request, changing: boolean): Promise<ExhibitTeam | null> {
+export async function studentTeam(req: Request, changing: boolean): Promise<ExhibitTeam | null> {
   const { courseId, caseId } = req.params as Record<string, string>
   const workspace = isUuid(courseId) && isUuid(caseId) ? await getStudentWorkspace(courseId, caseId, req.user!.id) : null
   if (!workspace) throw new HttpError(404, 'Case not found.')

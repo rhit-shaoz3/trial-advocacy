@@ -1259,6 +1259,45 @@ export interface ExhibitOverview {
   reviewsWaiting: number
 }
 
+/** What one team's trial packet holds so far. */
+export interface TrialPacket {
+  teamId: string
+  teamNumber: number
+  side: Side
+  worldNumber: number
+  members: string[]
+  /** Exhibits for trial: admitted, or disputed for the judge at trial. */
+  exhibits: number
+  depositions: number
+  files: number
+  reports: number
+  discovery: number
+  /** What isn't finished yet, like a joint exhibit list that isn't final. */
+  warnings: string[]
+}
+
+/** One thing in a team's trial packet, as it's offered for the single PDF. */
+export interface PacketItem {
+  id: string
+  section: string
+  title: string
+  /** False for what has no pages, like a video: it's only in the zip. */
+  printable: boolean
+}
+
+/** A folder of a team's single PDF: its name, and the items filed in it, in order. */
+export interface PacketFolder {
+  name: string
+  items: string[]
+}
+
+/** What can go in a team's single PDF, and how the team filed it: what isn't in a folder stays out. */
+export interface PacketContents {
+  items: PacketItem[]
+  folders: PacketFolder[]
+  warnings: string[]
+}
+
 /** One case world's whole exhibit list, for the instructor to rule on as the judge (or ruled on). */
 export interface ExhibitReviewWorld {
   matchupId: string
@@ -1641,6 +1680,21 @@ export interface CourseService {
   uploadProposedExhibit(courseId: string, caseId: string, exhibitId: string, file: Blob): Promise<string>
   /** The same, for the instructor. */
   caseExhibitFileUrl(courseId: string, caseId: string, exhibitId: string, version?: ExhibitVersion): string
+  listTrialPackets(courseId: string, caseId: string): Promise<TrialPacket[]>
+  /** The zip of every team's packet, or of one team's with `teamId`. */
+  trialPacketsUrl(courseId: string, caseId: string, teamId?: string): string
+  /** What can go in a team's single PDF, for the instructor. */
+  getTrialPacketContents(courseId: string, caseId: string, teamId: string): Promise<PacketContents>
+  /** A team's packet as a single PDF, in the team's folders. */
+  trialPacketPdfUrl(courseId: string, caseId: string, teamId: string): string
+  /** What can go in the student's team's PDF; null until the team submits its exhibit list. */
+  getMyPacket(courseId: string, caseId: string): Promise<PacketContents | null>
+  /** Keeps how the student's team filed its PDF. */
+  saveMyPacketFolders(courseId: string, caseId: string, folders: PacketFolder[]): Promise<void>
+  /** The student's team's whole packet as a zip. */
+  myPacketUrl(courseId: string, caseId: string): string
+  /** The student's team's packet as a single PDF, in its folders. */
+  myPacketPdfUrl(courseId: string, caseId: string): string
   caseExhibitText(courseId: string, caseId: string, exhibitId: string): Promise<{ status: string; text: string | null }>
   /** An exhibit under review, as offered (or as proposed), for marking a redaction. */
   reviewExhibitFileUrl(courseId: string, exhibitId: string, version?: ExhibitVersion): string

@@ -148,6 +148,31 @@ describe('buildSystemPrompt', () => {
   })
 })
 
+describe('earlier testimony', () => {
+  const memory = ['Lee says she took the bus.', 'Lee says she took the bus.', 'Lee does not recall the time.']
+
+  it('comes after the question, each claim once, with the cache point on the question', () => {
+    const messages = buildMessages([{ question: 'Your name?', reply: 'Dana Lee.' }], 'How did you get there?', memory)
+    expect(messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'system'])
+    expect(messages[2].content).toEqual([{ type: 'text', text: 'How did you get there?', cache_control: { type: 'ephemeral' } }])
+    expect(messages[3].content).toContain('- Lee does not recall the time.')
+    expect((messages[3].content as string).match(/took the bus/g)).toHaveLength(1)
+  })
+
+  it('leaves the system prompt alone, so its cache survives', () => {
+    const plain = buildRequest({ profile, settings: adverse, transcript: [], question: 'Hi?' })
+    const remembering = buildRequest({ profile, settings: adverse, transcript: [], question: 'Hi?', memory })
+    expect(remembering.system).toEqual(plain.system)
+    expect(remembering.cache_control).toBeUndefined()
+  })
+
+  it('changes nothing without any', () => {
+    const request = buildRequest({ profile, settings: adverse, transcript: [], question: 'Hi?', memory: [] })
+    expect(request.messages).toEqual([{ role: 'user', content: 'Hi?' }])
+    expect(request.cache_control).toEqual({ type: 'ephemeral' })
+  })
+})
+
 describe('buildRequest', () => {
   it('sends the transcript as alternating turns, ending with the new question', () => {
     const messages = buildMessages([{ question: 'Your name?', reply: 'Dana Lee.' }], 'Where do you work?')

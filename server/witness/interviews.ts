@@ -9,6 +9,7 @@ import { HttpError } from '../httpError.ts'
 import { createReview, settledFacts } from '../reviews/reviews.ts'
 import { readString } from '../validation.ts'
 import { WitnessRefusalError } from './deposition.ts'
+import { queueClaims, testimonyMemory } from './memory.ts'
 import { depositionSettings, isAiWitness, loadProfile, WitnessNotReadyError } from './profile.ts'
 
 // A team's interview of an AI witness, stored turn by turn, before the
@@ -124,7 +125,9 @@ async function closeInterview(interviewId: string, teamId: string | null) {
     interviewId,
   ])
   if (rowCount !== 1 || !teamId) return false
-  return (await createReview(interviewId, teamId)) !== null
+  const sent = (await createReview(interviewId, teamId)) !== null
+  queueClaims(interviewId)
+  return sent
 }
 
 /** Ends every team interview past its hour and sends it for review. Run every minute by the server. */
@@ -241,6 +244,21 @@ export async function endInterview(ctx: InterviewContext) {
   return { interview: await getInterview(ctx), sentForReview }
 }
 
+/**
+ * What the witness has said elsewhere in this case world (nothing for the
+ * instructor's tests). The witness can still answer without it, so a failure
+ * is only logged. WITNESS_MEMORY=off turns it off.
+ */
+async function earlierTestimony(ctx: InterviewContext, interviewId: string, question: string) {
+  if (!ctx.matchupId || process.env.WITNESS_MEMORY === 'off') return []
+  try {
+    return (await testimonyMemory(ctx.witness.id, ctx.matchupId, interviewId, question)).map((c) => c.text)
+  } catch (err) {
+    console.error(`Could not read the testimony for interview ${interviewId}:`, err)
+    return []
+  }
+}
+
 /** Asks the next question (`{ question }`) and stores the witness's reply. */
 export async function askQuestion(ctx: InterviewContext, body: unknown) {
   const question = readString(body, 'question').trim()
@@ -258,6 +276,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
   }
 
   const transcript = await listTurns(interviewId)
+  const memory = await earlierTestimony(ctx, interviewId, question)
   let reply
   try {
     const profile = await loadProfile(ctx.courseCase, ctx.witness, await settledFacts(ctx.courseCase.id, ctx.matchupId), ctx.matchupId)
@@ -267,6 +286,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
       settings,
       transcript: transcript.map((t) => ({ question: t.question, reply: t.reply })),
       question: asked,
+      memory,
     })
   } catch (err) {
     if (err instanceof WitnessNotReadyError) throw new HttpError(409, err.message)
@@ -281,8 +301,8 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
 
   try {
     await pool.query(
-      `INSERT INTO interview_turns (interview_id, position, question, reply, objection, answer, asked_by, model)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO interview_turns (interview_id, position, question, reply, objection, answer, asked_by, model, memory)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         interviewId,
         transcript.length,
@@ -292,6 +312,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
         reply.answer,
         ctx.userId,
         reply.model,
+        memory.length ? JSON.stringify(memory) : null,
       ],
     )
   } catch (err) {
@@ -300,5 +321,6 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
     }
     throw err
   }
+  if (ctx.owner.teamId) queueClaims(interviewId)
   return { ...(await view(ctx.witness, ctx.owner, interviewId, ctx.closed)), exhibits: ctx.exhibits }
 }

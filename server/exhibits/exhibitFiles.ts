@@ -201,6 +201,23 @@ export async function sendExhibitFile(res: Response, x: ExhibitSource, view: boo
 }
 
 /**
+ * An exhibit's file as `sendExhibitFile` would send it, for the trial packet:
+ * its name, and how to read it when its turn comes.
+ */
+export async function exhibitFile(x: ExhibitSource) {
+  if (!x.materialId) throw new HttpError(404, 'This exhibit has no file.')
+  const file = await findMaterialFile(x.caseId, x.materialId)
+  if (!file) throw new HttpError(404, 'File not found.')
+  const stored = (key: string, type: string) => ({ filename: redactedName(file.filename, type), contentType: type, read: () => storage.read(key) })
+  if (x.admittedKey) return stored(x.admittedKey, x.admittedContentType ?? file.contentType)
+  const kind = markable(x)
+  if (x.offeredKey && (kind === 'pdf' || kind === 'image')) return stored(x.offeredKey, redactedType(kind))
+  const { filename, contentType } = file
+  if (x.parts && contentType.startsWith('application/pdf')) return { filename, contentType, read: () => exhibitPdf(x) }
+  return { filename, contentType, read: () => materialBytes(file) }
+}
+
+/**
  * Sends a file's bytes from the API itself rather than redirecting to
  * storage: the marking window reads the file with fetch, and S3 only lets the
  * app's pages upload (its CORS rule), not read.

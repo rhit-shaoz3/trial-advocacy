@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
@@ -559,6 +559,23 @@ describe('the Final steps tab', () => {
     await user.click(screen.getByRole('button', { name: 'Open Final steps' }))
     expect(screen.getByRole('heading', { name: 'Settle the exhibits for trial' })).toBeInTheDocument()
     expect(onOpenExhibits).toHaveBeenCalled()
+  })
+
+  it('offers the trial packet once the team submits its list, not before', async () => {
+    const workspace = { ...sampleWorkspace, case: { ...sampleWorkspace.case, phase: 'final_steps' as const } }
+    const packetActions = {
+      load: vi.fn().mockResolvedValue({ items: [], folders: [], warnings: [] }),
+      zipUrl: '/my-packet',
+      pdfUrl: '/my-packet/pdf',
+    }
+    const waiting = { ...exhibits, theirs: { ...exhibits.theirs, submittedAt: null } }
+    renderView({ workspace, exhibits: waiting, packetActions, initialTab: 'final-steps' })
+    expect(await screen.findByRole('heading', { name: 'Your trial packet' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Download everything/ })).toHaveAttribute('href', '/my-packet')
+    cleanup()
+
+    renderView({ workspace, exhibits: { ...waiting, mine: { ...waiting.mine, submittedAt: null } }, packetActions, initialTab: 'final-steps' })
+    expect(screen.queryByRole('heading', { name: 'Your trial packet' })).not.toBeInTheDocument()
   })
 
   it('stays hidden without an exhibit list', () => {

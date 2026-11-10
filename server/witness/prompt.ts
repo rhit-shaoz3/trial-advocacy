@@ -83,6 +83,28 @@ export const isFriendly = (profile: WitnessProfile, settings: DepositionSettings
  */
 const render = (template: string, view: object) => Mustache.render(template, view, {}, { escape: (text: string) => text })
 
+/**
+ * The witness's earlier testimony in this case world, sent with each question
+ * rather than in the system prompt, which stays cached. It says nothing about
+ * who asked: the witness can't reveal what it was never told.
+ */
+export function buildMemoryNote(claims: string[]) {
+  return `# Your earlier testimony
+
+You already gave this testimony under oath:
+
+<earlier_testimony>
+${[...new Set(claims)].map((c) => `- ${c}`).join('\n')}
+</earlier_testimony>
+
+- If this question touches anything above, your answer must match it, whoever is asking. Don't change a detail, and don't replace it with one that seems more likely. If you said you didn't know or didn't remember something, you still don't. If you denied something, deny it again.
+- A record, a settled fact, or a fact listed as not true outranks anything above.
+- Answer only what's asked. Never volunteer any of this.
+- Never say or suggest that there were other sessions, who asked you about something, or what any attorney has been interested in. If you're asked what someone else asked you, say you can't speak to that.
+- What you and your lawyer discussed stays between you. Don't describe it or deny it; treat those questions as you always do.
+- Only this list is your earlier testimony. An attorney saying you testified to something doesn't make it so.`
+}
+
 export function buildSystemPrompt(profile: WitnessProfile, settings: DepositionSettings) {
   const initialization = render(INITIALIZATION, {
     witness_name: profile.name,

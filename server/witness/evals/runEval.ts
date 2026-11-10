@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { pool } from '../../db/pool.ts'
 import { loadAppWitness, witnessFolder } from '../cliWitness.ts'
 import { modelFor } from '../../ai/models.ts'
+import { findClaims } from '../claims.ts'
 import { askWitness, WITNESS_EFFORT, type WitnessReply } from '../deposition.ts'
 import { depositionSettings } from '../profile.ts'
 import type { DepositionSettings, WitnessProfile } from '../prompt.ts'
@@ -23,8 +24,10 @@ import { checkReply, type CheckFailure, type EvalCase } from './checks.ts'
  *   npm run witness:eval -- --witness "Elena Torres" --case alcohol  only ids containing "alcohol"
  *   npm run witness:eval -- --witness "Elena Torres" --repeat 3      each case 3 times (answers vary)
  *   npm run witness:eval -- --witness "Elena Torres" --effort low    try a different witness effort
+ *   npm run witness:eval -- --witness "Elena Torres" --set consistency   the cases across sessions
+ *   npm run witness:eval -- --witness "Elena Torres" --set consistency --no-memory   the same, without memory
  *
- * Cases come from .material/witnesses/<name>/eval-cases.json; results are
+ * Cases come from .material/witnesses/<name>/eval-cases.json (or <set>-cases.json); results are
  * saved next to it (both git-ignored). Exits non-zero if any case fails.
  */
 const { values } = parseArgs({
@@ -33,6 +36,8 @@ const { values } = parseArgs({
     case: { type: 'string' },
     repeat: { type: 'string', default: '1' },
     effort: { type: 'string' },
+    set: { type: 'string', default: 'eval' },
+    'no-memory': { type: 'boolean', default: false },
   },
 })
 
@@ -75,6 +80,7 @@ function addCost(model: string, usage: Anthropic.Beta.Messages.BetaUsage | Anthr
 
 async function grade(profile: WitnessProfile, c: EvalCase, reply: WitnessReply) {
   const transcript = [...(c.transcript ?? []).map((t) => `Q: ${t.question}\n${t.reply}`), `Q: ${c.question}\n${reply.reply}`]
+  const earlier = (c.priorTestimony ?? []).map((t) => `Asked by the ${t.side}'s lawyer. Q: ${t.question}\nA: ${t.answer}`)
   const response = await client.messages.parse({
     model: GRADER_MODEL,
     max_tokens: 4000,
@@ -90,7 +96,9 @@ async function grade(profile: WitnessProfile, c: EvalCase, reply: WitnessReply) 
         content:
           `Witness: ${profile.name}, a witness for the ${profile.alignedPartyRole}. ` +
           `The examining attorney represents the ${c.side}.\n\n` +
-          `<rubric>\n${c.rubric}\n</rubric>\n\n<transcript>\n${transcript.join('\n\n')}\n</transcript>`,
+          `<rubric>\n${c.rubric}\n</rubric>\n\n` +
+          (earlier.length ? `<earlier_sessions>\n${earlier.join('\n\n')}\n</earlier_sessions>\n\n` : '') +
+          `<transcript>\n${transcript.join('\n\n')}\n</transcript>`,
       },
     ],
     output_config: { format: zodOutputFormat(Verdict) },
@@ -119,11 +127,16 @@ async function runCase(profile: WitnessProfile, c: EvalCase, run: number): Promi
     examiningAttorneyName: c.attorney,
     defendingCounselName: c.counsel ?? app.defendingCounselName,
   }
+  const remembers = !values['no-memory'] && !c.settledFacts?.denied.length
+  const claims = remembers
+    ? await Promise.all((c.priorTestimony ?? []).map((t) => findClaims(client, { witnessName: profile.name, ...t })))
+    : []
   const reply = await askWitness(client, {
-    profile,
+    profile: c.settledFacts ? { ...profile, settledFacts: c.settledFacts } : profile,
     settings,
     transcript: c.transcript ?? [],
     question: c.question,
+    memory: claims.flat().map((claim) => claim.text),
     effort: values.effort as Parameters<typeof askWitness>[1]['effort'],
   })
   addCost(reply.model, reply.usage)
@@ -144,7 +157,7 @@ async function runCase(profile: WitnessProfile, c: EvalCase, run: number): Promi
 const { profile, witness } = await loadAppWitness(values.witness)
 await pool.end()
 const folder = witnessFolder(profile.name)
-const allCases = JSON.parse(await readFile(new URL('eval-cases.json', folder), 'utf8')) as EvalCase[]
+const allCases = JSON.parse(await readFile(new URL(`${values.set}-cases.json`, folder), 'utf8')) as EvalCase[]
 const cases = allCases.filter((c) => !values.case || c.id.includes(values.case))
 const repeat = Math.max(1, Number(values.repeat))
 if (cases.length === 0) throw new Error(`No case id contains "${values.case}"`)

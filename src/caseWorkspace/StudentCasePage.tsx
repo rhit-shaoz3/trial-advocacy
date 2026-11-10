@@ -14,6 +14,7 @@ import type {
   ExhibitVersion,
   Investigation,
   ItemResponse,
+  PacketFolder,
   ReviewResult,
   StudentExchange,
   StudentExhibits,
@@ -212,6 +213,16 @@ export function StudentCasePage() {
   }
 
   /** The joint exhibit list's actions; each returns the list as it now stands. */
+  const packetActions = useMemo(
+    () => ({
+      load: () => service.getMyPacket(courseId, caseId),
+      save: (folders: PacketFolder[]) => service.saveMyPacketFolders(courseId, caseId, folders),
+      zipUrl: service.myPacketUrl(courseId, caseId),
+      pdfUrl: service.myPacketPdfUrl(courseId, caseId),
+    }),
+    [service, courseId, caseId],
+  )
+
   const exhibitActions = useMemo(
     () => ({
       async save(items: ExhibitListItem[]) {
@@ -370,6 +381,7 @@ export function StudentCasePage() {
               onOpenDraft={openDraft}
               exhibits={exhibits}
               exhibitActions={exhibitActions}
+              packetActions={packetActions}
               onOpenExhibits={openExhibits}
               initialTab={initialTab}
             />

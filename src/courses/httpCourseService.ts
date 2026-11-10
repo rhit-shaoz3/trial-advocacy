@@ -789,6 +789,38 @@ export const httpCourseService: CourseService = {
     return apiRequest(`${myCasePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/text`)
   },
 
+  async listTrialPackets(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/packets`)).packets
+  },
+
+  trialPacketsUrl(courseId, caseId, teamId) {
+    return `/api${casePath(courseId, caseId)}/packets/${teamId ? `${encodeURIComponent(teamId)}/` : ''}download`
+  },
+
+  async getTrialPacketContents(courseId, caseId, teamId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/packets/${encodeURIComponent(teamId)}/contents`)).contents
+  },
+
+  trialPacketPdfUrl(courseId, caseId, teamId) {
+    return `/api${casePath(courseId, caseId)}/packets/${encodeURIComponent(teamId)}/pdf`
+  },
+
+  async getMyPacket(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/packet`)).contents
+  },
+
+  async saveMyPacketFolders(courseId, caseId, folders) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/packet/folders`, { method: 'PUT', body: JSON.stringify({ folders }) })
+  },
+
+  myPacketUrl(courseId, caseId) {
+    return `/api${myCasePath(courseId, caseId)}/packet/download`
+  },
+
+  myPacketPdfUrl(courseId, caseId) {
+    return `/api${myCasePath(courseId, caseId)}/packet/pdf`
+  },
+
   caseExhibitFileUrl(courseId, caseId, exhibitId, version) {
     return `/api${casePath(courseId, caseId)}/exhibits/${encodeURIComponent(exhibitId)}/file${versionQuery(version)}`
   },

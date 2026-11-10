@@ -70,6 +70,61 @@ describe('the instructor’s Final steps tab', () => {
     expect(screen.getByText(/Only you can see this view/)).toBeInTheDocument()
   })
 
+  it('offers each team’s trial packet and all of them at once, and says what isn’t finished', async () => {
+    const packet = {
+      teamId: 't1',
+      teamNumber: 1,
+      side: 'plaintiff' as const,
+      worldNumber: 1,
+      members: ['Ada Lawyer', 'Ben Brief'],
+      exhibits: 2,
+      depositions: 1,
+      files: 5,
+      reports: 0,
+      discovery: 3,
+      warnings: ['The joint exhibit list isn’t final.'],
+    }
+    renderTab({
+      listTrialPackets: vi.fn().mockResolvedValue([packet, { ...packet, teamId: 't2', teamNumber: 2, side: 'defense', warnings: [] }]),
+    })
+    expect(await screen.findByRole('link', { name: 'Download Team 1’s packet' })).toHaveAttribute('href', '/packets/t1')
+    expect(screen.getByRole('link', { name: /Download all/ })).toHaveAttribute('href', '/packets/all')
+    expect(screen.getAllByText(/1 deposition · 2 exhibits for trial · 5 case files · 0 investigator reports · 3 discovery sets/)).toHaveLength(2)
+    expect(screen.getByText('The joint exhibit list isn’t final.')).toBeInTheDocument()
+    expect(screen.getByText(/1 packet isn’t finished yet/)).toBeInTheDocument()
+  })
+
+  it('shows the instructor a team’s PDF as the team filed it', async () => {
+    const packet = {
+      teamId: 't1',
+      teamNumber: 1,
+      side: 'plaintiff' as const,
+      worldNumber: 1,
+      members: [],
+      exhibits: 0,
+      depositions: 0,
+      files: 2,
+      reports: 0,
+      discovery: 0,
+      warnings: [],
+    }
+    const items = [
+      { id: 'file:a', section: 'Case file', title: 'Waiver.pdf', printable: true },
+      { id: 'file:b', section: 'Case file', title: 'Records.pdf', printable: true },
+    ]
+    const { user } = renderTab({
+      listTrialPackets: vi.fn().mockResolvedValue([packet]),
+      getTrialPacketContents: vi.fn().mockResolvedValue({ items, folders: [{ name: 'For the jury', items: ['file:a'] }], warnings: [] }),
+    })
+    await user.click(await screen.findByRole('button', { name: 'See Team 1’s PDF' }))
+    expect(await screen.findByRole('heading', { name: 'For the jury' })).toBeInTheDocument()
+    expect(screen.getByText('Waiver.pdf')).toBeInTheDocument()
+    // What the team didn't file isn't shown, and nothing can be changed.
+    expect(screen.queryByText('Records.pdf')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add folder|Move|Delete/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Download PDF' })).toHaveAttribute('href', '/packets/t1/pdf')
+  })
+
   it('turns the joint exhibit list off for students', async () => {
     const off = { ...rivera, exhibitListEnabled: false }
     const { user, service, onCaseChange } = renderTab({ setExhibitListEnabled: vi.fn().mockResolvedValue(off) })

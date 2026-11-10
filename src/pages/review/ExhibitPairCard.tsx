@@ -20,7 +20,7 @@ function versionDetail(v: ExhibitReview) {
   return rest || 'the whole document'
 }
 
-/** Neither parts nor black-outs: this version is the whole document. */
+/** Neither parts nor redactions: this version is the whole document. */
 const isWhole = (v: ExhibitReview) => v.parts === null && !v.offeredRedacted
 
 /**

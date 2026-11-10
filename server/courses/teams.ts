@@ -5,9 +5,9 @@ import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
 import type { RosterEntry } from './roster.ts'
 
-/** Two is the norm; three only absorbs the odd student out. */
-/** Auto-pair makes teams of this many students, as the instructor chooses. */
-export const MIN_AUTO_TEAM_SIZE = 2
+/** Auto-pair makes teams of this many students, as the instructor chooses; two unless they choose otherwise. */
+export const MIN_AUTO_TEAM_SIZE = 1
+export const DEFAULT_AUTO_TEAM_SIZE = 2
 export const MAX_AUTO_TEAM_SIZE = 6
 /** The most a team can hold, leaving room to add a leftover student by hand. */
 export const MAX_TEAM_SIZE = MAX_AUTO_TEAM_SIZE + 1
@@ -35,7 +35,7 @@ export interface CaseTeams {
   /** Roster students not on a team for this case yet. */
   unpaired: RosterEntry[]
   matchups: Matchup[]
-  /** The case has left the introduction phase: every world is locked, and no new teams or worlds can be made. */
+  /** The case has left the introduction phase: the worlds it had then are locked, though new teams and worlds can still be made. */
   worldsLocked: boolean
 }
 
@@ -338,7 +338,7 @@ async function deleteEmptyTeams(client: PoolClient, caseId: string) {
  * where possible. Students left over stay off a team, for the instructor to
  * place by hand.
  */
-export function autoPair(courseId: string, caseId: string, teamSize = MIN_AUTO_TEAM_SIZE) {
+export function autoPair(courseId: string, caseId: string, teamSize = DEFAULT_AUTO_TEAM_SIZE) {
   return changeTeams(courseId, caseId, async (client) => {
     const { unpaired } = await listTeams(courseId, caseId, client)
     if (unpaired.length === 0) throw new HttpError(409, 'Everyone is already on a team.')
@@ -375,7 +375,7 @@ export function pairStudents(
   emails: string[],
   pastPartners: Set<string>,
   random: (max: number) => number = randomInt,
-  size = MIN_AUTO_TEAM_SIZE,
+  size = DEFAULT_AUTO_TEAM_SIZE,
 ): { teams: string[][]; leftover: string[] } {
   const remaining = [...emails]
   for (let i = remaining.length - 1; i > 0; i--) {

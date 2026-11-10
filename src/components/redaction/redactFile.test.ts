@@ -4,7 +4,7 @@ import { planPages, redactParts } from './redactFile'
 const box = { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }
 
 describe('planPages', () => {
-  it('marking what’s redacted: blacks out pages with boxes, drops pages left out, and copies the rest', () => {
+  it('marking what’s redacted: whites out pages with boxes, drops pages left out, and copies the rest', () => {
     const marks = {
       mode: 'redact' as const,
       pages: [
@@ -12,10 +12,10 @@ describe('planPages', () => {
         { page: 3, removed: true, boxes: [] },
       ],
     }
-    expect(planPages(marks, 4)).toEqual(['copy', 'black', 'drop', 'copy'])
+    expect(planPages(marks, 4)).toEqual(['copy', 'cover', 'drop', 'copy'])
   })
 
-  it('marking what’s admitted: keeps only pages with a box, blacked out around it', () => {
+  it('marking what’s admitted: keeps only pages with a box, redacted around it', () => {
     const marks = {
       mode: 'admit' as const,
       pages: [
@@ -23,7 +23,7 @@ describe('planPages', () => {
         { page: 3, removed: true, boxes: [box] },
       ],
     }
-    expect(planPages(marks, 3)).toEqual(['black', 'drop', 'drop'])
+    expect(planPages(marks, 3)).toEqual(['cover', 'drop', 'drop'])
   })
 })
 
@@ -33,7 +33,7 @@ describe('redactParts', () => {
     { n: 1, question: 'Then?', objection: null, text: 'I sent it anyway.' },
   ]
 
-  it('blacks out what’s marked redacted, keeping the spaces around it', () => {
+  it('bars out what’s marked redacted, keeping the spaces around it', () => {
     const out = redactParts(parts, { mode: 'redact', parts: [{ n: 0, removed: false, ranges: [{ field: 'text', start: 4, end: 9 }] }] })
     expect(out.map((p) => p.text)).toEqual(['The █████ was red.', 'I sent it anyway.'])
   })

@@ -5,6 +5,7 @@ import { useCourseService } from '../../courses/CourseServiceContext'
 import {
   MAX_AUTO_TEAM_SIZE,
   MAX_TEAM_SIZE,
+  DEFAULT_AUTO_TEAM_SIZE,
   MIN_AUTO_TEAM_SIZE,
   type CaseTeams,
   type RosterEntry,
@@ -39,7 +40,7 @@ function StudentLabel({ student }: { student: RosterEntry }) {
  * chosen students by hand, adjust teams afterwards), followed by the case
  * worlds those teams are matched into. Read-only once the case is closed.
  * A locked world's teams stay (see Matchup.locked), though students can still
- * move between teams; once the case leaves Introduction no new teams are made.
+ * move between teams. New teams can be made in any phase until the case closes.
  */
 export function TeamsSection({
   courseId,
@@ -191,7 +192,7 @@ export function TeamsSection({
                   <button
                     type="button"
                     className="btn-primary"
-                    onClick={() => setAutoSize(String(MIN_AUTO_TEAM_SIZE))}
+                    onClick={() => setAutoSize(String(DEFAULT_AUTO_TEAM_SIZE))}
                     disabled={busy}
                   >
                     {unpaired.length === 1 ? 'Auto-pair 1 student' : `Auto-pair ${unpaired.length} students`}

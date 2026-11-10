@@ -11,7 +11,7 @@ export const PHASE_HINT: Record<CasePhase, string> = {
   investigate: "Teams can use the background investigator. The other side's witnesses can't be interviewed yet.",
   deposition: 'Every witness is revealed to both sides and can be deposed.',
   final_steps:
-    'Each case world builds and exchanges its joint exhibit list. You rule on the challenges from the Review page. Witnesses and the investigator stay open.',
+    'Each case world builds and exchanges its joint exhibit list. The teams settle what they can; with judicial review on, you rule on what they keep from the Review page. Witnesses and the investigator stay open.',
 }
 
 /** Asked before moving to `phase`; it applies to every case world at once. */

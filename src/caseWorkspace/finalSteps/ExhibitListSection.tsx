@@ -1,20 +1,22 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { BadgeCheck, Check, Eye, Gavel, Highlighter, Info, ListChecks, Lock, Scale, Send, TriangleAlert, X } from 'lucide-react'
+import { BadgeCheck, Check, CircleCheck, Eye, Gavel, Highlighter, Info, ListChecks, Lock, Scale, Send, TriangleAlert, X } from 'lucide-react'
 import { Modal } from '../../components/Modal'
-import { RedactionEditor } from '../../components/redaction/RedactionEditor'
+import { RedactionEditor, type MarkedRedaction } from '../../components/redaction/RedactionEditor'
 import { cutPdf } from '../../components/redaction/redactFile'
 import { DictationTextarea } from '../../components/Dictation'
 import type {
   Exhibit,
   ExhibitListItem,
+  ExhibitMarking,
   ExhibitMove,
   ExhibitOption,
   ExhibitPart,
   PageRedactionMarks,
   Side,
   StudentExhibits,
+  ExhibitVersion,
 } from '../../courses/types'
-import { exhibitLabel, pagesText, parsePages } from '../../courses/exhibitLabels'
+import { exhibitLabel, pagesText, parsePages, waitsOnTeam } from '../../courses/exhibitLabels'
 import { TeachMe } from '../exchange/TeachMe'
 import { TeachMeButton } from '../exchange/TeachMeButton'
 import '../exchange/exchange.css'
@@ -35,25 +37,33 @@ interface Choice {
   parts: number[] | null
   /** A PDF's pages as typed, while "Only some pages" is on. */
   pages?: string
-  /** Parts of a PDF or picture blacked out, with the copy (a new upload, or the one it was saved with). */
+  /** Parts of a PDF or picture redacted, with the copy (a new upload, or the one it was saved with). */
   marks?: PageRedactionMarks | null
   uploadKey?: string
   redactedKey?: string | null
-  /** "Keeps 2 of 3 pages, 1 with black-outs", once marked here. */
+  /** "Keeps 2 of 3 pages, 1 with redactions", once marked here. */
   summary?: string
 }
 
-/** What the builder needs to black out parts of a file: its bytes, and somewhere to upload the copy. */
+/** What the builder needs to redact parts of a file: its bytes, and somewhere to upload the copy. */
 export interface CopyActions {
   loadFile(materialId: string): Promise<Uint8Array>
   upload(materialId: string, file: Blob): Promise<string>
 }
 
+/** What a team needs to propose a redacted version of its exhibit: how it can be marked, its bytes, and somewhere to upload the copy. */
+export interface ProposalActions {
+  marking(exhibitId: string): Promise<ExhibitMarking>
+  loadFile(exhibitId: string): Promise<Uint8Array>
+  upload(exhibitId: string, file: Blob): Promise<string>
+}
+
 /**
  * The joint exhibit list, in the final steps phase: the team builds its list
  * and submits it; once both sides have, it reviews the other side's exhibits
- * (authenticity, then admissibility), answers objections to its own, and
- * follows each exhibit to the end. Without the action props (a closed case),
+ * (authenticity, then admissibility), answers challenges to its own (with a
+ * proposed redacted version, for an objection), settles or keeps its own
+ * challenges once answered, and follows each exhibit to the end. Without the action props (a closed case),
  * it's read-only.
  */
 export function ExhibitListSection({
@@ -64,6 +74,7 @@ export function ExhibitListSection({
   onOpenFile,
   onOpenExhibit,
   copyActions,
+  proposalActions,
 }: {
   exhibits: StudentExhibits
   onSave?(items: ExhibitListItem[]): Promise<void>
@@ -71,14 +82,22 @@ export function ExhibitListSection({
   onMove?(exhibitId: string, move: ExhibitMove): Promise<void>
   /** Opens one of the team's own case files, while building the list. */
   onOpenFile(materialId: string): void
-  /** Opens an exhibit's file: its listed pages, or the redacted version. */
-  onOpenExhibit(exhibit: Exhibit): void
-  /** Lets the team black out parts of a PDF or picture it lists; leave out to list files only as they are. */
+  /** Opens an exhibit's file: its listed pages, or the redacted version (or the proposed one). */
+  onOpenExhibit(exhibit: Exhibit, version?: ExhibitVersion): void
+  /** Lets the team redact parts of a PDF or picture it lists; leave out to list files only as they are. */
   copyActions?: CopyActions
+  /** Lets the team mark a redacted version of its own exhibit, answering an objection; leave out to describe it only. */
+  proposalActions?: ProposalActions
 }) {
   /** The guide open, and where its bulb was, to grow out of. */
   const [teach, setTeach] = useState<DOMRect | null>(null)
-  const [excerpt, setExcerpt] = useState<{ title: string; kind: Exhibit['kind']; parts: ExhibitPart[]; redacted?: boolean } | null>(null)
+  const [excerpt, setExcerpt] = useState<{
+    title: string
+    kind: Exhibit['kind']
+    parts: ExhibitPart[]
+    redacted?: boolean
+    version?: ExhibitVersion
+  } | null>(null)
   const { mine, theirs, side } = exhibits
   const exchanged = Boolean(mine.submittedAt && theirs.submittedAt)
   const other: Side = side === 'plaintiff' ? 'defense' : 'plaintiff'
@@ -86,6 +105,11 @@ export function ExhibitListSection({
   // A transcript, report or redacted text file opens as its text; any other file in the viewer.
   const open = (x: Exhibit) =>
     x.excerpt ? setExcerpt({ title: x.title, kind: x.kind, parts: x.excerpt, redacted: x.redacted }) : x.kind === 'material' && onOpenExhibit(x)
+  // The redacted version the offering side proposed: its text, or its file.
+  const openProposal = (x: Exhibit) =>
+    x.proposalExcerpt
+      ? setExcerpt({ title: x.title, kind: x.kind, parts: x.proposalExcerpt, redacted: true, version: 'proposal' })
+      : onOpenExhibit(x, 'proposal')
 
   return (
     <div className="xl">
@@ -109,7 +133,7 @@ export function ExhibitListSection({
         {exhibits.finalizedAt ? (
           <FinalList exhibits={exhibits.exhibits} onOpen={open} />
         ) : exchanged ? (
-          <Instructions />
+          <Instructions judging={exhibits.judicialReview !== false} />
         ) : mine.submittedAt ? (
           <>
             <p className="xl-waiting" role="status">
@@ -132,7 +156,9 @@ export function ExhibitListSection({
         )}
       </section>
 
-      {exchanged && <Exchanged exhibits={exhibits} onMove={onMove} onOpen={open} />}
+      {exchanged && (
+        <Exchanged exhibits={exhibits} onMove={onMove} onOpen={open} onOpenProposal={openProposal} proposalActions={proposalActions} />
+      )}
 
       {teach && <TeachMe topic="exhibits" from={teach} onClose={() => setTeach(null)} />}
       {excerpt && <ExcerptModal {...excerpt} onClose={() => setExcerpt(null)} />}
@@ -231,7 +257,7 @@ function Builder({
         <span>
           <strong>If it isn’t on your list, you can’t use it at trial.</strong> Mark everything you may need: case files
           (including the records your investigator got or made for you) and transcripts of the depositions your team took.
-          You can list a whole item or just the part you need, and black out parts of a PDF or picture.
+          You can list a whole item or just the part you need, and redact parts of a PDF or picture.
         </span>
       </p>
       <p className="muted xl-status">
@@ -305,7 +331,7 @@ function OptionRow({
   const byPage = option.kind === 'material' && !option.parts
   const label = byPage ? 'pages' : option.kind === 'deposition' ? 'questions and answers' : 'paragraphs'
   const some = choice !== null && (choice.pages !== undefined || choice.parts !== null)
-  // The pages the black-outs are drawn on: all of them, or the ones typed (if they read).
+  // The pages the redactions are drawn on: all of them, or the ones typed (if they read).
   const pages = choice?.pages !== undefined ? parsePages(choice.pages) : null
   const canDraw = Boolean(copyActions && option.markable && choice && (choice.pages === undefined || pages))
   return (
@@ -361,7 +387,7 @@ function OptionRow({
           {choice!.marks ? (
             <>
               <span>
-                <Check aria-hidden="true" /> Parts blacked out{choice!.summary ? `: ${choice!.summary}` : ''}.
+                <Check aria-hidden="true" /> Parts redacted{choice!.summary ? `: ${choice!.summary}` : ''}.
               </span>
               <button type="button" className="link-button" onClick={() => setDrawing(true)}>
                 Change
@@ -372,7 +398,7 @@ function OptionRow({
             </>
           ) : (
             <button type="button" className="ws-btn ws-btn-secondary" onClick={() => setDrawing(true)}>
-              <Highlighter aria-hidden="true" /> Black out parts
+              <Highlighter aria-hidden="true" /> Redact parts
             </button>
           )}
         </div>
@@ -425,7 +451,7 @@ function OptionRow({
   )
 }
 
-/** Text with its redactions (runs of █, from the server) drawn as black bars. */
+/** Text with its redactions (runs of █, from the server) drawn as white bars. */
 function Redacted({ text }: { text: string }) {
   if (!text.includes('█')) return text
   return text.split(/(█+)/).map((run, i) =>
@@ -459,7 +485,7 @@ function PartText({ part, index }: { part: ExhibitPart; index: number }) {
   )
 }
 
-function Instructions() {
+function Instructions({ judging }: { judging: boolean }) {
   return (
     <div className="xl-steps" role="note">
       <p>
@@ -475,8 +501,11 @@ function Instructions() {
         </li>
       </ol>
       <p className="muted">
-        When the other side objects to one of yours, drop it or send it to the judge with your response. Your instructor rules on
-        every challenge.
+        Each challenge gets one answer: the side that listed the exhibit responds or drops it, and can answer an objection with a
+        redacted version. Then the challenger withdraws or agrees, or keeps the challenge.{' '}
+        {judging
+          ? 'Once every exhibit is settled, your instructor rules on what’s kept.'
+          : 'What’s kept stays on the final list, marked disputed, for the judge to decide at trial.'}
       </p>
     </div>
   )
@@ -488,18 +517,26 @@ function statusBadge(x: Exhibit, side: Side): { label: string; tone: string } {
   switch (x.status) {
     case 'awaiting_authenticity':
       return { label: ours ? 'Other side checking authenticity' : 'Your call: authenticity', tone: ours ? 'grey' : 'amber' }
+    case 'authenticity_response':
+      return { label: ours ? 'Authenticity challenged: your answer' : 'Waiting on their answer', tone: ours ? 'amber' : 'grey' }
+    case 'authenticity_reconsider':
+      return { label: ours ? 'Answered: their call' : 'They answered: your call', tone: ours ? 'grey' : 'amber' }
     case 'authenticity_review':
       return { label: 'Authenticity before the judge', tone: 'blue' }
     case 'awaiting_admission':
       return { label: ours ? 'Other side deciding on admission' : 'Your call: admission', tone: ours ? 'grey' : 'amber' }
     case 'objection_response':
-      return { label: ours ? 'Objected to: your response' : 'Objected to', tone: ours ? 'amber' : 'grey' }
+      return { label: ours ? 'Objected to: your answer' : 'Waiting on their answer', tone: ours ? 'amber' : 'grey' }
+    case 'objection_reconsider':
+      return { label: ours ? 'Answered: their call' : 'They answered: your call', tone: ours ? 'grey' : 'amber' }
     case 'admission_review':
       return { label: 'Objection before the judge', tone: 'blue' }
     case 'admitted':
       return x.supersededBy
         ? { label: 'Replaced by the whole', tone: 'grey' }
         : { label: x.redaction || x.redacted ? 'Admitted, redacted' : 'Admitted', tone: 'green' }
+    case 'disputed':
+      return { label: 'Disputed: for the judge at trial', tone: 'amber' }
     case 'inauthentic':
       return { label: 'Rejected as inauthentic', tone: 'rose' }
     case 'dropped':
@@ -509,37 +546,49 @@ function statusBadge(x: Exhibit, side: Side): { label: string; tone: string } {
   }
 }
 
-/** Waiting on this team: the other side's exhibits to review, and objections to its own. */
-const needsUs = (x: Exhibit, side: Side) =>
-  x.offeredBy === side ? x.status === 'objection_response' : x.status === 'awaiting_authenticity' || x.status === 'awaiting_admission'
-
-const ADMITTED_STATES = new Set(['admitted'])
-const AUTHENTICATED_STATES = new Set(['awaiting_admission', 'objection_response', 'admission_review'])
-const IN_REVIEW_STATES = new Set(['awaiting_authenticity', 'authenticity_review'])
+const AUTHENTICITY_STATES = new Set(['awaiting_authenticity', 'authenticity_response', 'authenticity_reconsider', 'authenticity_review'])
+const ADMISSION_STATES = new Set(['awaiting_admission', 'objection_response', 'objection_reconsider', 'admission_review'])
 
 /** After the exchange: what needs the team, then every exhibit by where it stands. */
 function Exchanged({
   exhibits,
   onMove,
   onOpen,
+  onOpenProposal,
+  proposalActions,
 }: {
   exhibits: StudentExhibits
   onMove?(exhibitId: string, move: ExhibitMove): Promise<void>
   onOpen(x: Exhibit): void
+  onOpenProposal(x: Exhibit): void
+  proposalActions?: ProposalActions
 }) {
   const { side } = exhibits
+  const judging = exhibits.judicialReview !== false
   const list = exhibits.exhibits
-  const needs = list.filter((x) => needsUs(x, side))
+  const needs = list.filter((x) => waitsOnTeam(x, side))
+  const keep = judging ? 'keep it for the judge' : 'keep it for trial'
   // What needs the team, step by step: an exhibit it authenticates moves on to admission at once.
   const steps = [
     { id: 'authenticity', title: 'Step 1 · Authenticity', hint: 'Is each one what it claims to be?', items: needs.filter((x) => x.status === 'awaiting_authenticity') },
     {
+      id: 'replies',
+      title: 'They answered your challenges',
+      hint: `Withdraw or agree, or ${keep}.`,
+      items: needs.filter((x) => x.status === 'authenticity_reconsider' || x.status === 'objection_reconsider'),
+    },
+    {
       id: 'admission',
       title: 'Step 2 · Admission',
-      hint: 'These are authenticated. Admit each one, or object.',
+      hint: 'Admit each one, or object. An authenticity challenge you kept still stands.',
       items: needs.filter((x) => x.status === 'awaiting_admission'),
     },
-    { id: 'objections', title: 'Objections to your exhibits', hint: 'Drop it, or send it to the judge.', items: needs.filter((x) => x.status === 'objection_response') },
+    {
+      id: 'objections',
+      title: 'Challenges to your exhibits',
+      hint: 'Answer each one, or drop the exhibit. You can answer an objection with a redacted version.',
+      items: needs.filter((x) => x.status === 'authenticity_response' || x.status === 'objection_response'),
+    },
   ].filter((step) => step.items.length > 0)
   // Exhibits the team just authenticated here, marked as they arrive in Step 2.
   const [justAuthenticated, setJustAuthenticated] = useState<Set<string>>(() => new Set())
@@ -551,9 +600,10 @@ function Exchanged({
   }
   const groups = useMemo(
     () => [
-      { id: 'in-review', title: 'In review', items: list.filter((x) => IN_REVIEW_STATES.has(x.status)) },
-      { id: 'authenticated', title: 'Authenticated', items: list.filter((x) => AUTHENTICATED_STATES.has(x.status)) },
-      { id: 'admitted', title: 'Admitted', items: list.filter((x) => ADMITTED_STATES.has(x.status) && !x.supersededBy) },
+      { id: 'in-review', title: 'Authenticity', items: list.filter((x) => AUTHENTICITY_STATES.has(x.status)) },
+      { id: 'authenticated', title: 'Admission', items: list.filter((x) => ADMISSION_STATES.has(x.status)) },
+      { id: 'admitted', title: 'Admitted', items: list.filter((x) => x.status === 'admitted' && !x.supersededBy) },
+      { id: 'disputed', title: 'Disputed, for the judge at trial', items: list.filter((x) => x.status === 'disputed') },
     ],
     [list],
   )
@@ -565,7 +615,9 @@ function Exchanged({
           <span className="ws-eyebrow">Your team’s turn</span>
           <h2 id="xl-needs-title">{needs.length === 0 ? 'Nothing needs your team right now' : `${plural(needs.length, 'exhibit')} need your team`}</h2>
           {needs.length === 0 ? (
-            <p className="cw-empty">You’ll get a notice here when the other side objects, or when your instructor rules.</p>
+            <p className="cw-empty">
+              You’ll get a notice here when the other side challenges or answers{judging ? ', or when your instructor rules' : ''}.
+            </p>
           ) : (
             steps.map((step) => (
               <div key={step.id} className="xl-step" aria-labelledby={`xl-step-${step.id}`} role="group">
@@ -577,7 +629,15 @@ function Exchanged({
                   {step.items.map((x) => (
                     // A new card at each step, so nothing from the last one carries over.
                     <li key={`${x.id}:${x.status}`}>
-                      <MoveCard exhibit={x} side={side} onMove={onMove} onOpen={() => onOpen(x)} fresh={justAuthenticated.has(x.id)} />
+                      <MoveCard
+                        exhibit={x}
+                        judging={judging}
+                        onMove={onMove}
+                        onOpen={() => onOpen(x)}
+                        onOpenProposal={() => onOpenProposal(x)}
+                        proposalActions={proposalActions}
+                        fresh={justAuthenticated.has(x.id)}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -589,23 +649,25 @@ function Exchanged({
       <section className="cw-card ex-section" aria-labelledby="xl-running-title">
         <span className="ws-eyebrow">Both sides see this list</span>
         <h2 id="xl-running-title">Where every exhibit stands</h2>
-        {/* Once the list is final, only the groups with something in them. */}
-        {groups.filter((g) => !exhibits.finalizedAt || g.items.length > 0).map((g) => (
-          <div key={g.id} className="xl-status-group">
-            <h3>
-              {g.title} <span className="cw-tab-count">{g.items.length}</span>
-            </h3>
-            {g.items.length === 0 ? (
-              <p className="cw-empty">None.</p>
-            ) : (
-              <ul className="xl-rows">
-                {g.items.map((x) => (
-                  <ExhibitRow key={x.id} exhibit={x} side={side} onOpen={() => onOpen(x)} />
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
+        {/* Once the list is final, only the groups with something in them; the disputed group only when there are some. */}
+        {groups
+          .filter((g) => (!exhibits.finalizedAt && g.id !== 'disputed') || g.items.length > 0)
+          .map((g) => (
+            <div key={g.id} className="xl-status-group">
+              <h3>
+                {g.title} <span className="cw-tab-count">{g.items.length}</span>
+              </h3>
+              {g.items.length === 0 ? (
+                <p className="cw-empty">None.</p>
+              ) : (
+                <ul className="xl-rows">
+                  {g.items.map((x) => (
+                    <ExhibitRow key={x.id} exhibit={x} side={side} onOpen={() => onOpen(x)} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         {out.length > 0 && (
           <details className="xl-out">
             <summary>Not admitted ({out.length})</summary>
@@ -630,6 +692,13 @@ function Who({ exhibit }: { exhibit: Exhibit }) {
 }
 
 function Authentic({ exhibit }: { exhibit: Exhibit }) {
+  if (exhibit.authenticityDisputed && !exhibit.authenticated) {
+    return (
+      <span className="cw-badge xl-badge-amber xl-authentic" title="The challenge to its authenticity was kept">
+        <TriangleAlert aria-hidden="true" /> Authenticity disputed
+      </span>
+    )
+  }
   if (!exhibit.authenticated) return null
   return (
     <span className="cw-badge cw-badge-done xl-authentic" title="Accepted as authentic">
@@ -638,10 +707,12 @@ function Authentic({ exhibit }: { exhibit: Exhibit }) {
   )
 }
 
-/** The written record so far: challenges, objections, responses and rulings. */
+/** The written record so far: challenges, answers, proposed versions, what the teams agreed, and rulings. */
 export function ExhibitRecord({ exhibit: x }: { exhibit: Exhibit }) {
   const lines: [string, string][] = []
   if (x.authenticityNote) lines.push(['Authenticity challenge', x.authenticityNote])
+  if (x.authenticityResponse) lines.push(['Answer on authenticity', x.authenticityResponse])
+  if (x.authenticityDisputed && !x.authenticityRuling) lines.push(['Authenticity', 'The challenge was kept.'])
   if (x.authenticityRuling)
     lines.push([
       'Judge on authenticity',
@@ -649,14 +720,22 @@ export function ExhibitRecord({ exhibit: x }: { exhibit: Exhibit }) {
     ])
   if (x.objection) lines.push(['Objection', x.objection])
   if (x.response) lines.push(['Response', x.response])
-  if (x.acceptsRedaction) lines.push(['Would accept redacting', x.acceptsRedaction])
+  if (x.acceptsRedaction || x.proposalMarked) {
+    lines.push([
+      'Proposed redaction',
+      x.acceptsRedaction ? `${x.acceptsRedaction}${x.proposalMarked ? ' (marked on the exhibit)' : ''}` : 'Marked on the exhibit.',
+    ])
+  }
+  if (x.objectionKept && !x.ruling) lines.push(['Objection kept', 'The teams didn’t settle it.'])
+  if (x.agreed === 'proposal') lines.push(['Agreed', 'Admitted as the proposed redacted version.'])
+  else if (x.agreed === 'original' && x.objection) lines.push(['Agreed', 'Admitted as it is.'])
   if (x.ruling)
     lines.push([
       'Ruling',
       `${x.ruling === 'overruled' ? 'Objection overruled' : x.ruling === 'sustained' ? 'Objection sustained' : 'Partly overruled'}${x.rulingNote ? `. ${x.rulingNote}` : ''}`,
     ])
-  if (x.redaction) lines.push(['Redacted', x.redaction])
-  else if (x.redacted) lines.push(['Redacted', 'As the judge marked it. Open the exhibit to see what’s admitted.'])
+  if (x.redaction && x.agreed !== 'proposal') lines.push(['Redacted', x.redaction])
+  else if (x.redacted && x.agreed !== 'proposal') lines.push(['Redacted', 'As the judge marked it. Open the exhibit to see what’s admitted.'])
   if (lines.length === 0) return null
   return (
     <dl className="xl-record">
@@ -691,24 +770,34 @@ function ExhibitRow({ exhibit: x, side, onOpen }: { exhibit: Exhibit; side: Side
 /** One exhibit waiting on the team, with its buttons. */
 function MoveCard({
   exhibit: x,
-  side,
+  judging,
   onMove,
   onOpen,
+  onOpenProposal,
+  proposalActions,
   fresh = false,
 }: {
   exhibit: Exhibit
-  side: Side
+  /** The instructor rules on what's kept; otherwise the judge does, at trial. */
+  judging: boolean
   onMove(exhibitId: string, move: ExhibitMove): Promise<void>
   onOpen(): void
+  /** Opens the redacted version the offering side proposed. */
+  onOpenProposal(): void
+  /** Lets the team mark a redacted version of its own exhibit, answering an objection. */
+  proposalActions?: ProposalActions
   /** Just authenticated by the team, so its admission is a new choice. */
   fresh?: boolean
 }) {
-  const [writing, setWriting] = useState<'challenge' | 'review' | null>(null)
+  const [writing, setWriting] = useState<'challenge' | 'respond' | null>(null)
   const [text, setText] = useState('')
   const [redaction, setRedaction] = useState('')
+  const [marking, setMarking] = useState<ExhibitMarking | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [marked, setMarked] = useState<MarkedRedaction | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const ours = x.offeredBy === side
+  const forTheJudge = judging ? 'for the judge' : 'for trial'
 
   async function send(move: ExhibitMove) {
     setBusy(true)
@@ -722,8 +811,38 @@ function MoveCard({
     }
   }
 
+  const drop = (
+    <button
+      type="button"
+      className="ws-btn ws-btn-secondary"
+      disabled={busy}
+      onClick={() =>
+        window.confirm(`Drop ${x.title} from your exhibits? You won't be able to use it at trial.`) &&
+        send({ step: x.status === 'authenticity_response' ? 'authenticity-response' : 'response', decision: 'drop' })
+      }
+    >
+      <X aria-hidden="true" /> Drop the exhibit
+    </button>
+  )
+
+  /** Proposing a redacted version: find out whether the exhibit can be marked, and open the marks if so. */
+  async function startProposal() {
+    if (!proposalActions) return
+    if (marking) return setEditing(Boolean(marking.markable))
+    try {
+      const m = await proposalActions.marking(x.id)
+      setMarking(m)
+      if (m.markable) setEditing(true)
+    } catch {
+      setMarking({ markable: null, parts: null })
+    }
+  }
+  const markable = marking?.markable ? { ...marking, markable: marking.markable } : null
+
   let buttons: ReactNode
   let form: ReactNode = null
+  // What the other side said that this move answers, shown above the record.
+  let theirWords: ReactNode = null
   if (x.status === 'awaiting_authenticity') {
     buttons = (
       <>
@@ -743,11 +862,54 @@ function MoveCard({
           value={text}
           onChange={setText}
           busy={busy}
-          submit="Send challenge to the judge"
+          submit="Send challenge"
           onSubmit={() => send({ step: 'authenticity', decision: 'challenge', note: text })}
           onCancel={() => setWriting(null)}
         />
       )
+  } else if (x.status === 'authenticity_response') {
+    theirWords = x.authenticityNote && (
+      <p className="xl-objection">
+        <strong>Their challenge:</strong> {x.authenticityNote}
+      </p>
+    )
+    buttons = (
+      <>
+        {drop}
+        <button type="button" className="ws-btn ws-btn-primary" disabled={busy} onClick={() => setWriting('respond')} aria-pressed={writing === 'respond'}>
+          <Send aria-hidden="true" /> Answer the challenge
+        </button>
+      </>
+    )
+    if (writing === 'respond')
+      form = (
+        <NoteForm
+          label="Your answer to the challenge"
+          hint="Say where it came from and who can vouch for it: a custodian, a certification, a witness who knows it."
+          value={text}
+          onChange={setText}
+          busy={busy}
+          submit="Send answer"
+          onSubmit={() => send({ step: 'authenticity-response', decision: 'respond', note: text })}
+          onCancel={() => setWriting(null)}
+        />
+      )
+  } else if (x.status === 'authenticity_reconsider') {
+    theirWords = x.authenticityResponse && (
+      <p className="xl-objection">
+        <strong>Their answer:</strong> {x.authenticityResponse}
+      </p>
+    )
+    buttons = (
+      <>
+        <button type="button" className="ws-btn ws-btn-primary" disabled={busy} onClick={() => send({ step: 'authenticity-reconsider', decision: 'withdraw' })}>
+          <BadgeCheck aria-hidden="true" /> Withdraw the challenge
+        </button>
+        <button type="button" className="ws-btn ws-btn-secondary" disabled={busy} onClick={() => send({ step: 'authenticity-reconsider', decision: 'keep' })}>
+          <Scale aria-hidden="true" /> Keep it {forTheJudge}
+        </button>
+      </>
+    )
   } else if (x.status === 'awaiting_admission') {
     buttons = (
       <>
@@ -772,44 +934,110 @@ function MoveCard({
           onCancel={() => setWriting(null)}
         />
       )
-  } else {
+  } else if (x.status === 'objection_response') {
+    theirWords = x.objection && (
+      <p className="xl-objection">
+        <strong>Their objection:</strong> {x.objection}
+      </p>
+    )
     buttons = (
       <>
-        <button
-          type="button"
-          className="ws-btn ws-btn-secondary"
-          disabled={busy}
-          onClick={() => window.confirm(`Drop ${x.title} from your exhibits? You won't be able to use it at trial.`) && send({ step: 'response', decision: 'drop' })}
-        >
-          <X aria-hidden="true" /> Drop the exhibit
-        </button>
-        <button type="button" className="ws-btn ws-btn-primary" disabled={busy} onClick={() => setWriting('review')} aria-pressed={writing === 'review'}>
-          <Scale aria-hidden="true" /> Send to the judge
+        {drop}
+        <button type="button" className="ws-btn ws-btn-primary" disabled={busy} onClick={() => setWriting('respond')} aria-pressed={writing === 'respond'}>
+          <Send aria-hidden="true" /> Answer the objection
         </button>
       </>
     )
-    if (writing === 'review')
+    if (writing === 'respond')
       form = (
         <NoteForm
-          label="Your response to the objection"
+          label="Your answer to the objection"
           hint="Answer the ground they raised: another purpose, a hearsay exception, why it's relevant."
           value={text}
           onChange={setText}
           busy={busy}
-          submit="Send to the judge"
-          onSubmit={() => send({ step: 'response', decision: 'review', response: text, acceptsRedaction: redaction })}
+          submit="Send answer"
+          onSubmit={() =>
+            send({ step: 'response', decision: 'respond', response: text, acceptsRedaction: redaction, marks: marked?.marks, uploadKey: marked?.uploadKey })
+          }
           onCancel={() => setWriting(null)}
           extra={
-            <label className="xl-field">
-              <span>
-                Would you accept a redaction? <small>(optional) Say which part could come out.</small>
-              </span>
-              <input type="text" value={redaction} maxLength={2000} onChange={(e) => setRedaction(e.target.value)} />
-            </label>
+            <div className="xl-proposal">
+              {proposalActions && marking?.markable !== null && (
+                <p className="rx-marked">
+                  <span>
+                    {marked ? (
+                      <>
+                        <CircleCheck aria-hidden="true" /> Proposed version marked. {marked.summary}.
+                      </>
+                    ) : (
+                      'You can offer a redacted version they might accept.'
+                    )}
+                  </span>
+                  <button type="button" className="ws-btn ws-btn-secondary" disabled={busy} onClick={startProposal}>
+                    <Highlighter aria-hidden="true" /> {marked ? 'Change the marks' : 'Propose a redacted version'}
+                  </button>
+                </p>
+              )}
+              <label className="xl-field">
+                <span>
+                  {marked ? 'Describe your proposed version' : 'Or describe a redaction you’d accept'} <small>(optional)</small>
+                </span>
+                <input type="text" value={redaction} maxLength={2000} onChange={(e) => setRedaction(e.target.value)} />
+              </label>
+            </div>
           }
         />
       )
+  } else {
+    // objection_reconsider: the challenger's call on the answer to its objection.
+    const proposed = Boolean(x.proposalMarked || x.acceptsRedaction)
+    theirWords = (
+      <>
+        {x.response && (
+          <p className="xl-objection">
+            <strong>Their answer:</strong> {x.response}
+          </p>
+        )}
+        {proposed && (
+          <p className="xl-objection">
+            <strong>Their proposed version:</strong> {x.acceptsRedaction ?? 'Marked on the exhibit.'}{' '}
+            {x.proposalMarked && (
+              <button type="button" className="link-button" onClick={onOpenProposal}>
+                View it
+              </button>
+            )}
+          </p>
+        )}
+      </>
+    )
+    buttons = (
+      <>
+        <button type="button" className="ws-btn ws-btn-secondary" disabled={busy} onClick={() => send({ step: 'reconsider', decision: 'original' })}>
+          <Check aria-hidden="true" /> Admit it as it is
+        </button>
+        {proposed && (
+          <button type="button" className="ws-btn ws-btn-primary" disabled={busy} onClick={() => send({ step: 'reconsider', decision: 'proposal' })}>
+            <Highlighter aria-hidden="true" /> Agree to their redacted version
+          </button>
+        )}
+        <button type="button" className="ws-btn ws-btn-secondary" disabled={busy} onClick={() => send({ step: 'reconsider', decision: 'keep' })}>
+          <Gavel aria-hidden="true" /> Keep the objection {forTheJudge}
+        </button>
+      </>
+    )
   }
+  // The record, without what's shown above it.
+  const record =
+    x.status === 'authenticity_response'
+      ? { ...x, authenticityNote: null }
+      : x.status === 'authenticity_reconsider'
+        ? { ...x, authenticityResponse: null }
+        : x.status === 'objection_response'
+          ? { ...x, objection: null }
+          : x.status === 'objection_reconsider'
+            ? { ...x, response: null, acceptsRedaction: null, proposalMarked: false }
+            : x
 
   return (
     <div className={`ex-respond-item${writing ? ' ex-respond-open' : ''}${fresh ? ' xl-fresh' : ''}`}>
@@ -821,18 +1049,33 @@ function MoveCard({
         <Authentic exhibit={x} />
         {fresh && <span className="cw-badge xl-badge-blue">Just authenticated: now decide on admission</span>}
       </div>
-      {ours && x.objection && (
-        <p className="xl-objection">
-          <strong>Their objection:</strong> {x.objection}
-        </p>
-      )}
-      <ExhibitRecord exhibit={{ ...x, objection: ours ? null : x.objection }} />
+      {theirWords}
+      <ExhibitRecord exhibit={record} />
       <div className="xl-buttons">{buttons}</div>
       {form}
+      {marking && !marking.markable && writing === 'respond' && (
+        <p className="muted xl-step-hint">This exhibit can’t be marked here. Describe the redacted version you’d accept instead.</p>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}
         </p>
+      )}
+      {editing && markable && proposalActions && (
+        <RedactionEditor
+          eyebrow={`Propose a redacted version · ${x.title}`}
+          marking={markable}
+          deposition={x.kind === 'deposition'}
+          proposal
+          loadFile={() => proposalActions.loadFile(x.id)}
+          upload={(file) => proposalActions.upload(x.id, file)}
+          initial={marked?.marks}
+          onSave={(m) => {
+            setMarked(m)
+            setEditing(false)
+          }}
+          onClose={() => setEditing(false)}
+        />
       )}
     </div>
   )
@@ -886,14 +1129,21 @@ function NoteForm({
   )
 }
 
-/** The final list: the plaintiff's numbered, the defense's lettered. */
+/**
+ * The final list: the plaintiff's numbered, the defense's lettered. Without
+ * judicial review, it includes the exhibits the teams didn't settle, marked
+ * disputed with their record, for the judge at trial.
+ */
 function FinalList({ exhibits, onOpen }: { exhibits: Exhibit[]; onOpen(x: Exhibit): void }) {
   const labelled = exhibits.filter((x) => x.label)
+  const disputed = labelled.some((x) => x.status === 'disputed')
   return (
     <>
       <p className="xl-final-note" role="status">
         <ListChecks aria-hidden="true" />
-        Every exhibit is settled. These are the exhibits each side can use at trial.
+        {disputed
+          ? 'The teams have settled what they could. These are the exhibits for trial; the judge decides the disputed ones there, with the record below each.'
+          : 'Every exhibit is settled. These are the exhibits each side can use at trial.'}
       </p>
       <div className="xl-final">
         {(['plaintiff', 'defense'] as const).map((s) => {
@@ -915,6 +1165,12 @@ function FinalList({ exhibits, onOpen }: { exhibits: Exhibit[]; onOpen(x: Exhibi
                       {(x.redaction || x.redacted) && (
                         <span className="cw-badge ex-badge-amber">{x.redaction ? `Redacted: ${x.redaction}` : 'Redacted'}</span>
                       )}
+                      {x.status === 'disputed' && (
+                        <>
+                          <span className="cw-badge xl-badge-amber">Disputed: for the judge at trial</span>
+                          <ExhibitRecord exhibit={x} />
+                        </>
+                      )}
                     </li>
                   ))}
                 </ol>
@@ -933,18 +1189,21 @@ export function ExcerptModal({
   kind,
   parts,
   redacted,
+  version,
   onClose,
 }: {
   title: string
   kind: Exhibit['kind']
   parts: ExhibitPart[]
   redacted?: boolean
+  /** The redacted version the offering side proposed, rather than the exhibit as it stands. */
+  version?: ExhibitVersion
   onClose(): void
 }) {
   const what = kind === 'deposition' ? 'Deposition transcript' : kind === 'report' ? 'Investigator report' : 'Text of the file'
   return (
     <Modal
-      eyebrow={redacted ? `${what} · as admitted, redacted` : what}
+      eyebrow={version === 'proposal' ? `${what} · proposed redacted version` : redacted ? `${what} · as admitted, redacted` : what}
       title={title}
       icon={kind === 'deposition' ? <Gavel /> : <Lock />}
       wide

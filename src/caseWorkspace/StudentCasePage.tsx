@@ -11,6 +11,7 @@ import type {
   ExchangeKind,
   ExhibitListItem,
   ExhibitMove,
+  ExhibitVersion,
   Investigation,
   ItemResponse,
   ReviewResult,
@@ -222,11 +223,16 @@ export function StudentCasePage() {
       async move(exhibitId: string, move: ExhibitMove) {
         setExhibits(await service.moveExhibit(courseId, caseId, exhibitId, move))
       },
-      fileUrl: (exhibitId: string) => service.myExhibitFileUrl(courseId, caseId, exhibitId),
+      fileUrl: (exhibitId: string, version?: ExhibitVersion) => service.myExhibitFileUrl(courseId, caseId, exhibitId, version),
       loadText: (exhibitId: string) => service.myExhibitText(courseId, caseId, exhibitId),
       copy: {
         loadFile: (materialId: string) => fetchBytes(service.myExhibitSourceUrl(courseId, caseId, materialId)),
         upload: (materialId: string, file: Blob) => service.uploadExhibitCopy(courseId, caseId, materialId, file),
+      },
+      proposal: {
+        marking: (exhibitId: string) => service.getMyExhibitMarking(courseId, caseId, exhibitId),
+        loadFile: (exhibitId: string) => fetchBytes(service.myExhibitBytesUrl(courseId, caseId, exhibitId)),
+        upload: (exhibitId: string, file: Blob) => service.uploadProposedExhibit(courseId, caseId, exhibitId, file),
       },
     }),
     [service, courseId, caseId],

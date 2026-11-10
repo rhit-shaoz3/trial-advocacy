@@ -100,6 +100,12 @@ const submit = (agent: request.Agent, items: unknown[]) => agent.post(`${exhibit
 const file = (id: string, parts: number[] | null = null) => ({ kind: 'material', id, parts })
 const exhibitsOf = async (agent: request.Agent) => (await mine(agent)).exhibits as Exhibit[]
 const find = (list: Exhibit[], test: (x: Exhibit) => boolean) => list.find(test)!
+/** The instructor's worlds to rule on (or ruled on), and the exhibits of them waiting for a ruling. */
+const reviewWorlds = async (status = 'open') => (await prof.get(`${reviewsUrl()}?status=${status}`)).body.worlds as { worldNumber: number; exhibits: Exhibit[] }[]
+const waitingForRuling = async () =>
+  (await reviewWorlds())
+    .flatMap((w) => w.exhibits)
+    .filter((x) => ['authenticity_review', 'admission_review'].includes(x.status)) as (Exhibit & { pairedWith: string; sourceTitle: string })[]
 
 describe('building an exhibit list', () => {
   it('opens in the final steps phase, with the files and depositions the team can list (not investigator reports)', async () => {
@@ -114,7 +120,7 @@ describe('building an exhibit list', () => {
       'case-file: Medical records.pdf',
       expect.stringMatching(/^depositions: Deposition of Tom Becker \(/),
     ])
-    // A PDF can have parts blacked out.
+    // A PDF can have parts redacted.
     expect(ours.options[0].markable).toBe('pdf')
     const theirs = await mine(cy)
     expect(theirs.options.map((o: { title: string }) => o.title)).toEqual(['Amended complaint.pdf', 'Incident report.pdf'])
@@ -293,62 +299,197 @@ describe('reviewing the other side’s exhibits', () => {
     expect(find(await exhibitsOf(cy), (x) => x.id === inc.id).status).toBe('awaiting_admission')
   })
 
-  it('sends a challenge to the instructor, even in review lite, who authenticates or rejects it', async () => {
-    await prof.put(`${caseUrl()}/review-mode`).send({ reviewMode: 'lite' })
+  it('sends an authenticity challenge to the offering side to answer, then back to the challenger to withdraw or keep', async () => {
     const { medical: med, depo } = await exchanged()
     await move(cy, med.id, 'authenticity', { decision: 'challenge', note: 'No custodian can vouch for these.' }).expect(200)
-    await move(cy, depo.id, 'authenticity', { decision: 'challenge', note: 'The transcript was never certified.' }).expect(200)
+    expect(find(await exhibitsOf(ada), (x) => x.id === med.id).status).toBe('authenticity_response')
+    expect((await mine(ada)).notices.objections).toBe(1)
+    expect((await move(cy, med.id, 'authenticity-response', { decision: 'respond', note: 'Mine.' })).status).toBe(409)
+    expect((await move(ada, med.id, 'authenticity-response', { decision: 'respond' })).status).toBe(400)
+    await move(ada, med.id, 'authenticity-response', { decision: 'respond', note: 'The hospital certified them.' }).expect(200)
+    expect((await mine(cy)).notices.objections).toBe(1)
+    await move(cy, med.id, 'authenticity-reconsider', { decision: 'withdraw' }).expect(200)
+    expect(find(await exhibitsOf(ada), (x) => x.id === med.id)).toMatchObject({
+      status: 'awaiting_admission',
+      authenticated: true,
+      authenticityNote: 'No custodian can vouch for these.',
+      authenticityResponse: 'The hospital certified them.',
+    })
 
-    const open = (await prof.get(reviewsUrl())).body.reviews
-    expect(open.map((r: { title: string; status: string; authenticityNote: string }) => [r.status, r.authenticityNote])).toEqual([
-      ['authenticity_review', 'No custodian can vouch for these.'],
-      ['authenticity_review', 'The transcript was never certified.'],
-    ])
-    expect(open[0]).toMatchObject({ caseTitle: 'Ramirez v. Thrillville', worldNumber: 1, teams: { plaintiff: 1, defense: 2 } })
-    expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(2)
-
-    expect((await prof.post(`${reviewsUrl()}/${med.id}/authenticity`).send({ decision: 'authenticate' })).status).toBe(200)
-    await prof.post(`${reviewsUrl()}/${depo.id}/authenticity`).send({ decision: 'reject', note: 'Not certified.' }).expect(200)
-    const list = await exhibitsOf(ada)
-    expect(find(list, (x) => x.id === med.id)).toMatchObject({ status: 'awaiting_admission', authenticated: true })
-    expect(find(list, (x) => x.id === depo.id).status).toBe('inauthentic')
-    expect((await mine(ada)).notices.rulings).toBe(2)
-    expect((await prof.get(`${reviewsUrl()}?status=completed`)).body.reviews).toHaveLength(2)
+    // Or the offering side drops it.
+    await move(cy, depo.id, 'authenticity', { decision: 'challenge', note: 'Never certified.' }).expect(200)
+    await move(ada, depo.id, 'authenticity-response', { decision: 'drop' }).expect(200)
+    expect(find(await exhibitsOf(ada), (x) => x.id === depo.id).status).toBe('dropped')
   })
 
-  it('lets the offering side drop an exhibit objected to, or send it to the judge, who rules on it', async () => {
+  it('takes a kept authenticity challenge on to admission, and to the judge only once the whole world is settled, even in review lite', async () => {
+    await prof.put(`${caseUrl()}/review-mode`).send({ reviewMode: 'lite' })
+    const { medical: med, depo, incident: inc } = await exchanged()
+    await move(cy, med.id, 'authenticity', { decision: 'challenge', note: 'No custodian can vouch for these.' }).expect(200)
+    await move(ada, med.id, 'authenticity-response', { decision: 'respond', note: 'The hospital certified them.' }).expect(200)
+    await move(cy, med.id, 'authenticity-reconsider', { decision: 'keep' }).expect(200)
+    expect(find(await exhibitsOf(ada), (x) => x.id === med.id)).toMatchObject({
+      status: 'awaiting_admission',
+      authenticated: false,
+      authenticityDisputed: true,
+    })
+    await move(cy, med.id, 'admission', { decision: 'admit' }).expect(200)
+    expect(find(await exhibitsOf(ada), (x) => x.id === med.id).status).toBe('authenticity_review')
+
+    // The other exhibits are still with the teams, so nothing reaches the judge yet.
+    expect(await reviewWorlds()).toEqual([])
+    expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(0)
+    expect((await prof.post(`${reviewsUrl()}/${med.id}/authenticity`).send({ decision: 'authenticate' })).status).toBe(409)
+
+    await move(cy, depo.id, 'authenticity', { decision: 'agree' }).expect(200)
+    await move(cy, depo.id, 'admission', { decision: 'admit' }).expect(200)
+    await move(ada, inc.id, 'authenticity', { decision: 'agree' }).expect(200)
+    await move(ada, inc.id, 'admission', { decision: 'admit' }).expect(200)
+
+    // Now the whole world's list goes to the judge, with the one challenge to rule on.
+    const [world] = await reviewWorlds()
+    expect(world).toMatchObject({ caseTitle: 'Ramirez v. Thrillville', worldNumber: 1, teams: { plaintiff: 1, defense: 2 } })
+    expect(world.exhibits.map((x) => x.status)).toEqual(['authenticity_review', 'admitted', 'admitted'])
+    expect((await prof.get(`/api/courses/${course.id}/home`)).body.reviewCount).toBe(1)
+
+    await prof.post(`${reviewsUrl()}/${med.id}/authenticity`).send({ decision: 'authenticate' }).expect(200)
+    const list = await exhibitsOf(ada)
+    expect(find(list, (x) => x.id === med.id)).toMatchObject({ status: 'admitted', authenticated: true })
+    expect(list.map((x) => x.label)).toEqual(['1', '2', 'A'])
+    expect((await mine(ada)).notices.rulings).toBe(1)
+    expect(await reviewWorlds()).toEqual([])
+    expect((await reviewWorlds('completed')).map((w) => w.worldNumber)).toEqual([1])
+  })
+
+  it('lets the offering side drop an exhibit objected to, or answer it with a proposed version the challenger can agree to', async () => {
     const { medical: med, depo, incident: inc } = await exchanged()
     for (const x of [med, depo]) {
       await move(cy, x.id, 'authenticity', { decision: 'agree' }).expect(200)
-      await move(cy, x.id, 'admission', { decision: 'challenge', objection: 'Hearsay in the doctor’s notes.' }).expect(200)
+      await move(cy, x.id, 'admission', { decision: 'challenge', objection: 'Hearsay.' }).expect(200)
     }
     expect((await mine(ada)).notices.objections).toBe(2)
     expect((await move(cy, med.id, 'response', { decision: 'drop' })).status).toBe(409)
-    expect((await move(ada, med.id, 'response', { decision: 'review' })).status).toBe(400)
+    expect((await move(ada, med.id, 'response', { decision: 'respond' })).status).toBe(400)
 
-    await move(ada, depo.id, 'response', { decision: 'drop' }).expect(200)
-    await move(ada, med.id, 'response', { decision: 'review', response: 'Business records.', acceptsRedaction: 'Page 4.' }).expect(200)
-    const [review] = (await prof.get(reviewsUrl())).body.reviews
-    expect(review).toMatchObject({ status: 'admission_review', objection: 'Hearsay in the doctor’s notes.', response: 'Business records.', acceptsRedaction: 'Page 4.' })
+    // The transcript, with a proposed version that keeps only "The light" of the second answer.
+    expect((await ada.get(`${exhibitsUrl()}/${depo.id}/marking`)).body.markable).toBe('text')
+    expect((await cy.get(`${exhibitsUrl()}/${depo.id}/marking`)).status).toBe(409)
+    const marks = { mode: 'admit', parts: [{ n: 1, ranges: [{ field: 'text', start: 0, end: 9 }] }] }
+    await move(ada, depo.id, 'response', { decision: 'respond', response: 'Only the light.', marks }).expect(200)
+    expect(find(await exhibitsOf(cy), (x) => x.id === depo.id)).toMatchObject({
+      status: 'objection_reconsider',
+      response: 'Only the light.',
+      proposalMarked: true,
+      proposalExcerpt: [{ n: 1, question: '████', objection: null, text: 'The light ████████' }],
+    })
+    await move(cy, depo.id, 'reconsider', { decision: 'proposal' }).expect(200)
+    expect(find(await exhibitsOf(ada), (x) => x.id === depo.id)).toMatchObject({
+      status: 'admitted',
+      agreed: 'proposal',
+      redacted: true,
+      ruling: null,
+      excerpt: [{ n: 1, question: '████', objection: null, text: 'The light ████████' }],
+    })
 
+    // The records, answered in words; with no marked version, the challenger keeps the objection.
+    await move(ada, med.id, 'response', { decision: 'respond', response: 'Business records.', acceptsRedaction: 'Page 4.' }).expect(200)
+    await move(cy, med.id, 'reconsider', { decision: 'keep' }).expect(200)
+    expect(find(await exhibitsOf(ada), (x) => x.id === med.id)).toMatchObject({ status: 'admission_review', objectionKept: true })
+
+    // The defense drops its own once objected to; then the world goes to the judge.
+    await move(ada, inc.id, 'authenticity', { decision: 'agree' }).expect(200)
+    await move(ada, inc.id, 'admission', { decision: 'challenge', objection: 'Irrelevant.' }).expect(200)
+    expect((await move(ada, inc.id, 'reconsider', { decision: 'proposal' })).status).toBe(409)
+    await move(cy, inc.id, 'response', { decision: 'respond', response: 'It shows the harness was checked.' }).expect(200)
+    expect((await move(ada, inc.id, 'reconsider', { decision: 'proposal' })).status).toBe(400)
+    await move(ada, inc.id, 'reconsider', { decision: 'original' }).expect(200)
+
+    const [review] = await waitingForRuling()
+    expect(review).toMatchObject({ id: med.id, objection: 'Hearsay.', response: 'Business records.', acceptsRedaction: 'Page 4.' })
     expect((await prof.post(`${reviewsUrl()}/${med.id}/admission`).send({ decision: 'partial' })).status).toBe(400)
     await prof.post(`${reviewsUrl()}/${med.id}/admission`).send({ decision: 'partial', redaction: 'Page 4' }).expect(200)
 
-    // The defense's own exhibit is still open, so the list isn't final yet.
-    let list = await exhibitsOf(ada)
+    const list = await exhibitsOf(ada)
     expect(find(list, (x) => x.id === med.id)).toMatchObject({ status: 'admitted', redaction: 'Page 4', ruling: 'partial' })
-    expect(find(list, (x) => x.id === depo.id).status).toBe('dropped')
-    expect(list.every((x) => x.label === null)).toBe(true)
-
-    await move(ada, inc.id, 'authenticity', { decision: 'agree' }).expect(200)
-    await move(ada, inc.id, 'admission', { decision: 'challenge', objection: 'Irrelevant.' }).expect(200)
-    await move(cy, inc.id, 'response', { decision: 'review', response: 'It shows the harness was checked.' }).expect(200)
-    await prof.post(`${reviewsUrl()}/${inc.id}/admission`).send({ decision: 'sustain' }).expect(200)
-
-    list = await exhibitsOf(ada)
-    expect(find(list, (x) => x.id === inc.id).status).toBe('excluded')
-    expect(list.map((x) => x.label)).toEqual(['1', null, null])
+    expect(find(list, (x) => x.id === inc.id)).toMatchObject({ status: 'admitted', agreed: 'original' })
+    expect(list.map((x) => x.label)).toEqual(['1', '2', 'A'])
     expect((await mine(cy)).notices.finalized).toBe(true)
+  })
+
+  it('serves a proposed redacted copy of a file to both sides, and admits it when the challenger agrees', async () => {
+    const { medical: med, depo, incident: inc } = await exchanged()
+    // The stored test file isn't a real PDF, so it stands in for a picture.
+    await pool.query(`UPDATE case_materials SET content_type = 'image/png' WHERE id = $1`, [medical])
+    await move(cy, med.id, 'authenticity', { decision: 'agree' }).expect(200)
+    await move(cy, med.id, 'admission', { decision: 'challenge', objection: 'Hearsay.' }).expect(200)
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])
+    const { key, url, headers } = (await ada.post(`${exhibitsUrl()}/${med.id}/proposal-uploads`).send({ size: png.length }).expect(201)).body.upload
+    await ada.put(url).set(headers).send(png).expect(200)
+    const marks = { mode: 'redact', pages: [{ page: 1, removed: false, boxes: [{ x: 0.1, y: 0.1, w: 0.3, h: 0.1 }] }] }
+    await move(ada, med.id, 'response', { decision: 'respond', response: 'Without the notes.', marks, uploadKey: key }).expect(200)
+    for (const agent of [ada, cy]) expect((await agent.get(`${exhibitsUrl()}/${med.id}/file?version=proposal&stream=1`)).status).toBe(200)
+    expect((await ada.get(`${exhibitsUrl()}/${inc.id}/file?version=proposal`)).status).toBe(404)
+
+    await move(cy, med.id, 'reconsider', { decision: 'proposal' }).expect(200)
+    expect(find(await exhibitsOf(cy), (x) => x.id === med.id)).toMatchObject({ status: 'admitted', redacted: true })
+    const served = await cy.get(`${exhibitsUrl()}/${med.id}/file?stream=1`).buffer(true)
+    expect(served.headers['content-type']).toBe('image/png')
+    void depo
+  })
+
+  it('rules on authenticity first, then the objection the teams also kept', async () => {
+    const { medical: med, depo, incident: inc } = await exchanged()
+    await move(cy, med.id, 'authenticity', { decision: 'challenge', note: 'Unsigned.' }).expect(200)
+    await move(ada, med.id, 'authenticity-response', { decision: 'respond', note: 'Signed on page 2.' }).expect(200)
+    await move(cy, med.id, 'authenticity-reconsider', { decision: 'keep' }).expect(200)
+    await move(cy, med.id, 'admission', { decision: 'challenge', objection: 'Hearsay.' }).expect(200)
+    await move(ada, med.id, 'response', { decision: 'respond', response: 'Business records.' }).expect(200)
+    await move(cy, med.id, 'reconsider', { decision: 'keep' }).expect(200)
+    await move(cy, depo.id, 'authenticity', { decision: 'challenge', note: 'Never certified.' }).expect(200)
+    await move(ada, depo.id, 'authenticity-response', { decision: 'respond', note: 'Certified today.' }).expect(200)
+    await move(cy, depo.id, 'authenticity-reconsider', { decision: 'keep' }).expect(200)
+    await move(cy, depo.id, 'admission', { decision: 'admit' }).expect(200)
+    await move(ada, inc.id, 'authenticity', { decision: 'agree' }).expect(200)
+    await move(ada, inc.id, 'admission', { decision: 'admit' }).expect(200)
+
+    expect((await waitingForRuling()).map((x) => [x.id, x.status])).toEqual([
+      [med.id, 'authenticity_review'],
+      [depo.id, 'authenticity_review'],
+    ])
+    expect((await prof.post(`${reviewsUrl()}/${med.id}/admission`).send({ decision: 'overrule' })).status).toBe(409)
+    await prof.post(`${reviewsUrl()}/${med.id}/authenticity`).send({ decision: 'authenticate' }).expect(200)
+    await prof.post(`${reviewsUrl()}/${depo.id}/authenticity`).send({ decision: 'reject', note: 'Not certified.' }).expect(200)
+    expect(find(await exhibitsOf(ada), (x) => x.id === med.id)).toMatchObject({ status: 'admission_review', authenticated: true })
+    expect(find(await exhibitsOf(ada), (x) => x.id === depo.id).status).toBe('inauthentic')
+    await prof.post(`${reviewsUrl()}/${med.id}/admission`).send({ decision: 'sustain' }).expect(200)
+    const list = await exhibitsOf(ada)
+    expect(find(list, (x) => x.id === med.id).status).toBe('excluded')
+    expect(list.map((x) => x.label)).toEqual([null, null, 'A'])
+  })
+
+  it('without judicial review, puts what the teams kept on the final list as disputed, for the judge in person', async () => {
+    expect((await prof.put(`${caseUrl()}/exhibit-judicial-review`).send({ enabled: false })).body.case.exhibitJudicialReview).toBe(false)
+    const { medical: med, depo, incident: inc } = await exchanged()
+    expect((await mine(ada)).judicialReview).toBe(false)
+    // Fixed once the lists are exchanged.
+    expect((await prof.put(`${caseUrl()}/exhibit-judicial-review`).send({ enabled: true })).status).toBe(409)
+
+    await move(cy, med.id, 'authenticity', { decision: 'challenge', note: 'Unsigned.' }).expect(200)
+    await move(ada, med.id, 'authenticity-response', { decision: 'respond', note: 'Signed on page 2.' }).expect(200)
+    await move(cy, med.id, 'authenticity-reconsider', { decision: 'keep' }).expect(200)
+    await move(cy, med.id, 'admission', { decision: 'admit' }).expect(200)
+    await move(cy, depo.id, 'authenticity', { decision: 'agree' }).expect(200)
+    await move(cy, depo.id, 'admission', { decision: 'challenge', objection: 'Hearsay.' }).expect(200)
+    await move(ada, depo.id, 'response', { decision: 'respond', response: 'Party admission.' }).expect(200)
+    await move(cy, depo.id, 'reconsider', { decision: 'keep' }).expect(200)
+    await move(ada, inc.id, 'authenticity', { decision: 'agree' }).expect(200)
+    await move(ada, inc.id, 'admission', { decision: 'admit' }).expect(200)
+
+    const list = await exhibitsOf(ada)
+    expect(list.map((x) => `${x.label} ${x.status}`)).toEqual(['1 disputed', '2 disputed', 'A admitted'])
+    expect(find(list, (x) => x.id === depo.id)).toMatchObject({ objection: 'Hearsay.', response: 'Party admission.', objectionKept: true })
+    expect((await mine(ada)).finalizedAt).toEqual(expect.any(String))
+    expect(await reviewWorlds()).toEqual([])
   })
 
   it('numbers the plaintiff’s exhibits and letters the defense’s once nothing is open', async () => {
@@ -418,11 +559,12 @@ describe('redacting a partly admitted exhibit', () => {
     return res.body as Buffer
   }
   const move = (agent: request.Agent, id: string, step: string, body: object) => agent.post(`${exhibitsUrl()}/${id}/${step}`).send(body)
-  /** Takes an exhibit of the plaintiff's to the judge on an objection. */
+  /** Takes an exhibit of the plaintiff's to the judge on an objection the defense keeps. */
   async function toJudge(id: string) {
     await move(cy, id, 'authenticity', { decision: 'agree' }).expect(200)
     await move(cy, id, 'admission', { decision: 'challenge', objection: 'Hearsay.' }).expect(200)
-    await move(ada, id, 'response', { decision: 'review', response: 'Business records.' }).expect(200)
+    await move(ada, id, 'response', { decision: 'respond', response: 'Business records.' }).expect(200)
+    await move(cy, id, 'reconsider', { decision: 'keep' }).expect(200)
   }
 
   it('shows the other side only the listed pages of a file', async () => {
@@ -467,7 +609,7 @@ describe('redacting a partly admitted exhibit', () => {
     for (const agent of [ada, cy]) expect(await widths(await download(agent, `${exhibitsUrl()}/${x.id}/file`))).toEqual([100])
   })
 
-  it('blacks out a transcript’s text on the server, keeping only what’s marked admitted', async () => {
+  it('redacts a transcript’s text on the server, keeping only what’s marked admitted', async () => {
     await toFinalSteps()
     await submit(ada, [{ kind: 'deposition', id: deposition, parts: null }])
     await submit(cy, [])
@@ -518,7 +660,7 @@ describe('redacting a partly admitted exhibit', () => {
   })
 })
 
-describe('a team blacking out parts of a file it lists', () => {
+describe('a team redacting parts of a file it lists', () => {
   async function pdf(pages: number) {
     const doc = await PDFDocument.create()
     for (let i = 1; i <= pages; i++) doc.addPage([i * 100, 500])
@@ -550,7 +692,7 @@ describe('a team blacking out parts of a file it lists', () => {
   // Pages 2 and 4 of a five-page log, with a box on the first of them (so both stay).
   const marks = { mode: 'redact', pages: [{ page: 1, removed: false, boxes: [{ x: 0.1, y: 0.1, w: 0.3, h: 0.1 }] }] }
 
-  it('keeps the blacked-out copy with the list, and shows the other side only that', async () => {
+  it('keeps the redacted copy with the list, and shows the other side only that', async () => {
     const log = (await uploadCaseFile(prof, caseUrl(), 'Shift log.pdf', { audience: 'plaintiff' }, await pdf(5))).body.material.id
     await toFinalSteps()
     const item = (extra: object) => ({ ...file(log, [2, 4]), marks, ...extra })
@@ -587,13 +729,13 @@ describe('a team blacking out parts of a file it lists', () => {
     expect(await widths(await download(cy, `${exhibitsUrl()}/${x.id}/file`))).toEqual(await widths(copy))
   })
 
-  it('sends the file for blacking out from the API itself, never a redirect to storage', async () => {
+  it('sends the file for redacting from the API itself, never a redirect to storage', async () => {
     const log = (await uploadCaseFile(prof, caseUrl(), 'Shift log.pdf', { audience: 'plaintiff' }, await pdf(3))).body.material.id
     await toFinalSteps()
     const res = await ada.get(`${exhibitsUrl()}/sources/${log}`).buffer(true)
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toBe('application/pdf')
-    // Only what the team can list and black out: not the other side's file.
+    // Only what the team can list and redact: not the other side's file.
     expect((await cy.get(`${exhibitsUrl()}/sources/${log}`)).status).toBe(404)
 
     // The instructor's marking window gets the exhibit's bytes the same way.
@@ -605,7 +747,7 @@ describe('a team blacking out parts of a file it lists', () => {
     expect((await prof.get(`${reviewsUrl()}/${x.id}/file?stream=1`)).status).toBe(200)
   })
 
-  it('counts a file both sides listed as authentic, but sends differently blacked-out versions on for admission', async () => {
+  it('counts a file both sides listed as authentic, but sends differently redacted versions on for admission', async () => {
     await toFinalSteps()
     // The complaint's stored test file isn't a real PDF, so it stands in for a picture (one page).
     const both = complaint
@@ -630,7 +772,7 @@ describe('two versions of one document before the judge', () => {
   const move = (agent: request.Agent, id: string, step: string, body: object) => agent.post(`${exhibitsUrl()}/${id}/${step}`).send(body)
   const versions = (body: object) => prof.post(`${reviewsUrl()}/versions`).send(body)
 
-  /** Pages 1–2 (the plaintiff's) and 3–4 (the defense's) of one log, each objected to and sent to the judge. */
+  /** Pages 1–2 (the plaintiff's) and 3–4 (the defense's) of one log, each objected to and kept for the judge. */
   async function bothInReview() {
     const log = (await uploadCaseFile(prof, caseUrl(), 'Shift log.pdf', { audience: 'all' }, await pdf(5))).body.material.id
     await toFinalSteps()
@@ -639,19 +781,23 @@ describe('two versions of one document before the judge', () => {
     const list = await exhibitsOf(ada)
     const p = find(list, (x) => x.sourceId === log && x.offeredBy === 'plaintiff')
     const d = find(list, (x) => x.sourceId === log && x.offeredBy === 'defense')
+    const med = find(list, (x) => x.sourceId === medical)
+    await move(cy, med.id, 'authenticity', { decision: 'agree' }).expect(200)
+    await move(cy, med.id, 'admission', { decision: 'admit' }).expect(200)
     await move(cy, p.id, 'admission', { decision: 'challenge', objection: 'Pages 1–2 are hearsay.' }).expect(200)
     await move(ada, d.id, 'admission', { decision: 'challenge', objection: 'Pages 3–4 mislead without the rest.' }).expect(200)
-    await move(ada, p.id, 'response', { decision: 'review', response: 'Business records.' }).expect(200)
-    // Not yet a pair: only one version is before the judge.
-    const one = (await prof.get(reviewsUrl())).body.reviews
-    expect(one.map((r: { pairedWith: string | null }) => r.pairedWith)).toEqual([null])
-    await move(cy, d.id, 'response', { decision: 'review', response: 'Rule of completeness.' }).expect(200)
+    await move(ada, p.id, 'response', { decision: 'respond', response: 'Business records.' }).expect(200)
+    await move(cy, p.id, 'reconsider', { decision: 'keep' }).expect(200)
+    // Nothing reaches the judge while the other version is still with the teams.
+    expect(await reviewWorlds()).toEqual([])
+    await move(cy, d.id, 'response', { decision: 'respond', response: 'Rule of completeness.' }).expect(200)
+    await move(ada, d.id, 'reconsider', { decision: 'keep' }).expect(200)
     return { log, p, d }
   }
 
   it('lists the two versions together, with the document’s own title', async () => {
     const { p, d } = await bothInReview()
-    const reviews = (await prof.get(reviewsUrl())).body.reviews
+    const reviews = await waitingForRuling()
     expect(reviews.map((r: { id: string; pairedWith: string; sourceTitle: string; title: string }) => [r.id, r.pairedWith, r.sourceTitle, r.title])).toEqual([
       [p.id, d.id, 'Shift log.pdf', 'Shift log.pdf — pages 1–2'],
       [d.id, p.id, 'Shift log.pdf', 'Shift log.pdf — pages 3–4'],

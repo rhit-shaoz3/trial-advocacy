@@ -15,10 +15,14 @@ import {
   saveList,
   submitList,
   teamMove,
+  TEAM_STEPS,
   type ExhibitTeam,
+  type TeamStep,
 } from './exhibits.ts'
 import {
+  asProposal,
   findExhibitSource,
+  type ExhibitSource,
   markable,
   sendExhibitFile,
   sendExhibitText,
@@ -71,7 +75,7 @@ myExhibitsRouter.post('/list/submit', async (req, res) => {
   res.json({ exhibits: await getStudentExhibits(team) })
 })
 
-/** A PDF or picture the team can list, for blacking out parts of it in the browser. */
+/** A PDF or picture the team can list, for redacting parts of it in the browser. */
 myExhibitsRouter.get('/sources/:materialId', async (req, res) => {
   const team = (await studentTeam(req, true))!
   const option = (await exhibitOptions(team)).find((o) => o.kind === 'material' && o.id === req.params.materialId && o.markable)
@@ -79,7 +83,7 @@ myExhibitsRouter.get('/sources/:materialId', async (req, res) => {
   await sendMaterialBytes(res, team.caseId, option.id)
 })
 
-/** `{ materialId, size }`: where to upload the team's blacked-out copy of a PDF or picture it's listing. */
+/** `{ materialId, size }`: where to upload the team's redacted copy of a PDF or picture it's listing. */
 myExhibitsRouter.post('/uploads', async (req, res) => {
   const team = (await studentTeam(req, true))!
   const materialId = (req.body as Record<string, unknown> | undefined)?.materialId
@@ -88,7 +92,7 @@ myExhibitsRouter.post('/uploads', async (req, res) => {
   res.status(201).json({ upload: await startRedactedUpload(team.caseId, option.markable ?? null, req.body) })
 })
 
-for (const step of ['authenticity', 'admission', 'response'] as const) {
+for (const step of Object.keys(TEAM_STEPS) as TeamStep[]) {
   /** The team's move on one exhibit; see `teamMove`. */
   myExhibitsRouter.post(`/:exhibitId/${step}`, async (req, res) => {
     const team = (await studentTeam(req, true))!
@@ -97,18 +101,47 @@ for (const step of ['authenticity', 'admission', 'response'] as const) {
   })
 }
 
-/** One exhibit's file, for either side of the world: its listed pages, or the redacted version once admitted with one. */
-myExhibitsRouter.get('/:exhibitId/file', async (req, res) => {
-  const team = await studentTeam(req, false)
+/** An exhibit in the team's world; `?version=proposal` for the redacted version the offering team proposed. */
+async function worldExhibit(req: Request, team: ExhibitTeam | null) {
   if (!team || !isUuid(req.params.exhibitId)) throw new HttpError(404, 'Exhibit not found.')
-  await sendExhibitFile(res, await findExhibitSource(req.params.exhibitId as string, team), req.query.view === '1')
+  const x = await findExhibitSource(req.params.exhibitId as string, team)
+  return req.query.version === 'proposal' ? asProposal(x) : x
+}
+
+/**
+ * One exhibit's file, for either side of the world: its listed pages, or the
+ * redacted version once admitted with one; `?stream=1` sends the bytes from
+ * here (for marking a proposed version).
+ */
+myExhibitsRouter.get('/:exhibitId/file', async (req, res) => {
+  const x = await worldExhibit(req, await studentTeam(req, false))
+  await sendExhibitFile(res, x, req.query.view === '1', req.query.stream === '1')
+})
+
+/** The team's own exhibit, objected to and waiting on its response: one it can propose a redacted version of. */
+async function answeringExhibit(req: Request): Promise<[ExhibitTeam, ExhibitSource]> {
+  const team = (await studentTeam(req, true))!
+  const x = await worldExhibit(req, team)
+  if (x.offeredBy !== team.side || x.status !== 'objection_response') throw new HttpError(409, 'This exhibit has no objection waiting on your team.')
+  return [team, x]
+}
+
+/** `{ markable, parts }`: how the team can mark a proposed redacted version, and its turns or paragraphs when it's text. */
+myExhibitsRouter.get('/:exhibitId/marking', async (req, res) => {
+  const [, x] = await answeringExhibit(req)
+  const kind = markable(x)
+  res.json({ markable: kind, parts: kind === 'text' ? textParts(x) : null })
+})
+
+/** `{ size }`: where to upload the proposed redacted copy of a PDF or picture. */
+myExhibitsRouter.post('/:exhibitId/proposal-uploads', async (req, res) => {
+  const [team, x] = await answeringExhibit(req)
+  res.status(201).json({ upload: await startRedactedUpload(team.caseId, markable(x), req.body) })
 })
 
 /** One exhibit's text version (a Word file's), for the viewer. */
 myExhibitsRouter.get('/:exhibitId/text', async (req, res) => {
-  const team = await studentTeam(req, false)
-  if (!team || !isUuid(req.params.exhibitId)) throw new HttpError(404, 'Exhibit not found.')
-  await sendExhibitText(res, await findExhibitSource(req.params.exhibitId as string, team))
+  await sendExhibitText(res, await worldExhibit(req, await studentTeam(req, false)))
 })
 
 /** Marks the world's exhibits as read by this student. */
@@ -131,11 +164,12 @@ caseExhibitsRouter.get('/overview', async (req, res) => {
   res.json({ overview: await exhibitOverview(req.courseCase!.id) })
 })
 
-/** An exhibit in this course, for the instructor. */
-const courseExhibit = (req: Request) => {
+/** An exhibit in this course, for the instructor; `?version=proposal` for the redacted version the offering team proposed. */
+const courseExhibit = async (req: Request) => {
   const id = req.params.exhibitId as string
   if (!isUuid(id)) throw new HttpError(404, 'Exhibit not found.')
-  return findExhibitSource(id, { courseId: req.course!.id })
+  const x = await findExhibitSource(id, { courseId: req.course!.id })
+  return req.query.version === 'proposal' ? asProposal(x) : x
 }
 
 /** One exhibit's file, as the sides see it. */
@@ -154,16 +188,16 @@ caseExhibitsRouter.get('/:exhibitId/text', async (req, res) => {
 /** Mounted under /api/courses/:courseId/exhibit-reviews, for the instructor who teaches the course. */
 export const exhibitReviewsRouter = Router({ mergeParams: true })
 
-/** `?status=open` (the default) or `?status=completed`. */
+/** `{ worlds }`: `?status=open` (the default), worlds ready for rulings, or `?status=completed`. */
 exhibitReviewsRouter.get('/', async (req, res) => {
   const which = req.query.status === 'completed' ? 'completed' : 'open'
-  res.json({ reviews: await listExhibitReviews(req.course!.id, which) })
+  res.json({ worlds: await listExhibitReviews(req.course!.id, which) })
 })
 
 /** `{ decision: authenticate | reject, note }`. */
 exhibitReviewsRouter.post('/:exhibitId/authenticity', async (req, res) => {
   await ruleOnAuthenticity(req.course!.id, req.params.exhibitId as string, req.user!.id, req.body)
-  res.json({ reviews: await listExhibitReviews(req.course!.id, 'open') })
+  res.json({ worlds: await listExhibitReviews(req.course!.id, 'open') })
 })
 
 /** The exhibit's file as offered (its listed pages), for marking a redaction; `?stream=1` sends the bytes from here. */
@@ -197,7 +231,7 @@ exhibitReviewsRouter.get('/:exhibitId/original', async (req, res) => {
 /** `{ ids: [a, b], decision: whole | plaintiff | defense | partial | exclude, note, marks?, uploadKey?, redaction? }`. */
 exhibitReviewsRouter.post('/versions', async (req, res) => {
   await ruleOnVersions(req.course!.id, req.user!.id, req.body)
-  res.json({ reviews: await listExhibitReviews(req.course!.id, 'open') })
+  res.json({ worlds: await listExhibitReviews(req.course!.id, 'open') })
 })
 
 /** `{ size }`: where to upload the redacted copy of a PDF or picture. */
@@ -209,5 +243,5 @@ exhibitReviewsRouter.post('/:exhibitId/uploads', async (req, res) => {
 /** `{ decision: overrule | sustain | partial, redaction, note, marks, uploadKey }`. */
 exhibitReviewsRouter.post('/:exhibitId/admission', async (req, res) => {
   await ruleOnAdmission(req.course!.id, req.params.exhibitId as string, req.user!.id, req.body)
-  res.json({ reviews: await listExhibitReviews(req.course!.id, 'open') })
+  res.json({ worlds: await listExhibitReviews(req.course!.id, 'open') })
 })

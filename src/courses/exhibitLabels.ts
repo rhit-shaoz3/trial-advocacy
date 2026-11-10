@@ -3,15 +3,27 @@ import type { Exhibit, ExhibitStatus, Side } from './types'
 /** Where an exhibit stands, for the instructor (who's on neither side). */
 export const EXHIBIT_STATUS_LABEL: Record<ExhibitStatus, string> = {
   awaiting_authenticity: 'Waiting on authenticity',
-  authenticity_review: 'Authenticity challenged',
+  authenticity_response: 'Authenticity challenged',
+  authenticity_reconsider: 'Challenge answered',
+  authenticity_review: 'Authenticity to rule on',
   inauthentic: 'Rejected as inauthentic',
   awaiting_admission: 'Waiting on admission',
   objection_response: 'Objected to',
+  objection_reconsider: 'Objection answered',
   admission_review: 'Objection to rule on',
   dropped: 'Dropped',
   admitted: 'Admitted',
   excluded: 'Excluded',
+  disputed: 'Disputed, for trial',
 }
+
+/** Moves a side makes on its own exhibits (answering a challenge), and on the other side's (reviewing, then settling its challenges). */
+const OWN_MOVES: ExhibitStatus[] = ['authenticity_response', 'objection_response']
+const THEIR_MOVES: ExhibitStatus[] = ['awaiting_authenticity', 'authenticity_reconsider', 'awaiting_admission', 'objection_reconsider']
+
+/** Whether an exhibit waits on the team on `side`. */
+export const waitsOnTeam = (x: Pick<Exhibit, 'offeredBy' | 'status'>, side: Side) =>
+  (x.offeredBy === side ? OWN_MOVES : THEIR_MOVES).includes(x.status)
 
 export const EXHIBIT_SIDE: Record<Side, string> = { plaintiff: 'Plaintiff', defense: 'Defense' }
 

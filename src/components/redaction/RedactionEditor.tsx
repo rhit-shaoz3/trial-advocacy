@@ -25,7 +25,7 @@ export interface MarkedRedaction {
 type PageMark = { removed: boolean; boxes: RedactionBox[] }
 type PartMark = { removed: boolean; ranges: TextRedactionRange[] }
 
-/** The words for the judge's partial admission, or for a team blacking out its own exhibit. */
+/** The words for the judge's partial admission, a team redacting its own exhibit, or a team proposing a redacted version. */
 const WORDS = {
   judge: {
     title: 'Mark the redaction',
@@ -39,15 +39,26 @@ const WORDS = {
     save: 'Use these marks',
   },
   team: {
-    title: 'Black out parts',
-    modes: { redact: 'Mark what to black out', admit: 'Mark what to keep' },
+    title: 'Redact parts',
+    modes: { redact: 'Mark what to redact', admit: 'Mark what to keep' },
     preview: 'Show your copy',
     kept: 'kept',
     keeps: 'Keeps',
-    nothing: 'Mark what to black out or what to keep.',
+    nothing: 'Mark what to redact or what to keep.',
     empty: 'Nothing is left. To leave it all out, take it off your list.',
     cantShow: 'This file couldn’t be shown here. List it as it is, or only some of its pages.',
     save: 'Use this copy',
+  },
+  proposal: {
+    title: 'Propose a redacted version',
+    modes: { redact: 'Mark what to redact', admit: 'Mark what to keep' },
+    preview: 'Show the proposed version',
+    kept: 'kept',
+    keeps: 'Keeps',
+    nothing: 'Mark what to redact or what to keep.',
+    empty: 'Nothing is left. To leave it all out, drop the exhibit instead.',
+    cantShow: 'This exhibit couldn’t be shown here. Describe the redaction instead.',
+    save: 'Use this version',
   },
 }
 type Words = (typeof WORDS)['judge']
@@ -55,18 +66,19 @@ type Words = (typeof WORDS)['judge']
 const help = (w: Words, mode: RedactionMode, text: boolean) =>
   mode === 'redact'
     ? text
-      ? 'Select text, then choose Mark. Marked text is blacked out. Leave out a turn or paragraph to take it out entirely.'
-      : 'Drag a box over each part to black out. Leave out a page to take it out entirely.'
+      ? 'Select text, then choose Mark. Marked text is redacted. Leave out a turn or paragraph to take it out entirely.'
+      : 'Drag a box over each part to redact. Leave out a page to take it out entirely.'
     : text
-      ? `Select text, then choose Mark. Only marked text is ${w.kept}; the rest is blacked out, and a part with nothing marked is left out.`
-      : `Drag a box over each part that’s ${w.kept}. Everything else on the page is blacked out, and a page with no box is left out.`
+      ? `Select text, then choose Mark. Only marked text is ${w.kept}; the rest is redacted, and a part with nothing marked is left out.`
+      : `Drag a box over each part that’s ${w.kept}. Everything else on the page is redacted, and a page with no box is left out.`
 
 /**
  * Marks on an exhibit itself: boxes on a PDF's pages or a picture, or ranges
- * of a transcript's or text's text, showing either what's blacked out or
- * what's kept. The instructor marks a partial admission; a team blacks out
- * parts of a file it lists (`team`). Saving a PDF or picture makes the
- * blacked-out copy and uploads it.
+ * of a transcript's or text's text, showing either what's redacted or
+ * what's kept. The instructor marks a partial admission; a team redacts
+ * parts of a file it lists (`team`), or proposes a redacted version of its
+ * exhibit, answering an objection (`proposal`). Saving a PDF or picture makes the
+ * redacted copy and uploads it.
  */
 export function RedactionEditor({
   eyebrow,
@@ -75,6 +87,7 @@ export function RedactionEditor({
   upload,
   deposition = false,
   team = false,
+  proposal = false,
   initial,
   onSave,
   onClose,
@@ -83,18 +96,20 @@ export function RedactionEditor({
   marking: { markable: 'pdf' | 'image' | 'text'; parts: ExhibitPart[] | null }
   /** A PDF's or picture's bytes, as they'd be served (only the listed pages). */
   loadFile?(): Promise<Uint8Array>
-  /** Uploads the blacked-out copy of a PDF or picture; returns its key. */
+  /** Uploads the redacted copy of a PDF or picture; returns its key. */
   upload?(file: Blob): Promise<string>
   /** A transcript's turns, with their questions, rather than paragraphs. */
   deposition?: boolean
-  /** A team blacking out its own exhibit, rather than the judge's ruling. */
+  /** A team redacting its own exhibit, rather than the judge's ruling. */
   team?: boolean
+  /** A team proposing a redacted version of its exhibit, answering an objection. */
+  proposal?: boolean
   /** The marks from before, when editing them again. */
   initial?: RedactionMarks
   onSave(marked: MarkedRedaction): void
   onClose(): void
 }) {
-  const words = team ? WORDS.team : WORDS.judge
+  const words = proposal ? WORDS.proposal : team ? WORDS.team : WORDS.judge
   const [mode, setMode] = useState<RedactionMode>(initial?.mode ?? 'redact')
   const [preview, setPreview] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -125,7 +140,7 @@ export function RedactionEditor({
   const total = isText ? parts.length : (pages?.length ?? 0)
   const anything = isText ? textMarksOut.parts.length > 0 : pageMarksOut.pages.length > 0
   const noun = isText ? (deposition ? 'turns' : 'paragraphs') : marking.markable === 'image' ? 'pictures' : 'pages'
-  const summary = `${words.keeps} ${kept} of ${total} ${noun}${isText ? '' : `, ${plan.filter((p) => p === 'black').length} with black-outs`}`
+  const summary = `${words.keeps} ${kept} of ${total} ${noun}${isText ? '' : `, ${plan.filter((p) => p === 'cover').length} with redactions`}`
   const problem = !anything ? words.nothing : kept === 0 ? words.empty : null
 
   async function save() {
@@ -185,7 +200,7 @@ export function RedactionEditor({
             onClick={save}
             disabled={saving || Boolean(problem) || (!isText && !bytes)}
           >
-            {saving ? (isText ? 'Saving…' : 'Making the blacked-out copy…') : words.save}
+            {saving ? (isText ? 'Saving…' : 'Making the redacted copy…') : words.save}
           </button>
         </>
       }
@@ -339,11 +354,11 @@ function PageMarker({
                   ))}
                 </mask>
               </defs>
-              <rect width="1" height="1" className={preview ? 'rx-black' : 'rx-shade'} mask={`url(#rx-mask-${page})`} />
+              <rect width="1" height="1" className={preview ? 'rx-white' : 'rx-shade'} mask={`url(#rx-mask-${page})`} />
               {!preview && shown.map((b, i) => <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} className="rx-keep" />)}
             </>
           ) : (
-            shown.map((b, i) => <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} className={preview ? 'rx-black' : 'rx-cover'} />)
+            shown.map((b, i) => <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} className={preview ? 'rx-white' : 'rx-cover'} />)
           )}
         </svg>
         <div

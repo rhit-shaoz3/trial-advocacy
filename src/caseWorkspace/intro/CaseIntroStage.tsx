@@ -154,13 +154,22 @@ export function CaseIntroStage({
             <li>
               <ScrollText aria-hidden="true" />
               <span>
-                <strong>Review each other’s exhibits</strong>: authenticity first, then admission.
+                <strong>Review each other’s exhibits</strong>: authenticity first, then admission. Each challenge gets an answer, and a
+                chance to settle it.
               </span>
             </li>
             <li>
               <Gavel aria-hidden="true" />
               <span>
-                <strong>The judge rules</strong> on any challenge, and the final list is numbered for trial.
+                {intro.judging ? (
+                  <>
+                    <strong>The judge rules</strong> on any challenge you keep, and the final list is numbered for trial.
+                  </>
+                ) : (
+                  <>
+                    <strong>The final list is numbered</strong> for trial, and the judge decides any challenge you keep there.
+                  </>
+                )}
               </span>
             </li>
           </ol>

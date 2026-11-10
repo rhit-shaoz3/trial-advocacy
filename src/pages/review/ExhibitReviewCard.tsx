@@ -81,12 +81,30 @@ export function ExhibitReviewCard({
             World {worldLabel(x.worldNumber)} · Offered by {offering} ({EXHIBIT_SIDE[x.offeredBy]}) · challenged by {challenging}
           </p>
         </div>
-        <button type="button" className="btn-secondary" onClick={() => viewer.open(x)}>
-          View exhibit
-        </button>
+        <div className="xl-buttons">
+          {x.proposalMarked && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => viewer.open({ ...x, excerpt: x.proposalExcerpt ?? null, version: 'proposal' })}
+            >
+              View proposed version
+            </button>
+          )}
+          <button type="button" className="btn-secondary" onClick={() => viewer.open(x)}>
+            View exhibit
+          </button>
+        </div>
       </header>
 
       <ExhibitRecord exhibit={x} />
+      {onRuled && authenticity && (x.objectionKept || x.agreed === 'proposal') && (
+        <p className="review-meta">
+          {x.objectionKept
+            ? 'The teams also kept an objection to it: if you authenticate it, you rule on that next.'
+            : 'The teams agreed to admit the proposed redacted version: if you authenticate it, that version is admitted.'}
+        </p>
+      )}
 
       {onRuled ? (
         <div className="xl-note">

@@ -10,6 +10,7 @@ import {
   listTeams,
   MAX_AUTO_TEAM_SIZE,
   MAX_TEAM_SIZE,
+  DEFAULT_AUTO_TEAM_SIZE,
   MIN_AUTO_TEAM_SIZE,
   moveMember,
   removeMember,
@@ -63,7 +64,7 @@ teamsRouter.post('/', async (req, res) => {
 
 /** `{ teamSize }` (default 2): how many students per team. Students left over stay off a team. */
 teamsRouter.post('/auto', async (req, res) => {
-  const value = (req.body as Record<string, unknown> | undefined)?.teamSize ?? MIN_AUTO_TEAM_SIZE
+  const value = (req.body as Record<string, unknown> | undefined)?.teamSize ?? DEFAULT_AUTO_TEAM_SIZE
   const teamSize = Number(value)
   if (!Number.isInteger(teamSize) || teamSize < MIN_AUTO_TEAM_SIZE || teamSize > MAX_AUTO_TEAM_SIZE) {
     throw new HttpError(400, `Choose ${MIN_AUTO_TEAM_SIZE} to ${MAX_AUTO_TEAM_SIZE} students per team.`)

@@ -229,7 +229,7 @@ export function ExhibitCard({ courseId, courseCase }: { courseId: string; course
               <p className="exchange-waiting">
                 <Clock aria-hidden="true" />
                 <strong>
-                  {overview.reviewsWaiting} {overview.reviewsWaiting === 1 ? 'challenge' : 'challenges'} waiting for your ruling
+                  {overview.reviewsWaiting} kept {overview.reviewsWaiting === 1 ? 'challenge' : 'challenges'} waiting for your ruling
                 </strong>
                 <Link to={`/courses/${courseId}/review`}>Go to Review</Link>
               </p>

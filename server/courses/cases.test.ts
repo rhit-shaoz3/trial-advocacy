@@ -69,6 +69,8 @@ describe('creating', () => {
       reviewMode: 'all',
       exchangeReady: false,
       exhibitListEnabled: true,
+      exhibitJudicialReview: true,
+      exhibitsExchanged: false,
       // Made from scratch, not copied.
       copySetup: false,
       copiedFrom: null,

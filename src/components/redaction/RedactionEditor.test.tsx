@@ -42,7 +42,7 @@ function select(text: string) {
 }
 
 describe('RedactionEditor', () => {
-  it('marks selected text as redacted, previews the black-out, and saves the marks', async () => {
+  it('marks selected text as redacted, previews the redaction, and saves the marks', async () => {
     const { user, onSave } = renderEditor()
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByRole('button', { name: 'Use these marks' })).toBeDisabled()

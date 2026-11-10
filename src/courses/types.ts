@@ -1285,10 +1285,16 @@ export interface PacketItem {
   printable: boolean
 }
 
-/** What can go in a team's single PDF, and what the team left out so far. */
+/** A folder of a team's single PDF: its name, and the items filed in it, in order. */
+export interface PacketFolder {
+  name: string
+  items: string[]
+}
+
+/** What can go in a team's single PDF, and how the team filed it: what isn't in a folder stays out. */
 export interface PacketContents {
   items: PacketItem[]
-  leftOut: string[]
+  folders: PacketFolder[]
   warnings: string[]
 }
 
@@ -1679,15 +1685,16 @@ export interface CourseService {
   trialPacketsUrl(courseId: string, caseId: string, teamId?: string): string
   /** What can go in a team's single PDF, for the instructor. */
   getTrialPacketContents(courseId: string, caseId: string, teamId: string): Promise<PacketContents>
-  /** A team's packet as a single PDF, without `leftOut`. */
-  trialPacketPdfUrl(courseId: string, caseId: string, teamId: string, leftOut: string[]): string
+  /** A team's packet as a single PDF, in the team's folders. */
+  trialPacketPdfUrl(courseId: string, caseId: string, teamId: string): string
   /** What can go in the student's team's PDF; null until the team submits its exhibit list. */
   getMyPacket(courseId: string, caseId: string): Promise<PacketContents | null>
-  saveMyPacketChoices(courseId: string, caseId: string, leftOut: string[]): Promise<void>
+  /** Keeps how the student's team filed its PDF. */
+  saveMyPacketFolders(courseId: string, caseId: string, folders: PacketFolder[]): Promise<void>
   /** The student's team's whole packet as a zip. */
   myPacketUrl(courseId: string, caseId: string): string
-  /** The student's team's packet as a single PDF, without `leftOut`. */
-  myPacketPdfUrl(courseId: string, caseId: string, leftOut: string[]): string
+  /** The student's team's packet as a single PDF, in its folders. */
+  myPacketPdfUrl(courseId: string, caseId: string): string
   caseExhibitText(courseId: string, caseId: string, exhibitId: string): Promise<{ status: string; text: string | null }>
   /** An exhibit under review, as offered (or as proposed), for marking a redaction. */
   reviewExhibitFileUrl(courseId: string, exhibitId: string, version?: ExhibitVersion): string

@@ -371,10 +371,23 @@ describe('downloading', () => {
 
 describe('the single PDF', () => {
   const contentsOf = async (team = 0) => (await prof.get(`${caseUrl()}/packets/${teams[team].id}/contents`)).body.contents
-  const pdfOf = (leftOut: string[] = [], team = 0) =>
-    bytes(prof.get(`${caseUrl()}/packets/${teams[team].id}/pdf`).query(leftOut.length ? { leftOut: leftOut.join(',') } : {}))
+  const pdfOf = (team = 0) => bytes(prof.get(`${caseUrl()}/packets/${teams[team].id}/pdf`))
+  /** Files team 1's PDF as `folders`, as if the team had. */
+  const fileAs = (folders: { name: string; items: string[] }[]) =>
+    pool.query('UPDATE teams SET packet_layout = $2 WHERE id = $1', [teams[0].id, JSON.stringify(folders)])
 
-  it('holds what was chosen behind a table of contents, numbered through the whole PDF', async () => {
+  it('starts with a folder for each kind of document, everything in', async () => {
+    await upload('Waiver.pdf', 'all', await realPdf(1))
+    await addInterview(tom, 1, 'plaintiff', ['the light was red'])
+    await toFinalSteps()
+    const { items, folders } = await contentsOf()
+    expect(folders).toEqual([
+      { name: 'Depositions', items: [itemId(items, 'Tom Becker')] },
+      { name: 'Case file', items: [itemId(items, 'Amended complaint'), itemId(items, 'Waiver')] },
+    ])
+  })
+
+  it('holds what the team filed, in its folders and order, behind a table of contents numbered through the whole PDF', async () => {
     await upload('Waiver.pdf', 'all', await realPdf(3))
     await upload('Medical records.pdf', 'plaintiff', await realPdf(2))
     await addInterview(tom, 1, 'plaintiff', ['the light was red'])
@@ -382,23 +395,29 @@ describe('the single PDF', () => {
     await toFinalSteps()
 
     const { items } = await contentsOf()
-    const res = await pdfOf([itemId(items, 'Medical records')])
+    await fileAs([
+      { name: 'Key documents', items: [itemId(items, 'Waiver'), itemId(items, 'Tom Becker')] },
+      { name: 'Nothing yet', items: [] },
+    ])
+    const res = await pdfOf()
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toContain('application/pdf')
     expect(res.headers['content-disposition']).toContain('World A - Team 1 (Plaintiff) - Trial packet.pdf')
 
     const text = await pdfText(res.body as Buffer)
     expect(text).toContain('Table of contents')
+    expect(text).toContain('Key documents')
+    expect(text).not.toContain('Nothing yet')
     expect(text).toContain('Waiver.pdf')
     expect(text).toContain('Tom Becker, taken by Team 1')
     expect(text).toContain('the light was red')
     expect(text).not.toContain('Medical records')
-    // The first page, the deposition, and the three pages of the waiver.
+    // The first page, the three pages of the waiver, then the deposition, as filed.
     const doc = await PDFDocument.load(res.body as Buffer)
     expect(doc.getPageCount()).toBe(5)
     expect(text).toContain('Packet page 5 of 5')
-    const [, waiverLine] = /Waiver\.pdf[ .]*(\d+)/.exec(text)!
-    expect(waiverLine).toBe('3')
+    expect(/Waiver\.pdf[ .]*(\d+)/.exec(text)![1]).toBe('2')
+    expect(/Team 1 on [A-Za-z]+ \d+, \d{4}[ .]*(\d+)/.exec(text)![1]).toBe('5')
   })
 
   it('links each line of the table of contents to its page', async () => {
@@ -474,8 +493,10 @@ describe('the single PDF', () => {
     const { items } = await contentsOf()
     const exhibit = items.find((i: PacketItem) => i.id.startsWith('exhibit:'))
     expect(exhibit.printable).toBe(false)
-    const out = items.filter((i: PacketItem) => i.id === 'exhibit-list' || i.id.startsWith('file:')).map((i: PacketItem) => i.id)
-    expect((await pdfOf(out)).status).toBe(400)
+    // Filed anyway, it can't go in.
+    await fileAs([{ name: 'Exhibits', items: [exhibit.id] }])
+    expect((await contentsOf()).folders).toEqual([{ name: 'Exhibits', items: [] }])
+    expect((await pdfOf()).status).toBe(400)
   })
 
   it('leaves out a file it can’t read and names it on the first page', async () => {
@@ -487,10 +508,10 @@ describe('the single PDF', () => {
     expect(text).toContain('Waiver.pdf')
   })
 
-  it('needs something in it', async () => {
+  it('needs something filed', async () => {
     await toFinalSteps()
-    const { items } = await contentsOf()
-    expect((await pdfOf(items.map((i: PacketItem) => i.id))).status).toBe(400)
+    await fileAs([{ name: 'Empty', items: [] }])
+    expect((await pdfOf()).status).toBe(400)
   })
 })
 
@@ -500,7 +521,7 @@ describe('a team’s own packet', () => {
     expect((await ada.get(myPacketUrl())).body.contents).toBeNull()
     expect((await ada.get(`${myPacketUrl()}/download`)).status).toBe(409)
     expect((await ada.get(`${myPacketUrl()}/pdf`)).status).toBe(409)
-    expect((await ada.put(`${myPacketUrl()}/choices`).send({ leftOut: [] })).status).toBe(409)
+    expect((await ada.put(`${myPacketUrl()}/folders`).send({ folders: [] })).status).toBe(409)
 
     await ada.post(`${exhibitsUrl()}/list/submit`).send({ items: [{ kind: 'material', id: complaint, parts: null }] })
     const { contents } = (await ada.get(myPacketUrl())).body
@@ -545,24 +566,33 @@ describe('a team’s own packet', () => {
     expect((await stranger.get(`${myPacketUrl()}/pdf`)).status).toBe(409)
   })
 
-  it('remembers what the team left out, for teammates and the instructor', async () => {
+  it('keeps the team’s folders, for teammates and the instructor, and prints the PDF in them', async () => {
     await upload('Waiver.pdf', 'all', await realPdf(1))
     await finishList()
     const { items } = (await ada.get(myPacketUrl())).body.contents
-    const waiver = itemId(items, 'Waiver')
-    expect((await ada.put(`${myPacketUrl()}/choices`).send({ leftOut: [waiver] })).status).toBe(204)
+    const folders = [{ name: 'Liability', items: [itemId(items, 'Waiver')] }]
+    expect((await ada.put(`${myPacketUrl()}/folders`).send({ folders: [{ name: '  Liability ', items: folders[0].items }] })).status).toBe(204)
 
     const teammate = (await signedInAgent('student', email(2), 'Ben Brief')).agent
-    expect((await teammate.get(myPacketUrl())).body.contents.leftOut).toEqual([waiver])
-    expect((await prof.get(`${caseUrl()}/packets/${teams[0].id}/contents`)).body.contents.leftOut).toEqual([waiver])
-    expect((await cy.get(myPacketUrl())).body.contents.leftOut).toEqual([])
+    expect((await teammate.get(myPacketUrl())).body.contents.folders).toEqual(folders)
+    expect((await prof.get(`${caseUrl()}/packets/${teams[0].id}/contents`)).body.contents.folders).toEqual(folders)
+    expect((await cy.get(myPacketUrl())).body.contents.folders).not.toEqual(folders)
+
+    const text = await pdfText((await bytes(ada.get(`${myPacketUrl()}/pdf`))).body as Buffer)
+    expect(text).toContain('Liability')
+    expect(text).not.toContain('Amended complaint')
   })
 
-  it('doesn’t take junk for choices, or save on a closed case', async () => {
+  it('doesn’t take junk for folders, or save on a closed case', async () => {
     await finishList()
-    expect((await ada.put(`${myPacketUrl()}/choices`).send({ leftOut: 'all' })).status).toBe(400)
+    const put = (body: unknown) => ada.put(`${myPacketUrl()}/folders`).send(body as object)
+    expect((await put({ folders: 'all' })).status).toBe(400)
+    expect((await put({ folders: [{ name: ' ', items: [] }] })).status).toBe(400)
+    expect((await put({ folders: [{ name: 'A', items: [] }, { name: 'a', items: [] }] })).status).toBe(400)
+    expect((await put({ folders: [{ name: 'A', items: ['facts'] }, { name: 'B', items: ['facts'] }] })).status).toBe(400)
+    expect((await put({ folders: [{ name: 'A', items: [1] }] })).status).toBe(400)
     await pool.query(`UPDATE cases SET status = 'closed' WHERE id = $1`, [caseId])
-    expect((await ada.put(`${myPacketUrl()}/choices`).send({ leftOut: [] })).status).toBe(409)
+    expect((await put({ folders: [] })).status).toBe(409)
     expect((await ada.get(myPacketUrl())).body.contents).not.toBeNull()
   })
 })

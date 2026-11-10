@@ -3,9 +3,7 @@ import { findCase, phaseAtLeast } from '../courses/cases.ts'
 import { studentTeam } from '../exhibits/exhibitRoutes.ts'
 import { HttpError } from '../httpError.ts'
 import { isUuid } from '../validation.ts'
-import { packetContents, packetOpen, packetOverview, savePacketChoices, sendPacketPdf, sendPackets } from './packets.ts'
-
-const MAX_LEFT_OUT = 1000
+import { packetContents, packetOpen, packetOverview, readFolders, savePacketFolders, sendPacketPdf, sendPackets } from './packets.ts'
 
 /** The case, once it's reached the final steps phase. */
 function finishedCase(req: Request) {
@@ -19,9 +17,6 @@ function teamIdOf(req: Request) {
   if (!isUuid(teamId)) throw new HttpError(404, 'Team not found.')
   return teamId
 }
-
-/** What a PDF leaves out, from its link's `?leftOut=a,b`. */
-const leftOutOf = (req: Request) => String(req.query.leftOut ?? '').split(',').filter(Boolean)
 
 /** Mounted under /api/courses/:courseId/cases/:caseId/packets, for the instructor (after `loadCase`). */
 export const packetsRouter = Router({ mergeParams: true })
@@ -42,16 +37,16 @@ packetsRouter.get('/:teamId/download', async (req, res) => {
   await sendPackets(res, req.course!.id, courseCase, req.user!.id, teamIdOf(req))
 })
 
-/** `{ contents }`: what can go in a team's PDF, and what the team left out. */
+/** `{ contents }`: what can go in a team's PDF, and how the team filed it. */
 packetsRouter.get('/:teamId/contents', async (req, res) => {
   const courseCase = finishedCase(req)
   res.json({ contents: await packetContents(req.course!.id, courseCase, req.user!.id, teamIdOf(req)) })
 })
 
-/** One team's packet as a single PDF, without what `?leftOut=` names. */
+/** One team's packet as a single PDF, in the team's folders. */
 packetsRouter.get('/:teamId/pdf', async (req, res) => {
   const courseCase = finishedCase(req)
-  await sendPacketPdf(res, req.course!.id, courseCase, req.user!.id, teamIdOf(req), leftOutOf(req))
+  await sendPacketPdf(res, req.course!.id, courseCase, req.user!.id, teamIdOf(req))
 })
 
 /** The student's team and case, once the team has submitted its exhibit list; null before that. */
@@ -77,14 +72,10 @@ myPacketRouter.get('/', async (req, res) => {
   res.json({ contents: packet && (await packetContents(packet.courseId, packet.courseCase, req.user!.id, packet.team.teamId)) })
 })
 
-/** Keeps what the team left out of its PDF: `{ leftOut: [id] }`. */
-myPacketRouter.put('/choices', async (req, res) => {
+/** Keeps how the team filed its PDF: `{ folders: [{ name, items: [id] }] }`. */
+myPacketRouter.put('/folders', async (req, res) => {
   const { team } = await openPacket(req, true)
-  const { leftOut } = req.body as { leftOut?: unknown }
-  if (!Array.isArray(leftOut) || leftOut.length > MAX_LEFT_OUT || !leftOut.every((id) => typeof id === 'string')) {
-    throw new HttpError(400, 'Send what’s left out as a list.')
-  }
-  await savePacketChoices(team.teamId, leftOut)
+  await savePacketFolders(team.teamId, readFolders(req.body))
   res.status(204).end()
 })
 
@@ -94,8 +85,8 @@ myPacketRouter.get('/download', async (req, res) => {
   await sendPackets(res, courseId, courseCase, req.user!.id, team.teamId)
 })
 
-/** The team's packet as a single PDF, without what `?leftOut=` names. */
+/** The team's packet as a single PDF, in its folders. */
 myPacketRouter.get('/pdf', async (req, res) => {
   const { courseId, courseCase, team } = await openPacket(req)
-  await sendPacketPdf(res, courseId, courseCase, req.user!.id, team.teamId, leftOutOf(req))
+  await sendPacketPdf(res, courseId, courseCase, req.user!.id, team.teamId)
 })

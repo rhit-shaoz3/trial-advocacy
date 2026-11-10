@@ -564,9 +564,9 @@ describe('the Final steps tab', () => {
   it('offers the trial packet once the team submits its list, not before', async () => {
     const workspace = { ...sampleWorkspace, case: { ...sampleWorkspace.case, phase: 'final_steps' as const } }
     const packetActions = {
-      load: vi.fn().mockResolvedValue({ items: [], leftOut: [], warnings: [] }),
+      load: vi.fn().mockResolvedValue({ items: [], folders: [], warnings: [] }),
       zipUrl: '/my-packet',
-      pdfUrl: () => '/my-packet/pdf',
+      pdfUrl: '/my-packet/pdf',
     }
     const waiting = { ...exhibits, theirs: { ...exhibits.theirs, submittedAt: null } }
     renderView({ workspace, exhibits: waiting, packetActions, initialTab: 'final-steps' })

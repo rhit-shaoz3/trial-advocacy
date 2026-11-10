@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Download, FileText, FolderArchive } from 'lucide-react'
-import { PacketChooser } from '../../../caseWorkspace/finalSteps/PacketChooser'
+import { PacketFolders } from '../../../caseWorkspace/finalSteps/PacketFolders'
 import { Modal } from '../../../components/Modal'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { EXHIBIT_SIDE } from '../../../courses/exhibitLabels'
@@ -20,7 +20,7 @@ function holds(p: TrialPacket) {
   ].join(' · ')
 }
 
-/** Picks what goes in a team's single PDF, starting from the team's own choices. Changes here are only for this download. */
+/** A team's single PDF as the team filed it: its folders and what's in each. */
 function PacketPdfModal({ courseId, caseId, packet, onClose }: { courseId: string; caseId: string; packet: TrialPacket; onClose(): void }) {
   const service = useCourseService()
   const [contents, setContents] = useState<PacketContents | null>(null)
@@ -39,14 +39,14 @@ function PacketPdfModal({ courseId, caseId, packet, onClose }: { courseId: strin
 
   return (
     <Modal eyebrow={`World ${worldLabel(packet.worldNumber)}`} title={`Team ${packet.teamNumber}’s PDF`} icon={<FileText aria-hidden="true" />} onClose={onClose}>
-      <p className="muted">This starts from what the team chose. Your changes are only for this download; the team’s choices stay as they are.</p>
+      <p className="muted">The team names its folders and files what it wants in each; anything it didn’t file isn’t in the PDF.</p>
       {error && (
         <p className="form-error" role="alert">
           {error}
         </p>
       )}
       {contents ? (
-        <PacketChooser contents={contents} pdfUrl={(leftOut) => service.trialPacketPdfUrl(courseId, caseId, packet.teamId, leftOut)} />
+        <PacketFolders contents={contents} pdfUrl={service.trialPacketPdfUrl(courseId, caseId, packet.teamId)} />
       ) : (
         !error && <p className="muted">Loading…</p>
       )}
@@ -95,8 +95,8 @@ export function TrialPackets({ courseId, caseId }: { courseId: string; caseId: s
       <p className="muted">
         Each team’s packet has its exhibits for trial and the joint exhibit list, every deposition taken in its case world, and
         the case files, investigator reports, discovery, and ruled facts it gathered. Nothing from the other team’s private work
-        is included. Teams can download their own once they submit their exhibit list, and can choose what goes in a single
-        PDF for court. You can download that PDF too.
+        is included. Teams can download their own once they submit their exhibit list, and arrange a single PDF for court
+        in folders of their own. You can see and download that PDF too.
       </p>
       {error && (
         <p className="form-error" role="alert">
@@ -140,7 +140,7 @@ export function TrialPackets({ courseId, caseId }: { courseId: string; caseId: s
                   type="button"
                   className="btn-secondary tp-download"
                   onClick={() => setChoosing(p)}
-                  aria-label={`Choose what goes in Team ${p.teamNumber}’s PDF`}
+                  aria-label={`See Team ${p.teamNumber}’s PDF`}
                 >
                   <FileText aria-hidden="true" /> PDF
                 </button>

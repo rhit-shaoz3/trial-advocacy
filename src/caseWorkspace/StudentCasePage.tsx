@@ -14,6 +14,7 @@ import type {
   ExhibitVersion,
   Investigation,
   ItemResponse,
+  PacketFolder,
   ReviewResult,
   StudentExchange,
   StudentExhibits,
@@ -215,9 +216,9 @@ export function StudentCasePage() {
   const packetActions = useMemo(
     () => ({
       load: () => service.getMyPacket(courseId, caseId),
-      save: (leftOut: string[]) => service.saveMyPacketChoices(courseId, caseId, leftOut),
+      save: (folders: PacketFolder[]) => service.saveMyPacketFolders(courseId, caseId, folders),
       zipUrl: service.myPacketUrl(courseId, caseId),
-      pdfUrl: (leftOut: string[]) => service.myPacketPdfUrl(courseId, caseId, leftOut),
+      pdfUrl: service.myPacketPdfUrl(courseId, caseId),
     }),
     [service, courseId, caseId],
   )

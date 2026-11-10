@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, FolderArchive } from 'lucide-react'
-import type { PacketContents } from '../../courses/types'
-import { PacketChooser } from './PacketChooser'
+import type { PacketContents, PacketFolder } from '../../courses/types'
+import { PacketFolders } from './PacketFolders'
 import './exhibits.css'
 
 /** What the team's packet needs from the page. */
 export interface PacketActions {
   load(): Promise<PacketContents | null>
-  /** Leave out on a closed case: choices are then only for the download. */
-  save?(leftOut: string[]): Promise<void>
+  /** Leave out on a closed case: the folders are then shown as they are. */
+  save?(folders: PacketFolder[]): Promise<void>
   zipUrl: string
-  pdfUrl(leftOut: string[]): string
+  pdfUrl: string
 }
 
 /**
  * The team's trial packet, once it has submitted its exhibit list: all of it
- * as a zip, or what the team chooses as one PDF for court.
+ * as a zip, or what the team files in its own folders as one PDF for court.
  */
 export function TrialPacketSection({ actions }: { actions: PacketActions }) {
   const [contents, setContents] = useState<PacketContents | null>(null)
@@ -44,9 +44,10 @@ export function TrialPacketSection({ actions }: { actions: PacketActions }) {
         </a>
       </header>
       <p className="muted">
-        The zip has everything from the case, file by file. For court, choose what you want below and download it as one PDF
-        with a table of contents. Admitted exhibits join the packet as the exhibits settle, so download it again once the list
-        is final.
+        The zip has everything from the case, file by file. For court, arrange your own PDF: name and order its folders, and file
+        the documents you want in each. The folders become its table of contents, and anything you don’t file stays out.
+        Admitted exhibits join the packet as the exhibits settle, so check your folders and download it again once the list is
+        final.
       </p>
       {error && (
         <p className="form-error" role="alert">
@@ -59,7 +60,7 @@ export function TrialPacketSection({ actions }: { actions: PacketActions }) {
           <span>{w}</span>
         </p>
       ))}
-      {contents ? <PacketChooser contents={contents} pdfUrl={actions.pdfUrl} onSave={actions.save} /> : !error && <p className="muted">Loading…</p>}
+      {contents ? <PacketFolders contents={contents} pdfUrl={actions.pdfUrl} onSave={actions.save} /> : !error && <p className="muted">Loading…</p>}
     </section>
   )
 }

@@ -94,7 +94,7 @@ describe('the instructor’s Final steps tab', () => {
     expect(screen.getByText(/1 packet isn’t finished yet/)).toBeInTheDocument()
   })
 
-  it('lets the instructor choose what goes in a team’s PDF, starting from the team’s choices', async () => {
+  it('shows the instructor a team’s PDF as the team filed it', async () => {
     const packet = {
       teamId: 't1',
       teamNumber: 1,
@@ -112,17 +112,17 @@ describe('the instructor’s Final steps tab', () => {
       { id: 'file:a', section: 'Case file', title: 'Waiver.pdf', printable: true },
       { id: 'file:b', section: 'Case file', title: 'Records.pdf', printable: true },
     ]
-    const { user, service } = renderTab({
+    const { user } = renderTab({
       listTrialPackets: vi.fn().mockResolvedValue([packet]),
-      getTrialPacketContents: vi.fn().mockResolvedValue({ items, leftOut: ['file:b'], warnings: [] }),
+      getTrialPacketContents: vi.fn().mockResolvedValue({ items, folders: [{ name: 'For the jury', items: ['file:a'] }], warnings: [] }),
     })
-    await user.click(await screen.findByRole('button', { name: 'Choose what goes in Team 1’s PDF' }))
-    expect(await screen.findByRole('checkbox', { name: 'Records.pdf' })).not.toBeChecked()
-    expect(screen.getByRole('link', { name: 'Download PDF' })).toHaveAttribute('href', '/packets/t1/pdf?out=file:b')
-
-    await user.click(screen.getByRole('checkbox', { name: 'Waiver.pdf' }))
-    expect(screen.getByText('Choose at least one thing for the PDF.')).toBeInTheDocument()
-    expect(service.saveMyPacketChoices).not.toHaveBeenCalled()
+    await user.click(await screen.findByRole('button', { name: 'See Team 1’s PDF' }))
+    expect(await screen.findByRole('heading', { name: 'For the jury' })).toBeInTheDocument()
+    expect(screen.getByText('Waiver.pdf')).toBeInTheDocument()
+    // What the team didn't file isn't shown, and nothing can be changed.
+    expect(screen.queryByText('Records.pdf')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add folder|Move|Delete/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Download PDF' })).toHaveAttribute('href', '/packets/t1/pdf')
   })
 
   it('turns the joint exhibit list off for students', async () => {

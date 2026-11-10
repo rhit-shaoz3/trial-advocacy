@@ -1027,9 +1027,11 @@ ALTER TABLE exhibit_list_items ADD COLUMN IF NOT EXISTS redacted_key text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_marks jsonb;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS offered_key text;
 
--- What the team left out of its trial packet's PDF, by item (see packets.ts).
--- Leaving things out, rather than listing what's in, keeps anything new in.
-ALTER TABLE teams ADD COLUMN IF NOT EXISTS packet_left_out text[] NOT NULL DEFAULT '{}';
+-- How the team arranged its trial packet's PDF: `[{ name, items: [item id] }]`,
+-- its folders and the documents in each, in order (see packets.ts). Null until
+-- the team changes anything: then a folder for each kind of document, all in.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS packet_layout jsonb;
+ALTER TABLE teams DROP COLUMN IF EXISTS packet_left_out;
 
 -- Witness memory -------------------------------------------------------------
 

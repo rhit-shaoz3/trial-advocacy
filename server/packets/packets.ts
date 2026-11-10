@@ -27,8 +27,9 @@ import { TextPdf } from './textPdf.ts'
 // the other team's investigator reports, prep interviews, or subpoena results,
 // the AI mentor's feedback, or instructor-only files.
 //
-// The same packet can come as one PDF for court, holding what the team or the
-// instructor chose from it, with a table of contents (see packetPdf.ts).
+// The same packet can come as one PDF for court, with a table of contents
+// (see packetPdf.ts). The team files what it wants in folders it names and
+// orders itself; what isn't filed stays out.
 
 const SIDE_LABEL: Record<Side, string> = { plaintiff: 'Plaintiff', defense: 'Defense' }
 
@@ -631,30 +632,86 @@ export async function packetOpen(matchupId: string, side: Side) {
   return Boolean(rowCount)
 }
 
-/** What can go in a team's PDF. Matches `PacketContents` in src/courses/types.ts. */
+/** A folder of the team's PDF: its name, and the items filed in it, in order. Matches `PacketFolder` in src/courses/types.ts. */
+export interface PacketFolder {
+  name: string
+  items: string[]
+}
+
+const MAX_FOLDERS = 40
+const MAX_FOLDER_NAME = 80
+const MAX_FILED = 1000
+
+/** Checks a team's folders as sent: `{ folders: [{ name, items: [id] }] }`, each name once and each item in one folder at most. */
+export function readFolders(body: unknown): PacketFolder[] {
+  const folders = (body as { folders?: unknown } | null)?.folders
+  if (!Array.isArray(folders) || folders.length > MAX_FOLDERS) throw new HttpError(400, `Send up to ${MAX_FOLDERS} folders.`)
+  const names = new Set<string>()
+  const filed = new Set<string>()
+  return folders.map((folder: { name?: unknown; items?: unknown }) => {
+    const name = typeof folder?.name === 'string' ? folder.name.trim() : ''
+    if (!name || name.length > MAX_FOLDER_NAME) throw new HttpError(400, `Give each folder a name of up to ${MAX_FOLDER_NAME} characters.`)
+    if (names.has(name.toLowerCase())) throw new HttpError(400, `Two folders are named “${name}”.`)
+    names.add(name.toLowerCase())
+    if (!Array.isArray(folder.items) || !folder.items.every((id) => typeof id === 'string' && id.length <= 100)) {
+      throw new HttpError(400, 'Send each folder’s documents as a list.')
+    }
+    for (const id of folder.items) {
+      if (filed.has(id)) throw new HttpError(400, 'A document can be in one folder only.')
+      filed.add(id)
+    }
+    if (filed.size > MAX_FILED) throw new HttpError(400, 'That’s too many documents.')
+    return { name, items: folder.items as string[] }
+  })
+}
+
+/** The folders a team that hasn't arranged anything starts with: one for each kind of document, everything in. */
+function defaultFolders(entries: Entry[]): PacketFolder[] {
+  const folders: PacketFolder[] = []
+  for (const e of entries) {
+    if (!e.print) continue
+    const folder = folders.find((f) => f.name === e.section)
+    if (folder) folder.items.push(e.id)
+    else folders.push({ name: e.section, items: [e.id] })
+  }
+  return folders
+}
+
+/** The team's folders, holding only what's in its packet and can be printed (a file can go, or turn out to be a video). */
+async function teamFolders(teamId: string, entries: Entry[]) {
+  const { rows } = await pool.query<{ layout: PacketFolder[] | null }>('SELECT packet_layout AS layout FROM teams WHERE id = $1', [teamId])
+  const saved = rows[0]?.layout
+  if (!saved) return defaultFolders(entries)
+  const printable = new Set(entries.filter((e) => e.print).map((e) => e.id))
+  return saved.map((f) => ({ name: f.name, items: f.items.filter((id) => printable.has(id)) }))
+}
+
+/** What can go in a team's PDF, and how the team filed it. Matches `PacketContents` in src/courses/types.ts. */
 export async function packetContents(courseId: string, courseCase: CourseCase, viewerId: string, teamId: string) {
-  const [[packet], { rows }] = await Promise.all([
-    buildPackets(courseId, courseCase, viewerId, teamId),
-    pool.query<{ leftOut: string[] }>('SELECT packet_left_out AS "leftOut" FROM teams WHERE id = $1', [teamId]),
-  ])
+  const [packet] = await buildPackets(courseId, courseCase, viewerId, teamId)
   return {
     items: packet.entries.map((e) => ({ id: e.id, section: e.section, title: e.title, printable: e.print !== null })),
-    leftOut: rows[0]?.leftOut ?? [],
+    folders: await teamFolders(teamId, packet.entries),
     warnings: packet.warnings,
   }
 }
 
-/** Keeps what a team left out of its PDF. */
-export async function savePacketChoices(teamId: string, leftOut: string[]) {
-  await pool.query('UPDATE teams SET packet_left_out = $2 WHERE id = $1', [teamId, leftOut])
+/** Keeps how a team filed its PDF, for everyone on the team. */
+export async function savePacketFolders(teamId: string, folders: PacketFolder[]) {
+  await pool.query('UPDATE teams SET packet_layout = $2 WHERE id = $1', [teamId, JSON.stringify(folders)])
 }
 
-/** One team's packet as a single PDF, without what's in `leftOut`. */
-export async function sendPacketPdf(res: Response, courseId: string, courseCase: CourseCase, viewerId: string, teamId: string, leftOut: string[]) {
+/** One team's packet as a single PDF, in the team's folders. */
+export async function sendPacketPdf(res: Response, courseId: string, courseCase: CourseCase, viewerId: string, teamId: string) {
   const [packet] = await buildPackets(courseId, courseCase, viewerId, teamId)
-  const out = new Set(leftOut)
-  const parts = packet.entries.flatMap((e) => (e.print && !out.has(e.id) ? [{ section: e.section, title: e.title, print: e.print }] : []))
-  if (parts.length === 0) throw new HttpError(400, 'Choose at least one thing for the PDF.')
+  const byId = new Map(packet.entries.map((e) => [e.id, e]))
+  const parts = (await teamFolders(teamId, packet.entries)).flatMap((folder) =>
+    folder.items.map((id) => {
+      const e = byId.get(id)!
+      return { section: folder.name, title: e.title, print: e.print! }
+    }),
+  )
+  if (parts.length === 0) throw new HttpError(400, 'File at least one document in a folder for the PDF.')
   const pdf = await mergedPdf(`Trial packet · ${courseCase.title}`, parts, packet.cover)
   res.set({
     'Content-Type': 'application/pdf',

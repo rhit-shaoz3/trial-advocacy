@@ -634,55 +634,172 @@
   color: var(--tint-amber-fg);
 }
 
-/* Choosing what goes in a team's single PDF. */
-.tp-chooser {
+/* A team's single PDF, in folders it names, orders and files documents in. */
+.pf {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.85rem;
   margin-top: 0.75rem;
 }
 
-.tp-chooser-bar {
+.pf-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.85rem;
 }
 
-.tp-group {
+.pf-bar .link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pf-bar svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pf-folders {
   display: grid;
-  gap: 0.15rem;
-  min-width: 0;
+  gap: 0.6rem;
   margin: 0;
   padding: 0;
-  border: 0;
+  list-style: none;
 }
 
-.tp-group legend {
-  padding: 0;
-  margin-bottom: 0.25rem;
-  font-weight: 600;
+.pf-folder {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
 }
 
-.tp-item {
+.pf-folder-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
-  padding: 0.2rem 0;
+}
+
+.pf-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+}
+
+.pf-name:hover,
+.pf-name:focus {
+  border-color: var(--border);
+}
+
+.pf-name-text {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.pf-tools {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.pf-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 0.35rem;
+  cursor: pointer;
+}
+
+.pf-icon:hover:not(:disabled) {
+  color: inherit;
+  background: var(--border);
+}
+
+.pf-icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pf-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pf-move {
+  max-width: 9rem;
+  padding: 0.2rem 0.3rem;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.pf-docs {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pf-doc {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0 0.25rem 0.45rem;
+}
+
+.pf-doc-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.tp-item small {
-  flex: none;
+.pf-doc-text small,
+.pf-doc > small,
+.pf-empty {
   color: var(--muted);
 }
 
-.tp-item-off {
+.pf-doc-off {
   color: var(--muted);
 }
 
-.tp-chooser-actions {
+.pf-empty {
+  margin: 0.35rem 0 0 0.45rem;
+}
+
+.pf-unfiled h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.pf-group h4 {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pf-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .pf-doc {
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 560px) {

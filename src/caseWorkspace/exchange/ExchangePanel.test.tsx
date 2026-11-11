@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import type { StudentExchange, StudentPart, StudentSubpoenas } from '../../courses/types'
 import { ExchangePanel } from './ExchangePanel'
 
@@ -351,6 +352,35 @@ describe('ExchangePanel: subpoenas', () => {
     expect(screen.getByRole('img', { name: 'Checked' }).closest('.sf-command')).toHaveTextContent('Inspection of Premises')
     await user.click(screen.getByRole('button', { name: 'Serve subpoena' }))
     expect(onServeSubpoena).toHaveBeenCalledWith(expect.objectContaining({ requestType: 'inspection', records: 'The Atlas platform.' }), undefined, undefined)
+  })
+
+  it('starts a subpoena filled in with the example in the demo', async () => {
+    const example = {
+      recipient: 'Custodian of Records, Mercy General Hospital',
+      recipientDescription: 'The hospital.',
+      requestType: 'documents',
+      records: 'Her records.',
+      justification: 'Her injuries are at issue.',
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ script: { subpoena: example, questions: [] } }), { status: 200 }))
+    const auth = { user: { id: 'u1', role: 'student', demo: { as: 'student', courseId: 'k1', caseId: 'c1' } } } as unknown as AuthContextValue
+    const user = userEvent.setup()
+    render(
+      <AuthContext.Provider value={auth}>
+        <ExchangePanel
+          exchange={open}
+          now={now}
+          onServeSubpoena={vi.fn()}
+          subpoenaForm={{ caseId: 'c1', parties: { plaintiff: 'Elena Ramirez', defendant: 'Thrillville Parks' }, attorney: 'Ada Lawyer' }}
+        />
+      </AuthContext.Provider>,
+    )
+    await user.click(screen.getByRole('button', { name: /Subpoenas/ }))
+    await user.click(screen.getByRole('button', { name: 'Serve a subpoena' }))
+    expect(await screen.findByDisplayValue(example.recipient)).toBeInTheDocument()
+    expect(screen.getByLabelText('What you want')).toHaveValue('Her records.')
+    expect(screen.getByLabelText(/^Justification/)).toHaveValue('Her injuries are at issue.')
+    vi.restoreAllMocks()
   })
 
   it('tells the team when a subpoena was denied', async () => {

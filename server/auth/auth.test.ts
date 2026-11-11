@@ -43,6 +43,7 @@ describe('POST /api/auth/signup', () => {
       avatarUrl: null,
       toursSeen: {},
       createdAt: expect.any(String),
+      demo: null,
     })
     expect(JSON.stringify(res.body)).not.toContain('correct-horse')
     expect(JSON.stringify(res.body)).not.toContain('password')

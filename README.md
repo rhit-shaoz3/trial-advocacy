@@ -53,6 +53,7 @@ To preview a student's course home page with made-up cases, activity, and deadli
 | `npm run dev:server` | Start only the API (restarts on file changes)        |
 | `npm run db:migrate` | Apply `server/db/schema.sql` to the database         |
 | `npm run db:seed`    | Add demo accounts and courses (dev only)             |
+| `npm run demo:setup` | Set up the presentation demo from the Thrillville case (dev only; see [Presentation demo](#presentation-demo)) |
 | `npm run storage:migrate` | Move case files still stored in Postgres into storage (runs on each Heroku release) |
 | `npm run storage:check` | Check the case file storage (S3 or `.storage/`) end to end |
 | `npm run build`      | Type-check everything and build the web app (`dist/`) |
@@ -60,6 +61,18 @@ To preview a student's course home page with made-up cases, activity, and deadli
 | `npm test`           | Run all tests once                                   |
 | `npm run test:watch` | Re-run tests as files change                         |
 | `npm run lint`       | Run ESLint                                           |
+
+## Presentation demo
+
+For presenting the app, `npm run demo:setup` builds a demo from this database's case titled "Thrillville" (or the case in `DEMO_SOURCE_CASE_ID`). Log in as **demo@demo.com** / **password**:
+
+- Opening slides introduce the project (the **Slides** button shows them again).
+- A bar across the top switches between the course's **Instructor** and its **Student** (Jordan Lee, on the defense team in World A). It also sets the app's size for a projector (125% by default), and **Reset demo** rebuilds the case world from the start.
+- As the instructor, move the case through its phases; switch to the student to see each phase's intro.
+- A new subpoena starts filled in with an example. The AI check, serving, and the drafted response are real (they need `ANTHROPIC_API_KEY`).
+- Deposing Paige Winston, **Next question** fills in the scripted questions, and she gives the scripted answers (any other question goes to the AI witness). Ending the interview adds the rest of the scripted deposition, so the instructor reviews a full conversation.
+
+The script lives in `server/demo/script.ts`. The demo keeps a copy of the source case as its template (in a course no one logs in to), so re-run `npm run demo:setup` after changing the Thrillville case.
 
 ## Testing
 

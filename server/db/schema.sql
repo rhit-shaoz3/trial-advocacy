@@ -1084,3 +1084,8 @@ ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_key text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_content_type text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_excerpt jsonb;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS agreed text CHECK (agreed IN ('original', 'proposal'));
+
+-- The demo account's case (see server/demo): its witness answers the scripted
+-- deposition questions from the script, and an ended interview there gets the
+-- rest of the scripted conversation before it goes for review.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false;

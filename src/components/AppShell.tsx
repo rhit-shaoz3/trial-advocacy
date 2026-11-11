@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router'
 import { AccountDialog } from '../account/AccountDialog'
 import { useAuth } from '../auth/useAuth'
+import { DemoBar } from '../demo/DemoBar'
 import { Avatar } from './Avatar'
 import { BrandIcon } from './BrandIcon'
 import './AppShell.css'
@@ -108,6 +109,7 @@ export function AppShell({
       </aside>
 
       <div className="ws-main">
+        <DemoBar />
         {/* The guided tour, in the page's upper right corner. */}
         <div className="ws-corner">
           <TourButton />

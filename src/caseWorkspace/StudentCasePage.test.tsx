@@ -231,6 +231,8 @@ describe('StudentCasePage: review results', () => {
         updateProfile: vi.fn(),
         uploadAvatar: vi.fn(),
         removeAvatar: vi.fn(),
+        switchDemo: vi.fn(),
+        resetDemo: vi.fn(),
         markTourSeen: async (key) => {
           marked.push(key)
         },

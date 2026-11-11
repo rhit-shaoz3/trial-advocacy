@@ -227,6 +227,12 @@
   outline-offset: 1px;
 }
 
+/* Ask, and in the demo, the button that fills in its next question. */
+.iv-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .iv-hint {
   grid-column: 1 / -1;
   color: var(--ws-muted);

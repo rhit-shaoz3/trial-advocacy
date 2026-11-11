@@ -45,6 +45,8 @@ function Harness({ user, children, marked }: { user: User; children: ReactNode; 
       updateProfile: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      switchDemo: vi.fn(),
+      resetDemo: vi.fn(),
       markTourSeen: async (key) => {
         marked.push(key)
         setCurrent((u) => ({ ...u, toursSeen: { ...u.toursSeen, [key]: 'now' } }))

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { queueDemoSlides } from '../demo/demoSlidesQueue'
 import { applyPalette } from '../theme/theme'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 import { httpAuthService } from './httpAuthService'
@@ -33,7 +34,12 @@ export function AuthProvider({ children, service = httpAuthService }: Props) {
       user,
       loading,
       signUp: async (input) => setUser(await service.signUp(input)),
-      logIn: async (input) => setUser(await service.logIn(input)),
+      logIn: async (input) => {
+        const next = await service.logIn(input)
+        // The demo account opens on its slides.
+        if (next.demo) queueDemoSlides()
+        setUser(next)
+      },
       logOut: async () => {
         await service.logOut()
         setUser(null)
@@ -46,6 +52,18 @@ export function AuthProvider({ children, service = httpAuthService }: Props) {
         setUser((u) => (u && !u.toursSeen?.[key] ? { ...u, toursSeen: { ...u.toursSeen, [key]: new Date().toISOString() } } : u))
         // A failed save only means the tour may start again next time.
         if (service.markTourSeen) await service.markTourSeen(key).catch(() => undefined)
+      },
+      switchDemo: async (as) => {
+        if (!service.switchDemo) return null
+        const next = await service.switchDemo(as)
+        setUser(next)
+        return next
+      },
+      resetDemo: async () => {
+        if (!service.resetDemo) return null
+        const next = await service.resetDemo()
+        setUser(next)
+        return next
       },
     }),
     [user, loading, service],

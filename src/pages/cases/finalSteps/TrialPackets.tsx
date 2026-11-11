@@ -55,8 +55,8 @@ function PacketPdfModal({ courseId, caseId, packet, onClose }: { courseId: strin
 }
 
 /**
- * The end of the case: each team's trial packet to download, as a zip or as a
- * single PDF. It can be downloaded any time in final steps; what isn't
+ * Each team's own trial packet (the court binders above are for the trial),
+ * to download as a zip or as the team's single PDF. It can be downloaded any time in final steps; what isn't
  * finished yet is pointed out here and in the packet. Teams get their own once
  * they submit their exhibit list.
  */
@@ -83,8 +83,8 @@ export function TrialPackets({ courseId, caseId }: { courseId: string; caseId: s
     <section className="course-section tp-section" aria-labelledby="packets-heading">
       <div className="section-header">
         <div>
-          <span className="ws-eyebrow">The end of the case</span>
-          <h2 id="packets-heading">Trial packets</h2>
+          <span className="ws-eyebrow">Each team’s own</span>
+          <h2 id="packets-heading">Team packets</h2>
         </div>
         {packets && packets.length > 0 && (
           <a className="btn-primary tp-all" href={service.trialPacketsUrl(courseId, caseId)} download>

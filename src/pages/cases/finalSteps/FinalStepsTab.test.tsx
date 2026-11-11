@@ -58,6 +58,15 @@ function renderTab(overrides: Partial<CourseService> = {}, courseCase = rivera) 
 }
 
 describe('the instructor’s Final steps tab', () => {
+  it('offers each world’s court binder once its list is final', async () => {
+    const binder = { matchupId: 'm1', worldNumber: 1, teams: { plaintiff: 1, defense: 2 }, finalizedAt: '2026-11-10T10:00:00Z', exhibits: 3 }
+    renderTab({ listCourtBinders: vi.fn().mockResolvedValue([binder, { ...binder, matchupId: 'm2', worldNumber: 2, finalizedAt: null }]) })
+    expect(await screen.findByRole('link', { name: 'Download World A’s court binder' })).toHaveAttribute('href', '/binders/m1')
+    expect(screen.getByText('3 exhibits for trial')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Download World B’s court binder' })).not.toBeInTheDocument()
+    expect(screen.getByText('The joint exhibit list isn’t final yet.')).toBeInTheDocument()
+  })
+
   it('peeks at each world’s lists, read-only', async () => {
     const { user } = renderTab()
     await user.click(await screen.findByText('Case world A'))

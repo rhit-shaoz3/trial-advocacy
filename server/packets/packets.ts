@@ -1,6 +1,6 @@
 import type { Response } from 'express'
 import { ZipArchive } from 'archiver'
-import { findMaterialFile, findMaterialText, listMaterialsFor, type CaseMaterial } from '../courses/caseContent.ts'
+import { findMaterialFile, findMaterialText, listMaterials, listMaterialsFor, type CaseMaterial } from '../courses/caseContent.ts'
 import type { CourseCase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { listTeams, worldLetter } from '../courses/teams.ts'
@@ -13,7 +13,7 @@ import { HttpError } from '../httpError.ts'
 import { markedTranscript, type MarkedTurn } from '../reviews/reviews.ts'
 import { attachmentHeader } from '../storage/shared.ts'
 import { storage } from '../storage/storage.ts'
-import { mergedPdf } from './packetPdf.ts'
+import { mergedPdf, type PdfPart } from './packetPdf.ts'
 import { TextPdf } from './textPdf.ts'
 
 // The trial packets, the course's last step: once the case reaches final
@@ -26,6 +26,12 @@ import { TextPdf } from './textPdf.ts'
 // so it holds nothing the team couldn't see or wouldn't be served with: never
 // the other team's investigator reports, prep interviews, or subpoena results,
 // the AI mentor's feedback, or instructor-only files.
+//
+// For the trial itself, the instructor downloads a court binder for each case
+// world once its joint exhibit list is final: what the two teams agreed on,
+// and nothing either kept to itself. It holds the complaint, the joint list,
+// the exhibits for trial in label order (each with a sticker), and the
+// instructor's rulings on them (see sendCourtBinder).
 //
 // The same packet can come as one PDF for court, with a table of contents
 // (see packetPdf.ts). The team files what it wants in folders it names and
@@ -198,10 +204,10 @@ const exhibitName = (x: Exhibit) => `${SIDE_LABEL[x.offeredBy]}${x.label ? ` ${x
 const exhibitTitle = (x: Exhibit) => `${exhibitName(x)}: ${x.title}${x.status === 'disputed' ? ' (disputed)' : ''}`
 
 /** The joint exhibit list: every exhibit in the world, where it ended up, and why. */
-async function exhibitListPdf(courseCase: CourseCase, team: PacketTeam, world: WorldExhibits) {
+async function exhibitListPdf(courseCase: CourseCase, world: WorldExhibits) {
   const pdf = await TextPdf.create(`Joint exhibit list · ${courseCase.title}`)
   pdf.title('Joint exhibit list').text(courseCase.title)
-  pdf.text(`Case world ${worldLetter(team.worldNumber)}: Team ${world.teams.plaintiff} (Plaintiff) v. Team ${world.teams.defense} (Defense)`)
+  pdf.text(`Case world ${worldLetter(world.worldNumber)}: Team ${world.teams.plaintiff} (Plaintiff) v. Team ${world.teams.defense} (Defense)`)
   pdf.text(world.finalizedAt ? `Final as of ${longDay(world.finalizedAt)}` : 'Not final yet: some exhibits are still open.', { gray: true })
   for (const side of ['plaintiff', 'defense'] as const) {
     const exhibits = world.exhibits.filter((x) => x.offeredBy === side && !x.supersededBy)
@@ -496,7 +502,7 @@ async function buildPacket(courseCase: CourseCase, team: PacketTeam, viewerId: s
     })
   }
   if (world && world.exhibits.length > 0) {
-    addEntry(entries, '1 Exhibits/Joint exhibit list.pdf', () => exhibitListPdf(courseCase, team, world), {
+    addEntry(entries, '1 Exhibits/Joint exhibit list.pdf', () => exhibitListPdf(courseCase, world), {
       id: 'exhibit-list',
       section: 'Exhibits',
       title: 'Joint exhibit list',
@@ -716,6 +722,103 @@ export async function sendPacketPdf(res: Response, courseId: string, courseCase:
   res.set({
     'Content-Type': 'application/pdf',
     'Content-Disposition': attachmentHeader(`${safeName(courseCase.title)} - ${packet.folder} - Trial packet.pdf`),
+  })
+  res.send(Buffer.from(pdf))
+}
+
+// Court binders ----------------------------------------------------------------
+
+/** "Plaintiff's Exhibit 1", "Defendant's Exhibit A": an exhibit for trial as the court labels it. */
+const courtLabel = (x: Exhibit) => `${x.offeredBy === 'plaintiff' ? 'Plaintiff’s' : 'Defendant’s'} Exhibit ${x.label}`
+
+/** Plaintiff's exhibits first, each side in label order (1, 2, … 10; A, B, … AA). */
+function inLabelOrder(exhibits: Exhibit[]) {
+  const rank = (x: Exhibit) => [x.offeredBy === 'plaintiff' ? 0 : 1, (x.label ?? '').length, x.label ?? ''] as const
+  return [...exhibits].sort((a, b) => {
+    const [p, q] = [rank(a), rank(b)]
+    return p[0] - q[0] || p[1] - q[1] || p[2].localeCompare(q[2])
+  })
+}
+
+const AUTHENTICITY_RULING = { authenticated: 'Authentic', inauthentic: 'Not authentic' }
+const ADMISSION_RULING = { overruled: 'Objection overruled: admitted', sustained: 'Objection sustained: excluded', partial: 'Admitted in part' }
+
+/** Every exhibit in the world the instructor ruled on, as the judge. Null when there were none. */
+async function rulingsPdf(courseCase: CourseCase, world: WorldExhibits) {
+  const ruled = inLabelOrder(world.exhibits.filter((x) => !x.supersededBy && (x.authenticityRuling || x.ruling)))
+  if (ruled.length === 0) return null
+  return async () => {
+    const pdf = await TextPdf.create(`Rulings · ${courseCase.title}`)
+    pdf.title('Rulings on exhibits').text(courseCase.title).text(`Case world ${worldLetter(world.worldNumber)}`).space(6)
+    for (const x of ruled) {
+      pdf.text(`${x.label ? courtLabel(x) : `${SIDE_LABEL[x.offeredBy]}’s exhibit`}: ${x.title}`, { bold: true })
+      if (x.authenticityRuling) {
+        pdf.text(`Authenticity: ${AUTHENTICITY_RULING[x.authenticityRuling]}${x.authenticityRulingNote ? `. ${x.authenticityRulingNote}` : ''}`, { indent: 14 })
+      }
+      if (x.ruling) pdf.text(`Admission: ${ADMISSION_RULING[x.ruling]}${x.rulingNote ? `. ${x.rulingNote}` : ''}`, { indent: 14 })
+      if (x.redaction) pdf.text(`Redaction: ${x.redaction}`, { indent: 14 })
+      pdf.space(6)
+    }
+    return pdf.save()
+  }
+}
+
+/** One case world's binder, as the instructor's Final steps tab lists it. Matches `CourtBinder` in src/courses/types.ts. */
+export async function listCourtBinders(caseId: string) {
+  return (await listCaseExhibits(caseId))
+    .filter((w) => w.teams.plaintiff !== null && w.teams.defense !== null)
+    .map((w) => ({
+      matchupId: w.matchupId,
+      worldNumber: w.worldNumber,
+      teams: w.teams,
+      finalizedAt: w.finalizedAt,
+      exhibits: w.exhibits.filter(forTrial).length,
+    }))
+}
+
+/**
+ * A case world's court binder as one PDF: the complaint, the joint exhibit
+ * list, each exhibit for trial in label order with its sticker, and the
+ * rulings on them. Only once the list is final, since it's what both teams
+ * agreed on.
+ */
+export async function sendCourtBinder(res: Response, courseCase: CourseCase, matchupId: string) {
+  const world = (await listCaseExhibits(courseCase.id)).find((w) => w.matchupId === matchupId)
+  if (!world || world.teams.plaintiff === null || world.teams.defense === null) throw new HttpError(404, 'Case world not found.')
+  if (!world.finalizedAt) throw new HttpError(409, 'The court binder is ready once this world’s joint exhibit list is final.')
+
+  const parts: PdfPart[] = []
+  const noPages: string[] = []
+  const [complaint] = (await listMaterials(courseCase.id)).filter((m) => m.initial)
+  if (complaint) {
+    const print = filePrint(courseCase, complaint, () => materialBytes(courseCase.id, complaint.id))
+    if (print) parts.push({ section: 'Pleadings', title: 'Complaint', print })
+  }
+  parts.push({ section: 'Exhibits', title: 'Joint exhibit list', print: () => exhibitListPdf(courseCase, world) })
+  for (const x of inLabelOrder(world.exhibits.filter(forTrial))) {
+    const title = `${courtLabel(x)}: ${x.title}${x.status === 'disputed' ? ' (disputed)' : ''}`
+    const { load, print } = await admittedExhibit(courseCase, matchupId, x)
+    if (print === null) noPages.push(title)
+    else parts.push({ section: 'Exhibits', title, print: print ?? load, sticker: courtLabel(x) })
+  }
+  const rulings = await rulingsPdf(courseCase, world)
+  if (rulings) parts.push({ section: 'Rulings', title: 'Rulings on exhibits', print: rulings })
+
+  const letter = worldLetter(world.worldNumber)
+  const pdf = await mergedPdf(`Court binder · ${courseCase.title}`, parts, (cover, unreadable) => {
+    cover.title('Court binder').text(courseCase.title, { bold: true })
+    cover.text(`Case world ${letter}: Team ${world.teams.plaintiff} (Plaintiff) v. Team ${world.teams.defense} (Defense)`)
+    cover.text(`Joint exhibit list final as of ${longDay(world.finalizedAt!)}. Made ${longDay(new Date())}.`, { gray: true })
+    if (!complaint) cover.text('The case has no complaint file.', { gray: true })
+    if (noPages.length > 0 || unreadable.length > 0) {
+      cover.heading('Not in this binder')
+      for (const title of noPages) cover.text(`${title}: it has no pages (audio or video, say), so it’s shown at trial instead.`)
+      for (const title of unreadable) cover.text(`Couldn’t be included: ${title}`)
+    }
+  })
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': attachmentHeader(`${safeName(courseCase.title)} - World ${letter} - Court binder.pdf`),
   })
   res.send(Buffer.from(pdf))
 }

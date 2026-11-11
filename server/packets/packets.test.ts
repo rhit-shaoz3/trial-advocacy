@@ -597,6 +597,80 @@ describe('a team’s own packet', () => {
   })
 })
 
+describe('court binders', () => {
+  const bindersUrl = () => `${caseUrl()}/packets/binders`
+  const matchupId = async () => (await prof.get(bindersUrl())).body.binders[0].matchupId as string
+
+  /** Both teams list exhibits; the plaintiff's two are admitted (one ruled on), the defense's one is excluded. */
+  async function settleWorld() {
+    const realComplaint = await upload('Complaint.pdf', 'all', await realPdf(2))
+    await prof.put(`${caseUrl()}/materials/initial`).send({ materialId: realComplaint })
+    const log = await upload('Accident log.pdf', 'all', await realPdf(1))
+    const photo = await upload('Photo.pdf', 'all', await realPdf(1))
+    const memo = await upload('Memo.pdf', 'all', await realPdf(1))
+    await toFinalSteps()
+    const item = (id: string) => ({ kind: 'material', id, parts: null })
+    await ada.post(`${exhibitsUrl()}/list/submit`).send({ items: [item(log), item(photo)] })
+    await cy.post(`${exhibitsUrl()}/list/submit`).send({ items: [item(memo)] })
+    await pool.query(`UPDATE exhibits SET status = 'admitted', label = '2' WHERE material_id = $1`, [photo])
+    await pool.query(
+      `UPDATE exhibits SET status = 'admitted', label = '1', ruling = 'overruled', ruling_note = 'Kept in the ordinary course.' WHERE material_id = $1`,
+      [log],
+    )
+    await pool.query(`UPDATE exhibits SET status = 'excluded', ruling = 'sustained', ruling_note = 'Hearsay.' WHERE material_id = $1`, [memo])
+  }
+
+  it('is ready once the world’s joint exhibit list is final', async () => {
+    await settleWorld()
+    const before = (await prof.get(bindersUrl())).body.binders
+    expect(before).toEqual([expect.objectContaining({ worldNumber: 1, teams: { plaintiff: 1, defense: 2 }, finalizedAt: null })])
+    expect((await bytes(prof.get(`${bindersUrl()}/${before[0].matchupId}`))).status).toBe(409)
+
+    await pool.query('UPDATE exhibit_lists SET finalized_at = now()')
+    const [after] = (await prof.get(bindersUrl())).body.binders
+    expect(after).toMatchObject({ finalizedAt: expect.any(String), exhibits: 2 })
+  })
+
+  it('holds the complaint, the joint list, the exhibits in label order with stickers, and the rulings', async () => {
+    await addReport('The plaintiff skis.')
+    await settleWorld()
+    await pool.query('UPDATE exhibit_lists SET finalized_at = now()')
+
+    const res = await bytes(prof.get(`${bindersUrl()}/${await matchupId()}`))
+    expect(res.status).toBe(200)
+    expect(res.headers['content-disposition']).toContain('World A - Court binder.pdf')
+    const text = await pdfText(res.body as Buffer)
+    const contents = text.slice(text.indexOf('Table of contents'), text.indexOf('Packet page 1 of'))
+    const order = ['Complaint', 'Joint exhibit list', 'Plaintiff’s Exhibit 1: Accident log.pdf', 'Plaintiff’s Exhibit 2: Photo.pdf', 'Rulings on exhibits']
+    // Every line is there, each after the one before it.
+    const at = order.map((line) => contents.indexOf(line))
+    expect(at.every((n, i) => n >= 0 && (i === 0 || n > at[i - 1]))).toBe(true)
+
+    // Only what both teams agreed on: no excluded exhibit and no team's own work.
+    expect(contents).not.toContain('Memo.pdf')
+    expect(text).not.toContain('The plaintiff skis.')
+    // The stickers, on the exhibits' pages.
+    expect(text).toContain('Plaintiff’s Exhibit 1')
+    expect(text).toContain('Plaintiff’s Exhibit 2')
+    // The rulings: what was admitted over an objection, and what was kept out.
+    expect(text).toContain('Admission: Objection overruled: admitted. Kept in the ordinary course.')
+    expect(text).toContain('Admission: Objection sustained: excluded. Hearsay.')
+    // The cover, the complaint's two pages, the list, two exhibits, the rulings.
+    expect((await PDFDocument.load(res.body as Buffer)).getPageCount()).toBe(7)
+  })
+
+  it('isn’t there for a world not in the case', async () => {
+    await toFinalSteps()
+    expect((await prof.get(`${bindersUrl()}/00000000-0000-4000-8000-000000000000`)).status).toBe(404)
+    expect((await prof.get(`${bindersUrl()}/nope`)).status).toBe(404)
+  })
+
+  it('is the instructor’s', async () => {
+    await toFinalSteps()
+    expect((await ada.get(bindersUrl())).status).not.toBe(200)
+  })
+})
+
 describe('safeName', () => {
   it('keeps a name inside its folder', () => {
     expect(safeName('../../etc/passwd')).toBe('etc passwd')

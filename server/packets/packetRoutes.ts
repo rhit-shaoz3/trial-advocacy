@@ -3,7 +3,7 @@ import { findCase, phaseAtLeast } from '../courses/cases.ts'
 import { studentTeam } from '../exhibits/exhibitRoutes.ts'
 import { HttpError } from '../httpError.ts'
 import { isUuid } from '../validation.ts'
-import { packetContents, packetOpen, packetOverview, readFolders, savePacketFolders, sendPacketPdf, sendPackets } from './packets.ts'
+import { listCourtBinders, packetContents, packetOpen, packetOverview, sendCourtBinder, readFolders, savePacketFolders, sendPacketPdf, sendPackets } from './packets.ts'
 
 /** The case, once it's reached the final steps phase. */
 function finishedCase(req: Request) {
@@ -24,6 +24,19 @@ export const packetsRouter = Router({ mergeParams: true })
 /** `{ packets }`: what each team's packet holds so far. */
 packetsRouter.get('/', async (req, res) => {
   res.json({ packets: await packetOverview(req.course!.id, finishedCase(req), req.user!.id) })
+})
+
+/** `{ binders }`: each case world's court binder, and whether it's ready (its joint exhibit list is final). */
+packetsRouter.get('/binders', async (req, res) => {
+  res.json({ binders: await listCourtBinders(finishedCase(req).id) })
+})
+
+/** A case world's court binder, as one PDF. */
+packetsRouter.get('/binders/:matchupId', async (req, res) => {
+  const courseCase = finishedCase(req)
+  const matchupId = req.params.matchupId as string
+  if (!isUuid(matchupId)) throw new HttpError(404, 'Case world not found.')
+  await sendCourtBinder(res, courseCase, matchupId)
 })
 
 /** Every team's packet in one zip, a folder for each. */

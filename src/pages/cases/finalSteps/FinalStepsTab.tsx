@@ -5,6 +5,7 @@ import { EXHIBIT_SIDE, EXHIBIT_STATUS_LABEL, exhibitLabel } from '../../../cours
 import { worldLabel } from '../../../courses/worldLabel'
 import type { CourseCase, Exhibit, ExhibitList, WorldExhibits } from '../../../courses/types'
 import { ExhibitRecord } from '../../../caseWorkspace/finalSteps/ExhibitListSection'
+import { CourtBinders } from './CourtBinders'
 import { TrialPackets } from './TrialPackets'
 import { useExhibitViewer } from './useExhibitViewer'
 import '../exchange/exchange.css'
@@ -76,6 +77,7 @@ export function FinalStepsTab({
 
   return (
     <div className="exchange-tab">
+      <CourtBinders courseId={courseId} caseId={courseCase.id} />
       <TrialPackets courseId={courseId} caseId={courseCase.id} />
       <div className="exchange-tab-main">
         <section className="course-section" aria-labelledby="exhibits-heading">

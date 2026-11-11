@@ -797,6 +797,14 @@ export const httpCourseService: CourseService = {
     return `/api${casePath(courseId, caseId)}/packets/${teamId ? `${encodeURIComponent(teamId)}/` : ''}download`
   },
 
+  async listCourtBinders(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/packets/binders`)).binders
+  },
+
+  courtBinderUrl(courseId, caseId, matchupId) {
+    return `/api${casePath(courseId, caseId)}/packets/binders/${encodeURIComponent(matchupId)}`
+  },
+
   async getTrialPacketContents(courseId, caseId, teamId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/packets/${encodeURIComponent(teamId)}/contents`)).contents
   },

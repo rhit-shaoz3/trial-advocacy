@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { Router, type Request } from 'express'
 import { claimPendingEnrollments } from '../courses/roster.ts'
+import { DEMO_EMAIL } from '../demo/demo.ts'
 import { HttpError } from '../httpError.ts'
 import { EMAIL_PATTERN, readString } from '../validation.ts'
 import {
@@ -10,11 +11,11 @@ import {
   markTourSeen,
   MAX_NAME_LENGTH,
   THEMES,
-  toPublicUser,
   updateUser,
   type Role,
   type Theme,
 } from './users.ts'
+import { presentUser } from './present.ts'
 
 const BCRYPT_ROUNDS = 11
 const MIN_PASSWORD_LENGTH = 8
@@ -27,11 +28,12 @@ const TOUR_KEY = /^[a-z0-9:_-]{1,120}$/
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_ROUNDS)
 
 /** Issues a fresh session ID on login to prevent session fixation. */
-function startSession(req: Request, userId: string) {
+function startSession(req: Request, userId: string, demo = false) {
   return new Promise<void>((resolve, reject) => {
     req.session.regenerate((err) => {
       if (err) return reject(err)
       req.session.userId = userId
+      if (demo) req.session.demo = true
       req.session.save((saveErr) => (saveErr ? reject(saveErr) : resolve()))
     })
   })
@@ -41,7 +43,7 @@ export const authRouter = Router()
 
 authRouter.get('/me', async (req, res) => {
   const user = req.session.userId ? await findUserById(req.session.userId) : null
-  res.json({ user: user ? toPublicUser(user) : null })
+  res.json({ user: user ? await presentUser(req, user) : null })
 })
 
 /** The account page: `{ name?, theme? }`. */
@@ -61,7 +63,7 @@ authRouter.patch('/me', async (req, res) => {
   }
   const user = await updateUser(req.session.userId, fields)
   if (!user) throw new HttpError(401, 'Log in first.')
-  res.json({ user: toPublicUser(user) })
+  res.json({ user: await presentUser(req, user) })
 })
 
 /** A guided tour started: `{ key }`, e.g. student-course or phase:<caseId>:investigate. */
@@ -71,7 +73,7 @@ authRouter.post('/me/tours', async (req, res) => {
   if (!TOUR_KEY.test(key)) throw new HttpError(400, 'Unknown tour.')
   const user = await markTourSeen(req.session.userId, key)
   if (!user) throw new HttpError(401, 'Log in first.')
-  res.json({ user: toPublicUser(user) })
+  res.json({ user: await presentUser(req, user) })
 })
 
 authRouter.post('/signup', async (req, res) => {
@@ -99,7 +101,7 @@ authRouter.post('/signup', async (req, res) => {
   if (role === 'student') await claimPendingEnrollments(user.id, user.email)
 
   await startSession(req, user.id)
-  res.status(201).json({ user: toPublicUser(user) })
+  res.status(201).json({ user: await presentUser(req, user) })
 })
 
 authRouter.post('/login', async (req, res) => {
@@ -110,8 +112,8 @@ authRouter.post('/login', async (req, res) => {
   const valid = await bcrypt.compare(password, user?.password_hash ?? DUMMY_HASH)
   if (!user || !valid) throw new HttpError(401, 'Incorrect email or password.')
 
-  await startSession(req, user.id)
-  res.json({ user: toPublicUser(user) })
+  await startSession(req, user.id, user.email.toLowerCase() === DEMO_EMAIL)
+  res.json({ user: await presentUser(req, user) })
 })
 
 authRouter.post('/logout', (req, res, next) => {

@@ -6,6 +6,8 @@ import { pool } from './db/pool.ts'
 declare module 'express-session' {
   interface SessionData {
     userId: string
+    /** Logged in as the demo account, which can switch between its instructor and student (see server/demo). */
+    demo?: boolean
   }
 }
 

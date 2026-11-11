@@ -10,6 +10,7 @@ import { ROLE_LABEL } from '../courses/worldLabel'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import './interview.css'
 import { DictationTextarea } from '../components/Dictation'
+import { useDemoScript } from '../demo/useDemoScript'
 
 /** Matches INTERVIEW_MINUTES on the server: a team's interview lasts an hour from its first question. */
 const INTERVIEW_MINUTES = 60
@@ -57,6 +58,8 @@ export function InterviewPage() {
   const [now, setNow] = useState(() => Date.now())
   /** When the page last asked the server to end a timed-out interview (so it doesn't ask every second). */
   const lastTimeUpFetch = useRef(0)
+  /** The demo's deposition: its next question, ready to fill in. */
+  const script = useDemoScript(isInstructor ? undefined : caseId)
 
   const casePath = `/courses/${courseId}/cases/${caseId}`
   const backPath = isInstructor ? `${casePath}?tab=witnesses` : `${casePath}${workspace?.search ?? ''}`
@@ -101,6 +104,7 @@ export function InterviewPage() {
   }, [remaining, now, service, courseId, caseId, witnessId, as, interview?.endsAt])
 
   const turns = interview?.turns.length ?? 0
+  const nextQuestion = script?.questions.find((q) => !interview?.turns.some((t) => t.question.endsWith(q))) ?? null
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: 'end' })
   }, [turns, asking])
@@ -322,10 +326,22 @@ export function InterviewPage() {
                 rows={2}
                 disabled={!canAsk}
               />
-              <button type="submit" className="btn-primary iv-send" disabled={!canAsk || !question.trim()}>
-                <Send aria-hidden="true" />
-                Ask
-              </button>
+              <div className="iv-actions">
+                {nextQuestion && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setQuestion(nextQuestion)}
+                    disabled={!canAsk || question === nextQuestion}
+                  >
+                    Next question
+                  </button>
+                )}
+                <button type="submit" className="btn-primary iv-send" disabled={!canAsk || !question.trim()}>
+                  <Send aria-hidden="true" />
+                  Ask
+                </button>
+              </div>
               <small className="iv-hint">
                 Enter to ask, Shift+Enter for a new line · {interview.turns.length} of {interview.maxTurns} questions
               </small>

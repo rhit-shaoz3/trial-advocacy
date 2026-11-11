@@ -5,6 +5,7 @@ import type { Witness } from '../courses/caseContent.ts'
 import type { CourseCase } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { pool } from '../db/pool.ts'
+import { demoReply, finishDemoInterview } from '../demo/demo.ts'
 import { HttpError } from '../httpError.ts'
 import { createReview, settledFacts } from '../reviews/reviews.ts'
 import { readString } from '../validation.ts'
@@ -125,6 +126,7 @@ async function closeInterview(interviewId: string, teamId: string | null) {
     interviewId,
   ])
   if (rowCount !== 1 || !teamId) return false
+  await finishDemoInterview(interviewId)
   const sent = (await createReview(interviewId, teamId)) !== null
   queueClaims(interviewId)
   return sent
@@ -276,27 +278,31 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
   }
 
   const transcript = await listTurns(interviewId)
-  const memory = await earlierTestimony(ctx, interviewId, question)
-  let reply
-  try {
-    const profile = await loadProfile(ctx.courseCase, ctx.witness, await settledFacts(ctx.courseCase.id, ctx.matchupId), ctx.matchupId)
-    const settings = depositionSettings(profile, ctx.witness, ctx.owner.side)
-    reply = await ai.askWitness({
-      profile,
-      settings,
-      transcript: transcript.map((t) => ({ question: t.question, reply: t.reply })),
-      question: asked,
-      memory,
-    })
-  } catch (err) {
-    if (err instanceof WitnessNotReadyError) throw new HttpError(409, err.message)
-    if (err instanceof AiNotConfiguredError) throw new HttpError(503, 'The AI witness is not set up on this server yet.')
-    if (err instanceof WitnessRefusalError) throw new HttpError(422, 'The witness could not answer that question. Try rephrasing it.')
-    if (err instanceof Anthropic.APIError) {
-      console.error('AI witness request failed:', err.message)
-      throw new HttpError(502, 'The witness could not answer just now. Try again in a moment.')
+  // The demo case's witness answers its scripted questions from the script.
+  const scripted = ctx.owner.teamId ? await demoReply(ctx.courseCase.id, question) : null
+  const memory = scripted ? [] : await earlierTestimony(ctx, interviewId, question)
+  let reply = scripted
+  if (!reply) {
+    try {
+      const profile = await loadProfile(ctx.courseCase, ctx.witness, await settledFacts(ctx.courseCase.id, ctx.matchupId), ctx.matchupId)
+      const settings = depositionSettings(profile, ctx.witness, ctx.owner.side)
+      reply = await ai.askWitness({
+        profile,
+        settings,
+        transcript: transcript.map((t) => ({ question: t.question, reply: t.reply })),
+        question: asked,
+        memory,
+      })
+    } catch (err) {
+      if (err instanceof WitnessNotReadyError) throw new HttpError(409, err.message)
+      if (err instanceof AiNotConfiguredError) throw new HttpError(503, 'The AI witness is not set up on this server yet.')
+      if (err instanceof WitnessRefusalError) throw new HttpError(422, 'The witness could not answer that question. Try rephrasing it.')
+      if (err instanceof Anthropic.APIError) {
+        console.error('AI witness request failed:', err.message)
+        throw new HttpError(502, 'The witness could not answer just now. Try again in a moment.')
+      }
+      throw err
     }
-    throw err
   }
 
   try {

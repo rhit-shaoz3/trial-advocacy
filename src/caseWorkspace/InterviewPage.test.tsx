@@ -35,7 +35,7 @@ function renderPage(overrides: Partial<CourseService>, user: User = student, url
   const service = fakeCourseService(overrides)
   const events = userEvent.setup()
   render(
-    <AuthContext.Provider value={{ user, loading: false, signUp: vi.fn(), logIn: vi.fn(), logOut: vi.fn(), updateProfile: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn(), markTourSeen: vi.fn() }}>
+    <AuthContext.Provider value={{ user, loading: false, signUp: vi.fn(), logIn: vi.fn(), logOut: vi.fn(), updateProfile: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn(), markTourSeen: vi.fn(), switchDemo: vi.fn(), resetDemo: vi.fn() }}>
       <MemoryRouter initialEntries={[url]}>
         <CourseServiceContext.Provider value={service}>
           <Routes>
@@ -53,6 +53,23 @@ afterEach(() => {
 })
 
 describe('InterviewPage', () => {
+  it('fills in the next scripted question in the demo', async () => {
+    const script = { subpoena: {}, questions: ['How do you know Logan?', 'Why did you go?'] }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ script }), { status: 200 }))
+    const asked = { ...empty, turns: [turn(0, 'How do you know Logan?', 'We grew up together.')] }
+    const { user } = renderPage({ getInterview: vi.fn().mockResolvedValue(asked) }, { ...student, demo: { as: 'student', courseId: 'c1', caseId: 'k1' } })
+
+    await user.click(await screen.findByRole('button', { name: 'Next question' }))
+    expect(screen.getByLabelText('Your question')).toHaveValue('Why did you go?')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/demo/script', expect.anything())
+  })
+
+  it('has no scripted questions outside the demo', async () => {
+    renderPage({ getInterview: vi.fn().mockResolvedValue(empty) })
+    expect(await screen.findByLabelText('Your question')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Next question' })).not.toBeInTheDocument()
+  })
+
   it("asks the team's interview questions and shows the answers", async () => {
     const answered = { ...empty, turns: [turn(0, 'Where were you?', 'At the booth.')] }
     const askWitness = vi.fn().mockResolvedValue(answered)

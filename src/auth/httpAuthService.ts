@@ -43,4 +43,14 @@ export const httpAuthService: AuthService = {
     const body = await request('/me/tours', { method: 'POST', body: JSON.stringify({ key }) })
     return body.user as User
   },
+
+  async switchDemo(as) {
+    const body = await apiRequest('/demo/switch', { method: 'POST', body: JSON.stringify({ as }) })
+    return body.user as User
+  },
+
+  async resetDemo() {
+    const body = await apiRequest('/demo/reset', { method: 'POST' })
+    return body.user as User
+  },
 }

@@ -4,7 +4,8 @@ import { HttpError } from '../httpError.ts'
 import { storage } from '../storage/storage.ts'
 import { isUuid } from '../validation.ts'
 import { requireUser } from './requireUser.ts'
-import { findUserById, setAvatarKey, toPublicUser } from './users.ts'
+import { presentUser } from './present.ts'
+import { findUserById, setAvatarKey } from './users.ts'
 
 // Profile pictures (and, with the same helpers, witnesses' pictures). The
 // browser crops the picture to a square and uploads the image itself (not a
@@ -64,14 +65,14 @@ myAvatarRouter.put('/', readPicture, async (req, res) => {
     throw new HttpError(401, 'Please log in.')
   }
   if (result.oldKey) await storage.delete([result.oldKey])
-  res.json({ user: toPublicUser(result.user) })
+  res.json({ user: await presentUser(req, result.user) })
 })
 
 myAvatarRouter.delete('/', async (req, res) => {
   const result = await setAvatarKey(req.user!.id, null)
   if (!result) throw new HttpError(401, 'Please log in.')
   if (result.oldKey) await storage.delete([result.oldKey])
-  res.json({ user: toPublicUser(result.user) })
+  res.json({ user: await presentUser(req, result.user) })
 })
 
 /** `GET /api/users/:id/avatar`: anyone's picture, for anyone signed in. */

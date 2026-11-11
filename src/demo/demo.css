@@ -1,0 +1,478 @@
+/* The demo account's bar (DemoBar), across the top of the page area. */
+
+.demo-bar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.demo-bar-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.demo-toggle {
+  display: inline-flex;
+  padding: 0.15rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.demo-toggle button {
+  padding: 0.25rem 0.9rem;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.demo-toggle button[aria-pressed='true'] {
+  background: var(--tint-amber-fg);
+  color: var(--tint-amber-bg);
+}
+
+.demo-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.demo-bar button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.demo-bar button:focus-visible,
+.demo-size select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.demo-error {
+  font-weight: 700;
+}
+
+.demo-bar-end {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto;
+}
+
+.demo-size {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.demo-size select {
+  font: inherit;
+}
+
+/* The tour button sits below the bar instead of over it. */
+.demo-bar ~ .ws-corner {
+  top: 3.4rem;
+}
+
+/* The demo's opening slides (DemoSlides): full screen, like a presentation. */
+
+.ds-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(8, 16, 30, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.ds-slide {
+  display: flex;
+  flex-direction: column;
+  width: min(72rem, 100%);
+  min-height: min(40rem, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 1.6rem 2.2rem;
+  border-radius: 1rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font-family: var(--ws-sans);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+}
+
+.ds-top,
+.ds-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ds-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--ws-navy);
+  font-family: var(--ws-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.ds-brand-icon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.ds-count {
+  color: var(--ws-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-content {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 2.5rem;
+  padding: 2rem 0;
+}
+
+.ds-text {
+  animation: ds-in 0.45s ease-out both;
+}
+
+.ds-eyebrow {
+  color: var(--ws-blue);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.ds-text h2 {
+  margin: 0.5rem 0 1rem;
+  color: var(--ws-navy);
+  font-family: var(--ws-serif);
+  font-size: 2.4rem;
+  line-height: 1.15;
+}
+
+.ds-text p {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.ds-text .ds-lead {
+  font-size: 1.2rem;
+}
+
+.ds-bottom {
+  padding-top: 1rem;
+  border-top: 1px solid var(--ws-line);
+}
+
+.ds-dots {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.ds-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--ws-line);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.ds-dot-on {
+  background: var(--ws-blue);
+  transform: scale(1.3);
+}
+
+.ds-buttons {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.ds-buttons svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ds-graphic {
+  position: relative;
+}
+
+/* Slide 1: the three creators. */
+.ds-creators {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.ds-creator {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  font-family: var(--ws-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  animation: ds-pop 0.5s ease-out both;
+}
+
+.ds-creator-badge {
+  display: grid;
+  place-items: center;
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: 50%;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+  font-size: 2.6rem;
+  box-shadow: inset 0 0 0 3px currentColor;
+}
+
+.ds-creator:nth-child(2) .ds-creator-badge {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.ds-creator:nth-child(3) .ds-creator-badge {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+/* Slide 2: the steps of a lawsuit, all but trial skipped. */
+.ds-steps {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.ds-step {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 1rem;
+  border-radius: 0.7rem;
+  animation: ds-in 0.4s ease-out both;
+}
+
+.ds-step-icon {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+}
+
+.ds-step-icon svg {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+.ds-step strong {
+  font-size: 1.05rem;
+}
+
+.ds-step small {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ds-step-off {
+  border: 2px dashed var(--ws-line);
+  color: var(--ws-muted);
+}
+
+.ds-step-off strong {
+  text-decoration: line-through;
+}
+
+.ds-step-off .ds-step-icon {
+  background: var(--tint-grey-bg);
+}
+
+.ds-step-on {
+  border: 2px solid var(--tint-rose-fg);
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
+}
+
+.ds-step-on .ds-step-icon {
+  background: var(--tint-rose-fg);
+  color: var(--tint-rose-bg);
+}
+
+/* Slide 3: the student at the center, joined to the players in the lawsuit. */
+.ds-hub {
+  width: 100%;
+  max-width: 26rem;
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
+/* More specific than the shell's icon size (.ws svg). */
+.ds-hub svg.ds-hub-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.ds-hub-lines line {
+  stroke: var(--ws-blue);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  vector-effect: non-scaling-stroke;
+  animation: ds-fade 0.5s ease-out both;
+}
+
+.ds-hub-center,
+.ds-hub-node {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  transform: translate(-50%, -50%);
+}
+
+.ds-hub-center {
+  left: 50%;
+  top: 50%;
+  align-content: center;
+  width: 7rem;
+  height: 7rem;
+  border-radius: 50%;
+  background: var(--button);
+  color: var(--on-brand);
+  font-weight: 800;
+  box-shadow: 0 0 0 0.6rem var(--tint-blue-bg);
+  animation: ds-pulse 2.4s ease-in-out infinite;
+}
+
+.ds-hub-center svg {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+
+.ds-hub-node {
+  width: 7rem;
+  text-align: center;
+  animation: ds-pop-centered 0.45s ease-out both;
+}
+
+.ds-hub-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 50%;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.ds-hub-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.ds-hub-icon .ds-hub-spark {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--ws-blue);
+}
+
+.ds-hub-node small {
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+@keyframes ds-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.8rem);
+  }
+}
+
+@keyframes ds-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ds-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes ds-pop-centered {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+}
+
+@keyframes ds-pulse {
+  50% {
+    box-shadow: 0 0 0 1rem var(--tint-blue-bg);
+  }
+}
+
+@media (max-width: 760px) {
+  .ds-slide {
+    padding: 1.2rem;
+  }
+
+  .ds-content {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 1.2rem 0;
+  }
+
+  .ds-text h2 {
+    font-size: 1.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-text,
+  .ds-creator,
+  .ds-step,
+  .ds-hub-lines line,
+  .ds-hub-node,
+  .ds-hub-center {
+    animation: none;
+  }
+}

@@ -17,6 +17,15 @@ export interface User {
    */
   toursSeen?: Record<string, string>
   createdAt: string
+  /** Logged in as the demo account: which of its two people they are now, and the demo's course and case. */
+  demo?: DemoSession | null
+}
+
+/** The demo account switches between an instructor and a student of one course (see server/demo). */
+export interface DemoSession {
+  as: Role
+  courseId: string | null
+  caseId: string | null
 }
 
 /** What the account page can change. */
@@ -53,4 +62,8 @@ export interface AuthService {
   removeAvatar(): Promise<User>
   /** Remembers that a guided tour was shown (by its key), so it doesn't start on its own again. */
   markTourSeen?(key: string): Promise<User>
+  /** The demo account: becomes its instructor or its student. */
+  switchDemo?(as: Role): Promise<User>
+  /** The demo account: rebuilds the demo case world. */
+  resetDemo?(): Promise<User>
 }

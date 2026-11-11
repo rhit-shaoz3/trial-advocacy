@@ -22,6 +22,7 @@ import { DEFAULT_AI_FEEDBACK } from '../../courses/types'
 import { AiCheck } from './AiCheck'
 import { DraftControls, DraftsList } from './Drafts'
 import { useDraft, type DraftActions } from './useDraft'
+import { useDemoScript } from '../../demo/useDemoScript'
 import { Meter, SubHead } from './RequestsSection'
 import { FlagButton } from '../flags'
 
@@ -286,6 +287,18 @@ function Compose({
   const [records, setRecords] = useState(saved?.records ?? '')
   const [justification, setJustification] = useState(saved?.justification ?? '')
   const [lastCheck, setLastCheck] = useState<KeyedCheck | null>(draft?.lastCheck ?? null)
+  // The demo starts a new subpoena filled in with its example.
+  const example = useDemoScript(form.caseId)?.subpoena
+  const [filled, setFilled] = useState(false)
+  useEffect(() => {
+    if (!example || saved || filled) return
+    setFilled(true)
+    setRecipient(example.recipient)
+    setRecipientDescription(example.recipientDescription)
+    if (part.types.includes(example.requestType as SubpoenaType)) setRequestType(example.requestType as SubpoenaType)
+    setRecords(example.records)
+    setJustification(example.justification)
+  }, [example, saved, filled, part.types])
   const ready = Boolean(recipient.trim() && records.trim() && requestType && justification.trim())
   const content: SubpoenaDraftContent = { recipient, recipientDescription, requestType, records, justification }
   const empty = ![recipient, recipientDescription, records, justification].some((t) => t.trim())

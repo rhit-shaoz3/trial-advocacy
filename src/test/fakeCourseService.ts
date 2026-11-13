@@ -155,6 +155,8 @@ export function fakeCourseService(overrides: Partial<CourseService> = {}): Cours
     myExhibitText: vi.fn().mockResolvedValue({ status: 'none', text: null }),
     listTrialPackets: vi.fn().mockResolvedValue([]),
     trialPacketsUrl: vi.fn((_c: string, _k: string, teamId?: string) => `/packets/${teamId ?? 'all'}`),
+    listCourtBinders: vi.fn().mockResolvedValue([]),
+    courtBinderUrl: vi.fn((_c: string, _k: string, matchupId: string) => `/binders/${matchupId}`),
     getTrialPacketContents: vi.fn().mockResolvedValue({ items: [], folders: [], warnings: [] }),
     trialPacketPdfUrl: vi.fn((_c: string, _k: string, teamId: string) => `/packets/${teamId}/pdf`),
     getMyPacket: vi.fn().mockResolvedValue(null),

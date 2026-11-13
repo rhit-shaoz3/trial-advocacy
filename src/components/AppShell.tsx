@@ -1,10 +1,11 @@
 import { LogOut, type LucideIcon } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import { AccountDialog } from '../account/AccountDialog'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from './Avatar'
 import { BrandIcon } from './BrandIcon'
+import { inSection, lastPlace, pathOf, rememberPlace } from './lastPlace'
 import './AppShell.css'
 import { ThemeToggle } from '../theme/ThemeToggle'
 import { TourButton } from '../tour/TourButton'
@@ -46,8 +47,23 @@ export function AppShell({
 }) {
   const { user, logOut } = useAuth()
   const navigate = useNavigate()
+  const { pathname, search } = useLocation()
   const [accountOpen, setAccountOpen] = useState(false)
+  const userId = user?.id
+
+  // Remembers where the user is in a section, for its link to come back to.
+  // A link to a section's start only (`end`, like the dashboard) has nothing to remember.
+  const here = nav.find((item) => !item.end && inSection(pathname, pathOf(item.to)))
+  const section = here && pathOf(here.to)
+  useEffect(() => {
+    if (userId && section) rememberPlace(userId, section, pathname + search)
+  }, [userId, section, pathname, search])
+
   if (!user) return null
+
+  /** A section's link goes back to where the user left it, or, from inside the section, to its start. */
+  const linkTo = ({ to, end }: ShellNavItem) =>
+    end || inSection(pathname, pathOf(to)) ? to : (lastPlace(user.id, pathOf(to)) ?? to)
 
   async function handleLogOut() {
     await logOut()
@@ -68,19 +84,22 @@ export function AppShell({
 
         <nav aria-label={navLabel}>
           <span className="ws-nav-label">{navHeading}</span>
-          {nav.map(({ to, label, icon: Icon, end, badge, tourId }) => (
-            <NavLink
-              key={label}
-              to={to}
-              end={end}
-              aria-label={badge ? `${label}, ${badge} waiting` : undefined}
-              data-tour={tourId ? `nav-${tourId}` : undefined}
-            >
-              <Icon aria-hidden="true" />
-              {label}
-              {badge ? <span className="ws-nav-badge">{badge}</span> : null}
-            </NavLink>
-          ))}
+          {nav.map((item) => {
+            const { label, icon: Icon, end, badge, tourId } = item
+            return (
+              <NavLink
+                key={label}
+                to={linkTo(item)}
+                end={end}
+                aria-label={badge ? `${label}, ${badge} waiting` : undefined}
+                data-tour={tourId ? `nav-${tourId}` : undefined}
+              >
+                <Icon aria-hidden="true" />
+                {label}
+                {badge ? <span className="ws-nav-badge">{badge}</span> : null}
+              </NavLink>
+            )
+          })}
         </nav>
 
         <div className="ws-sidebar-bottom">

@@ -1276,6 +1276,17 @@ export interface TrialPacket {
   warnings: string[]
 }
 
+/** A case world's court binder: what its two teams agreed on, for the trial. */
+export interface CourtBinder {
+  matchupId: string
+  worldNumber: number
+  teams: { plaintiff: number | null; defense: number | null }
+  /** When the joint exhibit list became final; the binder is ready from then. */
+  finalizedAt: string | null
+  /** Exhibits for trial: admitted, or disputed for the judge at trial. */
+  exhibits: number
+}
+
 /** One thing in a team's trial packet, as it's offered for the single PDF. */
 export interface PacketItem {
   id: string
@@ -1683,6 +1694,10 @@ export interface CourseService {
   listTrialPackets(courseId: string, caseId: string): Promise<TrialPacket[]>
   /** The zip of every team's packet, or of one team's with `teamId`. */
   trialPacketsUrl(courseId: string, caseId: string, teamId?: string): string
+  /** Each case world's court binder, and whether it's ready. */
+  listCourtBinders(courseId: string, caseId: string): Promise<CourtBinder[]>
+  /** A case world's court binder, as one PDF. */
+  courtBinderUrl(courseId: string, caseId: string, matchupId: string): string
   /** What can go in a team's single PDF, for the instructor. */
   getTrialPacketContents(courseId: string, caseId: string, teamId: string): Promise<PacketContents>
   /** A team's packet as a single PDF, in the team's folders. */

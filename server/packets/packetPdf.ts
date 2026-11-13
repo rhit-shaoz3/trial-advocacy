@@ -10,6 +10,8 @@ export interface PdfPart {
   section: string
   title: string
   print(): Promise<Uint8Array>
+  /** A label stuck on the part's first page, like a court's exhibit sticker. */
+  sticker?: string
 }
 
 type Cover = (pdf: TextPdf, unreadable: string[]) => void
@@ -40,18 +42,43 @@ async function addPages(doc: PDFDocument, data: Uint8Array) {
   for (const page of pages) doc.addPage(page)
 }
 
-/** Writes `text` along the foot of the page as a reader sees it, whichever way the page is turned. */
-function stamp(page: PDFPage, text: string, font: PDFFont) {
+/**
+ * The page as a reader sees it, whichever way it's turned: its size, and where
+ * a point measured from the reader's bottom left falls on the page itself.
+ */
+function upright(page: PDFPage) {
   const { x, y, width, height } = page.getCropBox()
+  const turn = (((page.getRotation().angle % 360) + 360) % 360) as 0 | 90 | 180 | 270
+  const sideways = turn === 90 || turn === 270
+  const at = (u: number, v: number) =>
+    ({
+      0: { x: x + u, y: y + v },
+      90: { x: x + width - v, y: y + u },
+      180: { x: x + width - u, y: y + height - v },
+      270: { x: x + v, y: y + height - u },
+    })[turn]
+  return { width: sideways ? height : width, height: sideways ? width : height, rotate: degrees(turn), at }
+}
+
+/** Writes `text` along the foot of the page as a reader sees it. */
+function stamp(page: PDFPage, text: string, font: PDFFont) {
+  const view = upright(page)
   const length = font.widthOfTextAtSize(text, STAMP_SIZE)
-  const turn = ((page.getRotation().angle % 360) + 360) % 360
-  const at = {
-    0: { x: x + (width - length) / 2, y: y + STAMP_INSET },
-    90: { x: x + width - STAMP_INSET, y: y + (height - length) / 2 },
-    180: { x: x + (width + length) / 2, y: y + height - STAMP_INSET },
-    270: { x: x + STAMP_INSET, y: y + (height + length) / 2 },
-  }[turn as 0 | 90 | 180 | 270]
-  page.drawText(text, { ...at, size: STAMP_SIZE, font, color: rgb(0.25, 0.25, 0.25), rotate: degrees(turn) })
+  page.drawText(text, { ...view.at((view.width - length) / 2, STAMP_INSET), size: STAMP_SIZE, font, color: rgb(0.25, 0.25, 0.25), rotate: view.rotate })
+}
+
+const STICKER_SIZE = 10
+const STICKER_PAD = 5
+
+/** A boxed label near the bottom right of the page as a reader sees it, above the page number. */
+function sticker(page: PDFPage, text: string, font: PDFFont) {
+  const view = upright(page)
+  const width = font.widthOfTextAtSize(text, STICKER_SIZE) + 2 * STICKER_PAD
+  const height = STICKER_SIZE + 2 * STICKER_PAD
+  const u = view.width - 36 - width
+  const v = STAMP_INSET + 16
+  page.drawRectangle({ ...view.at(u, v), width, height, color: rgb(1, 1, 1), borderColor: rgb(0, 0, 0), borderWidth: 1, rotate: view.rotate })
+  page.drawText(text, { ...view.at(u + STICKER_PAD, v + STICKER_PAD + 1.5), size: STICKER_SIZE, font, rotate: view.rotate })
 }
 
 /** The first pages, for documents that start after `before` pages. */
@@ -93,6 +120,9 @@ export async function mergedPdf(footer: string, parts: PdfPart[], cover: Cover) 
 
   // How long the table of contents runs doesn't depend on its numbers, so a
   // first pass says how many pages come before the documents.
+  const bold = await doc.embedFont(StandardFonts.TimesRomanBold)
+  for (const part of placed) if (part.sticker) sticker(doc.getPage(part.index), part.sticker, bold)
+
   const before = (await frontPages(footer, cover, placed, unreadable, 0)).pdf.pageCount
   const { pdf, links } = await frontPages(footer, cover, placed, unreadable, before)
   const front = await PDFDocument.load(await pdf.save({ footer: false }))

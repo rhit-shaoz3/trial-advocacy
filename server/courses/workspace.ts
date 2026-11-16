@@ -24,41 +24,26 @@ import { listTeams } from './teams.ts'
 import { isAiWitness } from '../witness/profile.ts'
 
 /** What students see of a witness: never its AI setup (deposition file, persona, files it has seen). */
-export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'audience' | 'avatarUrl'> & {
+export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'avatarUrl'> & {
   /** The side the witness testifies for, or null for neither. */
   side: Side | null
   /** Whether the witness is an AI witness the team can interview. */
   canInterview: boolean
-  /** The other side's witness, shown because the instructor disclosed them; not to be interviewed yet. */
+  /** The other side's witness, which the team can't interview until the deposition phase. */
+  locked: boolean
+  /** The other side's witness, in the initial disclosures the instructor made for that side. */
   disclosed: boolean
 }
 
 /**
- * The witnesses a team on `side` can see in `phase`. Until the deposition
- * phase, a witness for one side is hidden from the other, and the rest follow
- * their audience, except that after the introduction phase the witnesses in
- * the instructor's initial disclosures show to both sides. In deposition,
- * every witness is revealed to both sides. With no side yet, only shared
- * witnesses with no side show.
+ * The witnesses students see: every one the instructor hasn't hidden, on both
+ * sides and in every phase.
  */
-export function visibleWitnesses<W extends Pick<Witness, 'id' | 'audience' | 'alignedSide'>>(
-  witnesses: W[],
-  side: Side | null,
-  phase: CasePhase,
-  disclosed: ReadonlySet<string> = new Set(),
-) {
-  if (phaseAtLeast(phase, 'deposition')) return witnesses
-  const audiences: string[] = visibleTo(side)
-  return witnesses.filter(
-    (w) =>
-      (audiences.includes(w.audience) && (w.alignedSide === null || w.alignedSide === side)) ||
-      (side !== null && requestsOpen(phase) && disclosed.has(w.id)),
-  )
-}
+export const visibleWitnesses = <W extends Pick<Witness, 'hidden'>>(witnesses: W[]) => witnesses.filter((w) => !w.hidden)
 
-/** Whether a team on `side` can interview a witness it can see: the other side's only in deposition. */
-export const interviewable = (w: Pick<Witness, 'alignedSide' | 'audience'>, side: Side | null, phase: CasePhase) =>
-  phaseAtLeast(phase, 'deposition') || !side || (w.alignedSide ?? (w.audience === 'all' ? side : w.audience)) === side
+/** Whether a team on `side` can interview a witness: the other side's only in deposition. */
+export const interviewable = (w: Pick<Witness, 'alignedSide'>, side: Side | null, phase: CasePhase) =>
+  phaseAtLeast(phase, 'deposition') || !side || !w.alignedSide || w.alignedSide === side
 
 // Shape sent to the client; matches `CaseWorkspace` in src/courses/types.ts.
 export interface CaseWorkspace {
@@ -232,17 +217,17 @@ async function assemble(
     world,
     side,
     materials,
-    witnesses: visibleWitnesses(witnesses, side, caseRow.phase, disclosed).map((w) => {
+    witnesses: visibleWitnesses(witnesses).map((w) => {
       const canAsk = interviewable(w, side, caseRow.phase)
       return {
         id: w.id,
         name: w.name,
         role: w.role,
         description: w.description,
-        audience: w.audience,
         side: w.alignedSide,
         canInterview: isAiWitness(w) && canAsk,
-        disclosed: !canAsk,
+        locked: !canAsk,
+        disclosed: Boolean(side && w.alignedSide && w.alignedSide !== side && requestsOpen(caseRow.phase) && disclosed.has(w.id)),
         avatarUrl: w.avatarUrl,
       }
     }),

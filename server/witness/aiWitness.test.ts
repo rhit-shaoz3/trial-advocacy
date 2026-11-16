@@ -221,12 +221,14 @@ describe('setting up an AI witness', () => {
     await createWitness()
     await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Bystander' })
     await launch()
-    // Elena testifies for the defense, so (before the deposition phase) only the defense team sees her.
+    // Elena testifies for the defense, so only the defense team can interview her before the deposition phase.
     const { witnesses } = (await cy.get(myCaseUrl())).body.workspace
     expect(witnesses).toEqual([
-      { id: expect.any(String), name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls.', audience: 'all', side: 'defense', canInterview: true, disclosed: false, avatarUrl: null },
-      { id: expect.any(String), name: 'Bystander', role: '', description: '', audience: 'all', side: null, canInterview: false, disclosed: false, avatarUrl: null },
+      { id: expect.any(String), name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls.', side: 'defense', canInterview: true, locked: false, disclosed: false, avatarUrl: null },
+      { id: expect.any(String), name: 'Bystander', role: '', description: '', side: null, canInterview: false, locked: false, disclosed: false, avatarUrl: null },
     ])
+    const theirs = (await ada.get(myCaseUrl())).body.workspace.witnesses[0]
+    expect(theirs).toMatchObject({ name: 'Elena Torres', canInterview: false, locked: true })
   })
 })
 
@@ -358,10 +360,10 @@ describe('interviewing an AI witness', () => {
     expect(view.body.interview).toMatchObject({ canAsk: false, notice: "Bystander isn't available for interviews yet." })
     expect((await ada.post(`${myCaseUrl()}/witnesses/${bystander}/interview/questions`).send({ question: 'Hi?' })).status).toBe(409)
 
-    // Before the deposition phase, a witness only the defense can see is out of reach.
+    // A witness the instructor hid from students is out of reach.
     await prof.put(`${caseUrl()}/phase`).send({ phase: 'investigate' })
-    const defenseOnly = (await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Secret', audience: 'defense' })).body.witness.id
-    expect((await ada.get(`${myCaseUrl()}/witnesses/${defenseOnly}/interview`)).status).toBe(404)
+    const hidden = (await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Secret', hidden: true })).body.witness.id
+    expect((await ada.get(`${myCaseUrl()}/witnesses/${hidden}/interview`)).status).toBe(404)
     expect(asked).toHaveLength(0)
   })
 
@@ -403,13 +405,13 @@ describe('witnesses by phase', () => {
     await launch()
   })
 
-  it("keeps a side's witness from the other side until the deposition phase", async () => {
+  it("keeps the other side from questioning a side's witness until the deposition phase", async () => {
     for (const phase of ['introduction', 'investigate']) {
       await setPhase(phase)
-      expect(await names(ada)).toEqual([])
+      expect(await names(ada)).toEqual(['Elena Torres'])
       expect(await names(cy)).toEqual(['Elena Torres'])
-      expect((await ada.get(interview())).status).toBe(404)
-      expect((await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })).status).toBe(404)
+      expect((await ada.get(interview())).status).toBe(409)
+      expect((await ada.post(`${interview()}/questions`).send({ question: 'Where were you?' })).status).toBe(409)
     }
     // Her own side can interview her all along.
     expect((await cy.post(`${interview()}/questions`).send({ question: 'Where were you?' })).status).toBe(200)
@@ -421,9 +423,9 @@ describe('witnesses by phase', () => {
     expect(deposed.status).toBe(200)
     expect(asked[1].settings).toMatchObject({ examiningPartyRole: 'plaintiff', defendingCounselName: 'Ms. Park' })
 
-    // Stepping back hides her again; the interview is kept for later.
+    // Stepping back locks her again; the interview is kept for later.
     await setPhase('investigate')
-    expect((await ada.get(interview())).status).toBe(404)
+    expect((await ada.get(interview())).status).toBe(409)
     await setPhase('deposition')
     expect((await ada.get(interview())).body.interview.turns).toHaveLength(1)
   })

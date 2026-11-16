@@ -16,6 +16,8 @@ import { DEFAULT_AI_FEEDBACK, SUBPOENA_TYPES } from '../../../courses/types'
 import { SUBPOENA_TYPE_HINT, SUBPOENA_TYPE_LABEL } from '../../../courses/subpoenaForm'
 import { WelcomeEmail } from '../../../caseWorkspace/exchange/WelcomeEmail'
 import { SIDE_LABEL, partSummary, subpoenaSummary } from './exchangeLabels'
+import { HelpToggle } from '../../../components/HelpToggle'
+import { EXCHANGE_HELP } from '../setup/stepHelp'
 import '../setup/CaseSetupFlow.css'
 import './exchange.css'
 
@@ -33,7 +35,7 @@ const STEP_LABEL: Record<ExchangeStep, string> = {
 
 const STEP_HINT: Record<ExchangeStep, string> = {
   disclosures:
-    'Pick what each side must disclose to the other. Each student makes their own picks during the introduction phase; your picks are the answer key, shared with everyone when you move to information exchange.',
+    'Pick what each side must disclose to the other. Each student makes their own picks during the introduction phase; your picks are the answer key, shared with everyone when you move to information exchange. Disclosed files open to both sides, and a disclosed witness you hid from students is shown.',
   subpoenas: 'Teams subpoena records, data, objects, or a site visit from people and organizations outside their files.',
   interrogatories: 'Written questions one team sends the other, answered in writing.',
   rfas: 'Statements one team asks the other to admit or deny, so settled facts don’t have to be proven at trial.',
@@ -217,6 +219,7 @@ export function ExchangeSetupFlow({
             </span>
             <h2>{STEP_LABEL[step]}</h2>
             <p className="muted">{STEP_HINT[step]}</p>
+            <HelpToggle label="What is this step for?">{EXCHANGE_HELP[step]}</HelpToggle>
           </div>
           {included !== null && included !== undefined && (
             <label className="exchange-include">

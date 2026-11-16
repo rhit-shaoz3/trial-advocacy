@@ -3,8 +3,6 @@ import { Link } from 'react-router'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL } from '../../../courses/caseLabels'
 import {
-  AUDIENCES,
-  type Audience,
   type CaseMaterial,
   type CourseCase,
   type Side,
@@ -24,7 +22,7 @@ const BLANK: WitnessInput = {
   name: '',
   role: '',
   description: '',
-  audience: 'all',
+  hidden: false,
   alignedSide: null,
   personaNotes: '',
   depositionMaterialId: null,
@@ -175,7 +173,7 @@ export function WitnessesSection({
                 <div>
                   <strong>{w.name}</strong>
                   {w.role && <span className="muted"> · {w.role}</span>}
-                  <span className={`badge content-audience-${w.audience}`}>{AUDIENCE_LABEL[w.audience]}</span>
+                  {w.hidden && <span className="badge content-audience-instructor">Hidden from students</span>}
                   {isAiWitness(w) && <span className="badge content-ai-witness">AI witness</span>}
                   {w.description && <p>{w.description}</p>}
                   {isAiWitness(w) && <AiSummary witness={w} materials={materials} />}
@@ -308,7 +306,7 @@ function WitnessForm({
   const [name, setName] = useState(initial.name)
   const [role, setRole] = useState(initial.role)
   const [description, setDescription] = useState(initial.description)
-  const [audience, setAudience] = useState<Audience>(initial.audience)
+  const [shown, setShown] = useState(!initial.hidden)
   const [alignedSide, setAlignedSide] = useState<Side | null>(initial.alignedSide)
   const [depositionId, setDepositionId] = useState(initial.depositionMaterialId ?? '')
   const [known, setKnown] = useState<string[]>(initial.knownMaterialIds)
@@ -332,7 +330,7 @@ function WitnessForm({
           name,
           role,
           description,
-          audience,
+          hidden: !shown,
           alignedSide,
           depositionMaterialId: depositionId || null,
           knownMaterialIds: known.filter((id) => id !== depositionId),
@@ -376,16 +374,16 @@ function WitnessForm({
           maxLength={120}
         />
       </label>
-      <label>
-        Visible to
-        <select value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
-          {AUDIENCES.map((a) => (
-            <option key={a} value={a}>
-              {AUDIENCE_LABEL[a]}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="content-form-full content-show">
+        <label className="investigator-toggle">
+          <input type="checkbox" checked={shown} onChange={(e) => setShown(e.target.checked)} />
+          Show to students
+        </label>
+        <span className="muted field-hint">
+          Both sides see every witness. Turn this off to keep this one from students until you&rsquo;re ready. A hidden
+          witness you pick for initial disclosures is shown when the introduction ends.
+        </span>
+      </div>
       <label className="content-form-full">
         About this witness (optional)
         <DictationTextarea

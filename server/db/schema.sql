@@ -179,7 +179,6 @@ CREATE TABLE IF NOT EXISTS case_witnesses (
   name        text        NOT NULL,
   role        text        NOT NULL DEFAULT '',
   description text        NOT NULL DEFAULT '',
-  audience    text        NOT NULL DEFAULT 'all' CHECK (audience IN ('all', 'plaintiff', 'defense')),
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
@@ -272,6 +271,11 @@ ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS defending_counsel text NOT N
 -- Choosing one clears the other; with neither, the witness shows an icon.
 ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS avatar_preset smallint CHECK (avatar_preset BETWEEN 1 AND 12);
 ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS avatar_key text;
+-- Every witness shows to both sides; the instructor can hide one from
+-- students until they're ready. (Witnesses used to have a per-side audience.)
+-- A hidden witness in the initial disclosures is shown when the introduction ends.
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS hidden boolean NOT NULL DEFAULT false;
+ALTER TABLE case_witnesses DROP COLUMN IF EXISTS audience;
 
 -- One interview of an AI witness, before any deposition: by a team (both
 -- partners share it, always as their team's side) or, with no team, an

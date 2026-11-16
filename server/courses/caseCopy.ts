@@ -102,9 +102,9 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
         copiedKeys.push(avatarKey)
       }
       await client.query(
-        `INSERT INTO case_witnesses (id, case_id, name, role, description, audience, created_at, aligned_side,
+        `INSERT INTO case_witnesses (id, case_id, name, role, description, hidden, created_at, aligned_side,
            persona_notes, deposition_material_id, known_material_ids, defending_counsel, avatar_preset, avatar_key)
-         SELECT $2, $3, name, role, description, audience, created_at, aligned_side,
+         SELECT $2, $3, name, role, description, hidden, created_at, aligned_side,
            persona_notes, $4, $5, defending_counsel, avatar_preset, $6
          FROM case_witnesses WHERE id = $1`,
         [

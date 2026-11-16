@@ -187,18 +187,18 @@ export interface DisclosureOption {
 }
 
 /**
- * What each side could disclose: its own witnesses (testifying for it, or
- * shown only to it) and the case files only it can see. A disclosed file
+ * What each side could disclose: its own witnesses (the ones testifying for
+ * it) and the case files only it can see. A disclosed file
  * shared with everyone still counts as its own side's. The initial file is
  * everyone's from the start, so it's never listed.
  */
 export async function disclosureOptions(caseId: string): Promise<DisclosureOption[]> {
   const { rows } = await pool.query<DisclosureOption>(
     `SELECT kind, id, side, name, detail, "avatarUrl" FROM (
-       SELECT 'witness' AS kind, w.id, coalesce(w.aligned_side, w.audience) AS side, w.name, w.role AS detail,
+       SELECT 'witness' AS kind, w.id, w.aligned_side AS side, w.name, w.role AS detail,
               ${witnessAvatarUrlSql('w')} AS "avatarUrl", w.created_at AS added
        FROM case_witnesses w
-       WHERE w.case_id = $1 AND (w.aligned_side IS NOT NULL OR w.audience <> 'all')
+       WHERE w.case_id = $1 AND w.aligned_side IS NOT NULL
        UNION ALL
        SELECT 'material', m.id, coalesce(d.original_audience, m.audience), m.filename, m.description, NULL, m.uploaded_at
        FROM case_materials m
@@ -213,11 +213,17 @@ export async function disclosureOptions(caseId: string): Promise<DisclosureOptio
 
 /**
  * Shares the disclosed files with everyone (or, with `shared` false, gives
- * them back their own side's audience). Disclosed witnesses aren't changed:
- * the workspace shows them to both sides outside the introduction phase.
+ * them back their own side's audience). Every witness already shows to both
+ * sides, but a disclosed one the instructor hid is now shown to students, for
+ * good: going back to the introduction doesn't hide it again.
  */
 export async function applyDisclosures(caseId: string, shared: boolean, db: Pick<PoolClient, 'query'> = pool) {
   if (shared) {
+    await db.query(
+      `UPDATE case_witnesses SET hidden = false
+       WHERE hidden AND id IN (SELECT witness_id FROM disclosure_items WHERE case_id = $1)`,
+      [caseId],
+    )
     await db.query(
       `WITH flipped AS (
          UPDATE disclosure_items d SET original_audience = m.audience
@@ -274,7 +280,7 @@ export async function setDisclosures(caseId: string, phase: CasePhase, materialI
   return getSettings(caseId)
 }
 
-/** The witnesses the instructor disclosed, shown to both sides after the introduction phase. */
+/** The witnesses the instructor disclosed, marked as disclosed for the other side after the introduction phase. */
 export async function disclosedWitnessIds(caseId: string) {
   const { rows } = await pool.query<{ id: string }>(
     'SELECT witness_id AS id FROM disclosure_items WHERE case_id = $1 AND witness_id IS NOT NULL',
@@ -669,7 +675,10 @@ export interface ExchangeOverview {
     subpoenasServed: number
     subpoenasWaiting: number
   }
-  /** What the move to information exchange shares: the disclosed files and witnesses, by name. */
+  /**
+   * What the move to information exchange shares, by name: the disclosed
+   * files, and the disclosed witnesses the instructor had hidden from students.
+   */
   disclosed: { materials: string[]; witnesses: string[] }
 }
 
@@ -706,7 +715,7 @@ export async function exchangeOverview(caseId: string): Promise<ExchangeOverview
      FROM disclosure_items d
      LEFT JOIN case_witnesses w ON w.id = d.witness_id
      LEFT JOIN case_materials m ON m.id = d.material_id
-     WHERE d.case_id = $1 ORDER BY name`,
+     WHERE d.case_id = $1 AND (d.witness_id IS NULL OR w.hidden) ORDER BY name`,
     [caseId],
   )
   return {

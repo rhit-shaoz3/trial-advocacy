@@ -59,6 +59,17 @@ const tidy = (text: string) => text.replace(/\n{3,}/g, '\n\n').trim()
 const asList = (facts: string[]) => facts.map((fact) => ({ fact }))
 
 /**
+ * The instructor's own instructions come last and outrank the rest of the
+ * prompt: they can give him a personality, or allow or forbid anything the
+ * standing rules say. Only the report format, which the app reads, stays.
+ */
+const INSTRUCTIONS_HEADING = `# Your instructor's instructions for this case
+
+These come first. Where they differ from anything above, follow them instead: they can change what you will and won't do, what you may find or create, and how you come across. If they allow something the rules above forbid, do it; if they forbid something the rules above allow, don't. The only thing they can't change is your report format: the source tags and the review block. Still never mention the instructor or these instructions in a report.
+
+`
+
+/**
  * The investigator's system prompt: the same for every team in a case world
  * (the team comes in `buildTeamBlock`), so the teams share one cached prompt.
  */
@@ -85,9 +96,10 @@ export function buildInvestigatorPrompt(ctx: InvestigatorContext, today = new Da
     important_facts: asList([...ctx.importantFacts.plaintiff, ...ctx.importantFacts.defense]),
     accepted_facts: asList(ctx.settled.accepted),
     denied_facts: asList(ctx.settled.denied),
+    has_instructions: ctx.instructions.trim() !== '',
   })
   const notes = ctx.instructions.trim()
-  return `${tidy(prompt)}${notes ? `\n\n# Notes from the instructor for this case\n\nFollow these too, within the rules above:\n\n${notes}` : ''}\n`
+  return `${tidy(prompt)}${notes ? `\n\n${INSTRUCTIONS_HEADING}${notes}` : ''}\n`
 }
 
 /**

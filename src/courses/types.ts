@@ -295,7 +295,8 @@ export interface Witness {
   name: string
   role: string
   description: string
-  audience: Audience
+  /** Kept from students until the instructor shows them. Everyone else shows to both sides. */
+  hidden: boolean
   /** The side the witness testifies for; null until it is an AI witness. */
   alignedSide: Side | null
   /** Demeanor and background for the AI to play. */
@@ -325,12 +326,13 @@ export interface WorkspaceWitness {
   name: string
   role: string
   description: string
-  audience: Audience
   /** The side the witness testifies for, or null for neither. */
   side: Side | null
   /** An AI witness the team can interview. */
   canInterview: boolean
-  /** The other side's witness, shown because the instructor disclosed them; not to be interviewed yet. */
+  /** The other side's witness, which the team can't interview until the deposition phase. */
+  locked?: boolean
+  /** The other side's witness, in that side's initial disclosures. */
   disclosed?: boolean
   /** The witness's picture, or null for an icon. */
   avatarUrl?: string | null
@@ -995,7 +997,7 @@ export interface ExchangeOverview {
     subpoenasServed?: number
     subpoenasWaiting?: number
   }
-  /** What moving to information exchange shares, by name. */
+  /** What moving to information exchange shares, by name: disclosed files, and disclosed witnesses that were hidden. */
   disclosed: { materials: string[]; witnesses: string[] }
 }
 
@@ -1410,7 +1412,6 @@ export interface WitnessSuggestion {
 /** Text the AI suggests for a case's own fields, from its initial file, for the instructor to keep or edit. */
 export interface CaseSuggestions {
   disputedIssues: string
-  investigatorNotes: string
   instructorNote: string
   tasks: { title: string; description: string }[]
 }

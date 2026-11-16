@@ -539,9 +539,9 @@ describe('WitnessesSection', () => {
 
   it('adds, edits, and removes witnesses', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const elena = { id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: '', audience: 'all' as const, ...blankAi }
+    const elena = { id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: '', hidden: false, ...blankAi }
     const createWitness = vi.fn().mockResolvedValue(elena)
-    const updateWitness = vi.fn().mockResolvedValue({ ...elena, audience: 'defense' })
+    const updateWitness = vi.fn().mockResolvedValue({ ...elena, hidden: true })
     const { user, service } = renderSection({ createWitness, updateWitness })
 
     await user.click(await screen.findByRole('button', { name: 'Add witness' }))
@@ -553,19 +553,19 @@ describe('WitnessesSection', () => {
       name: 'Elena Torres',
       role: 'Ride operator',
       description: '',
-      audience: 'all',
+      hidden: false,
       ...blankAi,
       avatarPreset: null,
     })
     const item = await screen.findByRole('listitem', { name: 'Elena Torres' })
-    expect(item).toHaveTextContent('Everyone')
+    expect(item).not.toHaveTextContent('Hidden from students')
     expect(within(item).queryByRole('link', { name: 'Test as plaintiff' })).not.toBeInTheDocument()
 
     await user.click(within(item).getByRole('button', { name: 'Edit' }))
-    await user.selectOptions(screen.getByLabelText('Visible to'), 'Defense only')
+    await user.click(screen.getByRole('checkbox', { name: 'Show to students' }))
     await user.click(screen.getByRole('button', { name: 'Save witness' }))
-    expect(updateWitness).toHaveBeenCalledWith('c1', 'k1', 'w1', expect.objectContaining({ audience: 'defense' }))
-    expect(await screen.findByRole('listitem', { name: 'Elena Torres' })).toHaveTextContent('Defense only')
+    expect(updateWitness).toHaveBeenCalledWith('c1', 'k1', 'w1', expect.objectContaining({ hidden: true }))
+    expect(await screen.findByRole('listitem', { name: 'Elena Torres' })).toHaveTextContent('Hidden from students')
 
     await user.click(within(screen.getByRole('listitem', { name: 'Elena Torres' })).getByRole('button', { name: 'Remove' }))
     expect(service.deleteWitness).toHaveBeenCalledWith('c1', 'k1', 'w1')
@@ -573,7 +573,7 @@ describe('WitnessesSection', () => {
   })
 
   it('gives the witness one of the picture designs', async () => {
-    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: 4, avatarUrl: '/witness-avatars/04.svg' }
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', hidden: false, ...blankAi, avatarPreset: 4, avatarUrl: '/witness-avatars/04.svg' }
     const createWitness = vi.fn().mockResolvedValue(elena)
     const { user } = renderSection({ createWitness })
 
@@ -591,7 +591,7 @@ describe('WitnessesSection', () => {
 
   it('uploads a cropped picture for the witness once it is saved', async () => {
     vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:picture'), revokeObjectURL: vi.fn() }))
-    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: null, avatarUrl: null }
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', hidden: false, ...blankAi, avatarPreset: null, avatarUrl: null }
     const withPicture = { ...elena, avatarUrl: '/api/witnesses/w1/avatar?v=1' }
     const createWitness = vi.fn().mockResolvedValue(elena)
     const uploadWitnessAvatar = vi.fn().mockResolvedValue(withPicture)
@@ -617,7 +617,7 @@ describe('WitnessesSection', () => {
   })
 
   it('removes an uploaded picture when No picture is chosen', async () => {
-    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: null, avatarUrl: '/api/witnesses/w1/avatar?v=1' }
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', hidden: false, ...blankAi, avatarPreset: null, avatarUrl: '/api/witnesses/w1/avatar?v=1' }
     const updateWitness = vi.fn().mockResolvedValue(elena)
     const removeWitnessAvatar = vi.fn().mockResolvedValue({ ...elena, avatarUrl: null })
     const { user } = renderSection({ listWitnesses: vi.fn().mockResolvedValue([elena]), updateWitness, removeWitnessAvatar })
@@ -638,7 +638,7 @@ describe('WitnessesSection', () => {
       name: 'Elena Torres',
       role: '',
       description: '',
-      audience: 'all' as const,
+      hidden: false,
       alignedSide: 'defense' as const,
       personaNotes: 'Plain-spoken.',
       depositionMaterialId: 'm2',
@@ -722,7 +722,6 @@ describe('TasksSection', () => {
 describe('suggestions from the case file', () => {
   const suggestions = {
     disputedIssues: 'Whether Torres checked the lap bars',
-    investigatorNotes: 'Talk to the riders in the next car.',
     instructorNote: 'Focus on the restart.',
     tasks: [
       { title: 'Outline the deposition', description: 'List the topics.' },
@@ -745,27 +744,23 @@ describe('suggestions from the case file', () => {
     updatedAt: '2026-10-01T15:00:00.000Z',
   }
 
-  it('writes the suggested notes into an empty field, saved only when the instructor saves', async () => {
-    const saveInvestigator = vi.fn().mockResolvedValue({ ...base, investigator: { ...base.investigator!, instructions: suggestions.investigatorNotes } })
-    const { user, service } = renderWith(<InvestigatorSection courseId="c1" courseCase={base} onSaved={vi.fn()} />, { ...ready, saveInvestigator })
+  it("doesn't suggest instructions for the investigator, and explains what they can say", async () => {
+    const saveInvestigator = vi.fn().mockResolvedValue({ ...base, investigator: { ...base.investigator!, instructions: 'Be brief.' } })
+    const { user } = renderWith(<InvestigatorSection courseId="c1" courseCase={base} onSaved={vi.fn()} />, { ...ready, saveInvestigator })
     const notes = screen.getByLabelText(/Instructions for the investigator/)
-    await waitFor(() => expect(notes).toHaveValue('Talk to the riders in the next car.'))
-    expect(service.getContentSuggestions).toHaveBeenCalledWith('c1', 'k1')
-    expect(screen.getByText(/Suggested from the case file/)).toBeInTheDocument()
-    expect(saveInvestigator).not.toHaveBeenCalled()
-    // Editing it makes it theirs.
-    await user.type(notes, ' Be brief.')
-    expect(screen.queryByText(/Suggested from the case file/)).not.toBeInTheDocument()
+    expect(notes).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: 'What can I write here?' }))
+    expect(screen.getByText(/A personality\./)).toBeInTheDocument()
+    expect(screen.getByText(/Whether he can create new records\./)).toBeInTheDocument()
+    await user.type(notes, 'Be brief.')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
-    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ instructions: 'Talk to the riders in the next car. Be brief.' }))
+    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ instructions: 'Be brief.' }))
   })
 
   it('leaves saved text alone', async () => {
     const saved = { ...base, investigator: { ...base.investigator!, instructions: 'Keep it short.' } }
     renderWith(<InvestigatorSection courseId="c1" courseCase={saved} onSaved={vi.fn()} />, ready)
-    await waitFor(() => expect(ready.getContentSuggestions).toHaveBeenCalled())
     expect(screen.getByLabelText(/Instructions for the investigator/)).toHaveValue('Keep it short.')
-    expect(screen.queryByText(/Suggested from the case file/)).not.toBeInTheDocument()
   })
 
   it('suggests the disputed issues', async () => {

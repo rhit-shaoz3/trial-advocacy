@@ -106,6 +106,10 @@
   margin: 0;
 }
 
+.setup-intro .help-toggle {
+  margin-top: 0.6rem;
+}
+
 .setup-count {
   color: var(--ws-gold);
   font-size: 0.72rem;

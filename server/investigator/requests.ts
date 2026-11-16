@@ -209,7 +209,8 @@ async function investigatorContext(request: RequestRow): Promise<InvestigatorCon
     documents: materials
       .filter((m) => m.textStatus === 'ready' && m.text)
       .map((m) => ({ id: m.id, title: m.description || m.filename, teamHasAccess: canSee.has(m.id), content: m.text! })),
-    witnesses: witnesses.map((w) => ({ name: w.name, role: w.role, side: w.alignedSide })),
+    // A witness the instructor is keeping from students isn't the investigator's to reveal.
+    witnesses: witnesses.filter((w) => !w.hidden).map((w) => ({ name: w.name, role: w.role, side: w.alignedSide })),
     importantFacts: request.importantFacts,
     settled,
   }

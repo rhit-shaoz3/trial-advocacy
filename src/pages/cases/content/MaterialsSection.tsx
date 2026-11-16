@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { Fragment, useEffect, useImperativeHandle, useRef, useState, type ChangeEvent, type DragEvent, type Ref } from 'react'
 import { Download, TriangleAlert, Upload, X } from 'lucide-react'
 import { FileViewer } from '../../../components/FileViewer'
 import { SortHeader } from '../../../components/SortHeader'
@@ -17,6 +17,7 @@ import {
 import { worldLabel } from '../../../courses/worldLabel'
 import { sharesLabel } from './shares'
 import { SharePicker } from './SharePicker'
+import type { StepSave } from './stepSave'
 
 const MAX_BYTES = 100 * 1024 * 1024 // matches the server's limit
 const ACCEPT = [
@@ -81,11 +82,14 @@ export function MaterialsSection({
   courseId,
   caseId,
   onChange,
+  saveRef,
 }: {
   courseId: string
   caseId: string
   /** Called after any upload, edit, or delete (e.g. to refresh the launch checklist). */
   onChange?(): void
+  /** For the case setup flow: Next uploads the files still waiting to upload. */
+  saveRef?: Ref<StepSave>
 }) {
   const service = useCourseService()
   const fileInput = useRef<HTMLInputElement>(null)
@@ -188,7 +192,7 @@ export function MaterialsSection({
   const updateQueued = (key: number, fields: Partial<QueuedFile>) =>
     setQueued((prev) => prev.map((p) => (p.key === key ? { ...p, ...fields } : p)))
 
-  /** Uploads every listed file with its own label and audience. Files that fail stay listed. */
+  /** Uploads every listed file with its own label and audience. Files that fail stay listed; returns their errors. */
   async function handleUpload() {
     setErrors([])
     setUploading(true)
@@ -208,9 +212,20 @@ export function MaterialsSection({
     setErrors(failures)
     setUploading(false)
     onChange?.()
+    return failures
   }
 
   const unlabeled = queued.some((p) => !p.label.trim())
+
+  useImperativeHandle(saveRef, () => ({
+    pending: () => queued.length > 0,
+    async save() {
+      if (queued.length === 0) return
+      if (unlabeled) throw new Error('Give each file a label, or remove it, before moving on.')
+      const failures = await handleUpload()
+      if (failures.length > 0) throw new Error('Some files didn’t upload. Try them again, or remove them, before moving on.')
+    },
+  }))
 
   async function handleAudience(material: CaseMaterial, choice: MaterialAudience | typeof SPECIFIC) {
     setErrors([])

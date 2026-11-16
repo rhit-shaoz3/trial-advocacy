@@ -559,14 +559,12 @@ export function CaseWorkspaceView({
             sub={
               phaseAtLeast(c.phase, 'deposition')
                 ? `People in ${c.title}. Interview your side's AI witnesses with your partner, and depose the other side's.`
-                : witnesses.some((w) => w.disclosed)
-                  ? `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's disclosed witnesses show here; you can depose them in the deposition phase.`
-                  : `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's witnesses are revealed in the deposition phase.`
+                : `People in ${c.title}. Interview your side's AI witnesses with your partner. You can depose the other side's witnesses in the deposition phase.`
             }
             empty="No witnesses have been added yet."
           >
             {witnesses.map((w) => {
-              // A witness for the other side: shown only once the deposition phase reveals them.
+              // A witness for the other side: deposed, not interviewed, and only in the deposition phase.
               const theirs = Boolean(workspace.side && w.side && w.side !== workspace.side)
               const action = theirs ? 'Depose' : 'Interview'
               return (
@@ -578,12 +576,8 @@ export function CaseWorkspaceView({
                   {w.description && <p>{w.description}</p>}
                 </div>
                 {theirs && <span className="cw-badge cw-badge-theirs">{WITNESS_FOR[w.side!]}</span>}
-                {w.disclosed ? (
-                  <span className="cw-badge cw-badge-theirs">Disclosed by the other side</span>
-                ) : (
-                  w.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[w.audience]}</span>
-                )}
-                {w.disclosed && (
+                {w.disclosed && <span className="cw-badge cw-badge-theirs">Disclosed by the other side</span>}
+                {w.locked && (
                   <span className="cw-interview cw-interview-off" aria-disabled="true">
                     <Lock aria-hidden="true" />
                     Can&rsquo;t interview yet
@@ -864,7 +858,7 @@ function TeamEmail({
         if (file) onOpenFile(file)
       }}
       witnesses={witnesses
-        .filter((w) => !w.disclosed && (w.side === side || (w.side === null && w.audience === side)))
+        .filter((w) => w.side === side)
         .map((w) => (w.role ? `${w.name}, ${w.role.charAt(0).toLowerCase()}${w.role.slice(1)}` : w.name))}
       disclosures={exchange.disclosures !== null}
     />

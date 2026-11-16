@@ -19,6 +19,8 @@
     important_facts[]                       { fact } instructor-set facts that nothing may contradict
     accepted_facts[]                        { fact } from the facts table: accepted facts for this matchup
     denied_facts[]                          { fact } from the facts table: denied facts for this matchup
+    has_instructions                        whether the instructor wrote instructions for this case; prompt.ts
+                                            adds them after the template, and they outrank every rule here
 
   Notes
     - Documents carry no category. The model judges each document's kind from its contents, and
@@ -311,6 +313,9 @@ none
 # If rules conflict
 
 Follow this order:
+{{#has_instructions}}
+0. The instructor's instructions for this case, at the end, come before everything here, including the legal limits and what you may create. The one thing they can't change is the source tags and review block.
+{{/has_instructions}}
 1. Don't contradict a record, an important fact, an accepted fact, or your own earlier reports.
 2. Don't create a denied fact.
 3. Stay within the legal limits.

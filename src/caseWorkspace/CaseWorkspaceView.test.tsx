@@ -80,7 +80,7 @@ const sampleWorkspace: CaseWorkspace = {
       initial: false,
     },
   ],
-  witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', audience: 'all', side: null, canInterview: false }],
+  witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', side: null, canInterview: false }],
   investigatorAvailable: false,
   tasks: [
     {
@@ -286,7 +286,7 @@ describe('CaseWorkspaceView', () => {
         ...sampleWorkspace,
         witnesses: [
           { ...sampleWorkspace.witnesses[0], canInterview: true },
-          { id: 'w2', name: 'Bystander', role: '', description: '', audience: 'all', side: null, canInterview: false },
+          { id: 'w2', name: 'Bystander', role: '', description: '', side: null, canInterview: false },
         ],
       },
       interviewHref: (id) => `/interview/${id}`,
@@ -309,7 +309,7 @@ describe('CaseWorkspaceView', () => {
 describe('CaseWorkspaceView phases', () => {
   // Ada's team is on the defense (sampleWorkspace.side).
   const elena = { ...sampleWorkspace.witnesses[0], side: 'defense' as const, canInterview: true }
-  const rider = { id: 'w2', name: 'Riley Rivera', role: 'Rider', description: '', audience: 'all' as const, side: 'plaintiff' as const, canInterview: true }
+  const rider = { id: 'w2', name: 'Riley Rivera', role: 'Rider', description: '', side: 'plaintiff' as const, canInterview: true }
 
   it('shows the phase and keeps the investigator locked in introduction', async () => {
     const { user } = renderView()
@@ -330,8 +330,20 @@ describe('CaseWorkspaceView phases', () => {
   it("says the other side's witnesses come in the deposition phase", async () => {
     const { user } = renderView({ workspace: { ...sampleWorkspace, witnesses: [elena] }, interviewHref: (id) => `/interview/${id}` })
     await user.click(screen.getByRole('tab', { name: 'Witnesses, 1' }))
-    expect(screen.getByRole('tabpanel')).toHaveTextContent("The other side's witnesses are revealed in the deposition phase.")
+    expect(screen.getByRole('tabpanel')).toHaveTextContent("You can depose the other side's witnesses in the deposition phase.")
     expect(screen.getByRole('link', { name: 'Interview Elena Torres' })).toBeInTheDocument()
+  })
+
+  it("shows the other side's witnesses locked before the deposition phase, marking the disclosed ones", async () => {
+    const { user } = renderView({
+      workspace: { ...sampleWorkspace, witnesses: [elena, { ...rider, canInterview: false, locked: true, disclosed: true }] },
+      interviewHref: (id) => `/interview/${id}`,
+    })
+    await user.click(screen.getByRole('tab', { name: 'Witnesses, 2' }))
+    const row = screen.getByText('Riley Rivera').closest('li')!
+    expect(row).toHaveTextContent('Disclosed by the other side')
+    expect(row).toHaveTextContent('Can’t interview yet')
+    expect(screen.queryByRole('link', { name: 'Depose Riley Rivera' })).not.toBeInTheDocument()
   })
 
   it("lets the team depose the other side's witnesses in the deposition phase", async () => {

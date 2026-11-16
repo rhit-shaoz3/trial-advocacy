@@ -282,12 +282,6 @@ caseRouter.get('/facts', async (req, res) => {
 })
 
 /**
- * Moves every world in the case to `{ phase }`: introduction, information
- * exchange (once it's set up), investigate (with an investigator), or
- * deposition. Leaving the introduction phase shares the instructor's initial
- * disclosures with both sides; going back to it takes them back.
- */
-/**
  * Copies the case into a class the instructor teaches (this one or another):
  * `{ courseId, includeTasks, title }`. The copy is a draft whose setup is its
  * teams and worlds.
@@ -309,6 +303,12 @@ caseRouter.post('/share', async (req, res) => {
   res.status(201).json({ share })
 })
 
+/**
+ * Moves every world in the case to `{ phase }`: introduction, information
+ * exchange (once it's set up), investigate (with an investigator), or
+ * deposition. Leaving the introduction phase shares the instructor's initial
+ * disclosures with both sides; going back to it takes the files back.
+ */
 caseRouter.put('/phase', async (req, res) => {
   const phase = readString(req.body, 'phase') as CasePhase
   const current = req.courseCase!

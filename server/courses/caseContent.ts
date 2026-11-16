@@ -5,8 +5,9 @@ import type { Side } from './matchups.ts'
 
 // What the instructor provides for a case: the case file (the pieces of the
 // fact pattern: documents, images, audio, video), witnesses, tasks, and a note.
-// Each item has an `audience`: everyone in the case, or only the teams on one
-// side. Case files can also be for instructors only, such as a witness's
+// Files and tasks have an `audience`: everyone in the case, or only the teams
+// on one side. Witnesses show to both sides unless the instructor hides them
+// from students. Case files can also be for instructors only, such as a witness's
 // deposition that trains an AI witness, and shared on top of that with
 // particular case worlds or teams (material_shares).
 
@@ -67,7 +68,8 @@ export interface Witness {
   name: string
   role: string
   description: string
-  audience: Audience
+  /** Kept from students until the instructor shows them; everyone else sees every witness. */
+  hidden: boolean
   /** The side the witness testifies for; set (with a deposition) to make it an AI witness. */
   alignedSide: Side | null
   personaNotes: string
@@ -428,17 +430,15 @@ export const witnessAvatarUrlSql = (w = '') => {
     WHEN ${c}avatar_preset IS NOT NULL THEN '/witness-avatars/' || lpad(${c}avatar_preset::text, 2, '0') || '.svg' END`
 }
 
-const WITNESS_COLUMNS = `id, name, role, description, audience, aligned_side AS "alignedSide",
+const WITNESS_COLUMNS = `id, name, role, description, hidden, aligned_side AS "alignedSide",
   persona_notes AS "personaNotes", deposition_material_id AS "depositionMaterialId",
   known_material_ids AS "knownMaterialIds", defending_counsel AS "defendingCounsel",
   avatar_preset AS "avatarPreset", ${witnessAvatarUrlSql()} AS "avatarUrl"`
 
-export async function listWitnesses(caseId: string, audiences: readonly Audience[] = AUDIENCES) {
+export async function listWitnesses(caseId: string) {
   const { rows } = await pool.query<Witness>(
-    `SELECT ${WITNESS_COLUMNS} FROM case_witnesses
-     WHERE case_id = $1 AND audience = ANY($2)
-     ORDER BY created_at, name`,
-    [caseId, audiences],
+    `SELECT ${WITNESS_COLUMNS} FROM case_witnesses WHERE case_id = $1 ORDER BY created_at, name`,
+    [caseId],
   )
   return rows
 }
@@ -449,7 +449,7 @@ const witnessValues = (f: WitnessFields) => [
   f.name,
   f.role,
   f.description,
-  f.audience,
+  f.hidden,
   f.alignedSide,
   f.personaNotes,
   f.depositionMaterialId,
@@ -460,7 +460,7 @@ const witnessValues = (f: WitnessFields) => [
 
 export async function createWitness(caseId: string, fields: WitnessFields) {
   const { rows } = await pool.query<Witness>(
-    `INSERT INTO case_witnesses (case_id, name, role, description, audience, aligned_side, persona_notes,
+    `INSERT INTO case_witnesses (case_id, name, role, description, hidden, aligned_side, persona_notes,
        deposition_material_id, known_material_ids, defending_counsel, avatar_preset)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING ${WITNESS_COLUMNS}`,
@@ -475,7 +475,7 @@ export async function createWitness(caseId: string, fields: WitnessFields) {
  */
 export async function updateWitness(caseId: string, id: string, fields: WitnessFields) {
   const { rows } = await pool.query<Witness & { removedKey: string | null }>(
-    `UPDATE case_witnesses SET name = $3, role = $4, description = $5, audience = $6, aligned_side = $7,
+    `UPDATE case_witnesses SET name = $3, role = $4, description = $5, hidden = $6, aligned_side = $7,
        persona_notes = $8, deposition_material_id = $9, known_material_ids = $10, defending_counsel = $11,
        avatar_preset = $12, avatar_key = CASE WHEN $12::smallint IS NULL THEN avatar_key END
      FROM (SELECT avatar_key AS old_key FROM case_witnesses WHERE case_id = $1 AND id = $2 FOR UPDATE) old

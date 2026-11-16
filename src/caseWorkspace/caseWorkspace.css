@@ -571,15 +571,15 @@
   font-size: 0.75rem;
 }
 
-/* Narrow: one column. */
+/* Narrow: one column. In rem, so zooming in (a larger root font) narrows it too. */
 
-@container (max-width: 760px) {
+@container (max-width: 47.5rem) {
   .cw-overview {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@container (max-width: 520px) {
+@container (max-width: 32.5rem) {
   .cw-title {
     font-size: 1.75rem;
   }

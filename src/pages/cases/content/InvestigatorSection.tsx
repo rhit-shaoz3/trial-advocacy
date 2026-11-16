@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useImperativeHandle, useState, type FormEvent, type Ref } from 'react'
 import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { DEFAULT_INVESTIGATOR_NAME, INVESTIGATOR_AVATAR_URL, investigatorOf, type CourseCase } from '../../../courses/types'
 import { DictationTextarea } from '../../../components/Dictation'
-import { SuggestedNote } from '../../../components/SuggestedNote'
-import { useCaseSuggestions, useSuggestedField } from './caseSuggestions'
+import { HelpToggle } from '../../../components/HelpToggle'
+import type { StepSave } from './stepSave'
 
 /**
  * The case's background investigator, the same for every team: whether the
@@ -15,19 +15,20 @@ export function InvestigatorSection({
   courseId,
   courseCase,
   onSaved,
+  saveRef,
 }: {
   courseId: string
   courseCase: CourseCase
   onSaved(updated: CourseCase): void
+  /** For the case setup flow: Next saves the changes. */
+  saveRef?: Ref<StepSave>
 }) {
   const service = useCourseService()
   /** What's saved now, to tell whether there's anything to save. */
   const [initial, setInitial] = useState(() => investigatorOf(courseCase))
   const [enabled, setEnabled] = useState(initial.enabled)
   const [name, setName] = useState(initial.name)
-  const suggestions = useCaseSuggestions(courseId, courseCase.id)
-  const notes = useSuggestedField(initial.instructions, suggestions?.investigatorNotes)
-  const instructions = notes.value
+  const [instructions, setInstructions] = useState(initial.instructions)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,20 +36,30 @@ export function InvestigatorSection({
   const changed =
     enabled !== initial.enabled || name.trim() !== initial.name || instructions.trim() !== initial.instructions
 
+  async function save() {
+    const updated = await service.saveInvestigator(courseId, courseCase.id, {
+      enabled,
+      name: name.trim() || DEFAULT_INVESTIGATOR_NAME,
+      instructions: instructions.trim(),
+    })
+    setInitial(investigatorOf(updated))
+    setName(investigatorOf(updated).name)
+    setInstructions(investigatorOf(updated).instructions)
+    onSaved(updated)
+    return updated
+  }
+
+  useImperativeHandle(saveRef, () => ({
+    pending: () => changed,
+    save: async () => (changed ? save() : undefined),
+  }))
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
     try {
-      const updated = await service.saveInvestigator(courseId, courseCase.id, {
-        enabled,
-        name: name.trim() || DEFAULT_INVESTIGATOR_NAME,
-        instructions: instructions.trim(),
-      })
-      setInitial(investigatorOf(updated))
-      setName(investigatorOf(updated).name)
-      notes.reset(investigatorOf(updated).instructions)
-      onSaved(updated)
+      await save()
       setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -103,17 +114,48 @@ export function InvestigatorSection({
           <DictationTextarea
             value={instructions}
             onChange={(e) => {
-              notes.setValue(e.target.value)
+              setInstructions(e.target.value)
               setSaved(false)
             }}
-            placeholder="Anything he should know: what to stress, where to look, how long reports should be"
+            placeholder="Optional"
             maxLength={2000}
             rows={3}
             disabled={!enabled}
           />
-          {notes.suggested && <SuggestedNote />}
-          <span className="muted field-hint">Sent with every request, alongside his standing instructions and the case file.</span>
+          <span className="muted field-hint">
+            Sent with every request, with the case file. Your instructions come first: where they differ from his
+            standard instructions, he follows yours.
+          </span>
         </label>
+        <HelpToggle label="What can I write here?">
+          <p>
+            Leave it empty and he works from his standard instructions: a licensed investigator who stays within the
+            law, works from the case file, and can follow people in public and create ordinary records of his own work.
+            Some things you might add:
+          </p>
+          <ul>
+            <li>
+              <strong>A personality.</strong> &ldquo;A gruff retired detective who keeps reports short and calls
+              everyone &lsquo;counselor.&rsquo;&rdquo;
+            </li>
+            <li>
+              <strong>Whether he can create new records.</strong> &ldquo;Don&rsquo;t create new documents or
+              photos; only report what&rsquo;s in the case file.&rdquo;
+            </li>
+            <li>
+              <strong>Things he won&rsquo;t do.</strong> &ldquo;He won&rsquo;t follow or watch anyone.&rdquo;
+              &ldquo;He won&rsquo;t look into the plaintiff&rsquo;s medical history.&rdquo;
+            </li>
+            <li>
+              <strong>Things he can do.</strong> &ldquo;He can get the park&rsquo;s maintenance logs without a
+              subpoena.&rdquo;
+            </li>
+            <li>
+              <strong>What to stress.</strong> &ldquo;Push teams to think about the timeline of the ride
+              inspection.&rdquo; Or how long his reports should be.
+            </li>
+          </ul>
+        </HelpToggle>
         <div className="panel-form-actions">
           <button type="submit" className="btn-primary" disabled={saving || !changed}>
             {saving ? 'Saving…' : 'Save changes'}

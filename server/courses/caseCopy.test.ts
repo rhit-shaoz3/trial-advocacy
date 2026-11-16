@@ -51,7 +51,7 @@ beforeEach(async () => {
       name: 'Elena Torres',
       role: 'Ride operator',
       description: 'At the controls.',
-      audience: 'defense',
+      hidden: true,
       alignedSide: 'defense',
       depositionMaterialId: deposition,
       knownMaterialIds: [photos],
@@ -149,7 +149,8 @@ describe('duplicating a case', () => {
       name: 'Elena Torres',
       role: 'Ride operator',
       description: 'At the controls.',
-      audience: 'defense',
+      // Hidden at first, but shown once the disclosures went out; the copy keeps the switch as it is.
+      hidden: false,
       alignedSide: 'defense',
       depositionMaterialId: byName['Elena deposition.txt'],
       knownMaterialIds: [byName['Photos.txt']],

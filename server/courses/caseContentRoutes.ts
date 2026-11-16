@@ -329,7 +329,7 @@ async function readWitness(caseId: string, body: unknown): Promise<WitnessFields
     name,
     role: readText(body, 'role', 'Role', MAX_NAME_LENGTH),
     description: readText(body, 'description', 'Description'),
-    audience: readAudience(fields.audience, 'all'),
+    hidden: fields.hidden === true,
     alignedSide: side === 'plaintiff' || side === 'defense' ? side : null,
     personaNotes: readText(body, 'personaNotes', 'Persona notes'),
     depositionMaterialId,

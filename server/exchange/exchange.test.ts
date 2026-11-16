@@ -60,8 +60,8 @@ beforeEach(async () => {
   medical = await upload('Medical records.pdf', 'plaintiff')
   photos = await upload('Harness photos.pdf', 'plaintiff')
   incident = await upload('Incident report.pdf', 'defense')
-  elena = (await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Elena Ramirez', role: 'Plaintiff', audience: 'plaintiff' })).body.witness.id
-  tom = (await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Tom Becker', role: 'Ride operator', audience: 'defense' })).body.witness.id
+  elena = (await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Elena Ramirez', role: 'Plaintiff', alignedSide: 'plaintiff', hidden: true })).body.witness.id
+  tom = (await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Tom Becker', role: 'Ride operator', alignedSide: 'defense' })).body.witness.id
   const launched = await prof.post(`${caseUrl()}/launch`)
   if (launched.status !== 200) throw new Error(JSON.stringify(launched.body))
 })
@@ -194,6 +194,7 @@ describe('initial disclosures', () => {
     })
     const before = (await cy.get(myCaseUrl())).body.workspace
     expect(before.materials.map((m: { filename: string }) => m.filename)).not.toContain('Medical records.pdf')
+    // Elena is hidden from students until the disclosures go out.
     expect(before.witnesses.map((w: { name: string }) => w.name)).toEqual(['Tom Becker'])
 
     expect((await toExchange()).status).toBe(200)
@@ -201,6 +202,8 @@ describe('initial disclosures', () => {
     expect(after.materials.map((m: { filename: string }) => m.filename)).toContain('Medical records.pdf')
     expect(after.witnesses).toContainEqual(expect.objectContaining({ name: 'Elena Ramirez', disclosed: true, canInterview: false }))
     expect((await cy.get(`${myCaseUrl()}/witnesses/${elena}/interview`)).status).toBe(409)
+    const shown = (await prof.get(`${caseUrl()}/witnesses`)).body.witnesses
+    expect(shown.find((w: { id: string }) => w.id === elena).hidden).toBe(false)
     const files = (await prof.get(`${caseUrl()}/materials`)).body.materials
     expect(files.find((m: { id: string }) => m.id === medical).audience).toBe('all')
     // Photos weren't disclosed, so they stay the plaintiff's.
@@ -216,6 +219,9 @@ describe('initial disclosures', () => {
     await prof.put(`${caseUrl()}/phase`).send({ phase: 'introduction' })
     const back = (await prof.get(`${caseUrl()}/materials`)).body.materials
     expect(back.find((m: { id: string }) => m.id === medical).audience).toBe('plaintiff')
+    // The instructor's switch now reads Show, so Elena stays shown.
+    const stillShown = (await cy.get(myCaseUrl())).body.workspace
+    expect(stillShown.witnesses).toContainEqual(expect.objectContaining({ name: 'Elena Ramirez', disclosed: false, locked: true }))
   })
 
   it('re-shares at once when the instructor changes the picks after the introduction', async () => {

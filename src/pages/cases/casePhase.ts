@@ -5,11 +5,11 @@ export { PHASE_LABEL } from '../../courses/caseLabels'
 /** What the phase means for every team, shown to the instructor. */
 export const PHASE_HINT: Record<CasePhase, string> = {
   introduction:
-    "Teams have the case and their side's witnesses. With information exchange set up, they also have the welcome email, and each student picks their initial disclosures.",
+    "Teams have the case and every witness you haven't hidden; they interview their own side's. With information exchange set up, they also have the welcome email, and each student picks their initial disclosures.",
   information_exchange:
     'Your initial disclosures are shared with both sides. Teams serve subpoenas, and send each other interrogatories and requests for admission.',
   investigate: "Teams can use the background investigator. The other side's witnesses can't be interviewed yet.",
-  deposition: 'Every witness is revealed to both sides and can be deposed.',
+  deposition: "Teams can depose the other side's witnesses.",
   final_steps:
     "Each case world builds and exchanges its joint exhibit list. The teams settle what they can; with judicial review on, you rule on what they keep from the Review page. Once a team submits its list, it can download its trial packet. Once a world's list is final, you download its court binder from the Final steps tab. Witnesses and the investigator stay open.",
 }
@@ -17,12 +17,12 @@ export const PHASE_HINT: Record<CasePhase, string> = {
 /** Asked before moving to `phase`; it applies to every case world at once. */
 export const PHASE_CONFIRM: Record<CasePhase, string> = {
   introduction:
-    "Move every case world back to the introduction phase? Teams lose the other side's witnesses, and your disclosed files go back to their side.",
+    'Move every case world back to the introduction phase? Your disclosed files go back to their side.',
   information_exchange: 'Move every case world to the information exchange phase?',
   investigate:
     "Move every case world to the investigate phase? Teams get the background investigator, and the other side's witnesses stay closed to interviews.",
   deposition:
-    'Move every case world to the deposition phase? This reveals every witness to both sides, and teams can depose them.',
+    "Move every case world to the deposition phase? Teams can depose the other side's witnesses.",
   final_steps:
     'Move every case world to the final steps phase? Teams build and exchange their exhibit lists for trial (if the joint exhibit list is on).',
 }

@@ -392,7 +392,7 @@ const PHASE_STEPS: Record<CasePhase, TourStep[]> = {
     {
       target: tab('witnesses'),
       title: 'Disclosed witnesses',
-      body: 'The other side’s disclosed witnesses appear here now. You can’t interview them yet.',
+      body: 'The witnesses the other side disclosed are marked here now. You can depose them in the deposition phase.',
     },
   ],
   investigate: [

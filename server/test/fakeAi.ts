@@ -26,7 +26,7 @@ beforeEach(() => {
   }
   // Edits nothing; tests that check the edit swap in their own.
   ai.finalizeReport = async (input) => input.body
-  ai.suggestFromComplaint = async () => ({ witnesses: [], content: { disputedIssues: '', investigatorNotes: '', instructorNote: '', tasks: [] } })
+  ai.suggestFromComplaint = async () => ({ witnesses: [], content: { disputedIssues: '', instructorNote: '', tasks: [] } })
   ai.reviewDiscovery = async () => ({ tag: 'LOOKS_GOOD', feedback: 'Nice work.' })
   ai.warmMentor = async () => ({ cacheReadTokens: 0, cacheWriteTokens: 0 })
   ai.groupFacts = async () => []

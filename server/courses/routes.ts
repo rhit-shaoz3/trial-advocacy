@@ -262,8 +262,8 @@ async function teamInterview(req: Request): Promise<InterviewContext> {
   const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
   const seen = isUuid(witnessId) ? workspace.witnesses.find((w) => w.id === witnessId) : undefined
   if (!seen) throw new HttpError(404, 'Witness not found.')
-  // The other side's disclosed witnesses show by name, but only deposition opens them.
-  if (seen.disclosed) throw new HttpError(409, "You can depose the other side's witnesses in the deposition phase.")
+  // The other side's witnesses show by name, but only deposition opens them.
+  if (seen.locked) throw new HttpError(409, "You can depose the other side's witnesses in the deposition phase.")
   const teamId = await findStudentTeamId(caseId, req.user!.id)
   if (!teamId || !workspace.side) throw new HttpError(409, 'Your team needs a case world before it can interview witnesses.')
   const [courseCase, witness, world] = await Promise.all([

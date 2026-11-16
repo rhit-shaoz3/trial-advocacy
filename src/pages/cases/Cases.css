@@ -947,6 +947,11 @@ a.case-row:hover {
   flex-basis: 100%;
 }
 
+.content-show {
+  display: grid;
+  gap: 0.3rem;
+}
+
 .content-form textarea,
 .content-form .content-form-grow input {
   width: 100%;

@@ -13,9 +13,10 @@
   align-items: start;
 }
 
-@media (max-width: 860px) {
+/* Sized by the workspace's width (.cw), not the window's, so it re-flows when the page is zoomed. */
+@container (max-width: 52rem) {
   .ex {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -72,6 +73,11 @@
   display: grid;
   gap: 1rem;
   min-width: 0;
+}
+
+/* The parts' layouts follow the room they're given, at any zoom. */
+.ex-content {
+  container: ex-content / inline-size;
 }
 
 /* A section's heading, with its actions at the top right */
@@ -1103,7 +1109,8 @@
   gap: 1.25rem;
 }
 
-@media (min-width: 1100px) {
+/* The form beside its preview only when both fit; otherwise the preview goes below. */
+@container ex-content (min-width: 56rem) {
   .ex-subpoena-compose {
     grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
     align-items: start;

@@ -10,7 +10,6 @@ const witness = (over: Partial<WorkspaceWitness>): WorkspaceWitness => ({
   name: 'Tom Becker',
   role: 'Ride operator',
   description: '',
-  audience: 'all',
   side: 'defense',
   canInterview: true,
   ...over,

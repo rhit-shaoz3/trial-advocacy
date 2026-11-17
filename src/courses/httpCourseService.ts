@@ -264,7 +264,7 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${casePath(courseId, caseId)}/materials`)).materials
   },
 
-  async uploadMaterial(courseId, caseId, file, { audience, description }) {
+  async uploadMaterial(courseId, caseId, file, { audience, description, owner }) {
     const materials = `${casePath(courseId, caseId)}/materials`
     // 1. The API approves the file and returns a signed upload link (S3 in production).
     const { upload } = await apiRequest(`${materials}/uploads`, {
@@ -282,7 +282,7 @@ export const httpCourseService: CourseService = {
     // 3. The API checks the stored file and adds it to the case file.
     const body = await apiRequest(materials, {
       method: 'POST',
-      body: JSON.stringify({ uploadKey: upload.key, filename: file.name, audience, description }),
+      body: JSON.stringify({ uploadKey: upload.key, filename: file.name, audience, description, owner }),
     })
     return body.material
   },
@@ -539,6 +539,22 @@ export const httpCourseService: CourseService = {
 
   async markInvestigationsSeen(courseId, caseId) {
     await apiRequest(`${myCasePath(courseId, caseId)}/investigator/seen`, { method: 'POST' })
+  },
+
+  async listMyClientEmails(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/client`)).emails
+  },
+
+  async sendClientEmail(courseId, caseId, email) {
+    const body = await apiRequest(`${myCasePath(courseId, caseId)}/client/emails`, {
+      method: 'POST',
+      body: JSON.stringify(email),
+    })
+    return body.emails
+  },
+
+  async markClientEmailsSeen(courseId, caseId) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/client/seen`, { method: 'POST' })
   },
 
   async getExchange(courseId, caseId) {

@@ -299,6 +299,7 @@ async function recentActivity(courseId: string): Promise<InstructorActivity[]> {
      UNION ALL
      (SELECT 'review-' || r.id, 'review', NULL,
              CASE WHEN r.kind = 'investigation' THEN 'You reviewed Team ' || r.team_number || '''s investigator report'
+                  WHEN r.kind = 'client_email' THEN 'You reviewed Team ' || r.team_number || '''s email from their client'
                   ELSE 'You ruled on Team ' || r.team_number || '''s interview of ' || w.name END,
              c.title, r.completed_at
       FROM interview_reviews r LEFT JOIN case_witnesses w ON w.id = r.witness_id JOIN cases c ON c.id = r.case_id

@@ -13,6 +13,8 @@ import type {
   ExhibitMove,
   ExhibitVersion,
   Investigation,
+  ClientEmail,
+  ClientEmailInput,
   ItemResponse,
   PacketFolder,
   ReviewResult,
@@ -55,6 +57,7 @@ export function StudentCasePage() {
   const [error, setError] = useState<string | null>(null)
   const [reviews, setReviews] = useState<ReviewResult[] | undefined>(undefined)
   const [investigations, setInvestigations] = useState<Investigation[] | undefined>(undefined)
+  const [clientEmails, setClientEmails] = useState<ClientEmail[] | undefined>(undefined)
   const [exchange, setExchange] = useState<StudentExchange | null>(null)
   /** Whether the exchange has loaded (it's null too when not set up), so a tour finds its tab. */
   const [exchangeLoaded, setExchangeLoaded] = useState(false)
@@ -109,6 +112,10 @@ export function StudentCasePage() {
       .listMyInvestigations(courseId, caseId)
       .then((i) => !cancelled && setInvestigations(i))
       .catch(() => {}) // nor its investigator reports
+    service
+      .listMyClientEmails(courseId, caseId)
+      .then((e) => !cancelled && setClientEmails(e))
+      .catch(() => {}) // nor its client email
     service
       .listMyFlags(courseId, caseId)
       .then((f) => !cancelled && setFlags(f))
@@ -276,6 +283,40 @@ export function StudentCasePage() {
     return () => clearInterval(timer)
   }, [service, courseId, caseId, waiting, reloadHome])
 
+  // While an email is with the clients or the instructor, check back for the reply.
+  const emailWaiting = clientEmails?.some((e) => e.status === 'working') ?? false
+  useEffect(() => {
+    if (!emailWaiting) return
+    const timer = setInterval(() => {
+      service
+        .listMyClientEmails(courseId, caseId)
+        .then((next) => {
+          setClientEmails(next)
+          // The reply may have attached files, and the course notice counts it.
+          if (!next.some((e) => e.status === 'working')) {
+            service.getMyCaseWorkspace(courseId, caseId).then(setData, () => {})
+            reloadHome?.()
+          }
+        })
+        .catch(() => {})
+    }, INVESTIGATION_POLL_MS)
+    return () => clearInterval(timer)
+  }, [service, courseId, caseId, emailWaiting, reloadHome])
+
+  async function sendClientEmail(email: ClientEmailInput) {
+    setClientEmails(await service.sendClientEmail(courseId, caseId, email))
+  }
+
+  /** Opening the client inbox marks the replies read, here and in the course notice. */
+  function openClient() {
+    if (!clientEmails?.some((e) => e.status === 'completed' && !e.seen)) return
+    setClientEmails((prev) => prev?.map((e) => (e.status === 'completed' ? { ...e, seen: true } : e)))
+    service
+      .markClientEmailsSeen(courseId, caseId)
+      .then(() => workspace?.reloadHome())
+      .catch(() => {})
+  }
+
   async function sendInvestigation(assignment: string) {
     setInvestigations(await service.sendInvestigation(courseId, caseId, assignment))
   }
@@ -368,6 +409,9 @@ export function StudentCasePage() {
               investigations={investigations ?? []}
               onSendInvestigation={sendInvestigation}
               onOpenInvestigator={openInvestigator}
+              clientEmails={clientEmails ?? []}
+              onSendClientEmail={sendClientEmail}
+              onOpenClient={openClient}
               exchange={exchange}
               onSubmitDisclosures={submitDisclosures}
               onSendRequest={sendRequest}

@@ -224,8 +224,8 @@ describe('setting up an AI witness', () => {
     // Elena testifies for the defense, so only the defense team can interview her before the deposition phase.
     const { witnesses } = (await cy.get(myCaseUrl())).body.workspace
     expect(witnesses).toEqual([
-      { id: expect.any(String), name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls.', side: 'defense', canInterview: true, locked: false, disclosed: false, avatarUrl: null },
-      { id: expect.any(String), name: 'Bystander', role: '', description: '', side: null, canInterview: false, locked: false, disclosed: false, avatarUrl: null },
+      { id: expect.any(String), name: 'Elena Torres', role: 'Ride operator', description: 'Was at the controls.', side: 'defense', canInterview: true, locked: false, disclosed: false, client: false, avatarUrl: null },
+      { id: expect.any(String), name: 'Bystander', role: '', description: '', side: null, canInterview: false, locked: false, disclosed: false, client: false, avatarUrl: null },
     ])
     const theirs = (await ada.get(myCaseUrl())).body.workspace.witnesses[0]
     expect(theirs).toMatchObject({ name: 'Elena Torres', canInterview: false, locked: true })
@@ -349,6 +349,54 @@ describe('interviewing an AI witness', () => {
     const restarted = await bo.post(`${interview()}/restart`)
     expect(restarted.body.interview.turns).toEqual([])
     expect((await ada.get(interview())).body.interview.id).toBe(restarted.body.interview.id)
+  })
+
+  it('limits each team to two interviews with the witness; an empty one is free', async () => {
+    const ask = (agent: request.Agent) => agent.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    // Opening and starting over an empty interview doesn't count.
+    await ada.post(`${interview()}/restart`)
+    expect((await ada.get(interview())).body.interview.limit).toEqual({ max: 2, per: 'team', used: 0 })
+    expect((await ask(ada)).body.interview.limit).toEqual({ max: 2, per: 'team', used: 1 })
+    await ada.post(`${interview()}/end`)
+    expect((await ask(bo)).body.interview.limit).toEqual({ max: 2, per: 'team', used: 2 })
+    // The second keeps going; the third can't start.
+    expect((await ask(ada)).status).toBe(200)
+    await bo.post(`${interview()}/restart`)
+    const third = await ask(ada)
+    expect(third.status).toBe(409)
+    expect(third.body.error).toBe('Your team has used its 2 interviews with Elena Torres.')
+    expect((await ada.get(interview())).body.interview).toMatchObject({ canAsk: false, limit: { used: 2 } })
+    // The other team has its own, and the instructor's tests have none.
+    expect((await ask(cy)).status).toBe(200)
+    const test = await prof.post(`${caseUrl()}/witnesses/${witnessId}/interview/questions?side=plaintiff`).send({ question: 'Hi?' })
+    expect(test.body.interview.limit).toBeNull()
+
+    // Raising it lets the team go on.
+    await prof.put(`${caseUrl()}/witness-settings`).send({ inWorldDate: '', disputedIssues: '', interviewLimit: { max: 3, per: 'team' } })
+    expect((await ask(ada)).body.interview.limit).toEqual({ max: 3, per: 'team', used: 3 })
+  })
+
+  it('can count interviews per student instead', async () => {
+    await prof.put(`${caseUrl()}/witness-settings`).send({ inWorldDate: '', disputedIssues: '', interviewLimit: { max: 1, per: 'student' } })
+    const ask = (agent: request.Agent) => agent.post(`${interview()}/questions`).send({ question: 'Where were you?' })
+    expect((await ask(ada)).body.interview.limit).toEqual({ max: 1, per: 'student', used: 1 })
+    // Bo hasn't asked in it yet, so it isn't one of his; asking makes it his one.
+    expect((await bo.get(interview())).body.interview.limit).toEqual({ max: 1, per: 'student', used: 0 })
+    expect((await ask(bo)).status).toBe(200)
+    await ada.post(`${interview()}/restart`)
+    expect((await ask(ada)).body.error).toBe("You've used your interview with Elena Torres.")
+    expect((await ask(bo)).status).toBe(409)
+  })
+
+  it('validates the interview limit', async () => {
+    const put = (interviewLimit: unknown) =>
+      prof.put(`${caseUrl()}/witness-settings`).send({ inWorldDate: '', disputedIssues: '', interviewLimit })
+    expect((await put({ max: 0, per: 'team' })).status).toBe(400)
+    expect((await put({ max: 2.5, per: 'team' })).status).toBe(400)
+    expect((await put({ max: 2, per: 'world' })).status).toBe(400)
+    expect((await put({ max: 40, per: 'student' })).body.case.interviewLimit).toEqual({ max: 40, per: 'student' })
+    // Left out, it stays.
+    expect((await put(undefined)).body.case.interviewLimit).toEqual({ max: 40, per: 'student' })
   })
 
   it('validates questions and witnesses', async () => {

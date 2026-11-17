@@ -69,6 +69,8 @@ describe('case materials', () => {
       // Every case world's file, not one world's own (like a subpoena response).
       worldNumber: null,
       source: 'instructor',
+      // Someone outside the case has it unless the instructor says otherwise.
+      owner: { kind: 'third_party', witnessId: null },
     })
     const photo = (await upload('scene.JPG', { audience: 'plaintiff' })).body.material
     expect(photo).toMatchObject({ audience: 'plaintiff', contentType: 'image/jpeg' })
@@ -156,6 +158,8 @@ describe('witnesses, tasks, and the note', () => {
       defendingCounsel: '',
       avatarPreset: null,
       avatarUrl: null,
+      isClient: false,
+      speaksForOrganization: false,
     })
     const { id } = res.body.witness
     const edited = await prof.put(`${caseUrl()}/witnesses/${id}`).send({ name: 'Elena Torres', hidden: true })

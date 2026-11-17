@@ -22,7 +22,9 @@ export function FlagCard({ courseId, flag: f, onDone }: { courseId: string; flag
   const review = f.review
   const fact = review?.facts.find((x) => x.id === f.factId)
   const file = review?.documents?.find((d) => d.materialId === f.materialId)
-  const investigation = review?.kind === 'investigation'
+  const email = review?.kind === 'client_email'
+  /** A written answer (an investigator's report, or a client's reply), with no transcript. */
+  const investigation = review?.kind === 'investigation' || email
   const worldNumber = f.worldNumber ?? review?.worldNumber ?? f.subpoena?.worldNumber ?? null
 
   const choices: [FlagResolution, string, string][] =
@@ -57,9 +59,9 @@ export function FlagCard({ courseId, flag: f, onDone }: { courseId: string; flag
 
   const title =
     f.kind === 'fact'
-      ? `A fact from ${investigation ? 'the investigator' : `the interview of ${review?.witness?.name ?? 'a witness'}`}`
+      ? `A fact from ${email ? `${team}'s client` : investigation ? 'the investigator' : `the interview of ${review?.witness?.name ?? 'a witness'}`}`
       : f.kind === 'document'
-        ? `A file the investigator gave ${team}`
+        ? `A file ${email ? `${team}'s client` : 'the investigator'} gave ${team}`
         : f.subpoena?.outcome === 'denied'
           ? `Appeal: subpoena to ${f.subpoena.recipient} was denied`
           : `The answer to a subpoena to ${f.subpoena?.recipient ?? 'someone'}`
@@ -103,7 +105,7 @@ export function FlagCard({ courseId, flag: f, onDone }: { courseId: string; flag
       )}
       {investigation && review?.report && (
         <details className="review-report">
-          <summary>The investigator&rsquo;s report</summary>
+          <summary>{email ? 'The client’s reply' : 'The investigator’s report'}</summary>
           <p>{review.report}</p>
         </details>
       )}

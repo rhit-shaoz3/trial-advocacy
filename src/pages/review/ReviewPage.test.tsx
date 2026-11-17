@@ -205,6 +205,38 @@ describe('ReviewPage', () => {
     expect(screen.queryByRole('article', { name: 'Investigation for Team 3' })).not.toBeInTheDocument()
   })
 
+  it("shows a team's email to its clients with the reply, and the files the clients attached or wrote out", async () => {
+    const clientEmail: InterviewReview = {
+      ...review,
+      id: 'r8',
+      kind: 'client_email',
+      witness: null,
+      subject: 'Your records',
+      to: ['Paige Winston', 'Dana Winston'],
+      assignment: 'Can you send your receipts?',
+      askedBy: 'Ada Lawyer',
+      report: 'From: Paige Winston\n\nThe receipts are attached.',
+      finalReport: null,
+      facts: [{ id: 'f1', text: 'Paige says she kept every receipt.', decision: null }],
+      documents: [
+        { materialId: 'm9', title: 'Receipts', decision: null },
+        { materialId: 'm10', title: 'Texts with my sister', decision: null, made: true, contentType: 'application/pdf' },
+      ],
+    }
+    const decideDocument = vi.fn().mockResolvedValue(clientEmail)
+    const { user } = renderPage({ listReviewQueue: queue([clientEmail]), decideDocument })
+
+    const card = await screen.findByRole('article', { name: 'Email from Team 3 to Paige Winston and Dana Winston' })
+    expect(card).toHaveTextContent("Team 3's email, from Ada Lawyer: Your records")
+    expect(card).toHaveTextContent('Can you send your receipts?')
+    expect(card).toHaveTextContent('The client’s reply')
+    expect(card).toHaveTextContent('The receipts are attached.')
+    expect(card).toHaveTextContent('Give Team 3 the document the client wrote out, Texts with my sister')
+    expect(within(card).queryByText('Show conversation')).not.toBeInTheDocument()
+    await user.click(within(within(card).getByRole('radiogroup', { name: 'Allow Team 3 access to Receipts' })).getByRole('radio', { name: 'Allow' }))
+    expect(decideDocument).toHaveBeenCalledWith('c1', 'r8', 'm9', 'allow')
+  })
+
   it('shows a record the investigator made, to open before giving it to the team', async () => {
     const investigation: InterviewReview = {
       ...review,

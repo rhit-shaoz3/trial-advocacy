@@ -1143,6 +1143,11 @@ a.case-row:hover {
   color: var(--tint-purple-fg);
 }
 
+.content-client {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
 .content-ai-witness {
   background: var(--tint-blue-bg);
   color: var(--tint-blue-fg);
@@ -1707,4 +1712,34 @@ a.case-row:hover {
 .team-locked-note {
   margin: 0.4rem 0 0;
   font-size: 0.8rem;
+}
+
+/* "Interviews with each witness: [2] per [team]" (LimitField). */
+.limit-field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.limit-field legend {
+  margin-bottom: 0.35rem;
+  padding: 0;
+}
+
+.limit-field-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.limit-field-inputs input {
+  width: 6rem;
+}
+
+.content-form .limit-field {
+  flex-basis: 100%;
 }

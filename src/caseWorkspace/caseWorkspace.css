@@ -378,6 +378,13 @@
   background: var(--ws-blue);
 }
 
+/* Email, beside Interview for one of the team's clients. */
+button.cw-interview {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .cw-interview:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -703,6 +710,11 @@
   color: var(--tint-orange-fg);
 }
 
+.cw-badge-client {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
 /* Background investigator (locked until the investigate phase) */
 .cw-sr {
   position: absolute;
@@ -773,6 +785,13 @@
   width: 1.15rem;
   height: 1.15rem;
   margin-top: 0.1rem;
+}
+
+/* How many of the instructor's allowed requests are used. */
+.cw .cw-investigator-limit {
+  margin: 0;
+  color: var(--fg-soft);
+  font-size: 0.86rem;
 }
 
 .cw .cw-investigation-pending p {

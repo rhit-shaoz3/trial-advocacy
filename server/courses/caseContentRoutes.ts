@@ -11,6 +11,7 @@ import {
   AUDIENCES,
   InitialMaterialAudienceError,
   MATERIAL_AUDIENCES,
+  MATERIAL_OWNERS,
   createMaterial,
   createTask,
   createWitness,
@@ -37,6 +38,8 @@ import {
   witnessAvatarKeyFor,
   type Audience,
   type MaterialAudience,
+  type MaterialOwner,
+  type MaterialOwnerKind,
   type TaskFields,
   type WitnessFields,
 } from './caseContent.ts'
@@ -84,6 +87,24 @@ const readAudience = (value: unknown, fallback?: Audience) =>
 // Case files can also be kept from students entirely (an AI witness's deposition, say).
 const readMaterialAudience = (value: unknown, fallback?: MaterialAudience) =>
   readChoice(value, MATERIAL_AUDIENCES, fallback, 'Choose who can see it: everyone, plaintiff, defense, or instructors only.')
+
+/**
+ * `owner: { kind, witnessId }`: who would really have the file. Left out, it's
+ * `fallback` (a third party for a new file; unchanged for an edit).
+ */
+async function readOwner(caseId: string, body: unknown, fallback?: MaterialOwner): Promise<MaterialOwner | undefined> {
+  const raw = (body as Record<string, unknown> | undefined)?.owner
+  if (raw === undefined) return fallback
+  const { kind, witnessId } = (raw ?? {}) as Record<string, unknown>
+  if (!MATERIAL_OWNERS.includes(kind as MaterialOwnerKind)) {
+    throw new HttpError(400, 'Choose who owns the file: a third party, a side, or a witness.')
+  }
+  if (kind !== 'witness') return { kind: kind as MaterialOwnerKind, witnessId: null }
+  if (typeof witnessId !== 'string' || !isUuid(witnessId) || !(await findWitness(caseId, witnessId))) {
+    throw new HttpError(400, 'Choose a witness in this case to own the file.')
+  }
+  return { kind: 'witness', witnessId }
+}
 
 function readText(body: unknown, key: string, label: string, max = MAX_TEXT_LENGTH) {
   const text = readString(body, key).trim()
@@ -161,8 +182,9 @@ materialsRouter.post('/uploads', async (req, res) => {
 
 /**
  * Step 2, after the browser's PUT succeeds: `{ uploadKey, filename,
- * audience?, description? }` adds the uploaded file to the case file. Files
- * are for instructors only unless chosen otherwise: teams ask for them.
+ * audience?, description?, owner? }` adds the uploaded file to the case file.
+ * Files are for instructors only unless chosen otherwise (teams ask for them),
+ * and a third party's unless another owner is chosen.
  */
 materialsRouter.post('/', async (req, res) => {
   const caseId = req.courseCase!.id
@@ -172,6 +194,7 @@ materialsRouter.post('/', async (req, res) => {
   if (!uploadKey.startsWith(`uploads/${caseId}/`) || !KEY_PATTERN.test(uploadKey)) {
     throw new HttpError(400, 'That upload is not for this case.')
   }
+  const owner = await readOwner(caseId, req.body, { kind: 'third_party', witnessId: null })
   const size = await storage.size(uploadKey)
   if (size === null) throw new HttpError(400, 'The upload did not finish. Try again.')
   if (size > MAX_UPLOAD_BYTES) {
@@ -192,6 +215,7 @@ materialsRouter.post('/', async (req, res) => {
     sizeBytes: size,
     storageKey,
     uploadedBy: req.user!.id,
+    owner,
   })
   // Transcribed in the background so the AI witnesses can read it.
   queueTranscription(material.id)
@@ -211,13 +235,16 @@ materialsRouter.put('/initial', async (req, res) => {
   res.json({ materials: await listMaterials(caseId) })
 })
 
+/** `{ audience, description, owner? }`; without `owner`, the file keeps its owner. */
 materialsRouter.patch('/:materialId', async (req, res) => {
   const id = readId(req.params.materialId, 'File not found.')
+  const owner = await readOwner(req.courseCase!.id, req.body)
   let material
   try {
     material = await updateMaterial(req.courseCase!.id, id, {
       audience: readMaterialAudience(req.body?.audience),
       description: readText(req.body, 'description', 'Description'),
+      owner,
     })
   } catch (err) {
     if (err instanceof InitialMaterialAudienceError) {
@@ -324,6 +351,10 @@ async function readWitness(caseId: string, body: unknown): Promise<WitnessFields
   const existing = await existingMaterialIds(caseId, depositionMaterialId ? [depositionMaterialId, ...knownMaterialIds] : knownMaterialIds)
   if (depositionMaterialId && !existing.has(depositionMaterialId)) throw new HttpError(400, 'That deposition file is not in this case.')
   if (knownMaterialIds.some((id) => !existing.has(id))) throw new HttpError(400, 'Some of those case files are not in this case.')
+  const isClient = fields.isClient === true
+  if (isClient && side !== 'plaintiff' && side !== 'defense') {
+    throw new HttpError(400, 'A client needs a side: choose whom they testify for.')
+  }
 
   return {
     name,
@@ -336,6 +367,8 @@ async function readWitness(caseId: string, body: unknown): Promise<WitnessFields
     knownMaterialIds,
     defendingCounsel: readText(body, 'defendingCounsel', 'Defending lawyer', MAX_NAME_LENGTH),
     avatarPreset: readAvatarPreset(fields.avatarPreset),
+    isClient,
+    speaksForOrganization: isClient && fields.speaksForOrganization === true,
   }
 }
 

@@ -6,6 +6,8 @@ import {
   CASE_STATUSES,
   casePhases,
   DEFAULT_INVESTIGATOR_NAME,
+  LIMIT_SCOPES,
+  MAX_LIMIT,
   completeSetup,
   createCase,
   deleteCase,
@@ -25,6 +27,8 @@ import {
   type CaseStatus,
   type CourseCase,
   type ImportantFacts,
+  type InteractionLimit,
+  type LimitScope,
   type ReviewMode,
   type SetupStep,
 } from './cases.ts'
@@ -218,9 +222,22 @@ caseRouter.put('/note', async (req, res) => {
   res.json({ case: await findCase(req.course!.id, req.courseCase!.id) })
 })
 
+/** `{ max, per }`: a whole number from 1 up, for each team or each student. `what` names it in errors. */
+function readLimit(raw: unknown, what: string): InteractionLimit {
+  const { max, per } = (raw ?? {}) as Record<string, unknown>
+  if (typeof max !== 'number' || !Number.isInteger(max) || max < 1 || max > MAX_LIMIT) {
+    throw new HttpError(400, `The limit on ${what} must be a whole number from 1 to ${MAX_LIMIT}.`)
+  }
+  if (!LIMIT_SCOPES.includes(per as LimitScope)) throw new HttpError(400, `Say whether the limit on ${what} is per team or per student.`)
+  return { max, per: per as LimitScope }
+}
+
 /**
  * Settings shared by the case's AI witnesses: `{ inWorldDate: 'YYYY-MM-DD' | null,
- * disputedIssues }`, the date "today" in the case and the issues they must leave open.
+ * disputedIssues }`, the date "today" in the case and the issues they must leave open,
+ * and optionally `interviewLimit` (how many times each team or student can interview
+ * each witness) and `clientEmailLimit` (how many emails each can send its clients);
+ * left out, each stays as it is.
  */
 caseRouter.put('/witness-settings', async (req, res) => {
   const date = readString(req.body, 'inWorldDate').trim()
@@ -231,12 +248,18 @@ caseRouter.put('/witness-settings', async (req, res) => {
   if (disputedIssues.length > MAX_NOTE_LENGTH) {
     throw new HttpError(400, `The disputed issues must be at most ${MAX_NOTE_LENGTH} characters.`)
   }
-  await setWitnessSettings(req.courseCase!.id, { inWorldDate: date || null, disputedIssues })
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const interviewLimit = body.interviewLimit === undefined ? undefined : readLimit(body.interviewLimit, 'interviews')
+  const clientEmailLimit =
+    body.clientEmailLimit === undefined ? undefined : readLimit(body.clientEmailLimit, 'emails to the client')
+  await setWitnessSettings(req.courseCase!.id, { inWorldDate: date || null, disputedIssues, interviewLimit, clientEmailLimit })
   res.json({ case: await findCase(req.course!.id, req.courseCase!.id) })
 })
 
 /**
- * The case's background investigator: `{ enabled, name, instructions }`.
+ * The case's background investigator: `{ enabled, name, instructions }`, and
+ * optionally `limit` (how many requests each team or student can send him;
+ * left out, it stays as it is).
  * Without him the case has no investigate phase, so he can't be turned off
  * while the case is in it.
  */
@@ -252,7 +275,10 @@ caseRouter.put('/investigator', async (req, res) => {
   if (!body.enabled && req.courseCase!.phase === 'investigate') {
     throw new HttpError(409, 'Move the case out of the investigate phase before turning off the investigator.')
   }
-  res.json({ case: await setInvestigator(req.course!.id, req.courseCase!.id, { enabled: body.enabled, name, instructions }) })
+  const limit = body.limit === undefined ? req.courseCase!.investigator.limit : readLimit(body.limit, 'investigator requests')
+  res.json({
+    case: await setInvestigator(req.course!.id, req.courseCase!.id, { enabled: body.enabled, name, instructions, limit }),
+  })
 })
 
 /** `{ reviewMode }`: all (the instructor reviews everything) or lite (only what students flag). */

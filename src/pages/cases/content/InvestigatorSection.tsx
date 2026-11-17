@@ -1,15 +1,24 @@
 import { useImperativeHandle, useState, type FormEvent, type Ref } from 'react'
 import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { useCourseService } from '../../../courses/CourseServiceContext'
-import { DEFAULT_INVESTIGATOR_NAME, INVESTIGATOR_AVATAR_URL, investigatorOf, type CourseCase } from '../../../courses/types'
+import {
+  DEFAULT_INVESTIGATOR_NAME,
+  DEFAULT_LIMIT,
+  INVESTIGATOR_AVATAR_URL,
+  investigatorOf,
+  type CourseCase,
+} from '../../../courses/types'
 import { DictationTextarea } from '../../../components/Dictation'
 import { HelpToggle } from '../../../components/HelpToggle'
+import { LimitField } from './LimitField'
+import { limitDraft, parseLimit, sameLimit } from './limitDraft'
 import type { StepSave } from './stepSave'
 
 /**
  * The case's background investigator, the same for every team: whether the
- * case has one (without him there's no investigate phase), his name, and the
- * instructor's own instructions for him.
+ * case has one (without him there's no investigate phase), his name, the
+ * instructor's own instructions for him, and how many requests each team (or
+ * student) can send.
  */
 export function InvestigatorSection({
   courseId,
@@ -29,22 +38,31 @@ export function InvestigatorSection({
   const [enabled, setEnabled] = useState(initial.enabled)
   const [name, setName] = useState(initial.name)
   const [instructions, setInstructions] = useState(initial.instructions)
+  const [limit, setLimit] = useState(() => limitDraft(initial.limit ?? DEFAULT_LIMIT))
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const parsedLimit = parseLimit(limit)
   const changed =
-    enabled !== initial.enabled || name.trim() !== initial.name || instructions.trim() !== initial.instructions
+    enabled !== initial.enabled ||
+    name.trim() !== initial.name ||
+    instructions.trim() !== initial.instructions ||
+    !sameLimit(parsedLimit, initial.limit ?? DEFAULT_LIMIT)
 
   async function save() {
+    if (!parsedLimit) throw new Error('Enter how many requests each team or student can send, from 1 up.')
     const updated = await service.saveInvestigator(courseId, courseCase.id, {
       enabled,
       name: name.trim() || DEFAULT_INVESTIGATOR_NAME,
       instructions: instructions.trim(),
+      limit: parsedLimit,
     })
-    setInitial(investigatorOf(updated))
-    setName(investigatorOf(updated).name)
-    setInstructions(investigatorOf(updated).instructions)
+    const saved = investigatorOf(updated)
+    setInitial(saved)
+    setName(saved.name)
+    setInstructions(saved.instructions)
+    setLimit(limitDraft(saved.limit ?? DEFAULT_LIMIT))
     onSaved(updated)
     return updated
   }
@@ -109,6 +127,16 @@ export function InvestigatorSection({
             disabled={!enabled}
           />
         </label>
+        <LimitField
+          label="Requests to the investigator"
+          hint="Each assignment a team emails him counts as one. Per student, each partner has their own."
+          value={limit}
+          onChange={(next) => {
+            setLimit(next)
+            setSaved(false)
+          }}
+          disabled={!enabled}
+        />
         <label>
           Instructions for the investigator (optional)
           <DictationTextarea
@@ -157,7 +185,7 @@ export function InvestigatorSection({
           </ul>
         </HelpToggle>
         <div className="panel-form-actions">
-          <button type="submit" className="btn-primary" disabled={saving || !changed}>
+          <button type="submit" className="btn-primary" disabled={saving || !changed || !parsedLimit}>
             {saving ? 'Saving…' : 'Save changes'}
           </button>
           {saved && !changed && (

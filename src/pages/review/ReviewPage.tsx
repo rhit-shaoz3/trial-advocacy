@@ -209,6 +209,8 @@ export function ReviewPage() {
             <p className="review-finished" role="status">
               {finished.kind === 'investigation'
                 ? `Investigation for Team ${finished.teamNumber} is done; their report is being written.`
+                : finished.kind === 'client_email'
+                ? `Email from Team ${finished.teamNumber}'s client is done; their reply is being written.`
                 : `Interview of ${finished.witness?.name} for Team ${finished.teamNumber} is done.`}{' '}
               You can still change its rulings in{' '}
               <button type="button" className="link-button" onClick={() => selectTab('completed')}>

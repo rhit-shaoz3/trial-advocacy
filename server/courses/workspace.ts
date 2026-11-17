@@ -10,7 +10,7 @@ import {
   type MaterialViewer,
   type Witness,
 } from './caseContent.ts'
-import { phaseAtLeast, type CasePhase } from './cases.ts'
+import { phaseAtLeast, type CasePhase, type InteractionLimit } from './cases.ts'
 import {
   disclosedWitnessIds,
   findSubmission,
@@ -33,6 +33,8 @@ export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'descripti
   locked: boolean
   /** The other side's witness, in the initial disclosures the instructor made for that side. */
   disclosed: boolean
+  /** One of the team's own clients, whom it can email. */
+  client: boolean
 }
 
 /**
@@ -67,10 +69,12 @@ export interface CaseWorkspace {
   side: Side | null
   materials: CaseMaterial[]
   witnesses: WorkspaceWitness[]
-  /** The case's background investigator, or null if it has none. */
-  investigator: { name: string; avatarUrl: string } | null
+  /** The case's background investigator, or null if it has none; `limit` is how many requests each team (or student) can send. */
+  investigator: { name: string; avatarUrl: string; limit: InteractionLimit } | null
   /** Whether the background investigator is open yet (from the investigate phase on). */
   investigatorAvailable: boolean
+  /** How many emails each team (or student) can send its clients (the clients are the witnesses marked `client`). */
+  clientEmailLimit: InteractionLimit
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady: boolean
   /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
@@ -93,6 +97,8 @@ export const INVESTIGATOR_AVATAR_URL = '/investigator.png'
 type CaseRow = CaseWorkspace['case'] & {
   investigatorEnabled: boolean
   investigatorName: string
+  investigatorLimit: InteractionLimit
+  clientEmailLimit: InteractionLimit
   exchangeReady: boolean
   exhibitListEnabled: boolean
   exhibitJudicialReview: boolean
@@ -104,6 +110,8 @@ async function findCaseRow(courseId: string, caseId: string) {
             json_build_object('plaintiff', plaintiff_name, 'defendant', defendant_name) AS parties,
             review_mode AS "reviewMode", phase_entered_at AS "phaseEnteredAt",
             investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName",
+            json_build_object('max', investigator_limit, 'per', investigator_limit_per) AS "investigatorLimit",
+            json_build_object('max', client_email_limit, 'per', client_email_limit_per) AS "clientEmailLimit",
             exhibit_list_enabled AS "exhibitListEnabled", exhibit_judicial_review AS "exhibitJudicialReview",
             EXISTS (SELECT 1 FROM information_exchange ie
                     WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"
@@ -191,7 +199,7 @@ const byDue = (a: WorkspaceTask, b: WorkspaceTask) =>
   (a.dueAt ? new Date(a.dueAt).getTime() : Infinity) - (b.dueAt ? new Date(b.dueAt).getTime() : Infinity)
 
 async function assemble(
-  { investigatorEnabled, investigatorName, exchangeReady, exhibitListEnabled, exhibitJudicialReview, ...caseRow }: CaseRow,
+  { investigatorEnabled, investigatorName, investigatorLimit, clientEmailLimit, exchangeReady, exhibitListEnabled, exhibitJudicialReview, ...caseRow }: CaseRow,
   team: MyCase['team'],
   world: MyCase['world'],
   viewer: MaterialViewer,
@@ -228,11 +236,15 @@ async function assemble(
         canInterview: isAiWitness(w) && canAsk,
         locked: !canAsk,
         disclosed: Boolean(side && w.alignedSide && w.alignedSide !== side && requestsOpen(caseRow.phase) && disclosed.has(w.id)),
+        client: Boolean(side && w.isClient && w.alignedSide === side),
         avatarUrl: w.avatarUrl,
       }
     }),
-    investigator: investigatorEnabled ? { name: investigatorName, avatarUrl: INVESTIGATOR_AVATAR_URL } : null,
+    investigator: investigatorEnabled
+      ? { name: investigatorName, avatarUrl: INVESTIGATOR_AVATAR_URL, limit: investigatorLimit }
+      : null,
     investigatorAvailable: investigatorEnabled && phaseAtLeast(caseRow.phase, 'investigate'),
+    clientEmailLimit,
     exchangeReady,
     exhibitListEnabled,
     exhibitJudicialReview,

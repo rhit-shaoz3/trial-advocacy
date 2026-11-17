@@ -36,6 +36,7 @@ export async function caseFacts(courseCase: CourseCase): Promise<CaseFacts> {
     pool.query<RuledFact & { decision: FactDecision; matchupId: string | null }>(
       `SELECT f.text, f.decision, f.auto, r.matchup_id AS "matchupId",
               CASE WHEN r.kind = 'investigation' THEN 'Investigation · Team ' || r.team_number
+                   WHEN r.kind = 'client_email' THEN 'Client email · Team ' || r.team_number
                    ELSE 'Interview of ' || coalesce(w.name, 'a witness') || ' · Team ' || r.team_number END AS source
        FROM review_facts f
        JOIN interview_reviews r ON r.id = f.review_id

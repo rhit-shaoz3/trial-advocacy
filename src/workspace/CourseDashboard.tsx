@@ -111,9 +111,21 @@ function StudentDashboard({ now }: { now: Date }) {
         {!isInstructor && home.newReviewResults ? (
           <Toast
             icon={<Gavel />}
-            title={home.newResultsAt?.kind === 'investigation' ? 'New investigator report' : 'New review results'}
+            title={
+              home.newResultsAt?.kind === 'investigation'
+                ? 'New investigator report'
+                : home.newResultsAt?.kind === 'client_email'
+                  ? 'New email from your client'
+                  : 'New review results'
+            }
             action={{
-              label: !home.newResultsAt ? 'Open my cases' : home.newResultsAt.kind === 'investigation' ? 'Read report' : 'See results',
+              label: !home.newResultsAt
+                ? 'Open my cases'
+                : home.newResultsAt.kind === 'investigation'
+                  ? 'Read report'
+                  : home.newResultsAt.kind === 'client_email'
+                    ? 'Read email'
+                    : 'See results',
               to: newResultsPath(base, search, home.newResultsAt),
             }}
           />
@@ -355,6 +367,6 @@ function UpcomingRow({ item }: { item: UpcomingItem }) {
 function newResultsPath(base: string, search: string, at: CourseHome['newResultsAt']) {
   if (!at) return `${base}/cases${search}`
   const params = new URLSearchParams(search)
-  params.set('tab', at.kind === 'investigation' ? 'investigator' : 'reviews')
+  params.set('tab', at.kind === 'investigation' ? 'investigator' : at.kind === 'client_email' ? 'client' : 'reviews')
   return `${base}/cases/${at.caseId}?${params}`
 }

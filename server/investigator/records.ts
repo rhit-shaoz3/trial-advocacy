@@ -6,7 +6,11 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf
 // <record> block; when he gives an estimate built from several sources, he
 // lays it out in an <aid> block, with its figures and the sources behind
 // them. Each becomes a PDF in his team's case world, reviewed with the report
-// like the files he unlocks.
+// like the files he unlocks. A team's clients write out their own records
+// the same way (`by: 'client'`), and those carry the client's name instead.
+
+/** Who wrote a record out: the investigator, or one of the team's clients handing over their own. */
+export type MadeBy = 'investigator' | 'client'
 
 export interface MadeRecord {
   kind: 'record'
@@ -98,8 +102,10 @@ function readAid(title: string, content: string): MadeAid {
 }
 
 /** The plain text of a record or aid, for the case file's transcription (so witnesses and the investigator can read it). */
-export function madeFileText(file: MadeFile, madeBy: string) {
-  if (file.kind === 'record') return `${file.title}\n\n${file.text}\n\n(Obtained by ${madeBy}, investigator.)`
+export function madeFileText(file: MadeFile, madeBy: string, by: MadeBy = 'investigator') {
+  if (file.kind === 'record') {
+    return `${file.title}\n\n${file.text}\n\n(${by === 'client' ? `Provided by ${madeBy}, client.` : `Obtained by ${madeBy}, investigator.`})`
+  }
   const rows = file.rows.map((r) => `- ${r.label}: ${r.value}${r.sources.length ? ` [${r.sources.join(', ')}]` : ''}`)
   const sources = file.sources.map((s, i) => `${i + 1}. ${s}`)
   return [
@@ -202,7 +208,13 @@ class Writer {
 const longDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
 /** The record or aid as a PDF. */
-export async function renderMadeFile(file: MadeFile, madeBy: string, teamNumber: number, date = new Date()) {
+export async function renderMadeFile(
+  file: MadeFile,
+  madeBy: string,
+  teamNumber: number,
+  date = new Date(),
+  by: MadeBy = 'investigator',
+) {
   const doc = await PDFDocument.create()
   doc.setTitle(file.title)
   doc.setAuthor(madeBy)
@@ -212,7 +224,9 @@ export async function renderMadeFile(file: MadeFile, madeBy: string, teamNumber:
     doc.embedFont(StandardFonts.Courier),
   ])
   const footer =
-    file.kind === 'record'
+    by === 'client'
+      ? `Provided by ${madeBy} to Team ${teamNumber}'s attorneys on ${longDate(date)}.`
+      : file.kind === 'record'
       ? `Obtained by ${madeBy}, investigator for Team ${teamNumber}, on ${longDate(date)}.`
       : `Illustrative aid prepared by ${madeBy}, investigator for Team ${teamNumber}, on ${longDate(date)}. Not a record of the case.`
   const w = new Writer(doc, footer, regular)

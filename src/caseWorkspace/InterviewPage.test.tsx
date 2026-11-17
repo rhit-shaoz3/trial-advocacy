@@ -125,6 +125,17 @@ describe('InterviewPage', () => {
     expect(await screen.findByText(/Ask your first question to start the interview/)).toBeInTheDocument()
   })
 
+  it("shows how many of the instructor's interviews are used, and warns before starting over the last", async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const last = { ...empty, turns: [turn(0, 'Where were you?', 'At the booth.')], limit: { max: 2, per: 'team' as const, used: 2 } }
+    const { user } = renderPage({ getInterview: vi.fn().mockResolvedValue(last) })
+    expect(await screen.findByText('2 of 2 interviews used for your team · 0 left')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Start over' }))
+    expect(confirm).toHaveBeenCalledWith(
+      "Start over? This clears the interview for your whole team. It still counts as one of your team's 2, so there won't be another.",
+    )
+  })
+
   it('explains when the witness cannot be interviewed', async () => {
     renderPage({
       getInterview: vi.fn().mockResolvedValue({ ...empty, canAsk: false, notice: "Elena Torres isn't available for interviews yet." }),

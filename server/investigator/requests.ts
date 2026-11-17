@@ -1,24 +1,14 @@
-import { randomUUID } from 'node:crypto'
 import { ai, AiNotConfiguredError } from '../ai/ai.ts'
-import {
-  createMaterial,
-  listMaterialsFor,
-  listMaterialTexts,
-  listWitnesses,
-  removeStoredFiles,
-  shareMaterialWithTeam,
-} from '../courses/caseContent.ts'
-import type { ImportantFacts } from '../courses/cases.ts'
+import { listMaterialsFor, listMaterialTexts, listWitnesses } from '../courses/caseContent.ts'
+import type { ImportantFacts, InteractionLimit } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { finishPendingTranscriptions } from '../courses/materialText.ts'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
-import { queueGrouping } from '../reviews/grouping.ts'
+import { completeReport, layOutReport, reportRulings } from '../reviews/reportReview.ts'
 import { settledFacts } from '../reviews/reviews.ts'
-import { storage } from '../storage/storage.ts'
 import { MAX_ASSIGNMENT_LENGTH, matchTitles, parseReport } from './investigate.ts'
 import type { InvestigatorContext } from './prompt.ts'
-import { madeFileText, renderMadeFile } from './records.ts'
 
 // A team's requests to the case's background investigator. The team emails an
 // assignment; in the background the AI writes his report, which goes to the
@@ -30,7 +20,8 @@ import { madeFileText, renderMadeFile } from './records.ts'
 // with the team, and the rulings bind later interviews and investigations.
 // In review lite mode the report skips the instructor: its facts stand for the
 // team's world and its files are allowed (marked `auto`), and the team can
-// flag either for the instructor.
+// flag either for the instructor. The instructor limits how many requests
+// each team (or each student) can send.
 
 /** Who's sending: the student's team, in its case world. */
 export interface InvestigationContext {
@@ -41,6 +32,8 @@ export interface InvestigationContext {
   teamNumber: number
   worldNumber: number
   userId: string
+  /** How many requests the team (or each student) can send; leave out for no limit. */
+  limit?: InteractionLimit
 }
 
 // Shape sent to students; matches `Investigation` in src/courses/types.ts.
@@ -48,6 +41,8 @@ export interface Investigation {
   id: string
   assignment: string
   askedBy: string | null
+  /** Whether this student sent it (for a per-student limit). */
+  mine: boolean
   sentAt: Date
   /** working: with the investigator or the instructor; completed: the report is back. */
   status: 'working' | 'completed'
@@ -66,7 +61,7 @@ export interface Investigation {
 export async function teamInvestigations(caseId: string, teamId: string, userId: string): Promise<Investigation[]> {
   const { rows } = await pool.query<Investigation>(
     `SELECT r.id, r.assignment, (SELECT u.name FROM users u WHERE u.id = r.asked_by) AS "askedBy",
-            r.created_at AS "sentAt",
+            r.asked_by IS NOT DISTINCT FROM $3 AS mine, r.created_at AS "sentAt",
             CASE WHEN r.status = 'completed' THEN 'completed' ELSE 'working' END AS status,
             r.completed_at AS "completedAt",
             CASE WHEN r.status = 'completed' THEN r.final_report END AS report,
@@ -89,13 +84,34 @@ export async function teamInvestigations(caseId: string, teamId: string, userId:
   return rows
 }
 
-/** Sends the team's assignment to the investigator. One at a time: the last must be back first. */
+/** How many requests count against the limit: the team's, or for a per-student limit this student's. */
+async function requestsUsed(ctx: InvestigationContext, limit: InteractionLimit) {
+  const { rows } = await pool.query<{ used: number }>(
+    `SELECT count(*)::int AS used FROM interview_reviews
+     WHERE case_id = $1 AND team_id = $2 AND kind = 'investigation' AND ($3::uuid IS NULL OR asked_by = $3)`,
+    [ctx.caseId, ctx.teamId, limit.per === 'student' ? ctx.userId : null],
+  )
+  return rows[0].used
+}
+
+/**
+ * Sends the team's assignment to the investigator. One at a time: the last
+ * must be back first. (That also keeps partners from both sending the last
+ * one the limit allows.)
+ */
 export async function sendInvestigation(ctx: InvestigationContext, body: unknown) {
   const raw = (body as { assignment?: unknown } | undefined)?.assignment
   const assignment = typeof raw === 'string' ? raw.trim() : ''
   if (!assignment) throw new HttpError(400, 'Write the assignment for the investigator.')
   if (assignment.length > MAX_ASSIGNMENT_LENGTH) {
     throw new HttpError(400, `Keep the assignment to ${MAX_ASSIGNMENT_LENGTH} characters.`)
+  }
+  if (ctx.limit && (await requestsUsed(ctx, ctx.limit)) >= ctx.limit.max) {
+    const times = ctx.limit.max === 1 ? 'request' : `${ctx.limit.max} requests`
+    throw new HttpError(
+      409,
+      ctx.limit.per === 'student' ? `You've used your ${times} to the investigator.` : `Your team has used its ${times} to the investigator.`,
+    )
   }
   try {
     const { rows } = await pool.query<{ id: string }>(
@@ -252,95 +268,21 @@ async function investigateRequest(id: string): Promise<'open' | 'finalizing' | n
     const parsed = parseReport(text)
     // Only files the team doesn't have yet are his to unlock.
     const unlock = matchTitles(parsed.accessTitles, context.documents.filter((d) => !d.teamHasAccess))
-    // The records and aids he made, drawn and stored before they're added to the case.
-    const made = await Promise.all(
-      parsed.made.map(async (file) => {
-        const materialId = randomUUID()
-        const data = Buffer.from(await renderMadeFile(file, request.investigatorName, request.teamNumber))
-        const storageKey = `cases/${request.caseId}/${materialId}`
-        await storage.put(storageKey, data, 'application/pdf')
-        return { file, materialId, storageKey, size: data.length }
-      }),
-    )
-
-    const client = await pool.connect()
-    let replaced: string[] = []
-    try {
-      await client.query('BEGIN')
-      await client.query('DELETE FROM review_facts WHERE review_id = $1', [id])
-      // A retry replaces what an earlier try made.
-      const { rows: earlier } = await client.query<{ id: string; key: string | null }>(
-        `DELETE FROM case_materials WHERE source = 'investigator'
-           AND id IN (SELECT material_id FROM review_documents WHERE review_id = $1)
-         RETURNING id, storage_key AS key`,
-        [id],
-      )
-      replaced = earlier.flatMap((m) => (m.key ? [m.key] : []))
-      await client.query('DELETE FROM review_documents WHERE review_id = $1', [id])
-      // Review lite: his facts stand for this world only, and his files are allowed.
-      const lite = request.lite
-      for (const [position, fact] of parsed.facts.entries()) {
-        await client.query(
-          `INSERT INTO review_facts (review_id, position, text, decision, decided_at, auto)
-           VALUES ($1, $2, $3, CASE WHEN $4 THEN 'accept_world' END, CASE WHEN $4 THEN now() END, $4)`,
-          [id, position, fact, lite],
-        )
-      }
-      for (const [position, doc] of unlock.entries()) {
-        await client.query(
-          `INSERT INTO review_documents (review_id, material_id, position, decision, auto)
-           VALUES ($1, $2, $3, CASE WHEN $4 THEN 'allow' END, $4)`,
-          [id, doc.id, position, lite],
-        )
-      }
-      // Each record or aid is a file in the team's world, for the instructor only until it's allowed.
-      for (const [i, m] of made.entries()) {
-        await createMaterial(
-          {
-            id: m.materialId,
-            caseId: request.caseId,
-            audience: 'instructor',
-            filename: `${m.file.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()}.pdf`,
-            description: m.file.title,
-            contentType: 'application/pdf',
-            sizeBytes: m.size,
-            storageKey: m.storageKey,
-            uploadedBy: null,
-            matchupId: request.matchupId,
-            source: 'investigator',
-          },
-          client,
-        )
-        // Its text is known, so witnesses and later investigations can read it once it's allowed.
-        await client.query(`UPDATE case_materials SET text_status = 'ready', text_content = $2 WHERE id = $1`, [
-          m.materialId,
-          madeFileText(m.file, request.investigatorName),
-        ])
-        await client.query(
-          `INSERT INTO review_documents (review_id, material_id, position, decision, auto)
-           VALUES ($1, $2, $3, CASE WHEN $4 THEN 'allow' END, $4)`,
-          [id, m.materialId, unlock.length + i, lite],
-        )
-      }
-      // Otherwise every report waits for the instructor, even with nothing to rule on.
-      const status = lite ? 'finalizing' : 'open'
-      await client.query(
-        `UPDATE interview_reviews
-         SET report = $2, records_requested = $3, review_block_missing = $4, error = NULL, status = $5
-         WHERE id = $1`,
-        [id, parsed.body, parsed.records, !parsed.hasReviewBlock, status],
-      )
-      await client.query('COMMIT')
-      await removeStoredFiles(replaced)
-      if (status === 'open') queueGrouping(request.caseId)
-      return status
-    } catch (err) {
-      await client.query('ROLLBACK')
-      await removeStoredFiles(made.map((m) => m.storageKey))
-      throw err
-    } finally {
-      client.release()
-    }
+    return await layOutReport(id, {
+      caseId: request.caseId,
+      matchupId: request.matchupId,
+      teamNumber: request.teamNumber,
+      lite: request.lite,
+      body: parsed.body,
+      facts: parsed.facts,
+      unlockIds: unlock.map((d) => d.id),
+      made: parsed.made,
+      madeBy: request.investigatorName,
+      by: 'investigator',
+      source: 'investigator',
+      recordsRequested: parsed.records,
+      reviewBlockMissing: !parsed.hasReviewBlock,
+    })
   } catch (err) {
     await fail(id, err, 'get the investigator’s report')
     return null
@@ -350,54 +292,22 @@ async function investigateRequest(id: string): Promise<'open' | 'finalizing' | n
 /** Writes the team's clean report, shares the allowed files, and completes the review; never throws. */
 async function finalizeRequest(id: string) {
   try {
-    const { rows } = await pool.query<{ teamId: string | null; report: string; investigatorName: string }>(
-      `SELECT r.team_id AS "teamId", r.report, c.investigator_name AS "investigatorName"
-       FROM interview_reviews r JOIN cases c ON c.id = r.case_id WHERE r.id = $1`,
-      [id],
-    )
-    const request = rows[0]
-    if (!request) return
-    const { rows: facts } = await pool.query<{ text: string; decision: string }>(
-      'SELECT text, decision FROM review_facts WHERE review_id = $1 ORDER BY position',
-      [id],
-    )
-    const { rows: docs } = await pool.query<{ materialId: string; title: string; decision: string }>(
-      `SELECT d.material_id AS "materialId", coalesce(nullif(m.description, ''), m.filename) AS title, d.decision
-       FROM review_documents d JOIN case_materials m ON m.id = d.material_id
-       WHERE d.review_id = $1 ORDER BY d.position`,
-      [id],
-    )
+    const [rulings, { rows }] = await Promise.all([
+      reportRulings(id),
+      pool.query<{ investigatorName: string }>(
+        `SELECT c.investigator_name AS "investigatorName"
+         FROM interview_reviews r JOIN cases c ON c.id = r.case_id WHERE r.id = $1`,
+        [id],
+      ),
+    ])
+    if (!rulings || !rows[0]) return
     const finalReport = await ai.finalizeReport({
-      investigatorName: request.investigatorName,
-      body: request.report,
-      deniedFacts: facts.filter((f) => f.decision.startsWith('deny')).map((f) => f.text),
-      deniedTitles: docs.filter((d) => d.decision !== 'allow').map((d) => d.title),
+      author: rows[0].investigatorName,
+      body: rulings.report,
+      deniedFacts: rulings.deniedFacts,
+      deniedTitles: rulings.deniedTitles,
     })
-
-    const client = await pool.connect()
-    try {
-      await client.query('BEGIN')
-      if (request.teamId) {
-        for (const doc of docs.filter((d) => d.decision === 'allow')) {
-          await shareMaterialWithTeam(doc.materialId, request.teamId, client)
-        }
-        // A file the instructor took back after all (from a student's flag, say).
-        for (const doc of docs.filter((d) => d.decision !== 'allow')) {
-          await client.query('DELETE FROM material_shares WHERE material_id = $1 AND team_id = $2', [doc.materialId, request.teamId])
-        }
-      }
-      await client.query(
-        `UPDATE interview_reviews SET final_report = $2, status = 'completed', completed_at = coalesce(completed_at, now()), error = NULL
-         WHERE id = $1`,
-        [id, finalReport],
-      )
-      await client.query('COMMIT')
-    } catch (err) {
-      await client.query('ROLLBACK')
-      throw err
-    } finally {
-      client.release()
-    }
+    await completeReport(id, rulings.teamId, finalReport)
   } catch (err) {
     await fail(id, err, 'write the team’s report')
   }

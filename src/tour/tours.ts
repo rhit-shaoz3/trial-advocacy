@@ -296,6 +296,13 @@ const CASE_STEPS: TourStep[] = [
     body: 'Interview your side’s witnesses. They only know what they know, so ask good questions.',
   },
   {
+    target: '[data-tour="client-email"]',
+    title: 'Email your client',
+    body: 'Ask your client for documents and details only they have. Their replies land in the Client email tab.',
+    go: { tab: 'overview' },
+    ifMissing: 'skip',
+  },
+  {
     target: tab('exchange'),
     title: 'Information exchange',
     body: 'Disclosures, subpoenas, interrogatories, and requests for admission, sent and received.',

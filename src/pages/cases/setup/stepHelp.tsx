@@ -38,6 +38,11 @@ export const SETUP_HELP: Record<SetupStep, ReactNode> = {
         Give each file a clear label. Students see the label, and the AI uses it to cite the file. A long fact
         pattern works better split into sections.
       </li>
+      <li>
+        <strong>Owned by:</strong> who would really have the file. A third party (a hospital, the city) gives it up only
+        to a subpoena or the investigator; a side&rsquo;s team, or one of its clients, can hand it over when the team
+        emails its client.
+      </li>
       <li>Files you add are uploaded when you press Next, or with the Upload button.</li>
     </ul>
   ),
@@ -73,6 +78,16 @@ export const SETUP_HELP: Record<SetupStep, ReactNode> = {
         witness you pick for initial disclosures is shown when the introduction ends.
       </li>
       <li>Persona notes shape how the witness talks. Their lawyer&rsquo;s name is who objects in a deposition.</li>
+      <li>
+        <strong>Clients:</strong> mark a side&rsquo;s clients, and that team can email them for information. Several
+        clients answer together, from anything any of them knows or owns. When nothing they own covers a request, they
+        write out the document, for you to review. &ldquo;Emails to the client&rdquo; limits how many each team (or
+        student) can send: two per team unless you change it.
+      </li>
+      <li>
+        <strong>Interviews with each witness:</strong> how many times each team (or each student) can interview each
+        witness, depositions included. Two per team unless you change it.
+      </li>
     </ul>
   ),
   investigator: (
@@ -86,6 +101,10 @@ export const SETUP_HELP: Record<SetupStep, ReactNode> = {
         to the team.
       </li>
       <li>Turn him off and the case skips the investigate phase.</li>
+      <li>
+        <strong>Requests:</strong> how many assignments each team (or each student) can send him. Two per team unless
+        you change it.
+      </li>
       <li>Your instructions change how he works, and they come before his standard instructions.</li>
     </ul>
   ),
@@ -108,6 +127,11 @@ export const EXCHANGE_HELP: Record<ExchangeStep, ReactNode> = {
       <li>
         Your picks are the answer key. When you move to information exchange, students see how theirs compare, and
         your picks are shared with the other side.
+      </li>
+      <li>
+        Documents a team got from its clients or the investigator belong to its case world. You can add them to that
+        world&rsquo;s disclosures; they&rsquo;re listed under the world. That team can pick them in its own practice
+        too.
       </li>
       <li>Turn this part off to skip the practice. Teams then start straight from requests.</li>
     </ul>

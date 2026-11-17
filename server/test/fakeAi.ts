@@ -24,6 +24,9 @@ beforeEach(() => {
   ai.investigate = async () => {
     throw new Error('This test did not set up a fake investigator.')
   }
+  ai.emailClient = async () => {
+    throw new Error('This test did not set up a fake client.')
+  }
   // Edits nothing; tests that check the edit swap in their own.
   ai.finalizeReport = async (input) => input.body
   ai.suggestFromComplaint = async () => ({ witnesses: [], content: { disputedIssues: '', instructorNote: '', tasks: [] } })

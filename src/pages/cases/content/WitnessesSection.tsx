@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL } from '../../../courses/caseLabels'
 import {
+  DEFAULT_LIMIT,
   type CaseMaterial,
   type CourseCase,
   type Side,
@@ -17,6 +18,8 @@ import { WitnessPicturePicker } from './WitnessPicturePicker'
 import { DictationTextarea } from '../../../components/Dictation'
 import { SuggestedNote } from '../../../components/SuggestedNote'
 import { useCaseSuggestions, useSuggestedField } from './caseSuggestions'
+import { LimitField } from './LimitField'
+import { limitDraft, parseLimit, sameLimit } from './limitDraft'
 
 const BLANK: WitnessInput = {
   name: '',
@@ -29,6 +32,8 @@ const BLANK: WitnessInput = {
   knownMaterialIds: [],
   defendingCounsel: '',
   avatarPreset: null,
+  isClient: false,
+  speaksForOrganization: false,
 }
 
 const isAiWitness = (w: Witness) => w.alignedSide !== null && w.depositionMaterialId !== null
@@ -174,6 +179,9 @@ export function WitnessesSection({
                   <strong>{w.name}</strong>
                   {w.role && <span className="muted"> · {w.role}</span>}
                   {w.hidden && <span className="badge content-audience-instructor">Hidden from students</span>}
+                  {w.isClient && w.alignedSide && (
+                    <span className="badge content-client">{ROLE_LABEL[w.alignedSide]}&rsquo;s client</span>
+                  )}
                   {isAiWitness(w) && <span className="badge content-ai-witness">AI witness</span>}
                   {w.description && <p>{w.description}</p>}
                   {isAiWitness(w) && <AiSummary witness={w} materials={materials} />}
@@ -237,9 +245,18 @@ function WitnessSettings({
   const suggestions = useCaseSuggestions(courseId, courseCase.id)
   const field = useSuggestedField(courseCase.disputedIssues, suggestions?.disputedIssues)
   const issues = field.value
+  const savedLimit = courseCase.interviewLimit ?? DEFAULT_LIMIT
+  const [limit, setLimit] = useState(() => limitDraft(savedLimit))
+  const parsedLimit = parseLimit(limit)
+  const savedEmailLimit = courseCase.clientEmailLimit ?? DEFAULT_LIMIT
+  const [emailLimit, setEmailLimit] = useState(() => limitDraft(savedEmailLimit))
+  const parsedEmailLimit = parseLimit(emailLimit)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null)
-  const changed = issues.trim() !== courseCase.disputedIssues
+  const changed =
+    issues.trim() !== courseCase.disputedIssues ||
+    !sameLimit(parsedLimit, savedLimit) ||
+    !sameLimit(parsedEmailLimit, savedEmailLimit)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -250,9 +267,13 @@ function WitnessSettings({
         // The witnesses always use the real date now.
         inWorldDate: null,
         disputedIssues: issues,
+        interviewLimit: parsedLimit ?? undefined,
+        clientEmailLimit: parsedEmailLimit ?? undefined,
       })
       onSaved(saved)
       field.reset(saved.disputedIssues)
+      setLimit(limitDraft(saved.interviewLimit ?? DEFAULT_LIMIT))
+      setEmailLimit(limitDraft(saved.clientEmailLimit ?? DEFAULT_LIMIT))
       setMessage({ error: false, text: 'Saved.' })
     } catch (err) {
       setMessage({ error: true, text: err instanceof Error ? err.message : 'Something went wrong.' })
@@ -274,8 +295,26 @@ function WitnessSettings({
         />
         {field.suggested && <SuggestedNote />}
       </label>
+      <LimitField
+        label="Interviews with each witness"
+        hint="An interview counts once it has a question; starting over begins the next one. Depositions count too. Per student, an interview counts for each partner who asks in it."
+        value={limit}
+        onChange={(next) => {
+          setLimit(next)
+          setMessage(null)
+        }}
+      />
+      <LimitField
+        label="Emails to the client"
+        hint="Each email a team sends its clients counts as one. Per student, each partner has their own."
+        value={emailLimit}
+        onChange={(next) => {
+          setEmailLimit(next)
+          setMessage(null)
+        }}
+      />
       <div className="panel-form-actions">
-        <button type="submit" className="btn-secondary" disabled={saving || !changed}>
+        <button type="submit" className="btn-secondary" disabled={saving || !changed || !parsedLimit || !parsedEmailLimit}>
           {saving ? 'Saving…' : 'Save settings'}
         </button>
         {message && (
@@ -312,6 +351,8 @@ function WitnessForm({
   const [known, setKnown] = useState<string[]>(initial.knownMaterialIds)
   const [personaNotes, setPersonaNotes] = useState(initial.personaNotes)
   const [counsel, setCounsel] = useState(initial.defendingCounsel)
+  const [isClient, setIsClient] = useState(initial.isClient ?? false)
+  const [organization, setOrganization] = useState(initial.speaksForOrganization ?? false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   // Depositions are usually instructors-only files, so list those first.
@@ -337,6 +378,9 @@ function WitnessForm({
           personaNotes,
           defendingCounsel: counsel,
           avatarPreset: picture.kind === 'preset' ? picture.preset : null,
+          // A client needs a side.
+          isClient: isClient && alignedSide !== null,
+          speaksForOrganization: isClient && alignedSide !== null && organization,
         },
         picture,
         initialPicture(initial).kind === 'uploaded',
@@ -382,6 +426,28 @@ function WitnessForm({
         <span className="muted field-hint">
           Both sides see every witness. Turn this off to keep this one from students until you&rsquo;re ready. A hidden
           witness you pick for initial disclosures is shown when the introduction ends.
+        </span>
+      </div>
+      <div className="content-form-full content-show">
+        <label className="investigator-toggle">
+          <input
+            type="checkbox"
+            checked={isClient && alignedSide !== null}
+            onChange={(e) => setIsClient(e.target.checked)}
+            disabled={alignedSide === null}
+          />
+          This is a client
+        </label>
+        {isClient && alignedSide !== null && (
+          <label className="investigator-toggle">
+            <input type="checkbox" checked={organization} onChange={(e) => setOrganization(e.target.checked)} />
+            Speaks for an organization (e.g. the park&rsquo;s safety manager)
+          </label>
+        )}
+        <span className="muted field-hint">
+          {alignedSide === null
+            ? 'Choose whom they testify for (under AI witness) to make them a client.'
+            : `The ${ROLE_LABEL[alignedSide].toLowerCase()} team can email its clients for information and documents. With several clients, they answer together, from anything any of them knows or owns.`}
         </span>
       </div>
       <label className="content-form-full">

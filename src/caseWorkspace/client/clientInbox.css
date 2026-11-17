@@ -1,0 +1,386 @@
+/* A team's email with its clients (ClientInbox): a message list beside the open message, stacked when there's no room. */
+
+.ci {
+  display: grid;
+  gap: 1rem;
+  container: ci / inline-size;
+}
+
+.ci-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.ci-who {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  min-width: 0;
+  flex: 1 1 22rem;
+}
+
+.ci-who h2 {
+  margin: 0.1rem 0 0.25rem;
+  font-family: var(--ws-serif, serif);
+  font-size: 1.35rem;
+}
+
+.ci-who .cw-section-sub {
+  margin: 0;
+}
+
+.ci-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ci-actions .ws-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.cw .ci-limit {
+  margin: 0;
+  color: var(--fg-soft);
+  font-size: 0.86rem;
+}
+
+.ci-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border: 1px solid var(--ws-line);
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+@container ci (min-width: 44rem) {
+  .ci-box {
+    grid-template-columns: minmax(14rem, 19rem) minmax(0, 1fr);
+    min-height: 22rem;
+  }
+
+  .ci-list {
+    border-right: 1px solid var(--ws-line);
+    border-bottom: 0;
+  }
+}
+
+.ci-list {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  border-bottom: 1px solid var(--ws-line);
+  background: var(--ws-paper);
+}
+
+.ci-folders {
+  display: flex;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.ci-folders button {
+  display: inline-flex;
+  flex: 1;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ws-muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ci-folders button[aria-selected='true'] {
+  border-bottom-color: var(--ws-navy);
+  color: var(--ws-navy);
+}
+
+.ci-folders svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.ci-count {
+  min-width: 1.2rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--ws-navy);
+  color: var(--surface);
+  font-size: 0.72rem;
+  line-height: 1.2rem;
+}
+
+.ci-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ci-item {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--ws-row-line);
+  background: none;
+  color: var(--ws-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ci-item:hover {
+  background: var(--surface-hover);
+}
+
+.ci-item-open {
+  background: var(--tint-blue-bg);
+  box-shadow: inset 3px 0 0 var(--tint-blue-fg);
+}
+
+.ci-item-top {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.ci-item-who {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ci-item-top small,
+.ci-item-waiting {
+  flex: none;
+  color: var(--ws-muted);
+  font-size: 0.75rem;
+}
+
+.ci-item-subject {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  min-width: 0;
+  color: var(--fg-soft);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.ci-item-subject svg {
+  flex: none;
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.ci-item-unread .ci-item-who,
+.ci-item-unread .ci-item-subject {
+  color: var(--ws-text);
+  font-weight: 700;
+}
+
+.ci-item-waiting {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.ci-item-waiting svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.ci-item .cw-badge {
+  justify-self: start;
+}
+
+.cw .ci-none {
+  margin: 0;
+  padding: 1rem;
+  color: var(--ws-muted);
+  font-size: 0.88rem;
+}
+
+.ci-read {
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+}
+
+.ci .ci-read-none {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0;
+}
+
+.ci-read-none svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.ci-message {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.ci-message h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.ci-headers {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--ws-row-line);
+  font-size: 0.88rem;
+}
+
+.ci-headers div {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.ci-headers dt {
+  flex: none;
+  width: 3rem;
+  color: var(--ws-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.ci-headers dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cw .ci-body {
+  margin: 0;
+  color: var(--ws-text);
+  font-size: 0.93rem;
+  line-height: 1.6;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.cw .ci-pending {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+  font-size: 0.86rem;
+}
+
+.ci-pending svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ci-compose-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ci-compose-head strong {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.ci-compose-head svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ci-to {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ci-to legend {
+  float: left;
+  padding: 0;
+}
+
+.ci-to label {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.ci-subject {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ci-subject small {
+  flex: none;
+  width: 3.5rem;
+  color: var(--ws-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ci-subject input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 0.92rem;
+}
+
+/* The dashboard's card: who the clients are, the latest message, and Compose. */
+.cw-client-card .cw-client-latest {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.4rem 0 0.75rem;
+  font-size: 0.86rem;
+}
+
+.cw-client-card .cw-client-latest small {
+  color: var(--ws-muted);
+}
+
+.cw-client-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

@@ -72,10 +72,12 @@ export function FactGroupCard({
               <p className="review-meta">
                 Team {f.teamNumber} · World {worldLabel(f.worldNumber)} · {f.source}
               </p>
-              {review?.kind === 'investigation' ? (
+              {review?.kind === 'investigation' || review?.kind === 'client_email' ? (
                 review.report && (
                   <details className="review-transcript">
-                    <summary>Show report · Team {f.teamNumber}</summary>
+                    <summary>
+                      Show {review.kind === 'client_email' ? 'email' : 'report'} · Team {f.teamNumber}
+                    </summary>
                     <p className="review-group-report">{review.report}</p>
                   </details>
                 )

@@ -168,7 +168,7 @@ describe("the team's clean report", () => {
   it('drops the source tags without asking the AI when nothing was turned down', async () => {
     const create = vi.fn()
     const report = await finalizeReport({ messages: { create } } as EditClient, {
-      investigatorName: 'Nora Vance',
+      author: 'Nora Vance',
       body: parseReport(REPORT).body,
       deniedFacts: [],
       deniedTitles: [],
@@ -186,7 +186,7 @@ describe("the team's clean report", () => {
       stop_reason: 'end_turn',
       content: [{ type: 'text', text: '1. I photographed the intersection. [NEW FACT]' }],
     })
-    const input = { investigatorName: 'Nora Vance', body: 'report', deniedFacts: ['The camera points south.'], deniedTitles: ['Maintenance log'] }
+    const input = { author: 'Nora Vance', body: 'report', deniedFacts: ['The camera points south.'], deniedTitles: ['Maintenance log'] }
     const report = await finalizeReport({ messages: { create } } as unknown as EditClient, input)
 
     expect(report).toBe('1. I photographed the intersection.')

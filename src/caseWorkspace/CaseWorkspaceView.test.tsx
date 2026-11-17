@@ -401,6 +401,27 @@ describe('the background investigator', () => {
     expect(within(email).getByLabelText('Your assignment')).toHaveValue('')
   })
 
+  it("counts the requests against the instructor's limit, and stops the email at it", async () => {
+    const limited = { ...open, investigator: { ...open.investigator, limit: { max: 2, per: 'team' as const } } }
+    const { user } = renderView({ workspace: limited, investigations: [report()], onSendInvestigation: vi.fn() })
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+    expect(screen.getByText('1 of 2 requests used by your team · 1 left')).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: 'Email Nora Vance' })).toBeInTheDocument()
+  })
+
+  it('hides the email once the limit is used, counting only your own per student', async () => {
+    const perStudent = { ...open, investigator: { ...open.investigator, limit: { max: 1, per: 'student' as const } } }
+    const { user } = renderView({
+      workspace: perStudent,
+      investigations: [report({ id: 'i2', mine: false }), report({ mine: true })],
+      onSendInvestigation: vi.fn(),
+    })
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+    expect(screen.getByText('1 of 1 request used by you · 0 left')).toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Email Nora Vance' })).not.toBeInTheDocument()
+    expect(screen.getByText('You’ve used the one request your instructor allows to Nora Vance.')).toBeInTheDocument()
+  })
+
   it('shows the request he is working on instead of the email', async () => {
     const { user } = renderView({
       workspace: open,

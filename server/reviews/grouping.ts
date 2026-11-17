@@ -53,7 +53,8 @@ async function groupPendingFacts(caseId: string) {
     const { rows: facts } = await pool.query<PendingFact & { groupId: string | null }>(
       `SELECT f.id, f.text, f.review_id AS "reviewId", f.group_id AS "groupId",
               r.team_number AS "teamNumber", r.world_number AS "worldNumber",
-              coalesce(w.name, 'the investigator') AS source
+              CASE WHEN r.kind = 'client_email' THEN 'the team''s client'
+                   ELSE coalesce(w.name, 'the investigator') END AS source
        FROM review_facts f
        JOIN interview_reviews r ON r.id = f.review_id
        LEFT JOIN case_witnesses w ON w.id = r.witness_id
@@ -124,6 +125,7 @@ const GROUP_SELECT = `
          json_agg(json_build_object('id', f.id, 'text', f.text, 'reviewId', r.id, 'teamNumber', r.team_number,
                                     'worldNumber', r.world_number,
                                     'source', CASE WHEN r.kind = 'investigation' THEN 'Investigation'
+                                                   WHEN r.kind = 'client_email' THEN 'Client email'
                                                    ELSE 'Interview of ' || coalesce(w.name, 'a witness') END)
                   ORDER BY r.team_number, f.position) AS facts,
          count(DISTINCT r.matchup_id)::int AS worlds

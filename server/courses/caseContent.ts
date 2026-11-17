@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg'
 import { pool } from '../db/pool.ts'
 import { storage } from '../storage/storage.ts'
 import type { Side } from './matchups.ts'
+import type { InteractionLimit } from './cases.ts'
 
 // What the instructor provides for a case: the case file (the pieces of the
 // fact pattern: documents, images, audio, video), witnesses, tasks, and a note.
@@ -9,7 +10,8 @@ import type { Side } from './matchups.ts'
 // on one side. Witnesses show to both sides unless the instructor hides them
 // from students. Case files can also be for instructors only, such as a witness's
 // deposition that trains an AI witness, and shared on top of that with
-// particular case worlds or teams (material_shares).
+// particular case worlds or teams (material_shares). Each file has an owner,
+// who would really have it: a third party, one side's team, or one witness.
 
 export const AUDIENCES = ['all', 'plaintiff', 'defense'] as const
 export type Audience = (typeof AUDIENCES)[number]
@@ -23,10 +25,25 @@ export type TextStatus = 'pending' | 'ready' | 'failed' | 'none'
 /**
  * Where a case file came from: the instructor's upload, a subpoena response
  * approved in one case world, or a record or illustrative aid the
- * investigator made for a team in one world.
+ * investigator made, or a document a team's clients wrote out, for a team in
+ * one world.
  */
-export const MATERIAL_SOURCES = ['instructor', 'subpoena', 'investigator'] as const
+export const MATERIAL_SOURCES = ['instructor', 'subpoena', 'investigator', 'client'] as const
 export type MaterialSource = (typeof MATERIAL_SOURCES)[number]
+
+/**
+ * Who would really have a case file: someone outside the case (only a subpoena
+ * or the investigator gets it), one side's team (its clients have it), or one
+ * witness (who knows it, and as a client can hand it over).
+ */
+export const MATERIAL_OWNERS = ['third_party', 'plaintiff', 'defense', 'witness'] as const
+export type MaterialOwnerKind = (typeof MATERIAL_OWNERS)[number]
+
+/** A file's owner; `witnessId` is set only for a witness's own file. */
+export interface MaterialOwner {
+  kind: MaterialOwnerKind
+  witnessId: string | null
+}
 
 /** The audiences someone on `side` can see; with no side yet, only shared items. */
 export const visibleTo = (side: Side | null): Audience[] => (side ? ['all', side] : ['all'])
@@ -61,6 +78,7 @@ export interface CaseMaterial {
   /** The case world the file belongs to (like a subpoena response), by number; null for every world's files. */
   worldNumber: number | null
   source: MaterialSource
+  owner: MaterialOwner
 }
 
 export interface Witness {
@@ -83,6 +101,10 @@ export interface Witness {
   avatarPreset: number | null
   /** The design or uploaded picture to show, or null for an icon. */
   avatarUrl: string | null
+  /** One of its side's clients, whom that side's team can email (needs a side). */
+  isClient: boolean
+  /** A client who speaks for an organization, like a company's safety manager. */
+  speaksForOrganization: boolean
 }
 
 export interface CaseTask {
@@ -103,14 +125,15 @@ const MATERIAL_COLUMNS = `id, audience, filename, description, content_type AS "
                             WHERE s.material_id = case_materials.id AND s.matchup_id IS NOT NULL), '[]'),
     'teamIds', coalesce((SELECT json_agg(s.team_id) FROM material_shares s
                          WHERE s.material_id = case_materials.id AND s.team_id IS NOT NULL), '[]')) AS shares,
-  (SELECT w.number FROM matchups w WHERE w.id = case_materials.matchup_id) AS "worldNumber", source`
+  (SELECT w.number FROM matchups w WHERE w.id = case_materials.matchup_id) AS "worldNumber", source,
+  json_build_object('kind', owner, 'witnessId', owner_witness_id) AS owner`
 
 /**
- * SQL for "this viewer can see the file": its audience is theirs, or it's
- * shared with their team or world. Uses parameters $n (audiences), $n+1
- * (team) and $n+2 (matchup).
+ * SQL for "this viewer can see the file": its audience is theirs (a world's
+ * own file only in that world), or it's shared with their team or world. Uses
+ * parameters $n (audiences), $n+1 (team) and $n+2 (matchup).
  */
-const visibleToViewer = (n: number) => `(audience = ANY($${n}) OR EXISTS (
+const visibleToViewer = (n: number) => `((audience = ANY($${n}) AND (matchup_id IS NULL OR matchup_id = $${n + 2}::uuid)) OR EXISTS (
   SELECT 1 FROM material_shares s
   WHERE s.material_id = case_materials.id AND (s.team_id = $${n + 1}::uuid OR s.matchup_id = $${n + 2}::uuid)))`
 
@@ -196,11 +219,14 @@ export async function createMaterial(input: {
   matchupId?: string | null
   /** The instructor's upload unless said otherwise. */
   source?: MaterialSource
+  /** A third party's unless said otherwise. */
+  owner?: MaterialOwner
 }, db: Pick<PoolClient, 'query'> = pool) {
   const { rows } = await db.query<CaseMaterial>(
     `INSERT INTO case_materials
-       (id, case_id, audience, filename, description, content_type, size_bytes, storage_key, uploaded_by, matchup_id, source)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       (id, case_id, audience, filename, description, content_type, size_bytes, storage_key, uploaded_by, matchup_id, source,
+        owner, owner_witness_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING ${MATERIAL_COLUMNS}`,
     [
       input.id,
@@ -214,6 +240,8 @@ export async function createMaterial(input: {
       input.uploadedBy,
       input.matchupId ?? null,
       input.source ?? 'instructor',
+      input.owner?.kind ?? 'third_party',
+      input.owner?.witnessId ?? null,
     ],
   )
   return rows[0]
@@ -226,13 +254,14 @@ export class InitialMaterialAudienceError extends Error {}
 export async function updateMaterial(
   caseId: string,
   id: string,
-  fields: { audience: MaterialAudience; description: string },
+  fields: { audience: MaterialAudience; description: string; owner?: MaterialOwner },
 ) {
   const { rows } = await pool.query<CaseMaterial>(
-    `UPDATE case_materials SET audience = $3, description = $4
+    `UPDATE case_materials SET audience = $3, description = $4,
+       owner = coalesce($5, owner), owner_witness_id = CASE WHEN $5::text IS NULL THEN owner_witness_id ELSE $6 END
      WHERE case_id = $1 AND id = $2 AND (NOT initial OR $3 = 'all')
      RETURNING ${MATERIAL_COLUMNS}`,
-    [caseId, id, fields.audience, fields.description],
+    [caseId, id, fields.audience, fields.description, fields.owner?.kind ?? null, fields.owner?.witnessId ?? null],
   )
   if (rows[0]) return rows[0]
   const { rowCount } = await pool.query('SELECT 1 FROM case_materials WHERE case_id = $1 AND id = $2', [caseId, id])
@@ -392,21 +421,25 @@ export interface MaterialText {
   textStatus: TextStatus
   text: string | null
   initial: boolean
+  owner: MaterialOwner
+  /** The case world a world file belongs to; null for the instructor's files. */
+  matchupId: string | null
 }
 
 /**
  * The case file an AI reads, with each file's transcription: every file the
  * instructor uploaded, plus the subpoena responses approved in this case world
- * and the investigator's records and aids allowed in it (never another
+ * and the investigator's and clients' files allowed in it (never another
  * world's); with no world, only the instructor's files.
  */
 export async function listMaterialTexts(caseId: string, matchupId: string | null = null) {
   const { rows } = await pool.query<MaterialText>(
-    `SELECT id, audience, filename, description, text_status AS "textStatus", text_content AS text, initial
+    `SELECT id, audience, filename, description, text_status AS "textStatus", text_content AS text, initial,
+            json_build_object('kind', owner, 'witnessId', owner_witness_id) AS owner, matchup_id AS "matchupId"
      FROM case_materials
      WHERE case_id = $1 AND (source = 'instructor' OR (source = 'subpoena' AND matchup_id = $2)
-       -- A record or aid the investigator made counts once the instructor allows it (or review lite did).
-       OR (source = 'investigator' AND matchup_id = $2 AND EXISTS (
+       -- A file the investigator or a client made counts once the instructor allows it (or review lite did).
+       OR (source IN ('investigator', 'client') AND matchup_id = $2 AND EXISTS (
          SELECT 1 FROM review_documents d WHERE d.material_id = case_materials.id AND d.decision = 'allow')))
      ORDER BY uploaded_at, filename`,
     [caseId, matchupId],
@@ -433,7 +466,8 @@ export const witnessAvatarUrlSql = (w = '') => {
 const WITNESS_COLUMNS = `id, name, role, description, hidden, aligned_side AS "alignedSide",
   persona_notes AS "personaNotes", deposition_material_id AS "depositionMaterialId",
   known_material_ids AS "knownMaterialIds", defending_counsel AS "defendingCounsel",
-  avatar_preset AS "avatarPreset", ${witnessAvatarUrlSql()} AS "avatarUrl"`
+  avatar_preset AS "avatarPreset", ${witnessAvatarUrlSql()} AS "avatarUrl",
+  is_client AS "isClient", speaks_for_organization AS "speaksForOrganization"`
 
 export async function listWitnesses(caseId: string) {
   const { rows } = await pool.query<Witness>(
@@ -456,13 +490,15 @@ const witnessValues = (f: WitnessFields) => [
   f.knownMaterialIds,
   f.defendingCounsel,
   f.avatarPreset,
+  f.isClient,
+  f.speaksForOrganization,
 ]
 
 export async function createWitness(caseId: string, fields: WitnessFields) {
   const { rows } = await pool.query<Witness>(
     `INSERT INTO case_witnesses (case_id, name, role, description, hidden, aligned_side, persona_notes,
-       deposition_material_id, known_material_ids, defending_counsel, avatar_preset)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       deposition_material_id, known_material_ids, defending_counsel, avatar_preset, is_client, speaks_for_organization)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING ${WITNESS_COLUMNS}`,
     [caseId, ...witnessValues(fields)],
   )
@@ -477,7 +513,8 @@ export async function updateWitness(caseId: string, id: string, fields: WitnessF
   const { rows } = await pool.query<Witness & { removedKey: string | null }>(
     `UPDATE case_witnesses SET name = $3, role = $4, description = $5, hidden = $6, aligned_side = $7,
        persona_notes = $8, deposition_material_id = $9, known_material_ids = $10, defending_counsel = $11,
-       avatar_preset = $12, avatar_key = CASE WHEN $12::smallint IS NULL THEN avatar_key END
+       avatar_preset = $12, avatar_key = CASE WHEN $12::smallint IS NULL THEN avatar_key END,
+       is_client = $13, speaks_for_organization = $14
      FROM (SELECT avatar_key AS old_key FROM case_witnesses WHERE case_id = $1 AND id = $2 FOR UPDATE) old
      WHERE case_id = $1 AND id = $2
      RETURNING ${WITNESS_COLUMNS}, CASE WHEN $12::smallint IS NOT NULL THEN old.old_key END AS "removedKey"`,
@@ -620,10 +657,29 @@ export async function setInstructorNote(caseId: string, note: string) {
 }
 
 /** "Today" inside the case (null: the real date) and the issues no witness may settle. */
-export async function setWitnessSettings(caseId: string, settings: { inWorldDate: string | null; disputedIssues: string }) {
-  await pool.query('UPDATE cases SET in_world_date = $2, disputed_issues = $3, updated_at = now() WHERE id = $1', [
-    caseId,
-    settings.inWorldDate,
-    settings.disputedIssues,
-  ])
+export async function setWitnessSettings(
+  caseId: string,
+  settings: {
+    inWorldDate: string | null
+    disputedIssues: string
+    interviewLimit?: InteractionLimit
+    clientEmailLimit?: InteractionLimit
+  },
+) {
+  await pool.query(
+    `UPDATE cases SET in_world_date = $2, disputed_issues = $3,
+       interview_limit = coalesce($4, interview_limit), interview_limit_per = coalesce($5, interview_limit_per),
+       client_email_limit = coalesce($6, client_email_limit), client_email_limit_per = coalesce($7, client_email_limit_per),
+       updated_at = now()
+     WHERE id = $1`,
+    [
+      caseId,
+      settings.inWorldDate,
+      settings.disputedIssues,
+      settings.interviewLimit?.max ?? null,
+      settings.interviewLimit?.per ?? null,
+      settings.clientEmailLimit?.max ?? null,
+      settings.clientEmailLimit?.per ?? null,
+    ],
+  )
 }

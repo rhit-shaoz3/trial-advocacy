@@ -1088,3 +1088,58 @@ ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_key text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_content_type text;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS proposal_excerpt jsonb;
 ALTER TABLE exhibits ADD COLUMN IF NOT EXISTS agreed text CHECK (agreed IN ('original', 'proposal'));
+
+-- How many times each team (or each student, by `_per`) can use the
+-- background investigator, and interview each AI witness. An interview counts
+-- once it has a question (for a student, once they've asked one in it);
+-- every request to the investigator counts.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_limit integer NOT NULL DEFAULT 2 CHECK (investigator_limit >= 1);
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS investigator_limit_per text NOT NULL DEFAULT 'team'
+  CHECK (investigator_limit_per IN ('team', 'student'));
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS interview_limit integer NOT NULL DEFAULT 2 CHECK (interview_limit >= 1);
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS interview_limit_per text NOT NULL DEFAULT 'team'
+  CHECK (interview_limit_per IN ('team', 'student'));
+
+-- Clients and who owns each case file ----------------------------------------
+
+-- Who would really have each case file: someone outside the case (only a
+-- subpoena or the investigator gets it), one side's team (its clients have
+-- it), or one witness (`owner_witness_id`; they know it, and a client can
+-- hand it over).
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS owner text NOT NULL DEFAULT 'third_party'
+  CHECK (owner IN ('third_party', 'plaintiff', 'defense', 'witness'));
+ALTER TABLE case_materials ADD COLUMN IF NOT EXISTS owner_witness_id uuid REFERENCES case_witnesses (id) ON DELETE SET NULL;
+
+-- A side's clients: witnesses its team can email for information (any
+-- number; together they answer as one client). One can speak for an
+-- organization, like a company's safety manager.
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS is_client boolean NOT NULL DEFAULT false;
+ALTER TABLE case_witnesses ADD COLUMN IF NOT EXISTS speaks_for_organization boolean NOT NULL DEFAULT false;
+
+-- A team's email to its clients (kind 'client_email'): the subject, the body
+-- (in `assignment`), and whom it went to (empty: all of them). Its reply is
+-- reviewed like an investigator's report, and the files the clients write
+-- out are world files with source 'client'.
+ALTER TABLE interview_reviews DROP CONSTRAINT IF EXISTS interview_reviews_kind_check;
+ALTER TABLE interview_reviews ADD CONSTRAINT interview_reviews_kind_check
+  CHECK (kind IN ('interview', 'investigation', 'client_email'));
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS subject text;
+ALTER TABLE interview_reviews ADD COLUMN IF NOT EXISTS to_witness_ids uuid[] NOT NULL DEFAULT '{}';
+ALTER TABLE case_materials DROP CONSTRAINT IF EXISTS case_materials_source_check;
+ALTER TABLE case_materials ADD CONSTRAINT case_materials_source_check
+  CHECK (source IN ('instructor', 'subpoena', 'investigator', 'client'));
+
+-- A team has one email to its clients waiting at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS interview_reviews_one_client_email_idx ON interview_reviews (team_id)
+  WHERE kind = 'client_email' AND status <> 'completed';
+
+-- How many emails each team (or student) can send its clients.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS client_email_limit integer NOT NULL DEFAULT 2 CHECK (client_email_limit >= 1);
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS client_email_limit_per text NOT NULL DEFAULT 'team'
+  CHECK (client_email_limit_per IN ('team', 'student'));
+
+-- A world's own files (from a client or the investigator) can be in the
+-- initial disclosures too; one only the instructor could see goes back to that.
+ALTER TABLE disclosure_items DROP CONSTRAINT IF EXISTS disclosure_items_original_audience_check;
+ALTER TABLE disclosure_items ADD CONSTRAINT disclosure_items_original_audience_check
+  CHECK (original_audience IN ('plaintiff', 'defense', 'instructor'));

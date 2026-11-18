@@ -17,6 +17,7 @@ import {
   Mail,
   MessageSquare,
   Megaphone,
+  PenSquare,
   ScrollText,
   Scale,
   Search,
@@ -45,6 +46,8 @@ import {
   INVESTIGATOR_AVATAR_URL,
   type CaseMaterial,
   type CaseWorkspace,
+  type ClientEmail,
+  type ClientEmailInput,
   type DisclosurePick,
   type ExchangeKind,
   type Investigation,
@@ -71,6 +74,8 @@ import { PhaseSteps } from '../components/PhaseSteps'
 import { Toast, Toasts } from '../components/Toasts'
 import { FlagButton } from './flags'
 import { InvestigatorPanel, InvestigatorReport } from './InvestigatorPanel'
+import { ClientInbox } from './client/ClientInbox'
+import { splitReply } from './client/splitReply'
 import { CaseFileTable } from './CaseFileTable'
 import { CATEGORY_ICON } from './categoryIcons'
 import { ExchangePanel } from './exchange/ExchangePanel'
@@ -110,6 +115,9 @@ export function CaseWorkspaceView({
   investigations,
   onSendInvestigation,
   onOpenInvestigator,
+  clientEmails,
+  onSendClientEmail,
+  onOpenClient,
   exchange,
   onSubmitDisclosures,
   onSendRequest,
@@ -150,6 +158,12 @@ export function CaseWorkspaceView({
   onSendInvestigation?(assignment: string): Promise<void>
   /** Called when the student opens the investigator or a report, to mark the reports read. */
   onOpenInvestigator?(): void
+  /** The team's emails with its clients; leave out (the preview) to show the inbox empty. */
+  clientEmails?: ClientEmail[]
+  /** Emails the team's clients; leave out (the preview) to hide Compose. */
+  onSendClientEmail?(email: ClientEmailInput): Promise<void>
+  /** Called when the student opens the client inbox, to mark the replies read. */
+  onOpenClient?(): void
   /** The team's information exchange; leave out (the preview, or not set up) to hide its tab. */
   exchange?: StudentExchange | null
   onSubmitDisclosures?(picks: DisclosurePick[], heldBackReason: string): Promise<void>
@@ -215,6 +229,15 @@ export function CaseWorkspaceView({
     workspace.investigator === undefined
       ? { name: DEFAULT_INVESTIGATOR_NAME, avatarUrl: INVESTIGATOR_AVATAR_URL }
       : workspace.investigator
+  /** The team's own clients, whom it can email; the client inbox shows only when there are some. */
+  const clients = workspace.witnesses.filter((w) => w.client)
+  const unseenReplies = clientEmails?.filter((e) => e.status === 'completed' && !e.seen).length ?? 0
+  /** Clients to open Compose to, from the dashboard card or a witness's Email button. */
+  const [composeTo, setComposeTo] = useState<string[] | null>(null)
+  const emailClients = (ids: string[]) => {
+    setComposeTo(ids)
+    setTab('client')
+  }
   const exchangeRequests = exchange ? [...(exchange.interrogatories?.requests ?? []), ...(exchange.rfas?.requests ?? [])] : []
   /** Responses to the team's sets that this student hasn't read. */
   const newResponses = exchangeRequests.filter((r) => r.direction === 'sent' && r.respondedAt && !r.seen)
@@ -233,6 +256,7 @@ export function CaseWorkspaceView({
   useEffect(() => {
     if (tab === 'reviews' && unseen > 0) onOpenReviews?.()
     if (tab === 'investigator' && unseenReports > 0) onOpenInvestigator?.()
+    if (tab === 'client' && unseenReplies > 0) onOpenClient?.()
     if (tab === 'exchange' && newResponses.length + newAnswers.length + newNotices.length > 0) onOpenExchange?.()
     if (tab === 'final-steps' && exhibitNews > 0) onOpenExhibits?.()
   }, [
@@ -241,8 +265,10 @@ export function CaseWorkspaceView({
     tab,
     unseen,
     unseenReports,
+    unseenReplies,
     onOpenReviews,
     onOpenInvestigator,
+    onOpenClient,
     newResponses.length,
     newAnswers.length,
     newNotices.length,
@@ -264,6 +290,7 @@ export function CaseWorkspaceView({
     { id: 'overview', label: 'Overview' },
     { id: 'case-file', label: 'Case file', count: materials.length + reports.length },
     { id: 'witnesses', label: 'Witnesses', count: witnesses.length },
+    ...(clients.length ? [{ id: 'client' as const, label: 'Client email', count: unseenReplies }] : []),
     ...(exchange
       ? [{ id: 'exchange' as const, label: 'Information exchange', count: toRespond + newResponses.length + newAnswers.length + newNotices.length }]
       : []),
@@ -300,6 +327,13 @@ export function CaseWorkspaceView({
       <Toasts>
         {unseen > 0 && tab !== 'reviews' && (
           <Toast icon={<Gavel />} title="New review results" action={{ label: 'See results', onClick: () => setTab('reviews') }} />
+        )}
+        {unseenReplies > 0 && tab !== 'client' && (
+          <Toast
+            icon={<Mail />}
+            title={clients.length === 1 ? `New email from ${clients[0].name}` : 'New email from your client'}
+            action={{ label: 'Read email', onClick: () => setTab('client') }}
+          />
         )}
         {investigator && unseenReports > 0 && tab !== 'investigator' && (
           <Toast
@@ -494,6 +528,15 @@ export function CaseWorkspaceView({
                 now={now}
               />
               <CaseTeam workspace={workspace} />
+              {clients.length > 0 && (
+                <ClientCard
+                  clients={clients}
+                  emails={clientEmails}
+                  canCompose={Boolean(onSendClientEmail && team && world && c.status === 'active')}
+                  onOpen={() => setTab('client')}
+                  onCompose={() => emailClients(clients.map((w) => w.id))}
+                />
+              )}
               {c.instructorNote && (
                 <section className="cw-note" aria-labelledby="cw-note">
                   <span id="cw-note" className="cw-note-label">
@@ -559,14 +602,12 @@ export function CaseWorkspaceView({
             sub={
               phaseAtLeast(c.phase, 'deposition')
                 ? `People in ${c.title}. Interview your side's AI witnesses with your partner, and depose the other side's.`
-                : witnesses.some((w) => w.disclosed)
-                  ? `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's disclosed witnesses show here; you can depose them in the deposition phase.`
-                  : `People in ${c.title}. Interview your side's AI witnesses with your partner. The other side's witnesses are revealed in the deposition phase.`
+                : `People in ${c.title}. Interview your side's AI witnesses with your partner. You can depose the other side's witnesses in the deposition phase.`
             }
             empty="No witnesses have been added yet."
           >
             {witnesses.map((w) => {
-              // A witness for the other side: shown only once the deposition phase reveals them.
+              // A witness for the other side: deposed, not interviewed, and only in the deposition phase.
               const theirs = Boolean(workspace.side && w.side && w.side !== workspace.side)
               const action = theirs ? 'Depose' : 'Interview'
               return (
@@ -578,15 +619,34 @@ export function CaseWorkspaceView({
                   {w.description && <p>{w.description}</p>}
                 </div>
                 {theirs && <span className="cw-badge cw-badge-theirs">{WITNESS_FOR[w.side!]}</span>}
-                {w.disclosed ? (
-                  <span className="cw-badge cw-badge-theirs">Disclosed by the other side</span>
-                ) : (
-                  w.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[w.audience]}</span>
+                {w.disclosed && <span className="cw-badge cw-badge-theirs">Disclosed by the other side</span>}
+                {w.client && <span className="cw-badge cw-badge-client">Your client</span>}
+                {w.client && (
+                  <button
+                    type="button"
+                    className="cw-interview"
+                    onClick={() => emailClients([w.id])}
+                    aria-label={`Email ${w.name}`}
+                  >
+                    <Mail aria-hidden="true" />
+                    Email
+                  </button>
                 )}
-                {w.disclosed && (
+                {w.locked && (
                   <span className="cw-interview cw-interview-off" aria-disabled="true">
                     <Lock aria-hidden="true" />
                     Can&rsquo;t interview yet
+                  </span>
+                )}
+                {/* A client the instructor hasn't given an interview file: emailed, but not interviewed yet. */}
+                {w.client && !w.canInterview && !w.locked && (
+                  <span
+                    className="cw-interview cw-interview-off"
+                    aria-disabled="true"
+                    title={`Your instructor hasn't set up interviews with ${w.name} yet. You can email them now.`}
+                  >
+                    <MessageSquare aria-hidden="true" />
+                    Interview
                   </span>
                 )}
                 {w.canInterview &&
@@ -606,6 +666,21 @@ export function CaseWorkspaceView({
               )
             })}
           </ListPanel>
+        )}
+
+        {tab === 'client' && clients.length > 0 && (
+          <ClientInbox
+            clients={clients}
+            emails={clientEmails}
+            limit={workspace.clientEmailLimit}
+            teamName={team && world ? `Team ${team.number}` : null}
+            downloadUrl={downloadUrl}
+            onOpenFile={setViewing}
+            onSend={c.status === 'active' ? onSendClientEmail : undefined}
+            reviewLite={c.reviewMode === 'lite'}
+            composeTo={composeTo}
+            onComposeOpened={() => setComposeTo(null)}
+          />
         )}
 
         {tab === 'investigator' && investigator && (
@@ -864,7 +939,7 @@ function TeamEmail({
         if (file) onOpenFile(file)
       }}
       witnesses={witnesses
-        .filter((w) => !w.disclosed && (w.side === side || (w.side === null && w.audience === side)))
+        .filter((w) => w.side === side)
         .map((w) => (w.role ? `${w.name}, ${w.role.charAt(0).toLowerCase()}${w.role.slice(1)}` : w.name))}
       disclosures={exchange.disclosures !== null}
     />
@@ -1186,6 +1261,68 @@ function CaseTeam({ workspace: { team, world, case: c } }: { workspace: CaseWork
           )}
         </div>
       )}
+    </section>
+  )
+}
+
+/** On the dashboard: the team's clients, the latest message with them, and a way to write. */
+function ClientCard({
+  clients,
+  emails,
+  canCompose,
+  onOpen,
+  onCompose,
+}: {
+  clients: CaseWorkspace['witnesses']
+  emails?: ClientEmail[]
+  canCompose: boolean
+  onOpen(): void
+  onCompose(): void
+}) {
+  const latest = emails?.[0]
+  const unread = emails?.filter((e) => e.status === 'completed' && !e.seen).length ?? 0
+  const waiting = emails?.some((e) => e.status === 'working') ?? false
+  return (
+    <section className="cw-card cw-client-card" aria-labelledby="cw-client" data-tour="client-email">
+      <h2 id="cw-client" className="cw-card-title">
+        Email your client
+        {unread > 0 && <span className="cw-badge cw-badge-new">{unread} new</span>}
+      </h2>
+      <ul className="cw-people">
+        {clients.map((w) => (
+          <li key={w.id}>
+            <WitnessAvatar src={w.avatarUrl} size="sm" />
+            <span className="cw-person-text">
+              <strong>{w.name}</strong>
+              <small>{w.role || 'Client'}</small>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {latest ? (
+        <p className="cw-client-latest">
+          <strong>{latest.status === 'completed' ? `Re: ${latest.subject}` : latest.subject}</strong>
+          <small>
+            {latest.status === 'completed'
+              ? `${splitReply(latest.reply ?? '').headers.from ?? 'Your client'} replied ${shortDate(latest.repliedAt ?? latest.sentAt)}`
+              : `Sent ${shortDate(latest.sentAt)} · waiting for a reply`}
+          </small>
+        </p>
+      ) : (
+        <p className="cw-section-sub">Ask your client for documents and details only they have.</p>
+      )}
+      <div className="cw-client-actions">
+        <button type="button" className="ws-btn ws-btn-secondary" onClick={onOpen}>
+          <Inbox aria-hidden="true" />
+          Open inbox
+        </button>
+        {canCompose && (
+          <button type="button" className="ws-btn ws-btn-primary" onClick={onCompose} disabled={waiting}>
+            <PenSquare aria-hidden="true" />
+            Compose
+          </button>
+        )}
+      </div>
     </section>
   )
 }

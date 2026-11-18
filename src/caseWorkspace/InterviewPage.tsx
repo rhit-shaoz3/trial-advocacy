@@ -137,7 +137,9 @@ export function InterviewPage() {
 
   async function startOver() {
     const who = isInstructor ? 'this test interview' : 'the interview for your whole team'
-    if (!window.confirm(`Start over? This clears ${who}.`)) return
+    const limit = interview?.limit
+    const last = limit && limit.used >= limit.max ? ` It still counts as one of ${limitOwner(limit)} ${limit.max}, so there won't be another.` : ''
+    if (!window.confirm(`Start over? This clears ${who}.${last}`)) return
     setError(null)
     setRestarting(true)
     try {
@@ -204,6 +206,7 @@ export function InterviewPage() {
                 </span>
                 <h1>{witness!.name}</h1>
                 {witness!.role && <p className="iv-role">{witness!.role}</p>}
+                {interview.limit && <p className="iv-limit">{limitLine(interview.limit)}</p>}
               </div>
             </div>
             <div className="iv-header-actions">
@@ -461,4 +464,14 @@ function ExhibitPicker({
       ))}
     </div>
   )
+}
+
+/** "your team's" or "your", for the limit's owner. */
+const limitOwner = (limit: NonNullable<Interview['limit']>) => (limit.per === 'student' ? 'your' : "your team's")
+
+/** "Interview 1 of 2 for your team", counting this one once it has a question. */
+function limitLine(limit: NonNullable<Interview['limit']>) {
+  const who = limit.per === 'student' ? 'for you' : 'for your team'
+  const left = Math.max(0, limit.max - limit.used)
+  return `${limit.used} of ${limit.max} ${limit.max === 1 ? 'interview' : 'interviews'} used ${who} · ${left} left`
 }

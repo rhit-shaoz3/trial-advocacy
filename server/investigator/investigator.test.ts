@@ -58,7 +58,8 @@ describe('the investigator prompt', () => {
     expect(prompt).toContain('These issues must stay genuinely disputed: Whether the driver was distracted')
     expect(prompt).not.toContain('This is a criminal case')
     expect(prompt).not.toContain('{{')
-    expect(prompt).not.toContain('Notes from the instructor')
+    expect(prompt).not.toContain("instructor's instructions")
+    expect(prompt).toContain("Follow this order:\n1. Don't contradict a record")
     // He may watch named witnesses in public, within the limits, and tries to help.
     expect(prompt).toContain('This includes named witnesses and parties')
     expect(prompt).toContain('witness tampering (18 U.S.C. § 1512(d)')
@@ -86,10 +87,14 @@ describe('the investigator prompt', () => {
     )
   })
 
-  it("adds the instructor's own instructions at the end", () => {
-    const prompt = buildInvestigatorPrompt({ ...context, instructions: 'Keep reports under 200 words.' })
-    expect(prompt.trimEnd().endsWith('Keep reports under 200 words.')).toBe(true)
-    expect(prompt).toContain('# Notes from the instructor for this case')
+  it("adds the instructor's own instructions at the end, ahead of every other rule", () => {
+    const prompt = buildInvestigatorPrompt({ ...context, instructions: "He won't follow anyone." })
+    expect(prompt.trimEnd().endsWith("He won't follow anyone.")).toBe(true)
+    expect(prompt).toContain("# Your instructor's instructions for this case\n\nThese come first.")
+    expect(prompt).toContain('If they allow something the rules above forbid, do it; if they forbid something the rules above allow, don\'t.')
+    // They top the order for conflicts, except for the report format.
+    expect(prompt).toContain("Follow this order:\n0. The instructor's instructions for this case")
+    expect(prompt).toContain('1. Don\'t contradict a record')
   })
 
   it('tells people from organizations', () => {
@@ -163,7 +168,7 @@ describe("the team's clean report", () => {
   it('drops the source tags without asking the AI when nothing was turned down', async () => {
     const create = vi.fn()
     const report = await finalizeReport({ messages: { create } } as EditClient, {
-      investigatorName: 'Nora Vance',
+      author: 'Nora Vance',
       body: parseReport(REPORT).body,
       deniedFacts: [],
       deniedTitles: [],
@@ -181,7 +186,7 @@ describe("the team's clean report", () => {
       stop_reason: 'end_turn',
       content: [{ type: 'text', text: '1. I photographed the intersection. [NEW FACT]' }],
     })
-    const input = { investigatorName: 'Nora Vance', body: 'report', deniedFacts: ['The camera points south.'], deniedTitles: ['Maintenance log'] }
+    const input = { author: 'Nora Vance', body: 'report', deniedFacts: ['The camera points south.'], deniedTitles: ['Maintenance log'] }
     const report = await finalizeReport({ messages: { create } } as unknown as EditClient, input)
 
     expect(report).toBe('1. I photographed the intersection.')

@@ -19,7 +19,10 @@ export const stripTags = (body: string) =>
     .trim()
 
 export interface FinalizeInput {
-  investigatorName: string
+  /** Who wrote it: the investigator, or the client replying. */
+  author: string
+  /** An investigator's report (the default), or a client's email back to the team. */
+  kind?: 'report' | 'email'
   /** The report without its review block. */
   body: string
   deniedFacts: string[]
@@ -48,6 +51,20 @@ Then:
 
 Write only the edited report, in plain text, with no notes about your changes.`
 
+const EMAIL_INSTRUCTIONS = `You edit a client's email to the lawyers representing them before the lawyers read it. The lawyers' instructor has reviewed the email and turned some things down. Remove them, and change nothing else.
+
+Remove:
+- every statement of a fact the instructor denied (listed below), and anything that depends on it
+- every mention of a document the lawyers may not have (listed below): its contents, its title, any line saying it's attached, and its line under "Attachments:". If no attachments are left, remove the "Attachments:" heading too.
+
+Then:
+- Keep every other sentence word for word, in the client's own voice, with the From, To, Date and Subject lines as they are.
+- Keep the email reading naturally: if removing something leaves a dangling sentence or a numbered answer with nothing in it, drop that too.
+- Remove any tag lines such as EXISTING_DOCUMENT: or NEW_DOCUMENT:.
+- If nothing is left to say, write one short line from the client saying they don't have anything more on this right now, and sign it as they would.
+
+Write only the edited email, in plain text, with no notes about your changes.`
+
 export function buildFinalizeRequest(
   input: FinalizeInput,
   model = modelFor('review'),
@@ -56,11 +73,11 @@ export function buildFinalizeRequest(
   return {
     model,
     max_tokens: 8000,
-    system: INSTRUCTIONS,
+    system: input.kind === 'email' ? EMAIL_INSTRUCTIONS : INSTRUCTIONS,
     messages: [
       {
         role: 'user',
-        content: `Investigator: ${input.investigatorName}
+        content: `${input.kind === 'email' ? 'Client' : 'Investigator'}: ${input.author}
 
 <denied_facts>
 ${list(input.deniedFacts)}
@@ -70,9 +87,9 @@ ${list(input.deniedFacts)}
 ${list(input.deniedTitles)}
 </documents_the_team_may_not_have>
 
-<report>
+<${input.kind === 'email' ? 'email' : 'report'}>
 ${input.body}
-</report>`,
+</${input.kind === 'email' ? 'email' : 'report'}>`,
       },
     ],
   }

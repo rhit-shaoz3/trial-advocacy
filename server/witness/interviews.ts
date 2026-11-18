@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { ai, AiNotConfiguredError } from '../ai/ai.ts'
 import { avatarUrlSql } from '../auth/users.ts'
 import type { Witness } from '../courses/caseContent.ts'
-import type { CourseCase } from '../courses/cases.ts'
+import type { CourseCase, InteractionLimit } from '../courses/cases.ts'
 import type { Side } from '../courses/matchups.ts'
 import { pool } from '../db/pool.ts'
 import { HttpError } from '../httpError.ts'
@@ -20,6 +20,9 @@ import { depositionSettings, isAiWitness, loadProfile, WitnessNotReadyError } fr
 // interview" does the same but first sends it to the instructor for review.
 // A team's interview lasts at most an hour from its first question (so one
 // cached copy of the case file covers it); then it ends and goes for review.
+// The instructor limits how many interviews each team (or each student) has
+// with each witness: one counts once it has a question (for a student, once
+// they've asked one in it), so opening and starting over an empty one is free.
 
 export const MAX_QUESTION_LENGTH = 2000
 /** Keeps a runaway interview from growing the prompt (and the bill) without end. */
@@ -61,6 +64,8 @@ export interface Interview {
   notice: string | null
   /** Review lite: an ended interview's new facts stand without the instructor. */
   reviewLite?: boolean
+  /** A team's interviews with this witness, against the instructor's limit (this one included once it counts). Null for instructor tests. */
+  limit: (InteractionLimit & { used: number }) | null
 }
 
 const UNIQUE_VIOLATION = '23505'
@@ -103,6 +108,32 @@ async function listTurns(interviewId: string) {
   return rows
 }
 
+/** Who the limit counts: the team, and for a per-student limit the asker. */
+interface LimitOwner {
+  teamId: string
+  userId: string
+  limit: InteractionLimit
+}
+
+/** The team's (or student's) counted interviews with the witness: the others, and whether this one counts yet. */
+async function interviewsUsed(witnessId: string, owner: LimitOwner, interviewId: string) {
+  const { rows } = await pool.query<{ others: number; current: boolean }>(
+    `SELECT count(*) FILTER (WHERE i.id <> $3)::int AS others, coalesce(bool_or(i.id = $3), false) AS current
+     FROM interviews i
+     WHERE i.witness_id = $1 AND i.team_id = $2
+       AND EXISTS (SELECT 1 FROM interview_turns t WHERE t.interview_id = i.id AND ($4::uuid IS NULL OR t.asked_by = $4))`,
+    [witnessId, owner.teamId, interviewId, owner.limit.per === 'student' ? owner.userId : null],
+  )
+  return rows[0]
+}
+
+function limitNotice(witness: Witness, limit: InteractionLimit) {
+  const times = limit.max === 1 ? 'interview' : `${limit.max} interviews`
+  return limit.per === 'student'
+    ? `You've used your ${times} with ${witness.name}.`
+    : `Your team has used its ${times} with ${witness.name}.`
+}
+
 function notice(witness: Witness, closed: boolean) {
   if (closed) return 'This case is closed, so the interview can no longer continue.'
   if (!isAiWitness(witness)) return `${witness.name} isn't available for interviews yet.`
@@ -143,9 +174,22 @@ export async function endExpiredInterviews(now = new Date()) {
   return rows.length
 }
 
-async function view(witness: Witness, owner: InterviewOwner, interviewId: string, closed: boolean): Promise<Interview> {
-  const turns = await listTurns(interviewId)
-  const reason = notice(witness, closed) ?? (turns.length >= MAX_TURNS ? 'This interview has reached its question limit. Start over to begin a new one.' : null)
+async function view(
+  witness: Witness,
+  owner: InterviewOwner,
+  interviewId: string,
+  closed: boolean,
+  limited: LimitOwner | null = null,
+): Promise<Interview> {
+  const [turns, used] = await Promise.all([
+    listTurns(interviewId),
+    limited ? interviewsUsed(witness.id, limited, interviewId) : null,
+  ])
+  const overLimit = limited && used && !used.current && used.others >= limited.limit.max
+  const reason =
+    notice(witness, closed) ??
+    (overLimit ? limitNotice(witness, limited.limit) : null) ??
+    (turns.length >= MAX_TURNS ? 'This interview has reached its question limit. Start over to begin a new one.' : null)
   return {
     id: interviewId,
     side: owner.side,
@@ -164,6 +208,7 @@ async function view(witness: Witness, owner: InterviewOwner, interviewId: string
     endsAt: deadline(owner, turns),
     canAsk: reason === null,
     notice: reason,
+    limit: limited && used ? { ...limited.limit, used: used.others + (used.current ? 1 : 0) } : null,
   }
 }
 
@@ -171,6 +216,7 @@ export interface InterviewContext {
   courseCase: Pick<CourseCase, 'id' | 'title' | 'summary' | 'inWorldDate' | 'disputedIssues' | 'importantFacts'> & {
     parties?: CourseCase['parties']
     reviewMode?: CourseCase['reviewMode']
+    interviewLimit?: CourseCase['interviewLimit']
   }
   witness: Witness
   owner: InterviewOwner
@@ -216,10 +262,16 @@ function readExhibits(ctx: InterviewContext, body: unknown): Exhibit[] {
   })
 }
 
+/** For a team's interview, whom the instructor's limit counts. */
+const limitOwner = (ctx: InterviewContext): LimitOwner | null =>
+  ctx.owner.teamId && ctx.courseCase.interviewLimit
+    ? { teamId: ctx.owner.teamId, userId: ctx.userId, limit: ctx.courseCase.interviewLimit }
+    : null
+
 /** The open interview (a fresh one if the last ran out of time). */
 export async function getInterview(ctx: InterviewContext): Promise<Interview> {
   const interviewId = await openInterview(ctx.witness.id, ctx.owner, ctx.userId)
-  const current = await view(ctx.witness, ctx.owner, interviewId, ctx.closed)
+  const current = await view(ctx.witness, ctx.owner, interviewId, ctx.closed, limitOwner(ctx))
   if (current.endsAt && current.endsAt <= new Date() && !ctx.closed) {
     await closeInterview(interviewId, ctx.owner.teamId)
     return getInterview(ctx)
@@ -268,7 +320,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
   }
   const asked = withExhibits(question, readExhibits(ctx, body))
   const interviewId = await openInterview(ctx.witness.id, ctx.owner, ctx.userId)
-  const before = await view(ctx.witness, ctx.owner, interviewId, ctx.closed)
+  const before = await view(ctx.witness, ctx.owner, interviewId, ctx.closed, limitOwner(ctx))
   if (!before.canAsk) throw new HttpError(409, before.notice!)
   if (before.endsAt && before.endsAt <= new Date()) {
     await closeInterview(interviewId, ctx.owner.teamId)
@@ -322,5 +374,5 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
     throw err
   }
   if (ctx.owner.teamId) queueClaims(interviewId)
-  return { ...(await view(ctx.witness, ctx.owner, interviewId, ctx.closed)), exhibits: ctx.exhibits }
+  return { ...(await view(ctx.witness, ctx.owner, interviewId, ctx.closed, limitOwner(ctx))), exhibits: ctx.exhibits }
 }

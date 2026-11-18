@@ -3,7 +3,7 @@ import { Clock, Download, FileText, Lock, Mail, Paperclip, Send } from 'lucide-r
 import type { ViewableFile } from '../components/FileViewer'
 import { WitnessAvatar } from '../components/WitnessAvatar'
 import { fileTypeLabel, formatSize, shortDate } from '../courses/caseLabels'
-import type { Investigation } from '../courses/types'
+import type { InteractionLimit, Investigation } from '../courses/types'
 import { DictationTextarea } from '../components/Dictation'
 import { FlagButton } from './flags'
 
@@ -21,7 +21,8 @@ const WHAT_HE_DOES = [
 /**
  * The case's background investigator, for a team: who he is and what he can
  * do, the reports he's sent back (after the instructor's review), and an
- * email to send him the next assignment. Locked until the investigate phase.
+ * email to send him the next assignment, while the instructor's limit allows.
+ * Locked until the investigate phase.
  */
 export function InvestigatorPanel({
   investigator,
@@ -33,7 +34,7 @@ export function InvestigatorPanel({
   onSend,
   reviewLite,
 }: {
-  investigator: { name: string; avatarUrl: string }
+  investigator: { name: string; avatarUrl: string; limit?: InteractionLimit }
   available: boolean
   /** "Team 3", or null before the team is matched. */
   teamName: string | null
@@ -50,6 +51,10 @@ export function InvestigatorPanel({
   const reports = investigations?.filter((i) => i.status === 'completed') ?? []
   const working = investigations?.find((i) => i.status === 'working')
   const [latest, ...earlier] = reports
+  const limit = investigator.limit
+  // Every request counts, the team's or (per student) this student's.
+  const used = limit && investigations ? investigations.filter((i) => limit.per === 'team' || i.mine).length : 0
+  const usedUp = Boolean(limit && used >= limit.max)
 
   return (
     <section className="cw-card cw-investigator" aria-labelledby="cw-investigator-title">
@@ -113,8 +118,21 @@ export function InvestigatorPanel({
 
           {latest && <InvestigatorReport investigation={latest} downloadUrl={downloadUrl} onOpenFile={onOpenFile} latest />}
 
-          {onSend && !working && teamName && (
+          {limit && investigations && teamName && (
+            <p className="cw-investigator-limit">
+              {used} of {limit.max} {limit.max === 1 ? 'request' : 'requests'} used{' '}
+              {limit.per === 'student' ? 'by you' : 'by your team'} · {Math.max(0, limit.max - used)} left
+            </p>
+          )}
+          {onSend && !working && teamName && !usedUp && (
             <InvestigatorEmail name={investigator.name} teamName={teamName} onSend={onSend} reviewLite={reviewLite} />
+          )}
+          {onSend && !working && teamName && usedUp && (
+            <p className="cw-empty">
+              {limit!.per === 'student' ? 'You’ve' : 'Your team has'} used{' '}
+              {limit!.max === 1 ? 'the one request' : `all ${limit!.max} requests`} your instructor allows to{' '}
+              {investigator.name}.
+            </p>
           )}
           {!teamName && <p className="cw-empty">Your team can email the investigator once it&rsquo;s in a case world.</p>}
 

@@ -751,3 +751,20 @@
   padding: 0;
   border: none;
 }
+
+/* A client email's card has an envelope where an interview has the witness. */
+.review-email-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.review-email-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}

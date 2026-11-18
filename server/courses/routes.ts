@@ -2,6 +2,7 @@ import { Router, type Request, type RequestHandler } from 'express'
 import { requireUser } from '../auth/requireUser.ts'
 import { HttpError } from '../httpError.ts'
 import { isUuid, readString } from '../validation.ts'
+import { sendClientEmail, teamClientEmails, type ClientEmailContext } from '../client/emails.ts'
 import {
   createCourse,
   deleteCourse,
@@ -262,8 +263,8 @@ async function teamInterview(req: Request): Promise<InterviewContext> {
   const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
   const seen = isUuid(witnessId) ? workspace.witnesses.find((w) => w.id === witnessId) : undefined
   if (!seen) throw new HttpError(404, 'Witness not found.')
-  // The other side's disclosed witnesses show by name, but only deposition opens them.
-  if (seen.disclosed) throw new HttpError(409, "You can depose the other side's witnesses in the deposition phase.")
+  // The other side's witnesses show by name, but only deposition opens them.
+  if (seen.locked) throw new HttpError(409, "You can depose the other side's witnesses in the deposition phase.")
   const teamId = await findStudentTeamId(caseId, req.user!.id)
   if (!teamId || !workspace.side) throw new HttpError(409, 'Your team needs a case world before it can interview witnesses.')
   const [courseCase, witness, world] = await Promise.all([
@@ -349,7 +350,7 @@ async function teamInvestigation(req: Request, sending: boolean): Promise<Invest
   }
   if (workspace.case.status !== 'active') throw new HttpError(409, 'This case is closed, so the investigator has finished.')
   if (!teamId || !world) throw new HttpError(409, 'Your team needs a case world before it can hire the investigator.')
-  return { caseId, teamId, ...world, userId: req.user!.id }
+  return { caseId, teamId, ...world, userId: req.user!.id, limit: workspace.investigator.limit }
 }
 
 /** The team's requests to the background investigator, newest first, with the reports that are back. */
@@ -368,6 +369,42 @@ coursesRouter.post('/:courseId/my-cases/:caseId/investigator/requests', async (r
 coursesRouter.post('/:courseId/my-cases/:caseId/investigator/seen', async (req, res) => {
   const ctx = await teamInvestigation(req, false)
   if (ctx) await markReviewsSeen(ctx.caseId, ctx.teamId, ctx.userId, 'investigation')
+  res.status(204).end()
+})
+
+/**
+ * Who's emailing the team's clients: the student's team, in its case world
+ * (the side comes from the world, never the request). 409 unless the case is
+ * open and the team is matched; whether the side has clients is checked on send.
+ */
+async function teamClientEmail(req: Request, sending: boolean): Promise<ClientEmailContext | null> {
+  const { courseId, caseId } = req.params as Record<string, string>
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  const world = teamId ? await findTeamWorld(teamId) : null
+  const ctx = teamId && world ? { caseId, teamId, ...world, userId: req.user!.id, limit: workspace.clientEmailLimit } : null
+  if (!sending) return ctx
+  if (workspace.case.status !== 'active') throw new HttpError(409, 'This case is closed, so your client email is closed too.')
+  if (!ctx) throw new HttpError(409, 'Your team can email its client once it is in a case world.')
+  return ctx
+}
+
+/** The team's emails with its clients, newest first, with the replies that are back. */
+coursesRouter.get('/:courseId/my-cases/:caseId/client', async (req, res) => {
+  const ctx = await teamClientEmail(req, false)
+  res.json({ emails: ctx ? await teamClientEmails(ctx.caseId, ctx.teamId, ctx.userId) : [] })
+})
+
+/** Emails the team's clients `{ to, subject, body }`; the reply reaches the team after the instructor's review. */
+coursesRouter.post('/:courseId/my-cases/:caseId/client/emails', async (req, res) => {
+  const ctx = (await teamClientEmail(req, true))!
+  res.status(201).json({ emails: await sendClientEmail(ctx, req.body) })
+})
+
+/** Marks the team's client replies as read by this student. */
+coursesRouter.post('/:courseId/my-cases/:caseId/client/seen', async (req, res) => {
+  const ctx = await teamClientEmail(req, false)
+  if (ctx) await markReviewsSeen(ctx.caseId, ctx.teamId, ctx.userId, 'client_email')
   res.status(204).end()
 })
 

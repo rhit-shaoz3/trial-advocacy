@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowRight, Check, PartyPopper, Share2 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useCourseService } from '../../../courses/CourseServiceContext'
@@ -7,6 +7,7 @@ import { MaterialsSection } from '../content/MaterialsSection'
 import { TasksSection } from '../content/TasksSection'
 import { InvestigatorSection } from '../content/InvestigatorSection'
 import { WitnessesSection } from '../content/WitnessesSection'
+import type { StepSave } from '../content/stepSave'
 import { cleanFacts, toRows } from '../factRows'
 import { ImportantFactsField } from '../ImportantFactsField'
 import { TeamsSection } from '../TeamsSection'
@@ -15,6 +16,8 @@ import '../copyCase.css'
 import { PartyFields } from '../CaseForm'
 import { titleParties } from '../../../courses/worldLabel'
 import { DictationTextarea } from '../../../components/Dictation'
+import { HelpToggle } from '../../../components/HelpToggle'
+import { SETUP_HELP } from './stepHelp'
 
 const STEP_LABEL: Record<SetupStep, string> = {
   details: 'Details',
@@ -32,7 +35,7 @@ const STEP_HINT: Record<SetupStep, string> = {
   facts:
     'The most important facts for each side. The AI witnesses never contradict them, and students don’t see them. You can skip this for now, but the case can’t launch until each side has at least one.',
   files:
-    'Upload the documents, photos and recordings in the case, and choose who sees each. Make one the initial file: every team starts from it, and the case can’t launch without one.',
+    'Upload the documents, photos and recordings in the case, and choose who sees each. Make one the initial file: every team starts from it, and the case can’t launch without one. Files you add upload when you press Next.',
   teams: 'Put students into teams for this case. Drag them in, or make teams automatically.',
   worlds: 'Set teams against each other in case worlds: one team for the plaintiff, one for the defense.',
   witnesses: 'Add the people in the case. With a side and a deposition file, a witness becomes an AI witness teams can interview.',
@@ -82,6 +85,8 @@ export function CaseSetupFlow({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [finished, setFinished] = useState(false)
+  /** The step's unsaved work (files waiting to upload, investigator changes), saved by Next. */
+  const stepSave = useRef<StepSave>(null)
 
   const index = steps.indexOf(step)
   const last = index === steps.length - 1
@@ -116,6 +121,17 @@ export function CaseSetupFlow({
     } finally {
       setBusy(false)
     }
+  }
+
+  /** Next: saves what the step is holding first, so nothing added is lost. */
+  function next() {
+    const pending = stepSave.current
+    void advance(pending ? async () => (await pending.save()) ?? courseCase! : undefined)
+  }
+
+  function skip() {
+    if (stepSave.current?.pending() && !window.confirm('Skip without saving? What you added on this step will be lost.')) return
+    void advance()
   }
 
   if (finished && courseCase) return <SetupDone title={courseCase.title} onExit={onExit} />
@@ -170,6 +186,7 @@ export function CaseSetupFlow({
           {/* The later steps reuse the case page's sections, which bring their own heading. */}
           {OWN_HEADING.includes(step) && <h2>{STEP_LABEL[step]}</h2>}
           <p className="muted">{STEP_HINT[step]}</p>
+          <HelpToggle label="What is this step for?">{SETUP_HELP[step]}</HelpToggle>
         </div>
 
         {step === 'details' && (
@@ -217,7 +234,7 @@ export function CaseSetupFlow({
         )}
         {courseCase && !['details', 'facts'].includes(step) && (
           <>
-            {step === 'files' && <MaterialsSection courseId={courseId} caseId={courseCase.id} onChange={onContentChange} />}
+            {step === 'files' && <MaterialsSection courseId={courseId} caseId={courseCase.id} onChange={onContentChange} saveRef={stepSave} />}
             {step === 'teams' && (
               <TeamsSection courseId={courseId} caseId={courseCase.id} closed={false} onChange={onContentChange} part="teams" />
             )}
@@ -228,14 +245,14 @@ export function CaseSetupFlow({
               <WitnessesSection courseId={courseId} courseCase={courseCase} onCaseChange={onCaseChange} />
             )}
             {step === 'investigator' && (
-              <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={onCaseChange} />
+              <InvestigatorSection courseId={courseId} courseCase={courseCase} onSaved={onCaseChange} saveRef={stepSave} />
             )}
             {step === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
             <SetupFooter error={error}>
-              <button type="button" className="setup-skip" onClick={() => advance()} disabled={busy}>
+              <button type="button" className="setup-skip" onClick={skip} disabled={busy}>
                 Skip for now
               </button>
-              <button type="button" className="setup-next" onClick={() => advance()} disabled={busy}>
+              <button type="button" className="setup-next" onClick={next} disabled={busy}>
                 {last ? 'Finish' : 'Next'}
                 {!last && <ArrowRight aria-hidden="true" />}
               </button>

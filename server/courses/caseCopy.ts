@@ -43,19 +43,21 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
     await client.query(
       `INSERT INTO cases (id, course_id, title, summary, status, phase, instructor_note, disputed_issues,
          plaintiff_key_facts, defense_key_facts, plaintiff_name, defendant_name,
-         investigator_enabled, investigator_name, investigator_instructions, review_mode, exhibit_list_enabled, exhibit_judicial_review,
+         investigator_enabled, investigator_name, investigator_instructions, investigator_limit, investigator_limit_per,
+         interview_limit, interview_limit_per, client_email_limit, client_email_limit_per, review_mode, exhibit_list_enabled, exhibit_judicial_review,
          setup_step, setup_completed_at, witness_suggestions_done_at, copy_setup, copied_from_title, copied_from_name)
        SELECT $2, $3, $4, summary, 'draft', 'introduction', instructor_note, disputed_issues,
          plaintiff_key_facts, defense_key_facts, plaintiff_name, defendant_name,
-         investigator_enabled, investigator_name, investigator_instructions, review_mode, exhibit_list_enabled, exhibit_judicial_review,
+         investigator_enabled, investigator_name, investigator_instructions, investigator_limit, investigator_limit_per,
+         interview_limit, interview_limit_per, client_email_limit, client_email_limit_per, review_mode, exhibit_list_enabled, exhibit_judicial_review,
          'worlds', NULL, now(), true, title, $5
        FROM cases WHERE id = $1`,
       [sourceCaseId, newCaseId, targetCourseId, title, sourceRows[0].owner],
     )
 
     // The instructor's case files, not files generated in play (a world's subpoena responses).
-    const { rows: materials } = await client.query<{ id: string; storageKey: string | null }>(
-      `SELECT id, storage_key AS "storageKey" FROM case_materials
+    const { rows: materials } = await client.query<{ id: string; storageKey: string | null; ownerWitnessId: string | null }>(
+      `SELECT id, storage_key AS "storageKey", owner_witness_id AS "ownerWitnessId" FROM case_materials
        WHERE case_id = $1 AND source = 'instructor' AND matchup_id IS NULL ORDER BY uploaded_at`,
       [sourceCaseId],
     )
@@ -71,9 +73,9 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
       // The text the AI read comes along, so nothing is read again.
       await client.query(
         `INSERT INTO case_materials (id, case_id, audience, filename, description, content_type, size_bytes, data,
-           storage_key, uploaded_by, uploaded_at, text_status, text_content, text_error, initial, source)
+           storage_key, uploaded_by, uploaded_at, text_status, text_content, text_error, initial, source, owner)
          SELECT $2, $3, CASE WHEN initial THEN 'all' ELSE 'instructor' END, filename, description, content_type,
-           size_bytes, data, $4, $5, uploaded_at, text_status, text_content, text_error, initial, source
+           size_bytes, data, $4, $5, uploaded_at, text_status, text_content, text_error, initial, source, owner
          FROM case_materials WHERE id = $1`,
         [m.id, id, newCaseId, key, actorId],
       )
@@ -102,10 +104,11 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
         copiedKeys.push(avatarKey)
       }
       await client.query(
-        `INSERT INTO case_witnesses (id, case_id, name, role, description, audience, created_at, aligned_side,
-           persona_notes, deposition_material_id, known_material_ids, defending_counsel, avatar_preset, avatar_key)
-         SELECT $2, $3, name, role, description, audience, created_at, aligned_side,
-           persona_notes, $4, $5, defending_counsel, avatar_preset, $6
+        `INSERT INTO case_witnesses (id, case_id, name, role, description, hidden, created_at, aligned_side,
+           persona_notes, deposition_material_id, known_material_ids, defending_counsel, avatar_preset, avatar_key,
+           is_client, speaks_for_organization)
+         SELECT $2, $3, name, role, description, hidden, created_at, aligned_side,
+           persona_notes, $4, $5, defending_counsel, avatar_preset, $6, is_client, speaks_for_organization
          FROM case_witnesses WHERE id = $1`,
         [
           w.id,
@@ -116,6 +119,15 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
           avatarKey,
         ],
       )
+    }
+
+    // A witness's own files go to the copied witness (the witnesses are copied after the files).
+    for (const m of materials) {
+      if (!m.ownerWitnessId) continue
+      await client.query('UPDATE case_materials SET owner_witness_id = $2 WHERE id = $1', [
+        materialIds.get(m.id),
+        witnessIds.get(m.ownerWitnessId) ?? null,
+      ])
     }
 
     if (options.includeTasks) {

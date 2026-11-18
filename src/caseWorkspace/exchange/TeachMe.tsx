@@ -5,7 +5,7 @@ import { TeachBulb } from './TeachMeButton'
 import { SUBPOENA_TYPE_LABEL } from '../../courses/subpoenaForm'
 import { FEDERAL, type PartSettings, type SubpoenaType } from '../../courses/types'
 
-export type TeachTopic = 'disclosures' | 'subpoenas' | 'interrogatories' | 'rfas' | 'exhibits'
+export type TeachTopic = 'disclosures' | 'subpoenas' | 'interrogatories' | 'rfas' | 'exhibits' | 'client'
 
 /**
  * The "Teach me" guide for one part of the information exchange: the rule
@@ -30,6 +30,76 @@ export function TeachMe({
       Got it
     </button>
   )
+  if (topic === 'client') {
+    return (
+      <Modal eyebrow="Teach me · FRE 501 and 502" title="What can your client get you?" icon={<TeachBulb />} from={from} onClose={onClose} footer={close}>
+        <div className="teach">
+          <p>
+            Your client usually knows more about the case than anyone, and has records nobody else does. Email them early,
+            and be specific: who, what, when, and what you want them to send.
+          </p>
+          <h3>What clients can give you</h3>
+          <ul className="teach-types">
+            <li>
+              <strong>Their own records.</strong> Receipts, bills, calendars, notes, photos and videos they took, and (for a
+              company) its business records: logs, policies, emails, reports.
+            </li>
+            <li>
+              <strong>Their communications.</strong> Texts, emails, and messages they sent or received.
+            </li>
+            <li>
+              <strong>What they know.</strong> Their background and routines, what happened before and after, and who else
+              might know something.
+            </li>
+          </ul>
+          <Fact icon={<Lock />}>
+            Your client can&rsquo;t give you what they don&rsquo;t have: the other side&rsquo;s internal files, or records a
+            third party keeps, like a hospital chart or a bank&rsquo;s records. For those, use a subpoena or a discovery
+            request.
+          </Fact>
+          <h3>It&rsquo;s in writing</h3>
+          <p>
+            Confidential messages between you and your client to get or give legal advice are usually protected by the
+            attorney&ndash;client privilege. In federal court that&rsquo;s federal common law under FRE 501, though state
+            law governs it in a civil case where state law decides the claim (a diversity case, say). A company&rsquo;s
+            employees can be inside the privilege too (<em>Upjohn Co. v. United States</em>, 449 U.S. 383 (1981)).
+          </p>
+          <div className="teach-pair">
+            <div className="teach-risk teach-risk-amber">
+              <strong>
+                <TriangleAlert aria-hidden="true" /> The documents aren&rsquo;t privileged
+              </strong>
+              <p>
+                A receipt, text, or photo that already existed doesn&rsquo;t become privileged because your client sent it
+                to you. If it&rsquo;s relevant, the other side can get it in discovery (FRCP 26(b)(1) and 34).
+              </p>
+            </div>
+            <div className="teach-risk teach-risk-rose">
+              <strong>
+                <Lock aria-hidden="true" /> Neither are the facts
+              </strong>
+              <p>
+                The privilege protects what you and your client said, not the facts themselves. The other side can still
+                ask your client about them, in interrogatories or at a deposition.
+              </p>
+            </div>
+          </div>
+          <Tips
+            tips={[
+              'Assume anything your client sends you may be produced. Ask for what you need, not everything they have.',
+              'If you withhold something as privileged, you have to list it on a privilege log (FRCP 26(b)(5)(A)).',
+              'Don’t forward your client’s emails to anyone outside the case. Sharing a privileged message can waive the privilege; FRE 502 limits how far a waiver reaches, and when a mistaken disclosure doesn’t count.',
+              'Documents prepared for the case, by you or for you, may be protected as work product (FRCP 26(b)(3)).',
+            ]}
+          />
+          <p className="teach-note">
+            In this case, your instructor reviews your client&rsquo;s replies first, and a document they send you becomes
+            part of your case world&rsquo;s file.
+          </p>
+        </div>
+      </Modal>
+    )
+  }
   if (topic === 'exhibits') {
     return (
       <Modal eyebrow="Teach me · FRCP 26(a)(3)" title="What is an exhibit list?" icon={<TeachBulb />} from={from} onClose={onClose} footer={close}>

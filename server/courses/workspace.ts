@@ -10,7 +10,7 @@ import {
   type MaterialViewer,
   type Witness,
 } from './caseContent.ts'
-import { phaseAtLeast, type CasePhase } from './cases.ts'
+import { phaseAtLeast, type CasePhase, type InteractionLimit } from './cases.ts'
 import {
   disclosedWitnessIds,
   findSubmission,
@@ -24,41 +24,28 @@ import { listTeams } from './teams.ts'
 import { isAiWitness } from '../witness/profile.ts'
 
 /** What students see of a witness: never its AI setup (deposition file, persona, files it has seen). */
-export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'audience' | 'avatarUrl'> & {
+export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'avatarUrl'> & {
   /** The side the witness testifies for, or null for neither. */
   side: Side | null
   /** Whether the witness is an AI witness the team can interview. */
   canInterview: boolean
-  /** The other side's witness, shown because the instructor disclosed them; not to be interviewed yet. */
+  /** The other side's witness, which the team can't interview until the deposition phase. */
+  locked: boolean
+  /** The other side's witness, in the initial disclosures the instructor made for that side. */
   disclosed: boolean
+  /** One of the team's own clients, whom it can email. */
+  client: boolean
 }
 
 /**
- * The witnesses a team on `side` can see in `phase`. Until the deposition
- * phase, a witness for one side is hidden from the other, and the rest follow
- * their audience, except that after the introduction phase the witnesses in
- * the instructor's initial disclosures show to both sides. In deposition,
- * every witness is revealed to both sides. With no side yet, only shared
- * witnesses with no side show.
+ * The witnesses students see: every one the instructor hasn't hidden, on both
+ * sides and in every phase.
  */
-export function visibleWitnesses<W extends Pick<Witness, 'id' | 'audience' | 'alignedSide'>>(
-  witnesses: W[],
-  side: Side | null,
-  phase: CasePhase,
-  disclosed: ReadonlySet<string> = new Set(),
-) {
-  if (phaseAtLeast(phase, 'deposition')) return witnesses
-  const audiences: string[] = visibleTo(side)
-  return witnesses.filter(
-    (w) =>
-      (audiences.includes(w.audience) && (w.alignedSide === null || w.alignedSide === side)) ||
-      (side !== null && requestsOpen(phase) && disclosed.has(w.id)),
-  )
-}
+export const visibleWitnesses = <W extends Pick<Witness, 'hidden'>>(witnesses: W[]) => witnesses.filter((w) => !w.hidden)
 
-/** Whether a team on `side` can interview a witness it can see: the other side's only in deposition. */
-export const interviewable = (w: Pick<Witness, 'alignedSide' | 'audience'>, side: Side | null, phase: CasePhase) =>
-  phaseAtLeast(phase, 'deposition') || !side || (w.alignedSide ?? (w.audience === 'all' ? side : w.audience)) === side
+/** Whether a team on `side` can interview a witness: the other side's only in deposition. */
+export const interviewable = (w: Pick<Witness, 'alignedSide'>, side: Side | null, phase: CasePhase) =>
+  phaseAtLeast(phase, 'deposition') || !side || !w.alignedSide || w.alignedSide === side
 
 // Shape sent to the client; matches `CaseWorkspace` in src/courses/types.ts.
 export interface CaseWorkspace {
@@ -82,10 +69,12 @@ export interface CaseWorkspace {
   side: Side | null
   materials: CaseMaterial[]
   witnesses: WorkspaceWitness[]
-  /** The case's background investigator, or null if it has none. */
-  investigator: { name: string; avatarUrl: string } | null
+  /** The case's background investigator, or null if it has none; `limit` is how many requests each team (or student) can send. */
+  investigator: { name: string; avatarUrl: string; limit: InteractionLimit } | null
   /** Whether the background investigator is open yet (from the investigate phase on). */
   investigatorAvailable: boolean
+  /** How many emails each team (or student) can send its clients (the clients are the witnesses marked `client`). */
+  clientEmailLimit: InteractionLimit
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady: boolean
   /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
@@ -108,6 +97,8 @@ export const INVESTIGATOR_AVATAR_URL = '/investigator.png'
 type CaseRow = CaseWorkspace['case'] & {
   investigatorEnabled: boolean
   investigatorName: string
+  investigatorLimit: InteractionLimit
+  clientEmailLimit: InteractionLimit
   exchangeReady: boolean
   exhibitListEnabled: boolean
   exhibitJudicialReview: boolean
@@ -119,6 +110,8 @@ async function findCaseRow(courseId: string, caseId: string) {
             json_build_object('plaintiff', plaintiff_name, 'defendant', defendant_name) AS parties,
             review_mode AS "reviewMode", phase_entered_at AS "phaseEnteredAt",
             investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName",
+            json_build_object('max', investigator_limit, 'per', investigator_limit_per) AS "investigatorLimit",
+            json_build_object('max', client_email_limit, 'per', client_email_limit_per) AS "clientEmailLimit",
             exhibit_list_enabled AS "exhibitListEnabled", exhibit_judicial_review AS "exhibitJudicialReview",
             EXISTS (SELECT 1 FROM information_exchange ie
                     WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"
@@ -206,7 +199,7 @@ const byDue = (a: WorkspaceTask, b: WorkspaceTask) =>
   (a.dueAt ? new Date(a.dueAt).getTime() : Infinity) - (b.dueAt ? new Date(b.dueAt).getTime() : Infinity)
 
 async function assemble(
-  { investigatorEnabled, investigatorName, exchangeReady, exhibitListEnabled, exhibitJudicialReview, ...caseRow }: CaseRow,
+  { investigatorEnabled, investigatorName, investigatorLimit, clientEmailLimit, exchangeReady, exhibitListEnabled, exhibitJudicialReview, ...caseRow }: CaseRow,
   team: MyCase['team'],
   world: MyCase['world'],
   viewer: MaterialViewer,
@@ -232,22 +225,26 @@ async function assemble(
     world,
     side,
     materials,
-    witnesses: visibleWitnesses(witnesses, side, caseRow.phase, disclosed).map((w) => {
+    witnesses: visibleWitnesses(witnesses).map((w) => {
       const canAsk = interviewable(w, side, caseRow.phase)
       return {
         id: w.id,
         name: w.name,
         role: w.role,
         description: w.description,
-        audience: w.audience,
         side: w.alignedSide,
         canInterview: isAiWitness(w) && canAsk,
-        disclosed: !canAsk,
+        locked: !canAsk,
+        disclosed: Boolean(side && w.alignedSide && w.alignedSide !== side && requestsOpen(caseRow.phase) && disclosed.has(w.id)),
+        client: Boolean(side && w.isClient && w.alignedSide === side),
         avatarUrl: w.avatarUrl,
       }
     }),
-    investigator: investigatorEnabled ? { name: investigatorName, avatarUrl: INVESTIGATOR_AVATAR_URL } : null,
+    investigator: investigatorEnabled
+      ? { name: investigatorName, avatarUrl: INVESTIGATOR_AVATAR_URL, limit: investigatorLimit }
+      : null,
     investigatorAvailable: investigatorEnabled && phaseAtLeast(caseRow.phase, 'investigate'),
+    clientEmailLimit,
     exchangeReady,
     exhibitListEnabled,
     exhibitJudicialReview,

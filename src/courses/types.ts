@@ -76,12 +76,28 @@ export const DEFAULT_INVESTIGATOR_NAME = 'John Hastings'
 /** His portrait, the same in every case. */
 export const INVESTIGATOR_AVATAR_URL = '/investigator.png'
 
+/** Whom a limit counts for: each team as a whole, or each student on it. */
+export type LimitScope = 'team' | 'student'
+
+/** How many times each team (or student) can do something: interview a witness, or use the investigator. */
+export interface InteractionLimit {
+  max: number
+  per: LimitScope
+}
+
+/** Both limits' default (matches the server): twice per team. */
+export const DEFAULT_LIMIT: InteractionLimit = { max: 2, per: 'team' }
+/** The highest limit an instructor can set (matches the server). */
+export const MAX_LIMIT = 999
+
 /** The case's background investigator, the same for every team. */
 export interface InvestigatorSettings {
   enabled: boolean
   name: string
   /** The instructor's extra instructions, added to his prompt. */
   instructions: string
+  /** How many requests each team (or student) can send him; cases without it allow two per team. */
+  limit?: InteractionLimit
 }
 
 export const COURSE_CASE_STATUSES = ['draft', 'active', 'closed'] as const
@@ -132,6 +148,10 @@ export interface CourseCase {
   setupCompletedAt?: string | null
   /** The background investigator; cases without the field have one, as John Hastings. */
   investigator?: InvestigatorSettings
+  /** How many times each team (or student) can interview each AI witness; leaving it out means two per team. */
+  interviewLimit?: InteractionLimit
+  /** How many emails each team (or student) can send its clients; leaving it out means two per team. */
+  clientEmailLimit?: InteractionLimit
   /** How the instructor reviews the case; leaving it out means everything. */
   reviewMode?: ReviewMode
   /** Whether the information exchange setup is finished (students see it, and the case has its phase). */
@@ -163,7 +183,7 @@ export interface SharedCase {
 
 /** The case's investigator settings (cases from before the field have him, as John Hastings). */
 export const investigatorOf = (c: Pick<CourseCase, 'investigator'>): InvestigatorSettings =>
-  c.investigator ?? { enabled: true, name: DEFAULT_INVESTIGATOR_NAME, instructions: '' }
+  c.investigator ?? { enabled: true, name: DEFAULT_INVESTIGATOR_NAME, instructions: '', limit: DEFAULT_LIMIT }
 
 /** The guided setup's steps, in order (matches SETUP_STEPS on the server). */
 export const SETUP_STEPS = ['details', 'facts', 'files', 'teams', 'worlds', 'witnesses', 'investigator', 'tasks'] as const
@@ -172,6 +192,10 @@ export type SetupStep = (typeof SETUP_STEPS)[number]
 export interface WitnessSettingsInput {
   inWorldDate: string | null
   disputedIssues: string
+  /** How many times each team (or student) can interview each witness; leave out to keep it. */
+  interviewLimit?: InteractionLimit
+  /** How many emails each team (or student) can send its clients; leave out to keep it. */
+  clientEmailLimit?: InteractionLimit
 }
 
 export interface CaseInput {
@@ -270,11 +294,32 @@ export interface CaseMaterial {
   worldNumber?: number | null
   /** Where it came from; missing means the instructor uploaded it. */
   source?: MaterialSource
+  /** Who would really have it; missing means a third party. */
+  owner?: MaterialOwner
 }
 
-/** Where a case file came from: the instructor's upload, a subpoena response, or a record or aid the investigator made (each in one case world). */
-export const MATERIAL_SOURCES = ['instructor', 'subpoena', 'investigator'] as const
+/**
+ * Where a case file came from: the instructor's upload, a subpoena response,
+ * or a record or aid the investigator made, or a document a team's clients
+ * wrote out (each in one case world).
+ */
+export const MATERIAL_SOURCES = ['instructor', 'subpoena', 'investigator', 'client'] as const
 export type MaterialSource = (typeof MATERIAL_SOURCES)[number]
+
+/**
+ * Who would really have a case file: someone outside the case (a subpoena or
+ * the investigator gets it), one side's team (its clients have it), or one
+ * witness (who knows it, and as a client can hand it over).
+ */
+export type MaterialOwnerKind = 'third_party' | Side | 'witness'
+
+export interface MaterialOwner {
+  kind: MaterialOwnerKind
+  /** Set only for a witness's own file. */
+  witnessId: string | null
+}
+
+export const THIRD_PARTY: MaterialOwner = { kind: 'third_party', witnessId: null }
 
 export interface MaterialShares {
   matchupIds: string[]
@@ -284,6 +329,8 @@ export interface MaterialShares {
 export interface MaterialInput {
   audience: MaterialAudience
   description: string
+  /** Leave out to keep the owner (a new file is a third party's). */
+  owner?: MaterialOwner
 }
 
 /**
@@ -295,7 +342,8 @@ export interface Witness {
   name: string
   role: string
   description: string
-  audience: Audience
+  /** Kept from students until the instructor shows them. Everyone else shows to both sides. */
+  hidden: boolean
   /** The side the witness testifies for; null until it is an AI witness. */
   alignedSide: Side | null
   /** Demeanor and background for the AI to play. */
@@ -310,6 +358,10 @@ export interface Witness {
   avatarPreset?: number | null
   /** The design or uploaded picture to show, or null for an icon. */
   avatarUrl?: string | null
+  /** One of its side's clients, whom that side's team can email (needs a side). */
+  isClient?: boolean
+  /** A client who speaks for an organization, like a company's safety manager. */
+  speaksForOrganization?: boolean
 }
 
 /** How many witness picture designs there are, in public/witness-avatars/ (01.svg to 12.svg). */
@@ -325,13 +377,16 @@ export interface WorkspaceWitness {
   name: string
   role: string
   description: string
-  audience: Audience
   /** The side the witness testifies for, or null for neither. */
   side: Side | null
   /** An AI witness the team can interview. */
   canInterview: boolean
-  /** The other side's witness, shown because the instructor disclosed them; not to be interviewed yet. */
+  /** The other side's witness, which the team can't interview until the deposition phase. */
+  locked?: boolean
+  /** The other side's witness, in that side's initial disclosures. */
   disclosed?: boolean
+  /** One of the team's own clients, whom it can email. */
+  client?: boolean
   /** The witness's picture, or null for an icon. */
   avatarUrl?: string | null
 }
@@ -366,6 +421,12 @@ export interface Interview {
   notice: string | null
   /** Review lite: an ended interview's new facts stand without the instructor. */
   reviewLite?: boolean
+  /**
+   * A team's interviews with this witness against the instructor's limit,
+   * this one included once it counts (it has a question; for a per-student
+   * limit, one of theirs). Null or missing for instructor tests.
+   */
+  limit?: (InteractionLimit & { used: number }) | null
 }
 
 /**
@@ -385,7 +446,7 @@ export type DocumentDecision = 'allow' | 'deny'
 export interface InterviewReview {
   id: string
   /** Leaving it out means an interview. */
-  kind?: 'interview' | 'investigation'
+  kind?: 'interview' | 'investigation' | 'client_email'
   caseId: string
   caseTitle: string
   /** The witness interviewed; null for an investigation. */
@@ -405,9 +466,12 @@ export interface InterviewReview {
   completedAt: string | null
   /** `groupId`: ruled with a group of similar facts while open; `auto`: decided automatically (review lite). */
   facts: { id: string; text: string; decision: FactDecision | null; groupId?: string | null; auto?: boolean }[]
-  /** An investigation: what the team asked, and who sent it. */
+  /** An investigation, or a client email's body: what the team asked, and who sent it. */
   assignment?: string | null
   askedBy?: string | null
+  /** A client email's subject, and the clients it went to, by name. */
+  subject?: string | null
+  to?: string[]
   /** An investigation: the investigator's report, and what the team got. */
   report?: string | null
   finalReport?: string | null
@@ -518,11 +582,45 @@ export interface CaseFacts {
   worlds: WorldFacts[]
 }
 
+/** A team's email to its clients, as the team sees it: never the clients' draft or the rulings. */
+export interface ClientEmail {
+  id: string
+  /** The clients it went to, by name. */
+  to: string[]
+  subject: string
+  body: string
+  /** The student who sent it. */
+  from: string | null
+  /** Whether the current student sent it (for a per-student limit). */
+  mine?: boolean
+  sentAt: string
+  /** Working: with the clients or the instructor. */
+  status: 'working' | 'completed'
+  repliedAt: string | null
+  /** The clean reply, once completed: an email with From, To, Date and Subject lines. */
+  reply: string | null
+  /** Files the reply attached, also in the case file; `auto` when review lite allowed them. */
+  attachments: { id: string; title: string; filename: string; contentType: string; sizeBytes: number; auto?: boolean }[]
+  /** The facts the reply stated that stand, for flagging the ones decided automatically. */
+  facts?: { id: string; text: string; auto: boolean }[]
+  /** Whether the current student has read the reply. */
+  seen: boolean
+}
+
+/** The team's new email: to some of its clients (none means all of them). */
+export interface ClientEmailInput {
+  to: string[]
+  subject: string
+  body: string
+}
+
 /** A team's request to the background investigator, as the team sees it: never the draft or the rulings. */
 export interface Investigation {
   id: string
   assignment: string
   askedBy: string | null
+  /** Whether the current student sent it (for a per-student limit). */
+  mine?: boolean
   sentAt: string
   /** Working: with the investigator or the instructor. */
   status: 'working' | 'completed'
@@ -619,10 +717,12 @@ export interface CaseWorkspace {
   side: Side | null
   materials: CaseMaterial[]
   witnesses: WorkspaceWitness[]
-  /** The case's background investigator, or null if it has none. */
-  investigator?: { name: string; avatarUrl: string } | null
+  /** The case's background investigator, or null if it has none; `limit` is how many requests each team (or student) can send. */
+  investigator?: { name: string; avatarUrl: string; limit?: InteractionLimit } | null
   /** Whether the background investigator is open yet (from the investigate phase on). */
   investigatorAvailable: boolean
+  /** How many emails each team (or student) can send its clients (the witnesses marked `client`); missing means two per team. */
+  clientEmailLimit?: InteractionLimit
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady?: boolean
   /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
@@ -705,6 +805,8 @@ export interface DisclosureOption {
   name: string
   detail: string
   avatarUrl: string | null
+  /** A file that belongs to one case world (from a team's clients or the investigator), by number. */
+  worldNumber?: number | null
 }
 
 /** A disclosed witness or file, with the student's reason when it's their pick. */
@@ -995,7 +1097,7 @@ export interface ExchangeOverview {
     subpoenasServed?: number
     subpoenasWaiting?: number
   }
-  /** What moving to information exchange shares, by name. */
+  /** What moving to information exchange shares, by name: disclosed files, and disclosed witnesses that were hidden. */
   disclosed: { materials: string[]; witnesses: string[] }
 }
 
@@ -1410,7 +1512,6 @@ export interface WitnessSuggestion {
 /** Text the AI suggests for a case's own fields, from its initial file, for the instructor to keep or edit. */
 export interface CaseSuggestions {
   disputedIssues: string
-  investigatorNotes: string
   instructorNote: string
   tasks: { title: string; description: string }[]
 }
@@ -1572,6 +1673,11 @@ export interface CourseService {
   /** Emails the investigator an assignment; returns the team's requests. */
   sendInvestigation(courseId: string, caseId: string, assignment: string): Promise<Investigation[]>
   markInvestigationsSeen(courseId: string, caseId: string): Promise<void>
+  /** The student's team's emails with its clients, newest first. */
+  listMyClientEmails(courseId: string, caseId: string): Promise<ClientEmail[]>
+  /** Emails the team's clients; returns the team's emails. */
+  sendClientEmail(courseId: string, caseId: string, email: ClientEmailInput): Promise<ClientEmail[]>
+  markClientEmailsSeen(courseId: string, caseId: string): Promise<void>
   // Information exchange: the instructor's setup and views.
   /** The settings (federal defaults until saved), and what each side could disclose. */
   getExchange(courseId: string, caseId: string): Promise<{ settings: ExchangeSettings; options: DisclosureOption[] }>

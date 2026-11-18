@@ -184,46 +184,70 @@ export interface DisclosureOption {
   name: string
   detail: string
   avatarUrl: string | null
+  /** A file that belongs to one case world (one a client or the investigator gave a team), by number; null otherwise. */
+  worldNumber: number | null
 }
 
 /**
- * What each side could disclose: its own witnesses (testifying for it, or
- * shown only to it) and the case files only it can see. A disclosed file
+ * What each side could disclose: its own witnesses (the ones testifying for
+ * it) and the case files only it can see. A disclosed file
  * shared with everyone still counts as its own side's. The initial file is
- * everyone's from the start, so it's never listed.
+ * everyone's from the start, so it's never listed. With `worlds`, for the
+ * instructor, also each world's own files a team got from its clients or the
+ * investigator, as that team's side's: disclosed, they reach that world only.
+ * With `team`, for a student, also the world files that team got.
  */
-export async function disclosureOptions(caseId: string): Promise<DisclosureOption[]> {
+export async function disclosureOptions(
+  caseId: string,
+  { worlds = false, team = null }: { worlds?: boolean; team?: string | null } = {},
+): Promise<DisclosureOption[]> {
   const { rows } = await pool.query<DisclosureOption>(
-    `SELECT kind, id, side, name, detail, "avatarUrl" FROM (
-       SELECT 'witness' AS kind, w.id, coalesce(w.aligned_side, w.audience) AS side, w.name, w.role AS detail,
-              ${witnessAvatarUrlSql('w')} AS "avatarUrl", w.created_at AS added
+    `SELECT kind, id, side, name, detail, "avatarUrl", "worldNumber" FROM (
+       SELECT 'witness' AS kind, w.id, w.aligned_side AS side, w.name, w.role AS detail,
+              ${witnessAvatarUrlSql('w')} AS "avatarUrl", NULL::integer AS "worldNumber", w.created_at AS added
        FROM case_witnesses w
-       WHERE w.case_id = $1 AND (w.aligned_side IS NOT NULL OR w.audience <> 'all')
+       WHERE w.case_id = $1 AND w.aligned_side IS NOT NULL
        UNION ALL
-       SELECT 'material', m.id, coalesce(d.original_audience, m.audience), m.filename, m.description, NULL, m.uploaded_at
+       SELECT 'material', m.id, coalesce(d.original_audience, m.audience), m.filename, m.description, NULL, NULL, m.uploaded_at
        FROM case_materials m
        LEFT JOIN disclosure_items d ON d.material_id = m.id
-       WHERE m.case_id = $1 AND NOT m.initial AND coalesce(d.original_audience, m.audience) IN ('plaintiff', 'defense')
+       WHERE m.case_id = $1 AND NOT m.initial AND m.matchup_id IS NULL
+         AND coalesce(d.original_audience, m.audience) IN ('plaintiff', 'defense')
+       UNION ALL
+       SELECT 'material', m.id, r.side, m.filename, m.description, NULL, mu.number, m.uploaded_at
+       FROM case_materials m
+       JOIN matchups mu ON mu.id = m.matchup_id
+       JOIN LATERAL (SELECT rv.side, rv.team_id FROM review_documents rd JOIN interview_reviews rv ON rv.id = rd.review_id
+                     WHERE rd.material_id = m.id AND rd.decision = 'allow' AND rv.status = 'completed'
+                     ORDER BY rv.created_at LIMIT 1) r ON true
+       WHERE ($2 OR r.team_id = $3::uuid) AND m.case_id = $1 AND m.source IN ('client', 'investigator')
      ) options
-     ORDER BY kind DESC, added, name`,
-    [caseId],
+     ORDER BY kind DESC, "worldNumber" NULLS FIRST, added, name`,
+    [caseId, worlds, team],
   )
   return rows
 }
 
 /**
  * Shares the disclosed files with everyone (or, with `shared` false, gives
- * them back their own side's audience). Disclosed witnesses aren't changed:
- * the workspace shows them to both sides outside the introduction phase.
+ * them back their own side's audience). A world's own file is shared with
+ * everyone in its world only, and goes back to being the instructor's. Every witness already shows to both
+ * sides, but a disclosed one the instructor hid is now shown to students, for
+ * good: going back to the introduction doesn't hide it again.
  */
 export async function applyDisclosures(caseId: string, shared: boolean, db: Pick<PoolClient, 'query'> = pool) {
   if (shared) {
+    await db.query(
+      `UPDATE case_witnesses SET hidden = false
+       WHERE hidden AND id IN (SELECT witness_id FROM disclosure_items WHERE case_id = $1)`,
+      [caseId],
+    )
     await db.query(
       `WITH flipped AS (
          UPDATE disclosure_items d SET original_audience = m.audience
          FROM case_materials m
          WHERE d.case_id = $1 AND d.material_id = m.id AND d.original_audience IS NULL
-           AND m.audience IN ('plaintiff', 'defense')
+           AND (m.audience IN ('plaintiff', 'defense') OR (m.matchup_id IS NOT NULL AND m.audience = 'instructor'))
          RETURNING d.material_id)
        UPDATE case_materials SET audience = 'all' WHERE id IN (SELECT material_id FROM flipped)`,
       [caseId],
@@ -247,7 +271,7 @@ export async function applyDisclosures(caseId: string, shared: boolean, db: Pick
  * are shared at once, and files taken off the list go back to their side.
  */
 export async function setDisclosures(caseId: string, phase: CasePhase, materialIds: string[], witnessIds: string[]) {
-  const options = await disclosureOptions(caseId)
+  const options = await disclosureOptions(caseId, { worlds: true })
   const allowed = (kind: DisclosureOption['kind'], id: string) => options.some((o) => o.kind === kind && o.id === id)
   if (!materialIds.every((id) => allowed('material', id)) || !witnessIds.every((id) => allowed('witness', id))) {
     throw new HttpError(400, 'Choose witnesses and one-side case files from this case.')
@@ -274,7 +298,7 @@ export async function setDisclosures(caseId: string, phase: CasePhase, materialI
   return getSettings(caseId)
 }
 
-/** The witnesses the instructor disclosed, shown to both sides after the introduction phase. */
+/** The witnesses the instructor disclosed, marked as disclosed for the other side after the introduction phase. */
 export async function disclosedWitnessIds(caseId: string) {
   const { rows } = await pool.query<{ id: string }>(
     'SELECT witness_id AS id FROM disclosure_items WHERE case_id = $1 AND witness_id IS NOT NULL',
@@ -326,11 +350,12 @@ export async function findSubmission(caseId: string, userId: string): Promise<Di
 export async function submitDisclosures(
   caseId: string,
   userId: string,
+  teamId: string,
   side: Side,
   picks: { kind: 'witness' | 'material'; id: string; reason: string }[],
   heldBackReason: string,
 ) {
-  const options = (await disclosureOptions(caseId)).filter((o) => o.side === side)
+  const options = (await disclosureOptions(caseId, { team: teamId })).filter((o) => o.side === side)
   if (!picks.every((p) => options.some((o) => o.kind === p.kind && o.id === p.id))) {
     throw new HttpError(400, "Choose from your side's witnesses and documents.")
   }
@@ -669,7 +694,10 @@ export interface ExchangeOverview {
     subpoenasServed: number
     subpoenasWaiting: number
   }
-  /** What the move to information exchange shares: the disclosed files and witnesses, by name. */
+  /**
+   * What the move to information exchange shares, by name: the disclosed
+   * files, and the disclosed witnesses the instructor had hidden from students.
+   */
   disclosed: { materials: string[]; witnesses: string[] }
 }
 
@@ -706,7 +734,7 @@ export async function exchangeOverview(caseId: string): Promise<ExchangeOverview
      FROM disclosure_items d
      LEFT JOIN case_witnesses w ON w.id = d.witness_id
      LEFT JOIN case_materials m ON m.id = d.material_id
-     WHERE d.case_id = $1 ORDER BY name`,
+     WHERE d.case_id = $1 AND (d.witness_id IS NULL OR w.hidden) ORDER BY name`,
     [caseId],
   )
   return {

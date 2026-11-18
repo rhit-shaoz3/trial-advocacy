@@ -78,12 +78,12 @@ const openReviews = async () => (await prof.get(`/api/courses/${course.id}/revie
 
 describe('the investigator settings', () => {
   it('starts on as John Hastings, and can be renamed, instructed, and turned off', async () => {
-    expect((await prof.get(caseUrl())).body.case.investigator).toEqual({ enabled: true, name: 'John Hastings', instructions: '' })
+    expect((await prof.get(caseUrl())).body.case.investigator).toEqual({ enabled: true, name: 'John Hastings', instructions: '', limit: { max: 2, per: 'team' } })
 
     const res = await prof.put(`${caseUrl()}/investigator`).send({ enabled: true, name: '  Nora Vance ', instructions: 'Be brief.' })
-    expect(res.body.case.investigator).toEqual({ enabled: true, name: 'Nora Vance', instructions: 'Be brief.' })
+    expect(res.body.case.investigator).toEqual({ enabled: true, name: 'Nora Vance', instructions: 'Be brief.', limit: { max: 2, per: 'team' } })
     const blank = await prof.put(`${caseUrl()}/investigator`).send({ enabled: false, name: '', instructions: '' })
-    expect(blank.body.case.investigator).toEqual({ enabled: false, name: 'John Hastings', instructions: '' })
+    expect(blank.body.case.investigator).toEqual({ enabled: false, name: 'John Hastings', instructions: '', limit: { max: 2, per: 'team' } })
     expect((await prof.put(`${caseUrl()}/investigator`).send({ name: 'X' })).status).toBe(400)
   })
 
@@ -299,6 +299,46 @@ describe('asking the investigator', () => {
     await investigationsSettled()
     const [open] = await openReviews()
     expect(open.status).toBe('open')
+  })
+})
+
+describe('the request limit', () => {
+  beforeEach(async () => {
+    // Reports come straight back, so the team can send the next one.
+    await prof.put(`${caseUrl()}/review-mode`).send({ reviewMode: 'lite' })
+    await toInvestigate()
+    ai.investigate = async () => 'Nothing more to report.'
+  })
+
+  it('lets each team send two requests unless the instructor changes it', async () => {
+    expect((await sendAndWait(plaintiff, 'Check the corner.')).status).toBe(201)
+    const partner = (await signedInAgent('student', email(2), 'Bo Partner')).agent
+    expect((await sendAndWait(partner, 'Check the bus.')).status).toBe(201)
+    const third = await sendAndWait(plaintiff, 'Check the driver.')
+    expect(third.status).toBe(409)
+    expect(third.body.error).toBe('Your team has used its 2 requests to the investigator.')
+    // The other team has its own.
+    expect((await sendAndWait(defense, 'Check the rider.')).status).toBe(201)
+
+    // Per student, Ada and her partner have each used one of their two.
+    await prof
+      .put(`${caseUrl()}/investigator`)
+      .send({ enabled: true, name: '', instructions: '', limit: { max: 2, per: 'student' } })
+    const mine = (await plaintiff.get(`${myCaseUrl()}/investigator`)).body.investigations
+    expect(mine.map((i: { mine: boolean }) => i.mine)).toEqual([false, true])
+    expect((await sendAndWait(partner, 'Check the driver.')).status).toBe(201)
+    expect((await sendAndWait(plaintiff, 'Check the driver.')).status).toBe(201)
+    expect((await sendAndWait(plaintiff, 'Check the route.')).body.error).toBe("You've used your 2 requests to the investigator.")
+    expect((await plaintiff.get(myCaseUrl())).body.workspace.investigator.limit).toEqual({ max: 2, per: 'student' })
+  })
+
+  it('validates the limit, and keeps it when left out', async () => {
+    const put = (limit: unknown) => prof.put(`${caseUrl()}/investigator`).send({ enabled: true, name: '', instructions: '', limit })
+    expect((await put({ max: 0, per: 'team' })).status).toBe(400)
+    expect((await put({ max: 1000, per: 'team' })).status).toBe(400)
+    expect((await put({ max: 3, per: 'everyone' })).status).toBe(400)
+    expect((await put({ max: 5, per: 'team' })).body.case.investigator.limit).toEqual({ max: 5, per: 'team' })
+    expect((await put(undefined)).body.case.investigator.limit).toEqual({ max: 5, per: 'team' })
   })
 })
 

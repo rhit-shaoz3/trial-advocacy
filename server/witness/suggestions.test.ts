@@ -15,7 +15,7 @@ let caseId: string
 const caseUrl = () => `/api/courses/${course.id}/cases/${caseId}`
 const suggestions = async () => (await prof.get(`${caseUrl()}/witness-suggestions`)).body
 
-const noContent: CaseSuggestions = { disputedIssues: '', investigatorNotes: '', instructorNote: '', tasks: [] }
+const noContent: CaseSuggestions = { disputedIssues: '', instructorNote: '', tasks: [] }
 const content = async () => (await prof.get(`${caseUrl()}/content-suggestions`)).body
 /** The AI's one read of the complaint, with these witnesses (and what it was asked, in `asked`). */
 function fakeSuggest(witnesses: WitnessSuggestion[], fields: CaseSuggestions = noContent, asked: SuggestInput[] = []) {
@@ -114,7 +114,6 @@ describe('suggested witnesses', () => {
 describe('suggested text for the case', () => {
   const fields: CaseSuggestions = {
     disputedIssues: 'Whether Elena Torres checked the lap bars; how long the train was stopped',
-    investigatorNotes: 'Focus on the restart. Talk to the other riders.',
     instructorNote: 'Focus on what the operator knew before the restart.',
     tasks: [{ title: 'Outline Elena Torres’s deposition', description: 'List the topics and exhibits.' }],
   }
@@ -188,7 +187,6 @@ describe('reading the suggestions', () => {
                 name: 'suggest_case_setup',
                 input: {
                   disputedIssues: ' x '.repeat(1500),
-                  investigatorNotes: ' Talk to the riders. ',
                   instructorNote: 'Focus on the restart.',
                   tasks: [1, 2, 3, 4].map((n) => ({ title: `Task ${n}`, description: 'Do it.' })).concat({ title: '', description: 'No title.' }),
                   witnesses: [
@@ -210,7 +208,6 @@ describe('reading the suggestions', () => {
     ])
     // The case's fields, each within what it holds.
     expect(result.content.disputedIssues.length).toBeLessThanOrEqual(2000)
-    expect(result.content.investigatorNotes).toBe('Talk to the riders.')
     expect(result.content.tasks.map((t) => t.title)).toEqual(['Task 1', 'Task 2', 'Task 3'])
   })
 })

@@ -80,7 +80,7 @@ const sampleWorkspace: CaseWorkspace = {
       initial: false,
     },
   ],
-  witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', audience: 'all', side: null, canInterview: false }],
+  witnesses: [{ id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: 'At the controls.', side: null, canInterview: false }],
   investigatorAvailable: false,
   tasks: [
     {
@@ -286,7 +286,7 @@ describe('CaseWorkspaceView', () => {
         ...sampleWorkspace,
         witnesses: [
           { ...sampleWorkspace.witnesses[0], canInterview: true },
-          { id: 'w2', name: 'Bystander', role: '', description: '', audience: 'all', side: null, canInterview: false },
+          { id: 'w2', name: 'Bystander', role: '', description: '', side: null, canInterview: false },
         ],
       },
       interviewHref: (id) => `/interview/${id}`,
@@ -309,7 +309,7 @@ describe('CaseWorkspaceView', () => {
 describe('CaseWorkspaceView phases', () => {
   // Ada's team is on the defense (sampleWorkspace.side).
   const elena = { ...sampleWorkspace.witnesses[0], side: 'defense' as const, canInterview: true }
-  const rider = { id: 'w2', name: 'Riley Rivera', role: 'Rider', description: '', audience: 'all' as const, side: 'plaintiff' as const, canInterview: true }
+  const rider = { id: 'w2', name: 'Riley Rivera', role: 'Rider', description: '', side: 'plaintiff' as const, canInterview: true }
 
   it('shows the phase and keeps the investigator locked in introduction', async () => {
     const { user } = renderView()
@@ -330,8 +330,20 @@ describe('CaseWorkspaceView phases', () => {
   it("says the other side's witnesses come in the deposition phase", async () => {
     const { user } = renderView({ workspace: { ...sampleWorkspace, witnesses: [elena] }, interviewHref: (id) => `/interview/${id}` })
     await user.click(screen.getByRole('tab', { name: 'Witnesses, 1' }))
-    expect(screen.getByRole('tabpanel')).toHaveTextContent("The other side's witnesses are revealed in the deposition phase.")
+    expect(screen.getByRole('tabpanel')).toHaveTextContent("You can depose the other side's witnesses in the deposition phase.")
     expect(screen.getByRole('link', { name: 'Interview Elena Torres' })).toBeInTheDocument()
+  })
+
+  it("shows the other side's witnesses locked before the deposition phase, marking the disclosed ones", async () => {
+    const { user } = renderView({
+      workspace: { ...sampleWorkspace, witnesses: [elena, { ...rider, canInterview: false, locked: true, disclosed: true }] },
+      interviewHref: (id) => `/interview/${id}`,
+    })
+    await user.click(screen.getByRole('tab', { name: 'Witnesses, 2' }))
+    const row = screen.getByText('Riley Rivera').closest('li')!
+    expect(row).toHaveTextContent('Disclosed by the other side')
+    expect(row).toHaveTextContent('Can’t interview yet')
+    expect(screen.queryByRole('link', { name: 'Depose Riley Rivera' })).not.toBeInTheDocument()
   })
 
   it("lets the team depose the other side's witnesses in the deposition phase", async () => {
@@ -387,6 +399,27 @@ describe('the background investigator', () => {
 
     expect(onSendInvestigation).toHaveBeenCalledWith('Find who else was on the ride.')
     expect(within(email).getByLabelText('Your assignment')).toHaveValue('')
+  })
+
+  it("counts the requests against the instructor's limit, and stops the email at it", async () => {
+    const limited = { ...open, investigator: { ...open.investigator, limit: { max: 2, per: 'team' as const } } }
+    const { user } = renderView({ workspace: limited, investigations: [report()], onSendInvestigation: vi.fn() })
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+    expect(screen.getByText('1 of 2 requests used by your team · 1 left')).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: 'Email Nora Vance' })).toBeInTheDocument()
+  })
+
+  it('hides the email once the limit is used, counting only your own per student', async () => {
+    const perStudent = { ...open, investigator: { ...open.investigator, limit: { max: 1, per: 'student' as const } } }
+    const { user } = renderView({
+      workspace: perStudent,
+      investigations: [report({ id: 'i2', mine: false }), report({ mine: true })],
+      onSendInvestigation: vi.fn(),
+    })
+    await user.click(screen.getByRole('tab', { name: 'Investigator' }))
+    expect(screen.getByText('1 of 1 request used by you · 0 left')).toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Email Nora Vance' })).not.toBeInTheDocument()
+    expect(screen.getByText('You’ve used the one request your instructor allows to Nora Vance.')).toBeInTheDocument()
   })
 
   it('shows the request he is working on instead of the email', async () => {

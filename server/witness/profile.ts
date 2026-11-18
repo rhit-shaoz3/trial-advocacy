@@ -44,7 +44,8 @@ const title = (m: Pick<MaterialText, 'description' | 'filename'>) => m.descripti
  * How the witness treats each file: the deposition is their own sworn account;
  * the initial file (the complaint and pretrial order) is background, allegations
  * and all; other witnesses' depositions are someone else's account; the rest
- * are records. Only files the instructor ticked as seen are ones they know.
+ * are records. Only files the instructor ticked as seen, or made theirs, are
+ * ones they know.
  * Who can see a file doesn't matter: evidence stays with the instructor until
  * teams ask for it, and is a record all the same.
  */
@@ -53,7 +54,11 @@ export function witnessDocuments(
   materials: MaterialText[],
   otherDepositionIds: ReadonlySet<string> = new Set(),
 ): WitnessDocument[] {
-  const known = new Set(witness.knownMaterialIds)
+  // The files they own are theirs, so they know them too.
+  const known = new Set([
+    ...witness.knownMaterialIds,
+    ...materials.filter((m) => m.owner?.kind === 'witness' && m.owner.witnessId === witness.id).map((m) => m.id),
+  ])
   const readable = materials.filter((m) => m.textStatus === 'ready' && m.text)
   const deposition = readable.find((m) => m.id === witness.depositionMaterialId)
   if (!deposition) throw new WitnessNotReadyError(`${witness.name}'s deposition file can't be read yet.`)

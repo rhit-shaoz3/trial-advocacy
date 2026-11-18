@@ -44,7 +44,7 @@ describe('PhasePanel', () => {
 
     const steps = screen.getByRole('list', { name: 'Phases' })
     expect(within(steps).getByText('Introduction').closest('li')).toHaveAttribute('aria-current', 'step')
-    expect(screen.getByText(/Teams have the case and their side's witnesses/)).toBeInTheDocument()
+    expect(screen.getByText(/Teams have the case and every witness you haven't hidden/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Move to Investigate' }))
@@ -53,12 +53,12 @@ describe('PhasePanel', () => {
     expect(onChanged).toHaveBeenCalledWith(moved)
   })
 
-  it('warns that deposition reveals every witness, and can step back', async () => {
+  it("warns that deposition opens the other side's witnesses, and can step back", async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const { user, service } = renderPanel({ ...coaster, phase: 'investigate' })
 
     await user.click(screen.getByRole('button', { name: 'Move to Deposition' }))
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('reveals every witness to both sides'))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Teams can depose the other side's witnesses"))
     expect(service.setCasePhase).not.toHaveBeenCalled()
 
     confirm.mockReturnValue(true)
@@ -109,7 +109,7 @@ describe('PhasePanel', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Move to information exchange?' })
     expect(dialog).toHaveTextContent('2 case files become visible to everyone')
     expect(dialog).toHaveTextContent('Medical records and Incident report')
-    expect(dialog).toHaveTextContent('1 witness appears on both sides')
+    expect(dialog).toHaveTextContent('1 hidden witness is shown to students')
     expect(dialog).toHaveTextContent("1 student hasn't submitted their initial disclosures")
     expect(confirm).not.toHaveBeenCalled()
 

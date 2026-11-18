@@ -145,8 +145,8 @@ function ExchangePhaseDialog({
     },
     disclosed.witnesses.length > 0 && {
       icon: <Users />,
-      title: `${count(disclosed.witnesses.length, 'witness appears', 'witnesses appear')} on both sides`,
-      detail: `${list(disclosed.witnesses)}, with their roles and pictures. Teams still can't interview the other side's witnesses.`,
+      title: `${count(disclosed.witnesses.length, 'hidden witness is', 'hidden witnesses are')} shown to students`,
+      detail: `${list(disclosed.witnesses)}, from your initial disclosures. Teams still can't interview the other side's witnesses.`,
     },
     {
       icon: <ListChecks />,

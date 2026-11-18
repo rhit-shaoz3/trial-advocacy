@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { HttpError } from '../httpError.ts'
 import { isUuid, readString } from '../validation.ts'
+import { queueClientEmail } from '../client/emails.ts'
 import { queueInvestigation } from '../investigator/requests.ts'
 import { decideGroup, listFactGroups, ungroup } from './grouping.ts'
 import { listOpenFlags, resolveFlag } from './flags.ts'
@@ -26,9 +27,15 @@ function readId(id: string | undefined, notFound: string) {
   return id
 }
 
-/** A ruling that finished an investigation's review, or changed a finished one, starts the team's report. */
+/** Starts a written answer's next step: an investigator's report, or a client's email back (each does nothing for the other). */
+const queueAnswer = (id: string) => {
+  queueInvestigation(id)
+  queueClientEmail(id)
+}
+
+/** A ruling that finished a written answer's review, or changed a finished one, starts the team's clean copy. */
 const startReport = (review: InterviewReview | null) => {
-  if (review?.kind === 'investigation' && review.status === 'finalizing') queueInvestigation(review.id)
+  if (review && review.kind !== 'interview' && review.status === 'finalizing') queueAnswer(review.id)
 }
 
 /**
@@ -50,8 +57,8 @@ reviewsRouter.put('/fact-groups/:groupId', async (req, res) => {
   const decision = readString(req.body, 'decision')
   if (!FACT_DECISIONS.includes(decision as FactDecision)) throw new HttpError(400, 'Choose a ruling for these facts.')
   const reviewIds = await decideGroup(req.course!.id, groupId, decision as FactDecision, req.user!.id)
-  // An investigation that finished starts its report (this does nothing for the others).
-  for (const id of reviewIds) queueInvestigation(id)
+  // A written answer that finished starts its clean copy (this does nothing for the others).
+  for (const id of reviewIds) queueAnswer(id)
   res.json({ reviewIds })
 })
 
@@ -101,7 +108,7 @@ reviewsRouter.post('/:reviewId/complete', async (req, res) => {
 reviewsRouter.post('/:reviewId/retry', async (req, res) => {
   const reviewId = readId(req.params.reviewId, 'Review not found.')
   const review = await retryReview(req.course!.id, reviewId)
-  if (review.kind === 'investigation') queueInvestigation(review.id)
+  if (review.kind !== 'interview') queueAnswer(review.id)
   res.json({ review })
 })
 

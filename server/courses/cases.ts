@@ -27,12 +27,29 @@ export const casePhases = (investigatorEnabled: boolean, exchangeReady: boolean)
 /** What every case's background investigator is called until the instructor renames him. */
 export const DEFAULT_INVESTIGATOR_NAME = 'John Hastings'
 
+export const LIMIT_SCOPES = ['team', 'student'] as const
+/** Whom a limit counts for: each team as a whole, or each student on it. */
+export type LimitScope = (typeof LIMIT_SCOPES)[number]
+
+/** How many times each team (or student) can do something: interview a witness, or use the investigator. */
+export interface InteractionLimit {
+  max: number
+  per: LimitScope
+}
+
+/** The default for both limits: twice per team. */
+export const DEFAULT_LIMIT: InteractionLimit = { max: 2, per: 'team' }
+/** The highest limit an instructor can set. */
+export const MAX_LIMIT = 999
+
 /** The case's background investigator, the same for every team. */
 export interface InvestigatorSettings {
   enabled: boolean
   name: string
   /** The instructor's extra instructions, added to his prompt. Instructors only. */
   instructions: string
+  /** How many requests each team (or student) can send him. */
+  limit: InteractionLimit
 }
 
 /** The guided setup's steps, in order; a case remembers the furthest one reached. */
@@ -76,6 +93,10 @@ export interface CourseCase {
   /** When the instructor finished the guided setup; null until then. */
   setupCompletedAt: Date | null
   investigator: InvestigatorSettings
+  /** How many times each team (or student) can interview each AI witness. */
+  interviewLimit: InteractionLimit
+  /** How many emails each team (or student) can send its clients. */
+  clientEmailLimit: InteractionLimit
   reviewMode: ReviewMode
   /** Whether the information exchange setup is finished (so students see it, and the case has its phase). */
   exchangeReady: boolean
@@ -121,7 +142,10 @@ const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "ins
   json_build_object('plaintiff', plaintiff_key_facts, 'defense', defense_key_facts) AS "importantFacts",
   setup_step AS "setupStep", setup_completed_at AS "setupCompletedAt",
   json_build_object('enabled', investigator_enabled, 'name', investigator_name,
-                    'instructions', investigator_instructions) AS investigator,
+                    'instructions', investigator_instructions,
+                    'limit', json_build_object('max', investigator_limit, 'per', investigator_limit_per)) AS investigator,
+  json_build_object('max', interview_limit, 'per', interview_limit_per) AS "interviewLimit",
+  json_build_object('max', client_email_limit, 'per', client_email_limit_per) AS "clientEmailLimit",
   review_mode AS "reviewMode",
   EXISTS (SELECT 1 FROM information_exchange ie
           WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
@@ -232,10 +256,10 @@ export async function setCasePhase(courseId: string, id: string, phase: CasePhas
 export async function setInvestigator(courseId: string, id: string, settings: InvestigatorSettings) {
   const { rows } = await pool.query<CourseCase>(
     `UPDATE cases SET investigator_enabled = $3, investigator_name = $4, investigator_instructions = $5,
-       updated_at = now()
+       investigator_limit = $6, investigator_limit_per = $7, updated_at = now()
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
-    [courseId, id, settings.enabled, settings.name, settings.instructions],
+    [courseId, id, settings.enabled, settings.name, settings.instructions, settings.limit.max, settings.limit.per],
   )
   return rows[0] ?? null
 }

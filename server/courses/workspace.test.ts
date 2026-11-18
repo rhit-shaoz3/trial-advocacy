@@ -69,6 +69,8 @@ describe('case materials', () => {
       // Every case world's file, not one world's own (like a subpoena response).
       worldNumber: null,
       source: 'instructor',
+      // Someone outside the case has it unless the instructor says otherwise.
+      owner: { kind: 'third_party', witnessId: null },
     })
     const photo = (await upload('scene.JPG', { audience: 'plaintiff' })).body.material
     expect(photo).toMatchObject({ audience: 'plaintiff', contentType: 'image/jpeg' })
@@ -148,7 +150,7 @@ describe('witnesses, tasks, and the note', () => {
       name: 'Elena Torres',
       role: 'Ride operator',
       description: 'Was at the controls.',
-      audience: 'all',
+      hidden: false,
       alignedSide: null,
       personaNotes: '',
       depositionMaterialId: null,
@@ -156,10 +158,12 @@ describe('witnesses, tasks, and the note', () => {
       defendingCounsel: '',
       avatarPreset: null,
       avatarUrl: null,
+      isClient: false,
+      speaksForOrganization: false,
     })
     const { id } = res.body.witness
-    const edited = await prof.put(`${caseUrl()}/witnesses/${id}`).send({ name: 'Elena Torres', audience: 'defense' })
-    expect(edited.body.witness).toMatchObject({ role: '', audience: 'defense' })
+    const edited = await prof.put(`${caseUrl()}/witnesses/${id}`).send({ name: 'Elena Torres', hidden: true })
+    expect(edited.body.witness).toMatchObject({ role: '', hidden: true })
     expect((await prof.post(`${caseUrl()}/witnesses`).send({ name: '' })).body.error).toBe('Witness name is required.')
     expect((await prof.delete(`${caseUrl()}/witnesses/${id}`)).status).toBe(204)
     expect((await prof.get(`${caseUrl()}/witnesses`)).body.witnesses).toEqual([])
@@ -251,7 +255,7 @@ describe("a student's case dashboard", () => {
     await upload('Plaintiff memo.pdf', { audience: 'plaintiff' })
     await upload('Defense memo.pdf', { audience: 'defense' })
     await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Elena Torres', role: 'Ride operator' })
-    await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Dr. Lin', audience: 'defense' })
+    await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Dr. Lin', hidden: true })
     await prof.post(`${caseUrl()}/tasks`).send({ title: 'Read the fact pattern' })
     await prof.post(`${caseUrl()}/tasks`).send({ title: 'Interview the rider', audience: 'plaintiff' })
     await prof.put(`${caseUrl()}/note`).send({ note: 'Mind the timeline.' })
@@ -289,7 +293,7 @@ describe("a student's case dashboard", () => {
 
     const theirs = (await defense.get(myCaseUrl())).body.workspace
     expect(theirs.materials.map((m: { filename: string }) => m.filename)).toEqual(['Fact pattern.pdf', 'Defense memo.pdf'])
-    expect(theirs.witnesses).toHaveLength(2)
+    expect(theirs.witnesses).toHaveLength(1)
   })
 
   it("downloads only the files the student's side can see", async () => {
@@ -478,21 +482,21 @@ describe('case phases', () => {
       await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Rider', alignedSide: 'plaintiff' })
       await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Operator', alignedSide: 'defense' })
       await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Bystander' })
-      await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Engineer', audience: 'defense' })
+      await prof.post(`${caseUrl()}/witnesses`).send({ name: 'Engineer', hidden: true })
       await launch()
       // Joins after launch, so isn't on a team yet.
       await prof.post(`/api/courses/${course.id}/roster`).send({ emails: [email(5)] })
       unpaired = (await signedInAgent('student', email(5))).agent
     })
 
-    it("hides each side's witnesses from the other, and the investigator, in introduction", async () => {
-      expect(await view(plaintiff)).toEqual({ phase: 'introduction', investigator: false, witnesses: ['Rider', 'Bystander'] })
-      expect(await view(defense)).toEqual({
-        phase: 'introduction',
-        investigator: false,
-        witnesses: ['Operator', 'Bystander', 'Engineer'],
-      })
-      expect((await view(unpaired)).witnesses).toEqual(['Bystander'])
+    it('shows both sides every witness the instructor hasn\'t hidden, but not the investigator, in introduction', async () => {
+      const shown = ['Rider', 'Operator', 'Bystander']
+      expect(await view(plaintiff)).toEqual({ phase: 'introduction', investigator: false, witnesses: shown })
+      expect(await view(defense)).toEqual({ phase: 'introduction', investigator: false, witnesses: shown })
+      expect((await view(unpaired)).witnesses).toEqual(shown)
+      // The other side's witness shows, but can't be interviewed yet.
+      const operator = (await plaintiff.get(myCaseUrl())).body.workspace.witnesses[1]
+      expect(operator).toMatchObject({ name: 'Operator', side: 'defense', locked: true, disclosed: false })
     })
 
     it('tells students when the case entered its phase, anew each time it moves', async () => {
@@ -509,28 +513,31 @@ describe('case phases', () => {
       expect(new Date(await entered()).getTime()).toBeGreaterThan(new Date(first).getTime())
     })
 
-    it('opens the investigator in investigate, still hiding the other side', async () => {
+    it("opens the investigator in investigate, with the other side's witnesses still locked", async () => {
       await setPhase('investigate')
-      expect(await view(plaintiff)).toEqual({ phase: 'investigate', investigator: true, witnesses: ['Rider', 'Bystander'] })
-      expect((await view(defense)).witnesses).toEqual(['Operator', 'Bystander', 'Engineer'])
+      expect(await view(plaintiff)).toEqual({ phase: 'investigate', investigator: true, witnesses: ['Rider', 'Operator', 'Bystander'] })
+      const operator = (await plaintiff.get(myCaseUrl())).body.workspace.witnesses[1]
+      expect(operator).toMatchObject({ name: 'Operator', locked: true })
     })
 
-    it('reveals every witness to both sides in deposition', async () => {
+    it("unlocks the other side's witnesses in deposition, and keeps hidden ones hidden", async () => {
       await setPhase('deposition')
-      const all = ['Rider', 'Operator', 'Bystander', 'Engineer']
-      expect(await view(plaintiff)).toEqual({ phase: 'deposition', investigator: true, witnesses: all })
-      expect((await view(defense)).witnesses).toEqual(all)
+      const shown = ['Rider', 'Operator', 'Bystander']
+      expect(await view(plaintiff)).toEqual({ phase: 'deposition', investigator: true, witnesses: shown })
+      expect((await view(defense)).witnesses).toEqual(shown)
       const operator = (await plaintiff.get(myCaseUrl())).body.workspace.witnesses[1]
-      expect(operator).toMatchObject({ name: 'Operator', side: 'defense' })
+      expect(operator).toMatchObject({ name: 'Operator', side: 'defense', locked: false })
       expect(operator).not.toHaveProperty('personaNotes')
     })
 
-    it("follows the phase in the instructor's preview", async () => {
+    it("shows a hidden witness once the instructor turns it on, in the preview too", async () => {
       const preview = async () =>
         (await prof.get(`${caseUrl()}/preview?side=plaintiff`)).body.workspace.witnesses.map((w: { name: string }) => w.name)
-      expect(await preview()).toEqual(['Rider', 'Bystander'])
-      await setPhase('deposition')
+      expect(await preview()).toEqual(['Rider', 'Operator', 'Bystander'])
+      const engineer = (await prof.get(`${caseUrl()}/witnesses`)).body.witnesses.find((w: { name: string }) => w.name === 'Engineer')
+      await prof.put(`${caseUrl()}/witnesses/${engineer.id}`).send({ name: 'Engineer', hidden: false })
       expect(await preview()).toEqual(['Rider', 'Operator', 'Bystander', 'Engineer'])
+      expect((await view(defense)).witnesses).toContain('Engineer')
     })
   })
 

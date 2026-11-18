@@ -34,7 +34,6 @@ export interface WitnessSuggestion {
 /** Text for the case's own fields; matches `CaseSuggestions` in src/courses/types.ts. */
 export interface CaseSuggestions {
   disputedIssues: string
-  investigatorNotes: string
   instructorNote: string
   tasks: { title: string; description: string }[]
 }
@@ -63,8 +62,6 @@ witnesses: the people most likely to be deposed.
 - At most ${MAX_SUGGESTIONS}, the most important first.
 
 disputedIssues: the two to four facts the complaint leaves genuinely contested, which the AI witnesses must not settle one way or the other. One short phrase each, separated by semicolons. For example: "Whether the clerk saw the spill before the fall; how long the floor had been wet".
-
-investigatorNotes: one or two sentences for the background investigator who answers the student teams' requests: what matters most in this case, and where a good investigator would look (people, places, or records the complaint mentions).
 
 instructorNote: one or two sentences to the students on what to focus on in this case.
 
@@ -98,7 +95,6 @@ export function buildSuggestRequest(input: SuggestInput, model = modelFor('setup
               },
             },
             disputedIssues: { type: 'string' },
-            investigatorNotes: { type: 'string' },
             instructorNote: { type: 'string' },
             tasks: {
               type: 'array',
@@ -109,7 +105,7 @@ export function buildSuggestRequest(input: SuggestInput, model = modelFor('setup
               },
             },
           },
-          required: ['witnesses', 'disputedIssues', 'investigatorNotes', 'instructorNote', 'tasks'],
+          required: ['witnesses', 'disputedIssues', 'instructorNote', 'tasks'],
         },
       },
     ],
@@ -151,7 +147,6 @@ export async function suggestFromComplaint(client: SuggestClient, input: Suggest
     witnesses,
     content: {
       disputedIssues: clean(raw.disputedIssues, 2000),
-      investigatorNotes: clean(raw.investigatorNotes, 2000),
       instructorNote: clean(raw.instructorNote, 2000),
       tasks: tasks
         .map((t) => ({ title: clean((t as Record<string, unknown>).title, 120), description: clean((t as Record<string, unknown>).description, 4000) }))

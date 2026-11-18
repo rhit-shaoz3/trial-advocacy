@@ -7,9 +7,13 @@
   --sf-fill: #1d3f8f;
   --sf-rule: #1a1a1a;
   box-sizing: border-box;
+  /* Its layout follows the room it has, not the window, so it re-flows when zoomed. */
+  container: sf / inline-size;
+  /* A container doesn't size to its content, so it fills the room up to its max. */
+  width: 100%;
   max-width: 46rem;
   margin: 0 auto;
-  padding: 1.75rem 2rem 1.5rem;
+  padding: 1.75rem clamp(1rem, 4%, 2rem) 1.5rem;
   border: 1px solid var(--border-strong, #c7ccd0);
   border-radius: 0.25rem;
   background: #ffffff;
@@ -17,6 +21,7 @@
   font-family: 'Times New Roman', Times, var(--ws-serif, serif);
   font-size: 0.92rem;
   line-height: 1.4;
+  overflow-wrap: anywhere;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
@@ -103,7 +108,7 @@
 
 .sf-to {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   column-gap: 0.5rem;
   align-items: end;
 }
@@ -221,12 +226,7 @@ p.sf-blank.sf-records {
   text-align: center;
 }
 
-@media (max-width: 560px) {
-  .sf-page {
-    padding: 1.1rem 1rem;
-    font-size: 0.85rem;
-  }
-
+@container sf (max-width: 30rem) {
   .sf-caption,
   .sf-signatures {
     grid-template-columns: 1fr;

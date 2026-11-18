@@ -1,0 +1,62 @@
+.help-toggle {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+}
+
+.help-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tint-blue-fg);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help-toggle-button:hover {
+  text-decoration: underline;
+}
+
+.help-toggle-button svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+}
+
+.help-toggle-button .help-toggle-chevron {
+  width: 0.85rem;
+  height: 0.85rem;
+  transition: transform 0.15s ease;
+}
+
+.help-toggle-button[aria-expanded='true'] .help-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.help-toggle-panel {
+  max-width: 46rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.help-toggle-panel p {
+  margin: 0 0 0.4rem;
+}
+
+.help-toggle-panel ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.help-toggle-panel li + li {
+  margin-top: 0.25rem;
+}

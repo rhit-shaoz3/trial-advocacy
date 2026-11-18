@@ -361,3 +361,10 @@
   color: inherit;
   cursor: pointer;
 }
+
+/* How many of the instructor's allowed interviews with this witness are used. */
+.iv-limit {
+  margin: 0.25rem 0 0;
+  color: var(--ws-muted);
+  font-size: 0.85rem;
+}

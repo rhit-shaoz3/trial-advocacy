@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -199,6 +199,85 @@ describe('the guided case setup', () => {
     expect(stepButtons().at(-1)).toBe('7Investigator')
     await user.click(screen.getByRole('button', { name: 'Skip for now' }))
     expect(service.reachSetupStep).toHaveBeenCalledWith('c1', 'k1', 'tasks')
+  })
+
+  it('saves the investigator changes with Next', async () => {
+    const investigating = { ...draft, setupStep: 'investigator' as const, investigator: { enabled: true, name: 'John Hastings', instructions: '' } }
+    const saveInvestigator = vi.fn(async (_c: string, _k: string, input: { enabled: boolean; name: string; instructions: string }) => ({
+      ...investigating,
+      investigator: input,
+    }))
+    const service = setupService({ getCase: vi.fn().mockResolvedValue(investigating), saveInvestigator })
+    const user = renderAt('/courses/c1/cases/k1', service)
+
+    await user.type(await screen.findByLabelText(/Instructions for the investigator/), 'Never follow anyone.')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => expect(service.reachSetupStep).toHaveBeenCalledWith('c1', 'k1', 'tasks'))
+    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ instructions: 'Never follow anyone.' }))
+  })
+
+  it('explains each step on request', async () => {
+    const service = setupService({ getCase: vi.fn().mockResolvedValue({ ...draft, setupStep: 'worlds' }) })
+    const user = renderAt('/courses/c1/cases/k1', service)
+
+    const help = await screen.findByRole('button', { name: 'What is this step for?' })
+    expect(help).toHaveAttribute('aria-expanded', 'false')
+    await user.click(help)
+    expect(help).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText(/Each world plays out on its own/)).toBeInTheDocument()
+  })
+})
+
+describe('the case file step', () => {
+  const atFiles = () => setupService({ getCase: vi.fn().mockResolvedValue({ ...draft, setupStep: 'files' }) })
+  const addFile = async (name: string) => {
+    await screen.findByText(/No files uploaded yet/)
+    fireEvent.change(screen.getByTestId('material-input'), { target: { files: [new File(['x'], name, { type: 'application/pdf' })] } })
+  }
+
+  it('uploads the files waiting to upload when the instructor presses Next', async () => {
+    const service = atFiles()
+    vi.mocked(service.uploadMaterial).mockImplementation(async (_c, _k, file, input) => ({
+      id: 'm1',
+      filename: file.name,
+      description: input.description,
+      contentType: 'application/pdf',
+      sizeBytes: 1,
+      initial: false,
+      audience: input.audience,
+      uploadedAt: '2026-10-01T15:00:00.000Z',
+      textStatus: 'ready' as const,
+      textError: null,
+    }))
+    const user = renderAt('/courses/c1/cases/k1', service)
+    await addFile('Complaint.pdf')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    await waitFor(() => expect(service.reachSetupStep).toHaveBeenCalledWith('c1', 'k1', 'teams'))
+    expect(service.uploadMaterial).toHaveBeenCalledWith('c1', 'k1', expect.any(File), expect.objectContaining({ description: 'Complaint' }))
+  })
+
+  it("won't move on with a file that has no label", async () => {
+    const service = atFiles()
+    const user = renderAt('/courses/c1/cases/k1', service)
+    await addFile('Complaint.pdf')
+    await user.clear(screen.getByLabelText('Label for Complaint.pdf'))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(await screen.findByText('Give each file a label, or remove it, before moving on.')).toBeInTheDocument()
+    expect(service.uploadMaterial).not.toHaveBeenCalled()
+    expect(service.reachSetupStep).not.toHaveBeenCalled()
+  })
+
+  it('asks before Skip for now leaves files behind', async () => {
+    const service = atFiles()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const user = renderAt('/courses/c1/cases/k1', service)
+    await addFile('Complaint.pdf')
+    await user.click(screen.getByRole('button', { name: 'Skip for now' }))
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Skip without saving?'))
+    expect(service.reachSetupStep).not.toHaveBeenCalled()
   })
 })
 

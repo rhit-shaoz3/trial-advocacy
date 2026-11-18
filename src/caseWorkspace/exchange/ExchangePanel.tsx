@@ -131,7 +131,7 @@ export function ExchangePanel({
       parts[0]?.id,
   )
   /** The guide open (for the section on screen), and where its bulb was, to grow out of. */
-  const [teach, setTeach] = useState<{ topic: Exclude<TeachTopic, 'exhibits'>; from: DOMRect } | null>(null)
+  const [teach, setTeach] = useState<{ topic: Exclude<TeachTopic, 'exhibits' | 'client'>; from: DOMRect } | null>(null)
   // Guided tours open the section a step is about.
   const sectionIds = parts.map((p) => p.id).join(' ')
   const tourNavigator = useMemo(

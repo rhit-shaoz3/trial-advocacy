@@ -135,7 +135,7 @@ export const exchangeRouter = Router({ mergeParams: true })
 /** The settings, and what each side could disclose. */
 exchangeRouter.get('/', async (req, res) => {
   const caseId = req.courseCase!.id
-  res.json({ settings: await getSettings(caseId), options: await disclosureOptions(caseId) })
+  res.json({ settings: await getSettings(caseId), options: await disclosureOptions(caseId, { worlds: true }) })
 })
 
 exchangeRouter.put('/', async (req, res) => {
@@ -255,7 +255,7 @@ async function requireStudentContext(req: Request) {
 async function studentExchange(ctx: StudentContext): Promise<StudentExchange> {
   const [settings, options, submission, requests, drafts] = await Promise.all([
     getSettings(ctx.caseId),
-    disclosureOptions(ctx.caseId),
+    disclosureOptions(ctx.caseId, { team: ctx.teamId }),
     findSubmission(ctx.caseId, ctx.userId),
     listTeamRequests(ctx.caseId, ctx.teamId, ctx.userId),
     listDrafts(ctx),
@@ -357,12 +357,12 @@ myExchangeRouter.post('/disclosures', async (req, res) => {
     return { kind: kind as 'witness' | 'material', id, reason }
   })
   const heldBackReason = readString(req.body, 'heldBackReason').trim()
-  const options = (await disclosureOptions(ctx.caseId)).filter((o) => o.side === ctx.side)
+  const options = (await disclosureOptions(ctx.caseId, { team: ctx.teamId })).filter((o) => o.side === ctx.side)
   if (picks.length < options.length && !heldBackReason) {
     throw new HttpError(400, "Say why you're holding back the rest.")
   }
   if (heldBackReason.length > MAX_REASON_LENGTH) throw new HttpError(400, `Keep your reason to ${MAX_REASON_LENGTH} characters.`)
-  await submitDisclosures(ctx.caseId, ctx.userId, ctx.side, picks, heldBackReason)
+  await submitDisclosures(ctx.caseId, ctx.userId, ctx.teamId, ctx.side, picks, heldBackReason)
   res.status(201).json({ exchange: await studentExchange(ctx) })
 })
 

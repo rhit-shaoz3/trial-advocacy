@@ -2,6 +2,7 @@ import { app } from './app.ts'
 import { port } from './config.ts'
 import { resumeSubpoenas } from './exchange/subpoenas.ts'
 import { resumeInvestigations } from './investigator/requests.ts'
+import { resumeClientEmails } from './client/emails.ts'
 import { endExpiredInterviews } from './witness/interviews.ts'
 import { resumeClaims } from './witness/memory.ts'
 
@@ -10,6 +11,7 @@ app.listen(port, () => {
 })
 
 resumeInvestigations().catch((err) => console.error('Could not resume investigations:', err))
+resumeClientEmails().catch((err) => console.error('Could not resume client emails:', err))
 resumeSubpoenas().catch((err) => console.error('Could not resume subpoena drafts:', err))
 resumeClaims().catch((err) => console.error('Could not resume reading testimony:', err))
 

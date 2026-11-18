@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Mail } from 'lucide-react'
 import { FileViewer, type ViewableFile } from '../../components/FileViewer'
 import { useCourseService } from '../../courses/CourseServiceContext'
 import { FACT_DECISIONS, INVESTIGATOR_AVATAR_URL, type InterviewReview } from '../../courses/types'
@@ -35,6 +36,11 @@ export function ReviewCard({
   // Finished by the instructor, even while the team's report is still being written.
   const done = r.status === 'completed' || r.status === 'finalizing'
   const investigation = r.kind === 'investigation'
+  /** A team's email to its clients, and the clients' reply. */
+  const email = r.kind === 'client_email'
+  /** A written answer to the team (a report or a reply), reviewed with its files. */
+  const written = investigation || email
+  const clientsName = r.to?.length ? r.to.join(' and ') : 'their client'
   const documents = r.documents ?? []
   const ruled = r.facts.filter((f) => f.decision).length
   const decided = documents.filter((d) => d.decision).length
@@ -68,10 +74,18 @@ export function ReviewCard({
   return (
     <article className="review-card" aria-labelledby={`review-${r.id}`}>
       <header className="review-card-header">
-        <WitnessAvatar src={investigation ? INVESTIGATOR_AVATAR_URL : r.witness?.avatarUrl} size="lg" />
+        {email ? (
+          <span className="review-email-icon" aria-hidden="true">
+            <Mail />
+          </span>
+        ) : (
+          <WitnessAvatar src={investigation ? INVESTIGATOR_AVATAR_URL : r.witness?.avatarUrl} size="lg" />
+        )}
         <div className="review-card-title">
           <span className="ws-eyebrow">{r.caseTitle}</span>
-          <h2 id={`review-${r.id}`}>{investigation ? `Investigation for ${team}` : `Interview of ${r.witness?.name}`}</h2>
+          <h2 id={`review-${r.id}`}>
+            {email ? `Email from ${team} to ${clientsName}` : investigation ? `Investigation for ${team}` : `Interview of ${r.witness?.name}`}
+          </h2>
           <p className="review-meta">
             World {worldLabel(r.worldNumber)} · {ROLE_LABEL[r.side]} · Team {r.teamNumber}
             {r.team.length > 0 && ` (${r.team.join(', ')})`}
@@ -80,7 +94,7 @@ export function ReviewCard({
         <small className="muted">
           {done && r.completedAt
             ? `Completed ${dateTime(r.completedAt)}`
-            : `${investigation ? 'Sent' : 'Ended'} ${dateTime(r.createdAt)}`}
+            : `${written ? 'Sent' : 'Ended'} ${dateTime(r.createdAt)}`}
           {auto && (
             <>
               <br />
@@ -90,21 +104,27 @@ export function ReviewCard({
         </small>
       </header>
 
-      {investigation && r.assignment && (
+      {written && r.assignment && (
         <div className="review-assignment">
-          <span className="review-label">Assignment{r.askedBy ? ` from ${r.askedBy}` : ''}</span>
+          <span className="review-label">
+            {email ? `${team}'s email${r.askedBy ? `, from ${r.askedBy}` : ''}${r.subject ? `: ${r.subject}` : ''}` : `Assignment${r.askedBy ? ` from ${r.askedBy}` : ''}`}
+          </span>
           <p>{r.assignment}</p>
         </div>
       )}
 
       {r.status === 'summarizing' && (
         <p className="review-note" role="status">
-          {investigation ? `The investigator is working on ${team}'s assignment…` : 'Listing the new facts in this conversation…'}
+          {email
+            ? `${clientsName} ${r.to && r.to.length > 1 ? 'are' : 'is'} writing back to ${team}…`
+            : investigation
+              ? `The investigator is working on ${team}'s assignment…`
+              : 'Listing the new facts in this conversation…'}
         </p>
       )}
       {r.status === 'finalizing' && (
         <p className="review-note" role="status">
-          Writing {team}&rsquo;s report without what you turned down…
+          Writing {team}&rsquo;s {email ? 'reply' : 'report'} without what you turned down…
         </p>
       )}
 
@@ -122,18 +142,20 @@ export function ReviewCard({
         </div>
       )}
 
-      {investigation && r.status === 'open' && r.reviewBlockMissing && (
+      {written && r.status === 'open' && r.reviewBlockMissing && (
         <p className="review-warning" role="note">
-          The investigator didn&rsquo;t list his new facts or files. Read the report before sending it.
+          {email
+            ? 'The reply didn’t list its new facts. Read it before sending it.'
+            : 'The investigator didn’t list his new facts or files. Read the report before sending it.'}
         </p>
       )}
-      {investigation && r.report && (
+      {written && r.report && (
         <details className="review-report" open={r.status === 'open'}>
-          <summary>The investigator&rsquo;s report</summary>
+          <summary>{email ? 'The client’s reply' : 'The investigator’s report'}</summary>
           <p>{r.report}</p>
         </details>
       )}
-      {investigation && done && r.finalReport && (
+      {written && done && r.finalReport && (
         <details className="review-report">
           <summary>What {team} got</summary>
           <p>{r.finalReport}</p>
@@ -143,7 +165,7 @@ export function ReviewCard({
       {(r.status === 'open' || done) &&
         (r.facts.length === 0 ? (
           <p className="review-note">
-            {investigation ? 'No new facts in this report.' : 'No new facts: the witness kept to the record.'}
+            {email ? 'No new facts in this reply.' : investigation ? 'No new facts in this report.' : 'No new facts: the witness kept to the record.'}
           </p>
         ) : (
           <ol className="review-facts" aria-label="New facts">
@@ -184,18 +206,20 @@ export function ReviewCard({
           </ol>
         ))}
 
-      {investigation && (r.status === 'open' || done) && documents.length > 0 && (
+      {written && (r.status === 'open' || done) && documents.length > 0 && (
         <section className="review-documents" aria-label="Case files">
           <h3>Case files</h3>
           <p className="muted">
-            The investigator could get these for {team}, or made them (a record of what he found, or an illustrative aid
-            behind an estimate). If you don&rsquo;t allow one, everything from it comes out of the report.
+            {email
+              ? `The client attached these for ${team}: files they own, or ones they wrote out because the case file didn’t have them. A new one becomes part of this world’s case file. If you don’t allow one, it comes out of the reply.`
+              : `The investigator could get these for ${team}, or made them (a record of what he found, or an illustrative aid behind an estimate). If you don’t allow one, everything from it comes out of the report.`}
           </p>
           <ol className="review-facts review-doc-list">
             {documents.map((d) => (
               <li key={d.materialId}>
                 <p className="review-fact-text">
-                  {d.made ? 'Give' : 'Allow'} {team} {d.made ? 'the file he made,' : 'access to'} <em>{d.title}</em>{' '}
+                  {d.made ? 'Give' : 'Allow'} {team} {d.made ? (email ? 'the document the client wrote out,' : 'the file he made,') : 'access to'}{' '}
+                  <em>{d.title}</em>{' '}
                   <button
                     type="button"
                     className="link-button"
@@ -264,7 +288,7 @@ export function ReviewCard({
 
       <footer className="review-card-footer">
         <div className="review-expanders">
-          {!investigation && <Transcript courseId={courseId} reviewId={r.id} />}
+          {!written && <Transcript courseId={courseId} reviewId={r.id} />}
           <WorldFactsDetails courseId={courseId} caseId={r.caseId} worldNumber={r.worldNumber} />
         </div>
         {r.status === 'open' &&

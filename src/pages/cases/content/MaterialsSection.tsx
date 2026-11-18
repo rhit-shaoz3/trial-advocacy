@@ -1,14 +1,17 @@
-import { Fragment, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { Fragment, useEffect, useImperativeHandle, useRef, useState, type ChangeEvent, type DragEvent, type Ref } from 'react'
 import { Download, TriangleAlert, Upload, X } from 'lucide-react'
 import { FileViewer } from '../../../components/FileViewer'
 import { SortHeader } from '../../../components/SortHeader'
 import { byText, useSort, type SortState } from '../../../components/sorting'
 import { useCourseService } from '../../../courses/CourseServiceContext'
-import { AUDIENCE_LABEL, fileTypeLabel, formatSize, shortDate, SOURCE_LABEL } from '../../../courses/caseLabels'
+import { AUDIENCE_LABEL, fileTypeLabel, formatSize, OWNER_LABEL, shortDate, SOURCE_LABEL } from '../../../courses/caseLabels'
 import {
   MATERIAL_AUDIENCES,
   MATERIAL_SOURCES,
+  THIRD_PARTY,
+  type MaterialOwner,
   type MaterialSource,
+  type Witness,
   type CaseMaterial,
   type CaseTeams,
   type MaterialAudience,
@@ -17,6 +20,7 @@ import {
 import { worldLabel } from '../../../courses/worldLabel'
 import { sharesLabel } from './shares'
 import { SharePicker } from './SharePicker'
+import type { StepSave } from './stepSave'
 
 const MAX_BYTES = 100 * 1024 * 1024 // matches the server's limit
 const ACCEPT = [
@@ -26,12 +30,63 @@ const ACCEPT = [
   '.mp4,.mov,.webm', // video
 ].join(',')
 
-/** A file waiting to be uploaded, with the label and audience the instructor picks for it. */
+/** A file waiting to be uploaded, with the label, audience and owner the instructor picks for it. */
 interface QueuedFile {
   key: number
   file: File
   label: string
   audience: MaterialAudience
+  owner: MaterialOwner
+}
+
+/** The owner select's value: "third_party", a side, or "witness:<id>". */
+const ownerValue = (owner: MaterialOwner | undefined) =>
+  owner?.kind === 'witness' ? `witness:${owner.witnessId}` : (owner?.kind ?? 'third_party')
+
+const ownerFrom = (value: string): MaterialOwner =>
+  value.startsWith('witness:')
+    ? { kind: 'witness', witnessId: value.slice('witness:'.length) }
+    : { kind: value as Exclude<MaterialOwner['kind'], 'witness'>, witnessId: null }
+
+/** Who would really have the file: a third party, one side's team, or one of the case's witnesses. */
+function OwnerSelect({
+  value,
+  witnesses,
+  onChange,
+  label,
+  disabled,
+}: {
+  value: MaterialOwner | undefined
+  witnesses: Witness[]
+  onChange(owner: MaterialOwner): void
+  label: string
+  disabled?: boolean
+}) {
+  return (
+    <select
+      className="inline-select"
+      value={ownerValue(value)}
+      onChange={(e) => onChange(ownerFrom(e.target.value))}
+      aria-label={label}
+      disabled={disabled}
+    >
+      {(Object.keys(OWNER_LABEL) as (keyof typeof OWNER_LABEL)[]).map((kind) => (
+        <option key={kind} value={kind}>
+          {OWNER_LABEL[kind]}
+        </option>
+      ))}
+      {witnesses.length > 0 && (
+        <optgroup label="A witness">
+          {witnesses.map((w) => (
+            <option key={w.id} value={`witness:${w.id}`}>
+              {w.name}
+              {w.isClient ? ' (client)' : ''}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  )
 }
 
 /** How often the list refreshes while files are still being read, so a failure shows up. */
@@ -81,11 +136,14 @@ export function MaterialsSection({
   courseId,
   caseId,
   onChange,
+  saveRef,
 }: {
   courseId: string
   caseId: string
   /** Called after any upload, edit, or delete (e.g. to refresh the launch checklist). */
   onChange?(): void
+  /** For the case setup flow: Next uploads the files still waiting to upload. */
+  saveRef?: Ref<StepSave>
 }) {
   const service = useCourseService()
   const fileInput = useRef<HTMLInputElement>(null)
@@ -112,6 +170,19 @@ export function MaterialsSection({
   const [sharing, setSharing] = useState<string | null>(null)
   /** The file open in the viewer. */
   const [viewing, setViewing] = useState<CaseMaterial | null>(null)
+  /** The case's witnesses, who can own files. */
+  const [witnesses, setWitnesses] = useState<Witness[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    service
+      .listWitnesses(courseId, caseId)
+      .then((w) => !cancelled && setWitnesses(w))
+      .catch(() => {}) // only the third party and sides are offered
+    return () => {
+      cancelled = true
+    }
+  }, [service, courseId, caseId])
 
   useEffect(() => {
     let cancelled = false
@@ -169,7 +240,7 @@ export function MaterialsSection({
     const accepted = files.filter((f) => f.size <= MAX_BYTES)
     setQueued((prev) => [
       ...prev,
-      ...accepted.map((file) => ({ key: nextKey++, file, label: defaultLabel(file.name), audience })),
+      ...accepted.map((file) => ({ key: nextKey++, file, label: defaultLabel(file.name), audience, owner: THIRD_PARTY })),
     ])
   }
 
@@ -188,7 +259,7 @@ export function MaterialsSection({
   const updateQueued = (key: number, fields: Partial<QueuedFile>) =>
     setQueued((prev) => prev.map((p) => (p.key === key ? { ...p, ...fields } : p)))
 
-  /** Uploads every listed file with its own label and audience. Files that fail stay listed. */
+  /** Uploads every listed file with its own label and audience. Files that fail stay listed; returns their errors. */
   async function handleUpload() {
     setErrors([])
     setUploading(true)
@@ -198,6 +269,7 @@ export function MaterialsSection({
         const uploaded = await service.uploadMaterial(courseId, caseId, item.file, {
           audience: item.audience,
           description: item.label.trim(),
+          owner: item.owner,
         })
         setMaterials((prev) => [...(prev ?? []), uploaded])
         setQueued((prev) => prev.filter((p) => p.key !== item.key))
@@ -208,9 +280,20 @@ export function MaterialsSection({
     setErrors(failures)
     setUploading(false)
     onChange?.()
+    return failures
   }
 
   const unlabeled = queued.some((p) => !p.label.trim())
+
+  useImperativeHandle(saveRef, () => ({
+    pending: () => queued.length > 0,
+    async save() {
+      if (queued.length === 0) return
+      if (unlabeled) throw new Error('Give each file a label, or remove it, before moving on.')
+      const failures = await handleUpload()
+      if (failures.length > 0) throw new Error('Some files didn’t upload. Try them again, or remove them, before moving on.')
+    },
+  }))
 
   async function handleAudience(material: CaseMaterial, choice: MaterialAudience | typeof SPECIFIC) {
     setErrors([])
@@ -222,6 +305,21 @@ export function MaterialsSection({
       const updated = await service.updateMaterial(courseId, caseId, material.id, {
         audience: next,
         description: material.description,
+      })
+      setMaterials((prev) => prev?.map((m) => (m.id === updated.id ? updated : m)) ?? null)
+      onChange?.()
+    } catch (err) {
+      setErrors([err instanceof Error ? err.message : 'Something went wrong.'])
+    }
+  }
+
+  async function handleOwner(material: CaseMaterial, owner: MaterialOwner) {
+    setErrors([])
+    try {
+      const updated = await service.updateMaterial(courseId, caseId, material.id, {
+        audience: material.audience,
+        description: material.description,
+        owner,
       })
       setMaterials((prev) => prev?.map((m) => (m.id === updated.id ? updated : m)) ?? null)
       onChange?.()
@@ -269,7 +367,10 @@ export function MaterialsSection({
         complaint: every team starts from it on their Overview. The rest stay with instructors until a
         team asks for them; then change who can see the file, and it appears in that side&rsquo;s Case
         file tab. Keep witnesses&rsquo; depositions to instructors only, so the AI witness can read them
-        but students can&rsquo;t. Each file is transcribed for the AI witnesses once it&rsquo;s uploaded.
+        but students can&rsquo;t. Each file is transcribed for the AI witnesses once it&rsquo;s uploaded. Say
+        who <strong>owns</strong> each file, who would really have it: a third party (a hospital, the city), one
+        side&rsquo;s team, or a witness. A side&rsquo;s clients can hand over their own files and their side&rsquo;s
+        when the team emails them.
       </p>
 
       <div
@@ -353,6 +454,13 @@ export function MaterialsSection({
                     </option>
                   ))}
                 </select>
+                <OwnerSelect
+                  value={p.owner}
+                  witnesses={witnesses}
+                  onChange={(owner) => updateQueued(p.key, { owner })}
+                  label={`Who owns ${p.file.name}`}
+                  disabled={uploading}
+                />
                 <button
                   type="button"
                   className="icon-button"
@@ -430,9 +538,11 @@ export function MaterialsSection({
               <table className="data-table">
                 <thead>
                   <tr>
-                    {(Object.keys(SORTS) as SortKey[]).map((key) => (
+                    {(['file', 'source', 'audience'] as const).map((key) => (
                       <SortHeader key={key} column={key} label={SORTS[key].label} sort={sort} onSort={sortBy} />
                     ))}
+                    <th scope="col">Owned by</th>
+                    <SortHeader column="added" label={SORTS.added.label} sort={sort} onSort={sortBy} />
                     <th scope="col">
                       <span className="visually-hidden">Actions</span>
                     </th>
@@ -530,6 +640,14 @@ export function MaterialsSection({
                             </button>
                           )}
                         </td>
+                        <td>
+                          <OwnerSelect
+                            value={m.owner}
+                            witnesses={witnesses}
+                            onChange={(owner) => handleOwner(m, owner)}
+                            label={`Who owns ${m.filename}`}
+                          />
+                        </td>
                         <td>{shortDate(m.uploadedAt)}</td>
                         <td className="cell-actions">
                           <button
@@ -544,7 +662,7 @@ export function MaterialsSection({
                       </tr>
                       {sharing === m.id && teams && (
                         <tr className="share-row">
-                          <td colSpan={5}>
+                          <td colSpan={6}>
                             <SharePicker
                               material={m}
                               teams={teams}

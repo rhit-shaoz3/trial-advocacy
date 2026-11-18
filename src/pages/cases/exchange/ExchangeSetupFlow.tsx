@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, Check, ChevronLeft, FileText, Minus, Pencil, Plus, TriangleAlert } from 'lucide-react'
 import { WitnessAvatar } from '../../../components/WitnessAvatar'
 import { useCourseService } from '../../../courses/CourseServiceContext'
@@ -16,6 +16,9 @@ import { DEFAULT_AI_FEEDBACK, SUBPOENA_TYPES } from '../../../courses/types'
 import { SUBPOENA_TYPE_HINT, SUBPOENA_TYPE_LABEL } from '../../../courses/subpoenaForm'
 import { WelcomeEmail } from '../../../caseWorkspace/exchange/WelcomeEmail'
 import { SIDE_LABEL, partSummary, subpoenaSummary } from './exchangeLabels'
+import { worldLabel } from '../../../courses/worldLabel'
+import { HelpToggle } from '../../../components/HelpToggle'
+import { EXCHANGE_HELP } from '../setup/stepHelp'
 import '../setup/CaseSetupFlow.css'
 import './exchange.css'
 
@@ -33,7 +36,7 @@ const STEP_LABEL: Record<ExchangeStep, string> = {
 
 const STEP_HINT: Record<ExchangeStep, string> = {
   disclosures:
-    'Pick what each side must disclose to the other. Each student makes their own picks during the introduction phase; your picks are the answer key, shared with everyone when you move to information exchange.',
+    'Pick what each side must disclose to the other. Each student makes their own picks during the introduction phase; your picks are the answer key, shared with everyone when you move to information exchange. Disclosed files open to both sides, and a disclosed witness you hid from students is shown.',
   subpoenas: 'Teams subpoena records, data, objects, or a site visit from people and organizations outside their files.',
   interrogatories: 'Written questions one team sends the other, answered in writing.',
   rfas: 'Statements one team asks the other to admit or deny, so settled facts don’t have to be proven at trial.',
@@ -217,6 +220,7 @@ export function ExchangeSetupFlow({
             </span>
             <h2>{STEP_LABEL[step]}</h2>
             <p className="muted">{STEP_HINT[step]}</p>
+            <HelpToggle label="What is this step for?">{EXCHANGE_HELP[step]}</HelpToggle>
           </div>
           {included !== null && included !== undefined && (
             <label className="exchange-include">
@@ -313,7 +317,9 @@ function DisclosurePicker({
       {SIDES.map((side) => {
         const mine = options.filter((o) => o.side === side)
         const witnesses = mine.filter((o) => o.kind === 'witness')
-        const files = mine.filter((o) => o.kind === 'material')
+        const files = mine.filter((o) => o.kind === 'material' && !o.worldNumber)
+        // Files one team got from its clients or the investigator, by case world: disclosed, they reach that world only.
+        const worlds = [...new Set(mine.flatMap((o) => (o.worldNumber ? [o.worldNumber] : [])))].sort((a, b) => a - b)
         return (
           <section key={side} className="exchange-side" aria-label={`${SIDE_LABEL[side]} disclosures`}>
             <header>
@@ -348,6 +354,25 @@ function DisclosurePicker({
                   {o.detail && <small>{o.detail}</small>}
                 </span>
               </label>
+            ))}
+            {worlds.map((world) => (
+              <Fragment key={world}>
+                <h3>Case world {worldLabel(world)} only</h3>
+                {mine
+                  .filter((o) => o.worldNumber === world)
+                  .map((o) => (
+                    <label key={o.id} className="exchange-pick">
+                      <input type="checkbox" checked={isOn(o)} onChange={() => flip(o)} disabled={disabled} />
+                      <span className="ws-icon-tile ws-icon-tile-sm ws-tone-green" aria-hidden="true">
+                        <FileText />
+                      </span>
+                      <span>
+                        <strong>{o.name}</strong>
+                        <small>{o.detail ? `${o.detail} · ` : ''}From this world&rsquo;s team</small>
+                      </span>
+                    </label>
+                  ))}
+              </Fragment>
             ))}
           </section>
         )
@@ -559,7 +584,8 @@ function EmailStep({
   onChange(firms: ExchangeSettingsInput['firms']): void
 }) {
   const [preview, setPreview] = useState<Side>('plaintiff')
-  const sideOptions = options.filter((o) => o.side === preview)
+  // The welcome email lists the case's own disclosures, not one world's files.
+  const sideOptions = options.filter((o) => o.side === preview && !o.worldNumber)
   return (
     <div className="exchange-email">
       <div className="exchange-firms">

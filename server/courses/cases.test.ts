@@ -65,7 +65,9 @@ describe('creating', () => {
       // A new case starts the guided setup.
       setupStep: 'details',
       setupCompletedAt: null,
-      investigator: { enabled: true, name: 'John Hastings', instructions: '' },
+      investigator: { enabled: true, name: 'John Hastings', instructions: '', limit: { max: 2, per: 'team' } },
+      interviewLimit: { max: 2, per: 'team' },
+      clientEmailLimit: { max: 2, per: 'team' },
       reviewMode: 'all',
       exchangeReady: false,
       exhibitListEnabled: true,

@@ -205,6 +205,27 @@ describe('MaterialsSection', () => {
     expect(onChange).toHaveBeenCalled()
   })
 
+  it('says who owns each file: a third party, a side, or a witness', async () => {
+    const updateMaterial = vi.fn().mockImplementation(async (_c, _k, _id, input) => ({ ...factPattern, owner: input.owner }))
+    const witness = { id: 'w1', name: 'Paige Winston', role: '', description: '', hidden: false, alignedSide: 'plaintiff' as const, personaNotes: '', depositionMaterialId: null, knownMaterialIds: [], defendingCounsel: '', isClient: true }
+    const { user } = renderWith(<MaterialsSection courseId="c1" caseId="k1" />, {
+      listMaterials: vi.fn().mockResolvedValue([factPattern]),
+      listWitnesses: vi.fn().mockResolvedValue([witness]),
+      updateMaterial,
+    })
+    const owner = await screen.findByLabelText('Who owns Fact pattern.pdf')
+    expect(owner).toHaveDisplayValue('Third party')
+    await screen.findByRole('option', { name: 'Paige Winston (client)' })
+    await user.selectOptions(owner, 'Paige Winston (client)')
+    expect(updateMaterial).toHaveBeenCalledWith('c1', 'k1', 'm1', {
+      audience: factPattern.audience,
+      description: factPattern.description,
+      owner: { kind: 'witness', witnessId: 'w1' },
+    })
+    await user.selectOptions(screen.getByLabelText('Who owns Fact pattern.pdf'), 'Plaintiff team')
+    expect(updateMaterial).toHaveBeenLastCalledWith('c1', 'k1', 'm1', expect.objectContaining({ owner: { kind: 'plaintiff', witnessId: null } }))
+  })
+
   it('puts the initial file first and the rest by name, sorts by the heading clicked, and shows only failed reading', async () => {
     const file = (id: string, filename: string, uploadedAt: string, more: Partial<CaseMaterial> = {}): CaseMaterial => ({
       ...factPattern,
@@ -269,6 +290,7 @@ describe('MaterialsSection', () => {
       'Instructor Uploaded1',
       'Subpoena Response1',
       'From the Investigator0',
+      'From the Client0',
     ])
     expect(within(filter).getByRole('button', { name: /All/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('cell', { name: 'Subpoena Response · World A' })).toBeInTheDocument()
@@ -334,8 +356,8 @@ describe('MaterialsSection', () => {
     await user.selectOptions(screen.getByLabelText('Who will see Ride log (March).pdf'), 'Everyone')
     await user.click(screen.getByRole('button', { name: 'Upload 2 files' }))
 
-    expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', photo, { audience: 'defense', description: 'Ride photo' })
-    expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', log, { audience: 'all', description: 'Ride log (March)' })
+    expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', photo, { audience: 'defense', description: 'Ride photo', owner: { kind: 'third_party', witnessId: null } })
+    expect(uploadMaterial).toHaveBeenCalledWith('c1', 'k1', log, { audience: 'all', description: 'Ride log (March)', owner: { kind: 'third_party', witnessId: null } })
     expect(await screen.findByRole('button', { name: 'photo.jpg' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /Ready to upload/ })).not.toBeInTheDocument()
     expect(onChange).toHaveBeenCalled()
@@ -452,12 +474,31 @@ describe('InvestigatorSection', () => {
     await user.type(screen.getByLabelText(/Instructions for the investigator/), 'Be brief.')
     await user.click(save)
 
-    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', { enabled: true, name: 'Nora Vance', instructions: 'Be brief.' })
+    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', { enabled: true, name: 'Nora Vance', instructions: 'Be brief.', limit: { max: 2, per: 'team' } })
     expect(onSaved).toHaveBeenCalledWith(saved)
     expect(await screen.findByText('Saved.')).toBeInTheDocument()
 
     await user.click(toggle)
     expect(screen.getByLabelText('Name')).toBeDisabled()
+  })
+
+  it('limits the requests per team or per student, and only to a whole number from 1', async () => {
+    const saveInvestigator = vi.fn().mockImplementation(async (_c, _k, input) => ({ ...coaster, investigator: input }))
+    const { user } = renderWith(<InvestigatorSection courseId="c1" courseCase={coaster} onSaved={vi.fn()} />, { saveInvestigator })
+
+    const count = screen.getByLabelText('Requests to the investigator: how many')
+    expect(count).toHaveValue(2)
+    const save = screen.getByRole('button', { name: 'Save changes' })
+    await user.clear(count)
+    await user.type(count, '0')
+    expect(screen.getByText('Enter a whole number from 1 to 999.')).toBeInTheDocument()
+    expect(save).toBeDisabled()
+    await user.clear(count)
+    await user.type(count, '5')
+    await user.selectOptions(screen.getByLabelText('Requests to the investigator: for each team or each student'), 'student')
+    await user.click(save)
+    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ limit: { max: 5, per: 'student' } }))
+    expect(await screen.findByText('Saved.')).toBeInTheDocument()
   })
 
   it('shows why he can\'t be turned off', async () => {
@@ -537,11 +578,18 @@ describe('WitnessesSection', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(/couldn't be read\. Upload the complaint as a PDF or Word document/)
   })
 
+  it('shows a loading panel while the AI reads the complaint', async () => {
+    renderSection({ getWitnessSuggestions: vi.fn().mockResolvedValue({ status: 'waiting', reason: 'reading' }) })
+    const panel = await screen.findByRole('status')
+    expect(panel).toHaveTextContent('Finding likely witnesses')
+    expect(panel).toHaveTextContent(/Reading the complaint/)
+  })
+
   it('adds, edits, and removes witnesses', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const elena = { id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: '', audience: 'all' as const, ...blankAi }
+    const elena = { id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: '', hidden: false, ...blankAi }
     const createWitness = vi.fn().mockResolvedValue(elena)
-    const updateWitness = vi.fn().mockResolvedValue({ ...elena, audience: 'defense' })
+    const updateWitness = vi.fn().mockResolvedValue({ ...elena, hidden: true })
     const { user, service } = renderSection({ createWitness, updateWitness })
 
     await user.click(await screen.findByRole('button', { name: 'Add witness' }))
@@ -553,19 +601,21 @@ describe('WitnessesSection', () => {
       name: 'Elena Torres',
       role: 'Ride operator',
       description: '',
-      audience: 'all',
+      hidden: false,
       ...blankAi,
       avatarPreset: null,
+      isClient: false,
+      speaksForOrganization: false,
     })
     const item = await screen.findByRole('listitem', { name: 'Elena Torres' })
-    expect(item).toHaveTextContent('Everyone')
+    expect(item).not.toHaveTextContent('Hidden from students')
     expect(within(item).queryByRole('link', { name: 'Test as plaintiff' })).not.toBeInTheDocument()
 
     await user.click(within(item).getByRole('button', { name: 'Edit' }))
-    await user.selectOptions(screen.getByLabelText('Visible to'), 'Defense only')
+    await user.click(screen.getByRole('checkbox', { name: 'Show to students' }))
     await user.click(screen.getByRole('button', { name: 'Save witness' }))
-    expect(updateWitness).toHaveBeenCalledWith('c1', 'k1', 'w1', expect.objectContaining({ audience: 'defense' }))
-    expect(await screen.findByRole('listitem', { name: 'Elena Torres' })).toHaveTextContent('Defense only')
+    expect(updateWitness).toHaveBeenCalledWith('c1', 'k1', 'w1', expect.objectContaining({ hidden: true }))
+    expect(await screen.findByRole('listitem', { name: 'Elena Torres' })).toHaveTextContent('Hidden from students')
 
     await user.click(within(screen.getByRole('listitem', { name: 'Elena Torres' })).getByRole('button', { name: 'Remove' }))
     expect(service.deleteWitness).toHaveBeenCalledWith('c1', 'k1', 'w1')
@@ -573,7 +623,7 @@ describe('WitnessesSection', () => {
   })
 
   it('gives the witness one of the picture designs', async () => {
-    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: 4, avatarUrl: '/witness-avatars/04.svg' }
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', hidden: false, ...blankAi, avatarPreset: 4, avatarUrl: '/witness-avatars/04.svg' }
     const createWitness = vi.fn().mockResolvedValue(elena)
     const { user } = renderSection({ createWitness })
 
@@ -591,7 +641,7 @@ describe('WitnessesSection', () => {
 
   it('uploads a cropped picture for the witness once it is saved', async () => {
     vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:picture'), revokeObjectURL: vi.fn() }))
-    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: null, avatarUrl: null }
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', hidden: false, ...blankAi, avatarPreset: null, avatarUrl: null }
     const withPicture = { ...elena, avatarUrl: '/api/witnesses/w1/avatar?v=1' }
     const createWitness = vi.fn().mockResolvedValue(elena)
     const uploadWitnessAvatar = vi.fn().mockResolvedValue(withPicture)
@@ -617,7 +667,7 @@ describe('WitnessesSection', () => {
   })
 
   it('removes an uploaded picture when No picture is chosen', async () => {
-    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', audience: 'all' as const, ...blankAi, avatarPreset: null, avatarUrl: '/api/witnesses/w1/avatar?v=1' }
+    const elena = { id: 'w1', name: 'Elena Torres', role: '', description: '', hidden: false, ...blankAi, avatarPreset: null, avatarUrl: '/api/witnesses/w1/avatar?v=1' }
     const updateWitness = vi.fn().mockResolvedValue(elena)
     const removeWitnessAvatar = vi.fn().mockResolvedValue({ ...elena, avatarUrl: null })
     const { user } = renderSection({ listWitnesses: vi.fn().mockResolvedValue([elena]), updateWitness, removeWitnessAvatar })
@@ -638,7 +688,7 @@ describe('WitnessesSection', () => {
       name: 'Elena Torres',
       role: '',
       description: '',
-      audience: 'all' as const,
+      hidden: false,
       alignedSide: 'defense' as const,
       personaNotes: 'Plain-spoken.',
       depositionMaterialId: 'm2',
@@ -672,6 +722,34 @@ describe('WitnessesSection', () => {
     expect(within(item).getByRole('link', { name: 'Test as defense' })).toHaveAttribute('href', '/courses/c1/cases/k1/witnesses/w1?side=defense')
   })
 
+  it('marks a witness as a client, once they have a side', async () => {
+    const createWitness = vi.fn().mockImplementation(async (_c, _k, input) => ({ id: 'w9', avatarUrl: null, ...input }))
+    const { user } = renderSection({ createWitness })
+    await user.click(await screen.findByRole('button', { name: 'Add witness' }))
+    const form = screen.getByRole('form', { name: 'New witness' })
+    await user.type(within(form).getByLabelText('Name'), 'Dana Park')
+    const client = within(form).getByRole('checkbox', { name: 'This is a client' })
+    expect(client).toBeDisabled()
+    await user.selectOptions(within(form).getByLabelText('Testifies for'), 'Defense')
+    await user.click(client)
+    await user.click(within(form).getByRole('checkbox', { name: /Speaks for an organization/ }))
+    await user.click(within(form).getByRole('button', { name: 'Save witness' }))
+    expect(createWitness).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ alignedSide: 'defense', isClient: true, speaksForOrganization: true }))
+    expect(await screen.findByRole('listitem', { name: 'Dana Park' })).toHaveTextContent('Defendant’s client')
+  })
+
+  it('limits the emails each team can send its clients', async () => {
+    const saveWitnessSettings = vi.fn().mockResolvedValue({ ...coaster, clientEmailLimit: { max: 3, per: 'team' } })
+    const { user } = renderSection({ saveWitnessSettings })
+    const form = await screen.findByRole('form', { name: 'AI witness settings' })
+    const count = within(form).getByLabelText('Emails to the client: how many')
+    expect(count).toHaveValue(2)
+    await user.clear(count)
+    await user.type(count, '3')
+    await user.click(within(form).getByRole('button', { name: 'Save settings' }))
+    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ clientEmailLimit: { max: 3, per: 'team' } }))
+  })
+
   it('saves the disputed issues, with no case date to set', async () => {
     const saved = { ...coaster, disputedIssues: 'Where she stood.' }
     const saveWitnessSettings = vi.fn().mockResolvedValue(saved)
@@ -682,8 +760,32 @@ describe('WitnessesSection', () => {
     expect(within(form).queryByLabelText(/date in the case/)).not.toBeInTheDocument()
     await user.type(within(form).getByLabelText(/Issues the witnesses/), 'Where she stood.')
     await user.click(within(form).getByRole('button', { name: 'Save settings' }))
-    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', { inWorldDate: null, disputedIssues: 'Where she stood.' })
+    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', {
+      inWorldDate: null,
+      disputedIssues: 'Where she stood.',
+      interviewLimit: { max: 2, per: 'team' },
+      clientEmailLimit: { max: 2, per: 'team' },
+    })
     expect(onCaseChange).toHaveBeenCalledWith(saved)
+  })
+
+  it('sets how many times each team or student can interview each witness', async () => {
+    const saveWitnessSettings = vi.fn().mockResolvedValue({ ...coaster, interviewLimit: { max: 4, per: 'student' } })
+    const { user } = renderSection({ saveWitnessSettings })
+
+    const form = await screen.findByRole('form', { name: 'AI witness settings' })
+    const count = within(form).getByLabelText('Interviews with each witness: how many')
+    expect(count).toHaveValue(2)
+    await user.clear(count)
+    await user.type(count, '4')
+    await user.selectOptions(within(form).getByLabelText('Interviews with each witness: for each team or each student'), 'student')
+    await user.click(within(form).getByRole('button', { name: 'Save settings' }))
+    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', {
+      inWorldDate: null,
+      disputedIssues: '',
+      interviewLimit: { max: 4, per: 'student' },
+      clientEmailLimit: { max: 2, per: 'team' },
+    })
   })
 })
 
@@ -722,7 +824,6 @@ describe('TasksSection', () => {
 describe('suggestions from the case file', () => {
   const suggestions = {
     disputedIssues: 'Whether Torres checked the lap bars',
-    investigatorNotes: 'Talk to the riders in the next car.',
     instructorNote: 'Focus on the restart.',
     tasks: [
       { title: 'Outline the deposition', description: 'List the topics.' },
@@ -745,27 +846,23 @@ describe('suggestions from the case file', () => {
     updatedAt: '2026-10-01T15:00:00.000Z',
   }
 
-  it('writes the suggested notes into an empty field, saved only when the instructor saves', async () => {
-    const saveInvestigator = vi.fn().mockResolvedValue({ ...base, investigator: { ...base.investigator!, instructions: suggestions.investigatorNotes } })
-    const { user, service } = renderWith(<InvestigatorSection courseId="c1" courseCase={base} onSaved={vi.fn()} />, { ...ready, saveInvestigator })
+  it("doesn't suggest instructions for the investigator, and explains what they can say", async () => {
+    const saveInvestigator = vi.fn().mockResolvedValue({ ...base, investigator: { ...base.investigator!, instructions: 'Be brief.' } })
+    const { user } = renderWith(<InvestigatorSection courseId="c1" courseCase={base} onSaved={vi.fn()} />, { ...ready, saveInvestigator })
     const notes = screen.getByLabelText(/Instructions for the investigator/)
-    await waitFor(() => expect(notes).toHaveValue('Talk to the riders in the next car.'))
-    expect(service.getContentSuggestions).toHaveBeenCalledWith('c1', 'k1')
-    expect(screen.getByText(/Suggested from the case file/)).toBeInTheDocument()
-    expect(saveInvestigator).not.toHaveBeenCalled()
-    // Editing it makes it theirs.
-    await user.type(notes, ' Be brief.')
-    expect(screen.queryByText(/Suggested from the case file/)).not.toBeInTheDocument()
+    expect(notes).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: 'What can I write here?' }))
+    expect(screen.getByText(/A personality\./)).toBeInTheDocument()
+    expect(screen.getByText(/Whether he can create new records\./)).toBeInTheDocument()
+    await user.type(notes, 'Be brief.')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
-    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ instructions: 'Talk to the riders in the next car. Be brief.' }))
+    expect(saveInvestigator).toHaveBeenCalledWith('c1', 'k1', expect.objectContaining({ instructions: 'Be brief.' }))
   })
 
   it('leaves saved text alone', async () => {
     const saved = { ...base, investigator: { ...base.investigator!, instructions: 'Keep it short.' } }
     renderWith(<InvestigatorSection courseId="c1" courseCase={saved} onSaved={vi.fn()} />, ready)
-    await waitFor(() => expect(ready.getContentSuggestions).toHaveBeenCalled())
     expect(screen.getByLabelText(/Instructions for the investigator/)).toHaveValue('Keep it short.')
-    expect(screen.queryByText(/Suggested from the case file/)).not.toBeInTheDocument()
   })
 
   it('suggests the disputed issues', async () => {
@@ -779,7 +876,12 @@ describe('suggestions from the case file', () => {
     const form = await screen.findByRole('form', { name: 'AI witness settings' })
     await waitFor(() => expect(within(form).getByLabelText(/Issues the witnesses/)).toHaveValue('Whether Torres checked the lap bars'))
     await user.click(within(form).getByRole('button', { name: 'Save settings' }))
-    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', { inWorldDate: null, disputedIssues: 'Whether Torres checked the lap bars' })
+    expect(saveWitnessSettings).toHaveBeenCalledWith('c1', 'k1', {
+      inWorldDate: null,
+      disputedIssues: 'Whether Torres checked the lap bars',
+      interviewLimit: { max: 2, per: 'team' },
+      clientEmailLimit: { max: 2, per: 'team' },
+    })
   })
 
   it('starts a new task as the next suggested one the case doesn’t have', async () => {

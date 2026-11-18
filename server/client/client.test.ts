@@ -293,8 +293,10 @@ describe('emailing the clients', () => {
     // The clients remember the first email and their reply.
     expect(asked[1].context.priorEmails.map((e) => [e.subject, e.from])).toEqual([
       ['Your records', 'Ada Lawyer (your attorney)'],
-      ['Re: Your records', 'Paige Winston, Dana Winston'],
+      ['Re: Your records', 'Paige Winston'],
     ])
+    expect(asked[1].context.priorEmails[0].to).toBe('Paige Winston, Dana Winston')
+    expect(asked[1].context.priorEmails[1].body).toContain('The receipts are attached')
     const third = await send(ada, { subject: 'Last', body: 'One more?' })
     expect(third.status).toBe(409)
     expect(third.body.error).toBe('Your team has used its 2 emails to your client.')

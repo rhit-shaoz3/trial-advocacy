@@ -638,6 +638,17 @@ export function CaseWorkspaceView({
                     Can&rsquo;t interview yet
                   </span>
                 )}
+                {/* A client the instructor hasn't given an interview file: emailed, but not interviewed yet. */}
+                {w.client && !w.canInterview && !w.locked && (
+                  <span
+                    className="cw-interview cw-interview-off"
+                    aria-disabled="true"
+                    title={`Your instructor hasn't set up interviews with ${w.name} yet. You can email them now.`}
+                  >
+                    <MessageSquare aria-hidden="true" />
+                    Interview
+                  </span>
+                )}
                 {w.canInterview &&
                   (interviewHref ? (
                     <Link to={interviewHref(w.id)} className="cw-interview" aria-label={`${action} ${w.name}`}>

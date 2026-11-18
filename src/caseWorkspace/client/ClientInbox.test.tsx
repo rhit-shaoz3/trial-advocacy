@@ -124,6 +124,11 @@ describe('client email', () => {
     await user.click(screen.getByRole('tab', { name: /Witnesses/ }))
     const dana = screen.getAllByRole('listitem').find((li) => li.textContent?.includes('Dana Winston'))!
     expect(dana).toHaveTextContent('Your client')
+    // Both ways to reach a client: Paige can be interviewed; Dana has no interview file yet, so hers is greyed out.
+    const paige = screen.getAllByRole('listitem').find((li) => li.textContent?.includes('Paige Winston'))!
+    expect(within(paige).getByRole('button', { name: 'Email Paige Winston' })).toBeInTheDocument()
+    expect(within(paige).getByText('Interview')).not.toHaveAttribute('title')
+    expect(within(dana).getByText('Interview').closest('[aria-disabled]')).toHaveAttribute('title', expect.stringMatching(/hasn't set up interviews/))
     // Tom is the other side's witness, not a client.
     const tom = screen.getAllByRole('listitem').find((li) => li.textContent?.includes('Tom Becker'))!
     expect(within(tom).queryByRole('button', { name: /Email/ })).not.toBeInTheDocument()

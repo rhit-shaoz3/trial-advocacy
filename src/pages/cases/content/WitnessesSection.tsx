@@ -418,6 +418,14 @@ function WitnessForm({
           maxLength={120}
         />
       </label>
+      <label>
+        Testifies for
+        <select value={alignedSide ?? ''} onChange={(e) => setAlignedSide((e.target.value || null) as Side | null)}>
+          <option value="">Neither side</option>
+          <option value="plaintiff">Plaintiff</option>
+          <option value="defense">Defense</option>
+        </select>
+      </label>
       <div className="content-form-full content-show">
         <label className="investigator-toggle">
           <input type="checkbox" checked={shown} onChange={(e) => setShown(e.target.checked)} />
@@ -446,8 +454,8 @@ function WitnessForm({
         )}
         <span className="muted field-hint">
           {alignedSide === null
-            ? 'Choose whom they testify for (under AI witness) to make them a client.'
-            : `The ${ROLE_LABEL[alignedSide].toLowerCase()} team can email its clients for information and documents. With several clients, they answer together, from anything any of them knows or owns.`}
+            ? 'Choose whom they testify for to make them a client.'
+            : `The ${ROLE_LABEL[alignedSide].toLowerCase()} team can email its clients for information and documents. With several clients, they answer together, from anything any of them knows or owns.${isClient && !depositionId ? ' Choose an interview file under AI witness so the team can interview them too.' : ''}`}
         </span>
       </div>
       <label className="content-form-full">
@@ -470,21 +478,10 @@ function WitnessForm({
       <fieldset className="content-form-full content-fieldset">
         <legend>AI witness</legend>
         <p className="muted section-hint">
-          Choose a side and a deposition file to let teams interview this witness. Students never see these
-          settings or the deposition.
+          With a side (Testifies for, above) and a deposition file, teams can interview this witness. Students
+          never see these settings or the deposition.
         </p>
         <div className="content-form">
-          <label>
-            Testifies for
-            <select
-              value={alignedSide ?? ''}
-              onChange={(e) => setAlignedSide((e.target.value || null) as Side | null)}
-            >
-              <option value="">Not an AI witness</option>
-              <option value="plaintiff">Plaintiff</option>
-              <option value="defense">Defense</option>
-            </select>
-          </label>
           <label className="content-form-grow">
             Interview file
             <select value={depositionId} onChange={(e) => setDepositionId(e.target.value)}>
@@ -612,13 +609,31 @@ function SuggestedWitnesses({
   }
   if (state.status === 'waiting') {
     if (hasWitnesses && (state.reason === 'no-file' || state.reason === 'no-parties')) return null
+    if (state.reason === 'reading' || state.reason === 'thinking') {
+      return (
+        <section className="suggest-panel suggest-loading" role="status" aria-labelledby="suggest-title">
+          <h3 id="suggest-title">
+            <span className="suggest-spinner" aria-hidden="true" />
+            Finding likely witnesses
+          </h3>
+          <p className="muted">
+            {state.reason === 'reading'
+              ? 'Reading the complaint. Suggested witnesses will appear here in a minute or two.'
+              : 'The AI is picking out the people the complaint names. Suggested witnesses will appear here shortly.'}
+          </p>
+          <ul aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="suggest-skeleton" />
+            ))}
+          </ul>
+        </section>
+      )
+    }
     return (
       <p className="muted suggest-note" role="status">
         {state.reason === 'no-file'
           ? 'Upload the complaint as the case’s initial file, and the AI will suggest likely witnesses from it.'
-          : state.reason === 'no-parties'
-            ? 'Name the plaintiff and defendant in the case details, and the AI will suggest likely witnesses.'
-            : 'Reading the complaint for likely witnesses…'}
+          : 'Name the plaintiff and defendant in the case details, and the AI will suggest likely witnesses.'}
       </p>
     )
   }

@@ -578,6 +578,13 @@ describe('WitnessesSection', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(/couldn't be read\. Upload the complaint as a PDF or Word document/)
   })
 
+  it('shows a loading panel while the AI reads the complaint', async () => {
+    renderSection({ getWitnessSuggestions: vi.fn().mockResolvedValue({ status: 'waiting', reason: 'reading' }) })
+    const panel = await screen.findByRole('status')
+    expect(panel).toHaveTextContent('Finding likely witnesses')
+    expect(panel).toHaveTextContent(/Reading the complaint/)
+  })
+
   it('adds, edits, and removes witnesses', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const elena = { id: 'w1', name: 'Elena Torres', role: 'Ride operator', description: '', hidden: false, ...blankAi }

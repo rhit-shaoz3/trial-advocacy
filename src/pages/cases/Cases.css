@@ -1552,6 +1552,58 @@ a.case-row:hover {
   margin: 0 0 1rem;
 }
 
+/* While the AI reads the complaint: a spinner and placeholder rows where the suggestions will go. */
+.suggest-loading h3 {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.suggest-spinner {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border: 3px solid var(--tint-grey-bg);
+  border-top-color: var(--tint-blue-fg);
+  border-radius: 50%;
+  animation: suggest-spin 0.9s linear infinite;
+}
+
+.suggest-skeleton {
+  height: 2.4rem;
+  border-radius: 0.4rem;
+  background: var(--tint-grey-bg);
+  animation: suggest-pulse 1.6s ease-in-out infinite;
+}
+
+.suggest-skeleton:nth-child(2) {
+  width: 85%;
+  animation-delay: 0.2s;
+}
+
+.suggest-skeleton:nth-child(3) {
+  width: 70%;
+  animation-delay: 0.4s;
+}
+
+@keyframes suggest-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes suggest-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .suggest-spinner {
+    animation: suggest-pulse 1.6s ease-in-out infinite;
+  }
+}
+
 .case-copied-from {
   margin: 0.25rem 0 0;
   font-size: 0.85rem;

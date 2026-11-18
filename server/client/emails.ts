@@ -258,10 +258,14 @@ async function priorEmails(teamId: string | null, before: string): Promise<Prior
      ORDER BY r.created_at`,
     [teamId, before],
   )
-  return rows.flatMap((r) => [
-    { date: r.sentAt, from: r.from ? `${r.from} (your attorney)` : 'Your attorneys', to: r.to.join(', '), subject: r.subject, body: r.body },
-    { date: r.repliedAt, from: r.to.join(', '), to: 'Your attorneys', subject: `Re: ${r.subject}`, body: r.reply },
-  ])
+  // Each reply is from whichever client signed it.
+  return rows.flatMap((r) => {
+    const to = r.to.join(', ')
+    return [
+      { date: r.sentAt, from: r.from ? `${r.from} (your attorney)` : 'Your attorneys', to, subject: r.subject, body: r.body },
+      { date: r.repliedAt, from: parseClientReply(r.reply).from ?? to, to: 'Your attorneys', subject: `Re: ${r.subject}`, body: r.reply },
+    ]
+  })
 }
 
 /**

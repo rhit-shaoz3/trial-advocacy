@@ -68,6 +68,7 @@ describe('creating', () => {
       investigator: { enabled: true, name: 'John Hastings', instructions: '', limit: { max: 2, per: 'team' } },
       interviewLimit: { max: 2, per: 'team' },
       clientEmailLimit: { max: 2, per: 'team' },
+      planner: { enabled: true, reviewLimit: { max: 3, per: 'student' }, feedbackLevel: 'balanced' },
       reviewMode: 'all',
       exchangeReady: false,
       exhibitListEnabled: true,

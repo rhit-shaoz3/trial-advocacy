@@ -1394,3 +1394,106 @@ button.cw-interview {
   justify-content: flex-end;
   gap: 0.5rem;
 }
+
+/* The dashboard's way into the case planner. */
+.cw .cw-planner-open {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.9rem;
+}
+
+.cw-planner-open svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* The buttons under an email to the investigator, and his drafts. */
+.cw-email-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.cw-email-buttons svg,
+.cw-draft-open svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.cw-investigator-drafts {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.cw .cw-investigator-drafts h3 {
+  color: var(--ws-navy);
+  font-size: 0.95rem;
+}
+
+.cw-investigator-drafts ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cw-draft-open {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cw-draft-open[aria-current='true'] {
+  border-color: var(--tint-blue-fg);
+  background: var(--tint-blue-bg);
+}
+
+.cw-draft-open:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.cw-draft-open span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cw-draft-open small {
+  color: var(--ws-muted);
+}
+
+/* Deleting one of the team's own tasks. */
+.cw-task-delete {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--fg-soft);
+  cursor: pointer;
+}
+
+.cw-task-delete svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}

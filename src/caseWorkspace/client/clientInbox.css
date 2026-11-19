@@ -384,3 +384,20 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+.ci-compose-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ci-compose-buttons svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ci-item:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

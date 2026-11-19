@@ -44,12 +44,12 @@ export async function copyCase(sourceCaseId: string, targetCourseId: string, act
       `INSERT INTO cases (id, course_id, title, summary, status, phase, instructor_note, disputed_issues,
          plaintiff_key_facts, defense_key_facts, plaintiff_name, defendant_name,
          investigator_enabled, investigator_name, investigator_instructions, investigator_limit, investigator_limit_per,
-         interview_limit, interview_limit_per, client_email_limit, client_email_limit_per, review_mode, exhibit_list_enabled, exhibit_judicial_review,
+         interview_limit, interview_limit_per, client_email_limit, client_email_limit_per, planner_enabled, planner_review_limit, planner_review_limit_per, planner_feedback_level, review_mode, exhibit_list_enabled, exhibit_judicial_review,
          setup_step, setup_completed_at, witness_suggestions_done_at, copy_setup, copied_from_title, copied_from_name)
        SELECT $2, $3, $4, summary, 'draft', 'introduction', instructor_note, disputed_issues,
          plaintiff_key_facts, defense_key_facts, plaintiff_name, defendant_name,
          investigator_enabled, investigator_name, investigator_instructions, investigator_limit, investigator_limit_per,
-         interview_limit, interview_limit_per, client_email_limit, client_email_limit_per, review_mode, exhibit_list_enabled, exhibit_judicial_review,
+         interview_limit, interview_limit_per, client_email_limit, client_email_limit_per, planner_enabled, planner_review_limit, planner_review_limit_per, planner_feedback_level, review_mode, exhibit_list_enabled, exhibit_judicial_review,
          'worlds', NULL, now(), true, title, $5
        FROM cases WHERE id = $1`,
       [sourceCaseId, newCaseId, targetCourseId, title, sourceRows[0].owner],

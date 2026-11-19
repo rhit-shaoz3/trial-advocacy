@@ -10,7 +10,7 @@ import {
   type MaterialViewer,
   type Witness,
 } from './caseContent.ts'
-import { phaseAtLeast, type CasePhase, type InteractionLimit } from './cases.ts'
+import { phaseAtLeast, type CasePhase, type InteractionLimit, type PlannerSettings } from './cases.ts'
 import {
   disclosedWitnessIds,
   findSubmission,
@@ -22,6 +22,7 @@ import type { Side } from './matchups.ts'
 import { listMyCases, type MyCase } from './myCases.ts'
 import { listTeams } from './teams.ts'
 import { isAiWitness } from '../witness/profile.ts'
+import { listTeamTasks } from './teamTasks.ts'
 
 /** What students see of a witness: never its AI setup (deposition file, persona, files it has seen). */
 export type WorkspaceWitness = Pick<Witness, 'id' | 'name' | 'role' | 'description' | 'avatarUrl'> & {
@@ -75,6 +76,8 @@ export interface CaseWorkspace {
   investigatorAvailable: boolean
   /** How many emails each team (or student) can send its clients (the clients are the witnesses marked `client`). */
   clientEmailLimit: InteractionLimit
+  /** Whether the team has the case planner, and how many rounds of AI feedback each team (or student) can ask for. */
+  planner: PlannerSettings
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady: boolean
   /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
@@ -84,9 +87,15 @@ export interface CaseWorkspace {
   /**
    * The instructor's tasks, plus the information exchange's own (`auto`):
    * choosing initial disclosures, and responding to each set the other team
-   * sends. Those complete themselves.
+   * sends. Those complete themselves. Then the team's own (`team`), as from
+   * its planner, which it can delete.
    */
-  tasks: (CaseTask & { completedAt: Date | null; completedBy: string | null; auto?: boolean })[]
+  tasks: (CaseTask & {
+    completedAt: Date | null
+    completedBy: string | null
+    auto?: boolean
+    team?: { witnessId: string | null; createdBy: string | null }
+  })[]
   /** True when the instructor is looking at it as a team would; nothing can be changed. */
   preview: boolean
 }
@@ -99,6 +108,7 @@ type CaseRow = CaseWorkspace['case'] & {
   investigatorName: string
   investigatorLimit: InteractionLimit
   clientEmailLimit: InteractionLimit
+  planner: PlannerSettings
   exchangeReady: boolean
   exhibitListEnabled: boolean
   exhibitJudicialReview: boolean
@@ -112,6 +122,9 @@ async function findCaseRow(courseId: string, caseId: string) {
             investigator_enabled AS "investigatorEnabled", investigator_name AS "investigatorName",
             json_build_object('max', investigator_limit, 'per', investigator_limit_per) AS "investigatorLimit",
             json_build_object('max', client_email_limit, 'per', client_email_limit_per) AS "clientEmailLimit",
+            json_build_object('enabled', planner_enabled,
+                              'reviewLimit', json_build_object('max', planner_review_limit, 'per', planner_review_limit_per),
+                              'feedbackLevel', planner_feedback_level) AS planner,
             exhibit_list_enabled AS "exhibitListEnabled", exhibit_judicial_review AS "exhibitJudicialReview",
             EXISTS (SELECT 1 FROM information_exchange ie
                     WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"
@@ -199,7 +212,17 @@ const byDue = (a: WorkspaceTask, b: WorkspaceTask) =>
   (a.dueAt ? new Date(a.dueAt).getTime() : Infinity) - (b.dueAt ? new Date(b.dueAt).getTime() : Infinity)
 
 async function assemble(
-  { investigatorEnabled, investigatorName, investigatorLimit, clientEmailLimit, exchangeReady, exhibitListEnabled, exhibitJudicialReview, ...caseRow }: CaseRow,
+  {
+    investigatorEnabled,
+    investigatorName,
+    investigatorLimit,
+    clientEmailLimit,
+    planner,
+    exchangeReady,
+    exhibitListEnabled,
+    exhibitJudicialReview,
+    ...caseRow
+  }: CaseRow,
   team: MyCase['team'],
   world: MyCase['world'],
   viewer: MaterialViewer,
@@ -208,7 +231,7 @@ async function assemble(
 ): Promise<CaseWorkspace> {
   const { side, teamId } = viewer
   const audiences = visibleTo(side)
-  const [materials, witnesses, tasks, completions, disclosed, autoTasks] = await Promise.all([
+  const [materials, witnesses, tasks, completions, disclosed, autoTasks, ownTasks] = await Promise.all([
     listMaterialsFor(caseRow.id, viewer),
     listWitnesses(caseRow.id),
     listTasks(caseRow.id, audiences),
@@ -217,6 +240,7 @@ async function assemble(
     exchangeReady && teamId && side && !preview
       ? exchangeTasks(caseRow.id, caseRow.phase, teamId, side, userId)
       : Promise.resolve([]),
+    teamId && !preview ? listTeamTasks(caseRow.id, teamId) : Promise.resolve([]),
   ])
   const doneBy = new Map(completions.map((c) => [c.taskId, c]))
   return {
@@ -245,6 +269,7 @@ async function assemble(
       : null,
     investigatorAvailable: investigatorEnabled && phaseAtLeast(caseRow.phase, 'investigate'),
     clientEmailLimit,
+    planner,
     exchangeReady,
     exhibitListEnabled,
     exhibitJudicialReview,
@@ -255,6 +280,16 @@ async function assemble(
         completedBy: doneBy.get(t.id)?.completedBy ?? null,
       })),
       ...autoTasks,
+      ...ownTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: '',
+        dueAt: null,
+        audience: side ?? ('all' as const),
+        completedAt: t.completedAt,
+        completedBy: t.completedBy,
+        team: { witnessId: t.witnessId, createdBy: t.createdBy },
+      })),
     ].sort(byDue),
     preview,
   }

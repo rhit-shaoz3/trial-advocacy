@@ -42,6 +42,19 @@ export const DEFAULT_LIMIT: InteractionLimit = { max: 2, per: 'team' }
 /** The highest limit an instructor can set. */
 export const MAX_LIMIT = 999
 
+export const FEEDBACK_LEVELS = ['gentle', 'balanced', 'rigorous'] as const
+/** How demanding the planner's feedback is. */
+export type FeedbackLevel = (typeof FEEDBACK_LEVELS)[number]
+
+export interface PlannerSettings {
+  enabled: boolean
+  reviewLimit: InteractionLimit
+  feedbackLevel: FeedbackLevel
+}
+
+/** Three rounds of feedback for each student. */
+export const DEFAULT_PLANNER_REVIEW_LIMIT: InteractionLimit = { max: 3, per: 'student' }
+
 /** The case's background investigator, the same for every team. */
 export interface InvestigatorSettings {
   enabled: boolean
@@ -97,6 +110,8 @@ export interface CourseCase {
   interviewLimit: InteractionLimit
   /** How many emails each team (or student) can send its clients. */
   clientEmailLimit: InteractionLimit
+  /** Whether students get the case planner, and how many rounds of AI feedback each team (or student) can ask for. */
+  planner: PlannerSettings
   reviewMode: ReviewMode
   /** Whether the information exchange setup is finished (so students see it, and the case has its phase). */
   exchangeReady: boolean
@@ -146,6 +161,9 @@ const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "ins
                     'limit', json_build_object('max', investigator_limit, 'per', investigator_limit_per)) AS investigator,
   json_build_object('max', interview_limit, 'per', interview_limit_per) AS "interviewLimit",
   json_build_object('max', client_email_limit, 'per', client_email_limit_per) AS "clientEmailLimit",
+  json_build_object('enabled', planner_enabled,
+                    'reviewLimit', json_build_object('max', planner_review_limit, 'per', planner_review_limit_per),
+                    'feedbackLevel', planner_feedback_level) AS planner,
   review_mode AS "reviewMode",
   EXISTS (SELECT 1 FROM information_exchange ie
           WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
@@ -260,6 +278,18 @@ export async function setInvestigator(courseId: string, id: string, settings: In
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [courseId, id, settings.enabled, settings.name, settings.instructions, settings.limit.max, settings.limit.per],
+  )
+  return rows[0] ?? null
+}
+
+/** Turns the case planner on or off and sets its feedback rounds. Returns null if there was no such case. */
+export async function setPlanner(courseId: string, id: string, settings: PlannerSettings) {
+  const { rows } = await pool.query<CourseCase>(
+    `UPDATE cases SET planner_enabled = $3, planner_review_limit = $4, planner_review_limit_per = $5,
+       planner_feedback_level = $6, updated_at = now()
+     WHERE course_id = $1 AND id = $2
+     RETURNING ${CASE_COLUMNS}`,
+    [courseId, id, settings.enabled, settings.reviewLimit.max, settings.reviewLimit.per, settings.feedbackLevel],
   )
   return rows[0] ?? null
 }

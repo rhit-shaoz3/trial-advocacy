@@ -7,6 +7,8 @@ import { findNewFacts, type NewFact, type NewFactsInput } from '../witness/newFa
 import { suggestFromComplaint, type ComplaintSuggestions, type SuggestInput } from '../witness/suggest.ts'
 import { respondToSubpoena } from '../exchange/subpoenaResponse.ts'
 import { replyAsClient, type ClientReplyInput } from '../client/reply.ts'
+import { reviewPlanner } from '../planner/reviewer.ts'
+import type { PlannerReviewContext } from '../planner/prompt.ts'
 import type { SubpoenaContext } from '../exchange/subpoenaPrompt.ts'
 import { reviewDiscovery, warmMentorCache, type MentorProgress, type MentorReview } from '../exchange/mentor.ts'
 import type { MentorContext } from '../exchange/mentorPrompt.ts'
@@ -46,6 +48,8 @@ export const ai = {
   finalizeReport: (input: FinalizeInput): Promise<string> => finalizeReport(anthropic(), input),
   /** A team's clients' reply to its email, tag lines, records and review block and all. */
   emailClient: (input: ClientReplyInput): Promise<string> => replyAsClient(anthropic(), input),
+  /** One round of Socratic feedback on a team's case planner, tag line and blocks and all. */
+  reviewPlanner: (context: PlannerReviewContext): Promise<string> => reviewPlanner(anthropic(), context),
   /** A subpoena's response as its recipient drafts it, tag lines and all, for the instructor to review. */
   respondToSubpoena: (context: SubpoenaContext): Promise<string> => respondToSubpoena(anthropic(), context),
   /** The discovery mentor's tag and Socratic feedback on a team's draft requests or answers. */

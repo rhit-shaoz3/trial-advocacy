@@ -485,6 +485,30 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(myCasePath(courseId, caseId))).workspace
   },
 
+  async createTeamTask(courseId, caseId, task) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/tasks`, { method: 'POST', body: JSON.stringify(task) })).workspace
+  },
+
+  async deleteTeamTask(courseId, caseId, taskId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })).workspace
+  },
+
+  async listMessageDrafts(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/message-drafts`)).drafts
+  },
+
+  async saveMessageDraft(courseId, caseId, kind, id, content) {
+    const base = `${myCasePath(courseId, caseId)}/message-drafts`
+    const body = id
+      ? await apiRequest(`${base}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ content }) })
+      : await apiRequest(base, { method: 'POST', body: JSON.stringify({ kind, content }) })
+    return body.draft
+  },
+
+  async deleteMessageDraft(courseId, caseId, id) {
+    await apiRequest(`${myCasePath(courseId, caseId)}/message-drafts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  },
+
   async setTaskDone(courseId, caseId, taskId, done) {
     const body = await apiRequest(`${myCasePath(courseId, caseId)}/tasks/${encodeURIComponent(taskId)}`, {
       method: 'PUT',
@@ -529,10 +553,10 @@ export const httpCourseService: CourseService = {
     return (await apiRequest(`${myCasePath(courseId, caseId)}/investigator`)).investigations
   },
 
-  async sendInvestigation(courseId, caseId, assignment) {
+  async sendInvestigation(courseId, caseId, assignment, draftId) {
     const body = await apiRequest(`${myCasePath(courseId, caseId)}/investigator/requests`, {
       method: 'POST',
-      body: JSON.stringify({ assignment }),
+      body: JSON.stringify({ assignment, draftId }),
     })
     return body.investigations
   },
@@ -736,6 +760,93 @@ export const httpCourseService: CourseService = {
 
   async getCaseFacts(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/facts`)).facts
+  },
+
+  async getMyPlanner(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/planner`)).planner
+  },
+
+  async getPlannerSources(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/planner/sources`)).sources
+  },
+
+  async changePlanner(courseId, caseId, change) {
+    const base = `${myCasePath(courseId, caseId)}/planner`
+    const card = (id: string) => `${base}/cards/${encodeURIComponent(id)}`
+    const gap = (id: string) => `${base}/gaps/${encodeURIComponent(id)}`
+    const send = (method: string, path: string, body?: unknown) =>
+      apiRequest(path, { method, ...(body !== undefined && { body: JSON.stringify(body) }) })
+    switch (change.op) {
+      case 'addCard':
+        return send('POST', `${base}/cards`, { parentId: change.parentId, title: change.title })
+      case 'editCard':
+        return send('PATCH', card(change.cardId), { title: change.title, notes: change.notes })
+      case 'moveCard':
+        return send('PATCH', card(change.cardId), { move: { parentId: change.parentId, index: change.index } })
+      case 'deleteCard':
+        return send('DELETE', card(change.cardId))
+      case 'setWitnesses':
+        return send('PUT', `${card(change.cardId)}/witnesses`, { witnessIds: change.witnessIds })
+      case 'addEvidence':
+        return send('POST', `${card(change.cardId)}/evidence`, {
+          kind: change.kind,
+          id: change.id,
+          parts: change.parts,
+          excerpt: change.excerpt,
+          note: change.note,
+        })
+      case 'editEvidence':
+        return send('PATCH', `${card(change.cardId)}/evidence/${encodeURIComponent(change.evidenceId)}`, {
+          ...('parts' in change && { parts: change.parts }),
+          excerpt: change.excerpt,
+          note: change.note,
+        })
+      case 'deleteEvidence':
+        return send('DELETE', `${card(change.cardId)}/evidence/${encodeURIComponent(change.evidenceId)}`)
+      case 'addGap':
+        return send('POST', `${base}/gaps`, { cardId: change.cardId, description: change.description })
+      case 'editGap':
+        return send('PATCH', gap(change.gapId), {
+          description: change.description,
+          ...('cardId' in change && { cardId: change.cardId }),
+          move: change.move,
+        })
+      case 'deleteGap':
+        return send('DELETE', gap(change.gapId))
+      case 'setTools':
+        return send('PUT', `${gap(change.gapId)}/tools`, { tools: change.tools })
+    }
+  },
+
+  async getMyPlannerFeedback(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/planner/reviews`)).feedback
+  },
+
+  async requestPlannerReview(courseId, caseId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/planner/reviews`, { method: 'POST' })).feedback
+  },
+
+  async retryPlannerReview(courseId, caseId, reviewId) {
+    const path = `${myCasePath(courseId, caseId)}/planner/reviews/${encodeURIComponent(reviewId)}/retry`
+    return (await apiRequest(path, { method: 'POST' })).feedback
+  },
+
+  async savePlannerReply(courseId, caseId, reviewId, target, text) {
+    const path = `${myCasePath(courseId, caseId)}/planner/reviews/${encodeURIComponent(reviewId)}/replies/${target.kind}/${encodeURIComponent(target.id)}`
+    return (await apiRequest(path, { method: 'PUT', body: JSON.stringify({ text }) })).feedback
+  },
+
+  async savePlannerSettings(courseId, caseId, settings) {
+    const body = await apiRequest(`${casePath(courseId, caseId)}/planner`, { method: 'PUT', body: JSON.stringify(settings) })
+    return body.case
+  },
+
+  async listTeamPlanners(courseId, caseId) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/planners`)).teams
+  },
+
+  async getTeamPlanner(courseId, caseId, teamId) {
+    return apiRequest(`${casePath(courseId, caseId)}/planners/${encodeURIComponent(teamId)}`)
   },
 
   async getMyExhibits(courseId, caseId) {

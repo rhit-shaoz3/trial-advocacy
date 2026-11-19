@@ -106,7 +106,7 @@ function priorSet(r: ExchangeRequest, teamId: string): PriorDiscovery {
 }
 
 /** The team's completed interviews, as transcripts, leaving out what rests on a denied fact. */
-async function interviewTranscripts(caseId: string, teamId: string) {
+export async function interviewTranscripts(caseId: string, teamId: string) {
   const { rows } = await pool.query<{ id: string; witness: string; completedAt: Date }>(
     `SELECT r.id, w.name AS witness, r.completed_at AS "completedAt"
      FROM interview_reviews r JOIN case_witnesses w ON w.id = r.witness_id
@@ -125,6 +125,23 @@ async function interviewTranscripts(caseId: string, teamId: string) {
     })
   }
   return transcripts
+}
+
+/** A subpoena the team served, as prior discovery. */
+function priorSubpoena(s: Awaited<ReturnType<typeof teamSubpoenas>>[number]): PriorDiscovery {
+  return {
+    title: `Subpoena to ${s.recipient}, served ${shortDate(s.sentAt)}`,
+    type: `subpoena (${TYPE_TEXT[s.requestType]})`,
+    servedBy: 'your team',
+    status: s.outcome === 'denied' ? 'denied' : s.outcome === 'responded' ? 'answered' : 'awaiting a response',
+    content: `Asked for: ${s.records}${s.outcome && s.response ? `\n\n${s.outcome === 'denied' ? 'Denial' : 'Response'}: ${s.response}` : ''}`,
+  }
+}
+
+/** The discovery the team has sent and received: its sets (and the other team's), with answers, and its subpoenas. */
+export async function teamPriorDiscovery(caseId: string, teamId: string, userId: string): Promise<PriorDiscovery[]> {
+  const [requests, subpoenas] = await Promise.all([listTeamRequests(caseId, teamId, userId), teamSubpoenas(caseId, teamId, userId)])
+  return [...requests.map((r) => priorSet(r, teamId)), ...subpoenas.map(priorSubpoena)]
 }
 
 /** Everything the mentor reads for this draft: only what the team can see. */
@@ -178,15 +195,7 @@ export async function mentorContext(ctx: TeamContext, draft: CheckDraft): Promis
     acceptedFacts: settled.accepted,
     priorDiscovery: [
       ...requests.filter((r) => r.id !== answering?.id).map((r) => priorSet(r, ctx.teamId)),
-      ...subpoenas.map(
-        (s): PriorDiscovery => ({
-          title: `Subpoena to ${s.recipient}, served ${shortDate(s.sentAt)}`,
-          type: `subpoena (${TYPE_TEXT[s.requestType]})`,
-          servedBy: 'your team',
-          status: s.outcome === 'denied' ? 'denied' : s.outcome === 'responded' ? 'answered' : 'awaiting a response',
-          content: `Asked for: ${s.records}${s.outcome && s.response ? `\n\n${s.outcome === 'denied' ? 'Denial' : 'Response'}: ${s.response}` : ''}`,
-        }),
-      ),
+      ...subpoenas.map(priorSubpoena),
     ],
   }
 

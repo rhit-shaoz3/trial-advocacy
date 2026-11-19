@@ -46,6 +46,9 @@ import { markFlagsSeen, openFlagCount, raiseFlag, teamFlags } from '../reviews/f
 import { exhibitReviewsRouter, myExhibitsRouter } from '../exhibits/exhibitRoutes.ts'
 import { myPacketRouter } from '../packets/packetRoutes.ts'
 import { openExhibitReviewCount } from '../exhibits/exhibits.ts'
+import { myPlannerRouter } from '../planner/plannerRoutes.ts'
+import { createTeamTask, deleteTeamTask, setTeamTaskDone } from './teamTasks.ts'
+import { createMessageDraft, deleteMessageDraft, listMessageDrafts, updateMessageDraft } from './messageDrafts.ts'
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -248,8 +251,60 @@ coursesRouter.put('/:courseId/my-cases/:caseId/tasks/:taskId', async (req, res) 
   }
   const teamId = await findStudentTeamId(caseId, req.user!.id)
   if (!teamId) throw new HttpError(409, 'You need to be on a team to complete tasks.')
-  await setTaskDone(taskId, teamId, req.user!.id, done)
+  if (task.team) await setTeamTaskDone(caseId, teamId, taskId, req.user!.id, done)
+  else await setTaskDone(taskId, teamId, req.user!.id, done)
   res.json({ workspace: await loadStudentWorkspace(courseId, caseId, req.user!.id) })
+})
+
+/** The student's team, for changing its own tasks and drafts: 409 unless the case is open and they're on a team. */
+async function changingTeam(req: Request) {
+  const { courseId, caseId } = req.params as Record<string, string>
+  const workspace = await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  if (workspace.case.status !== 'active') throw new HttpError(409, 'This case is closed.')
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  if (!teamId) throw new HttpError(409, 'You need to be on a team first.')
+  return { caseId, teamId, userId: req.user!.id, workspace }
+}
+
+/** Adds one of the team's own tasks `{ title, witnessId?, gapId? }`, as from its planner. Returns `{ workspace }`. */
+coursesRouter.post('/:courseId/my-cases/:caseId/tasks', async (req, res) => {
+  const team = await changingTeam(req)
+  await createTeamTask(team, req.body)
+  res.status(201).json({ workspace: await loadStudentWorkspace(req.params.courseId, team.caseId, req.user!.id) })
+})
+
+/** Deletes one of the team's own tasks. Returns `{ workspace }`. */
+coursesRouter.delete('/:courseId/my-cases/:caseId/tasks/:taskId', async (req, res) => {
+  const team = await changingTeam(req)
+  if (!team.workspace.tasks.some((t) => t.id === req.params.taskId && t.team)) throw new HttpError(404, 'Task not found.')
+  await deleteTeamTask(team.caseId, team.teamId, req.params.taskId)
+  res.json({ workspace: await loadStudentWorkspace(req.params.courseId, team.caseId, req.user!.id) })
+})
+
+/** `{ drafts }`: the team's unsent emails to the investigator and its clients, newest first. */
+coursesRouter.get('/:courseId/my-cases/:caseId/message-drafts', async (req, res) => {
+  const { courseId, caseId } = req.params
+  await loadStudentWorkspace(courseId, caseId, req.user!.id)
+  const teamId = await findStudentTeamId(caseId, req.user!.id)
+  res.json({ drafts: teamId ? await listMessageDrafts(caseId, teamId) : [] })
+})
+
+/** Saves a new draft `{ kind: 'investigator' | 'client_email', content }`. Returns `{ draft }`. */
+coursesRouter.post('/:courseId/my-cases/:caseId/message-drafts', async (req, res) => {
+  const team = await changingTeam(req)
+  res.status(201).json({ draft: await createMessageDraft(team, req.body) })
+})
+
+/** Saves over one of the team's drafts: `{ content }`. Returns `{ draft }`. */
+coursesRouter.put('/:courseId/my-cases/:caseId/message-drafts/:draftId', async (req, res) => {
+  const team = await changingTeam(req)
+  res.json({ draft: await updateMessageDraft(team, req.params.draftId, req.body) })
+})
+
+coursesRouter.delete('/:courseId/my-cases/:caseId/message-drafts/:draftId', async (req, res) => {
+  const team = await changingTeam(req)
+  await deleteMessageDraft(team, req.params.draftId)
+  res.status(204).end()
 })
 
 /**
@@ -359,10 +414,15 @@ coursesRouter.get('/:courseId/my-cases/:caseId/investigator', async (req, res) =
   res.json({ investigations: ctx ? await teamInvestigations(ctx.caseId, ctx.teamId, ctx.userId) : [] })
 })
 
-/** Emails the investigator an assignment `{ assignment }`; his report reaches the team after the instructor's review. */
+/**
+ * Emails the investigator an assignment `{ assignment, draftId? }`; his report
+ * reaches the team after the instructor's review. Sending a draft deletes it.
+ */
 coursesRouter.post('/:courseId/my-cases/:caseId/investigator/requests', async (req, res) => {
   const ctx = (await teamInvestigation(req, true))!
-  res.status(201).json({ investigations: await sendInvestigation(ctx, req.body) })
+  const investigations = await sendInvestigation(ctx, req.body)
+  await deleteMessageDraft(ctx, (req.body as Record<string, unknown> | undefined)?.draftId)
+  res.status(201).json({ investigations })
 })
 
 /** Marks the team's investigator reports as read by this student. */
@@ -395,10 +455,15 @@ coursesRouter.get('/:courseId/my-cases/:caseId/client', async (req, res) => {
   res.json({ emails: ctx ? await teamClientEmails(ctx.caseId, ctx.teamId, ctx.userId) : [] })
 })
 
-/** Emails the team's clients `{ to, subject, body }`; the reply reaches the team after the instructor's review. */
+/**
+ * Emails the team's clients `{ to, subject, body, draftId? }`; the reply
+ * reaches the team after the instructor's review. Sending a draft deletes it.
+ */
 coursesRouter.post('/:courseId/my-cases/:caseId/client/emails', async (req, res) => {
   const ctx = (await teamClientEmail(req, true))!
-  res.status(201).json({ emails: await sendClientEmail(ctx, req.body) })
+  const emails = await sendClientEmail(ctx, req.body)
+  await deleteMessageDraft(ctx, (req.body as Record<string, unknown> | undefined)?.draftId)
+  res.status(201).json({ emails })
 })
 
 /** Marks the team's client replies as read by this student. */
@@ -438,6 +503,7 @@ coursesRouter.post('/:courseId/my-cases/:caseId/flags/seen', async (req, res) =>
 coursesRouter.use('/:courseId/my-cases/:caseId/exchange', myExchangeRouter)
 coursesRouter.use('/:courseId/my-cases/:caseId/exhibits', myExhibitsRouter)
 coursesRouter.use('/:courseId/my-cases/:caseId/packet', myPacketRouter)
+coursesRouter.use('/:courseId/my-cases/:caseId/planner', myPlannerRouter)
 coursesRouter.use('/:courseId/calendar', calendarRouter)
 
 // Everything below manages one course and is only for the instructor who teaches it.

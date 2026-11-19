@@ -289,6 +289,13 @@ const CASE_STEPS: TourStep[] = [
     go: { tab: 'overview' },
     ifMissing: 'skip',
   },
+  {
+    target: '[data-tour="planner"]',
+    title: 'Where do I start?',
+    body: 'Plan your case with your partner: what you must prove, your evidence, your gaps, and how you’ll fill them. Then ask for feedback.',
+    go: { tab: 'overview' },
+    ifMissing: 'skip',
+  },
   { target: tab('case-file'), title: 'Case file', body: 'The documents. Look for Start here: it’s the one to read first.' },
   {
     target: tab('witnesses'),

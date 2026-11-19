@@ -1143,3 +1143,182 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS client_email_limit_per text NOT NULL 
 ALTER TABLE disclosure_items DROP CONSTRAINT IF EXISTS disclosure_items_original_audience_check;
 ALTER TABLE disclosure_items ADD CONSTRAINT disclosure_items_original_audience_check
   CHECK (original_audience IN ('plaintiff', 'defense', 'instructor'));
+
+-- A team's case planner: a chart of the facts it must prove (cards with no
+-- parent are facts of consequence; the rest are sub-facts), the evidence and
+-- witnesses for each, the gaps it has found, and the tools it would use to
+-- fill each gap, in order. Shared by the team; each piece is its own row, so
+-- teammates editing different cards don't overwrite each other.
+CREATE TABLE IF NOT EXISTS planner_cards (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id    uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id    uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  parent_id  uuid        REFERENCES planner_cards (id) ON DELETE CASCADE,
+  title      text        NOT NULL DEFAULT '',
+  notes      text        NOT NULL DEFAULT '',
+  position   integer     NOT NULL DEFAULT 0,
+  updated_by uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS planner_cards_team_idx ON planner_cards (team_id, parent_id, position);
+
+-- What backs up a card: a case file, an interview (or deposition), or an
+-- investigator's report, whole or in part (`parts` as on an exhibit list:
+-- a file's pages, a transcript's turns, a text's paragraphs), with the
+-- passage the team quotes and why it matters. `title` is the source's, with
+-- the parts (" — pages 3–5"), as it was when attached.
+CREATE TABLE IF NOT EXISTS planner_evidence (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  card_id      uuid        NOT NULL REFERENCES planner_cards (id) ON DELETE CASCADE,
+  source_kind  text        NOT NULL CHECK (source_kind IN ('material', 'interview', 'report')),
+  material_id  uuid        REFERENCES case_materials (id) ON DELETE CASCADE,
+  interview_id uuid        REFERENCES interviews (id) ON DELETE CASCADE,
+  report_id    uuid        REFERENCES interview_reviews (id) ON DELETE CASCADE,
+  parts        integer[],
+  title        text        NOT NULL,
+  excerpt      text        NOT NULL DEFAULT '',
+  note         text        NOT NULL DEFAULT '',
+  position     integer     NOT NULL DEFAULT 0,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  CHECK (num_nonnulls(material_id, interview_id, report_id) = 1)
+);
+
+CREATE INDEX IF NOT EXISTS planner_evidence_card_idx ON planner_evidence (card_id, position);
+
+-- The witnesses the team means to get a card's facts through.
+CREATE TABLE IF NOT EXISTS planner_card_witnesses (
+  card_id    uuid NOT NULL REFERENCES planner_cards (id) ON DELETE CASCADE,
+  witness_id uuid NOT NULL REFERENCES case_witnesses (id) ON DELETE CASCADE,
+  PRIMARY KEY (card_id, witness_id)
+);
+
+-- What the team still needs to find out, on a card or about the case as a whole.
+CREATE TABLE IF NOT EXISTS planner_gaps (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id     uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id     uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  card_id     uuid        REFERENCES planner_cards (id) ON DELETE SET NULL,
+  description text        NOT NULL DEFAULT '',
+  position    integer     NOT NULL DEFAULT 0,
+  updated_by  uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS planner_gaps_team_idx ON planner_gaps (team_id, position);
+
+-- The tools the team would use on a gap, most promising first (`priority`
+-- from 1), each with why and the specifics (whom to ask, whom to subpoena).
+CREATE TABLE IF NOT EXISTS planner_gap_tools (
+  id         uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
+  gap_id     uuid    NOT NULL REFERENCES planner_gaps (id) ON DELETE CASCADE,
+  tool       text    NOT NULL CHECK (tool IN ('interview', 'client', 'investigator', 'deposition', 'subpoena',
+                                              'interrogatories', 'rfas', 'document_request')),
+  priority   integer NOT NULL,
+  reason     text    NOT NULL DEFAULT '',
+  specifics  text    NOT NULL DEFAULT '',
+  witness_id uuid    REFERENCES case_witnesses (id) ON DELETE SET NULL,
+  UNIQUE (gap_id, tool)
+);
+
+-- Whether students get the planner, and how many rounds of AI feedback on it
+-- each team (or student) can ask for.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS planner_enabled boolean NOT NULL DEFAULT true;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS planner_review_limit integer NOT NULL DEFAULT 3 CHECK (planner_review_limit >= 1);
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS planner_review_limit_per text NOT NULL DEFAULT 'student'
+  CHECK (planner_review_limit_per IN ('team', 'student'));
+
+-- A team's own to-dos, like questions for a witness from its planner (`gap_id`).
+-- One for a witness shows on that witness's interview too. Either teammate
+-- can tick one off.
+CREATE TABLE IF NOT EXISTS team_tasks (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id      uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id      uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  title        text        NOT NULL,
+  witness_id   uuid        REFERENCES case_witnesses (id) ON DELETE SET NULL,
+  gap_id       uuid        REFERENCES planner_gaps (id) ON DELETE SET NULL,
+  created_by   uuid        REFERENCES users (id) ON DELETE SET NULL,
+  completed_by uuid        REFERENCES users (id) ON DELETE SET NULL,
+  completed_at timestamptz,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS team_tasks_team_idx ON team_tasks (team_id, created_at);
+
+-- A round of AI feedback on a team's planner: the chart as it was reviewed
+-- (`snapshot`), the short ids the reviewer saw for its cards and gaps
+-- (`labels`, kept from round to round), and the reply: its tag, overview,
+-- big-picture questions, and (in planner_review_notes) the questions pinned
+-- to cards and gaps. A failed round can be tried again; it doesn't count
+-- against the team's rounds.
+CREATE TABLE IF NOT EXISTS planner_reviews (
+  id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id            uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id            uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  round              integer     NOT NULL,
+  asked_by           uuid        REFERENCES users (id) ON DELETE SET NULL,
+  status             text        NOT NULL DEFAULT 'working' CHECK (status IN ('working', 'ready', 'failed')),
+  snapshot           jsonb       NOT NULL,
+  labels             jsonb       NOT NULL,
+  tag                text        CHECK (tag IN ('LOOKS_GOOD', 'SMALL_EDITS', 'NEEDS_IMPROVEMENT')),
+  overview           text,
+  big_picture        text,
+  raw                text,
+  error              text,
+  model              text,
+  input_tokens       integer,
+  output_tokens      integer,
+  cache_read_tokens  integer,
+  cache_write_tokens integer,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  completed_at       timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS planner_reviews_team_idx ON planner_reviews (team_id, created_at);
+
+-- One round at a time for each team.
+CREATE UNIQUE INDEX IF NOT EXISTS planner_reviews_one_working_idx ON planner_reviews (team_id) WHERE status = 'working';
+
+CREATE TABLE IF NOT EXISTS planner_review_notes (
+  review_id   uuid    NOT NULL REFERENCES planner_reviews (id) ON DELETE CASCADE,
+  position    integer NOT NULL,
+  target_kind text    NOT NULL CHECK (target_kind IN ('card', 'gap')),
+  target_id   uuid    NOT NULL,
+  text        text    NOT NULL,
+  PRIMARY KEY (review_id, position)
+);
+
+-- The team's reply to a round's question on a card or gap, read by the next round.
+CREATE TABLE IF NOT EXISTS planner_replies (
+  review_id   uuid        NOT NULL REFERENCES planner_reviews (id) ON DELETE CASCADE,
+  target_kind text        NOT NULL CHECK (target_kind IN ('card', 'gap')),
+  target_id   uuid        NOT NULL,
+  text        text        NOT NULL,
+  updated_by  uuid        REFERENCES users (id) ON DELETE SET NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (review_id, target_kind, target_id)
+);
+
+-- A team's unsent emails to the investigator and to its clients: `content`
+-- is `{ assignment }` or `{ to, subject, body }`. Shared by the team; deleted
+-- when sent.
+CREATE TABLE IF NOT EXISTS message_drafts (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id    uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id    uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  kind       text        NOT NULL CHECK (kind IN ('investigator', 'client_email')),
+  content    jsonb       NOT NULL,
+  updated_by uuid        REFERENCES users (id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS message_drafts_team_idx ON message_drafts (case_id, team_id, updated_at DESC);
+
+-- How demanding the planner's feedback is: gentle (the big picture, and
+-- generous about what the team fixed), balanced, or rigorous.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS planner_feedback_level text NOT NULL DEFAULT 'balanced'
+  CHECK (planner_feedback_level IN ('gentle', 'balanced', 'rigorous'));

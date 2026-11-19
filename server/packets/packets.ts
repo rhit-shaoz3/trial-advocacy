@@ -382,7 +382,7 @@ interface RuledFact {
  * the other team took. The other team's investigator and prep interviews
  * stay out, though they're settled for the world too.
  */
-async function teamFacts(caseId: string, team: PacketTeam) {
+export async function teamFacts(caseId: string, team: Pick<PacketTeam, 'id' | 'matchupId'>) {
   const { rows } = await pool.query<RuledFact>(
     `SELECT f.text, f.decision LIKE 'accept%' AS accepted,
             CASE WHEN f.decision LIKE '%\\_case' AND r.matchup_id IS DISTINCT FROM $2 THEN 'Ruled for all worlds'

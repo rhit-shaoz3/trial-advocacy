@@ -233,6 +233,7 @@ describe('the case dashboard card for each phase', () => {
       'Witnesses',
       'Final steps',
       'Tasks',
+      'Planners',
       'Student view',
     ])
   })

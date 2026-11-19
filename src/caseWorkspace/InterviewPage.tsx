@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ChevronRight, Clock, FileText, Gavel, RotateCcw, Send, X } from 'lucide-react'
+import { ChevronRight, ClipboardList, Clock, FileText, Gavel, RotateCcw, Send, X } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Avatar } from '../components/Avatar'
@@ -250,6 +250,38 @@ export function InterviewPage() {
             <p className="iv-notice" role="status">
               {sentNote}
             </p>
+          )}
+
+          {!isInstructor && interview.teamTasks && interview.teamTasks.length > 0 && (
+            <details className="iv-plan" open>
+              <summary>
+                <ClipboardList aria-hidden="true" />
+                Your team&rsquo;s plan for {witness!.name}
+              </summary>
+              <ul>
+                {interview.teamTasks.map((t) => (
+                  <li key={t.id}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(t.completedAt)}
+                        onChange={async (e) => {
+                          try {
+                            await service.setTaskDone(courseId, caseId, t.id, e.target.checked)
+                            setInterview(await service.getInterview(courseId, caseId, witnessId, as))
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : 'Something went wrong.')
+                          }
+                        }}
+                      />
+                      <span>{t.title}</span>
+                    </label>
+                    {t.completedBy && <small>Done · {t.completedBy}</small>}
+                  </li>
+                ))}
+              </ul>
+              <p className="iv-plan-note">From your case planner. Tick each off as you cover it; your partner sees them too.</p>
+            </details>
           )}
 
           <ol className="iv-transcript" aria-label="Transcript">

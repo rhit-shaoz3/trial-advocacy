@@ -22,6 +22,7 @@ import {
   Scale,
   Search,
   Share2,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
@@ -48,6 +49,10 @@ import {
   type CaseWorkspace,
   type ClientEmail,
   type ClientEmailInput,
+  type MessageDraft,
+  type MessageDraftActions,
+  type PlannerGap,
+  type PlannerGapTool,
   type DisclosurePick,
   type ExchangeKind,
   type Investigation,
@@ -87,6 +92,11 @@ import type { DraftActions } from './exchange/useDraft'
 import { startingFilePhrase } from './exchange/startingFilePhrase'
 import { WelcomeEmail } from './exchange/WelcomeEmail'
 import { useTourNavigator } from '../tour/tourContext'
+import { PlannerPanel } from './planner/PlannerPanel'
+import { ComposeModal, type ComposeKind } from './planner/ComposeModal'
+import { ToolActions } from './planner/ToolActions'
+import type { PlannerActions } from './planner/usePlanner'
+import type { FeedbackActions } from './planner/usePlannerFeedback'
 import './caseWorkspace.css'
 
 type Tab = CaseTab
@@ -129,6 +139,11 @@ export function CaseWorkspaceView({
   exchangeDrafts,
   initialDraftId,
   onOpenDraft,
+  planner,
+  messageDrafts,
+  messageDraftActions,
+  onCreateTask,
+  onDeleteTask,
   exhibits,
   exhibitActions,
   packetActions,
@@ -154,8 +169,15 @@ export function CaseWorkspaceView({
   loadTranscript?(reviewId: string): Promise<ReviewTranscript>
   /** The team's requests to the background investigator; leave out (the preview) to show him without them. */
   investigations?: Investigation[]
-  /** Emails the investigator an assignment; leave out (the preview) to hide the email. */
-  onSendInvestigation?(assignment: string): Promise<void>
+  /** Emails the investigator an assignment (from a draft, which sending deletes); leave out (the preview) to hide the email. */
+  onSendInvestigation?(assignment: string, draftId?: string): Promise<void>
+  /** The team's unsent emails to the investigator and its clients; leave out (the preview) to not keep drafts. */
+  messageDrafts?: MessageDraft[]
+  messageDraftActions?: MessageDraftActions
+  /** Adds one of the team's own tasks, as from the planner; leave out (the preview) to not offer it. */
+  onCreateTask?(task: { title: string; witnessId: string | null; gapId: string }): Promise<void>
+  /** Deletes one of the team's own tasks. */
+  onDeleteTask?(taskId: string): Promise<void>
   /** Called when the student opens the investigator or a report, to mark the reports read. */
   onOpenInvestigator?(): void
   /** The team's emails with its clients; leave out (the preview) to show the inbox empty. */
@@ -182,6 +204,8 @@ export function CaseWorkspaceView({
   initialDraftId?: string
   /** Called with the open draft's id, and null on leaving it. */
   onOpenDraft?(draftId: string | null): void
+  /** The team's case planner and its rounds of feedback; leave out (the preview) to hide its tab. */
+  planner?: { chart: PlannerActions; feedback: FeedbackActions }
   /** The team's joint exhibit list (final steps); leave out (the preview, or not open) to hide its tab. */
   exhibits?: StudentExhibits | null
   /** The team's trial packet, offered once it submits its exhibit list; leave out (the preview) to hide it. */
@@ -232,6 +256,8 @@ export function CaseWorkspaceView({
   /** The team's own clients, whom it can email; the client inbox shows only when there are some. */
   const clients = workspace.witnesses.filter((w) => w.client)
   const unseenReplies = clientEmails?.filter((e) => e.status === 'completed' && !e.seen).length ?? 0
+  /** A gap's tool the planner opened a form for. */
+  const [composing, setComposing] = useState<{ kind: ComposeKind; gap: PlannerGap; tool: PlannerGapTool } | null>(null)
   /** Clients to open Compose to, from the dashboard card or a witness's Email button. */
   const [composeTo, setComposeTo] = useState<string[] | null>(null)
   const emailClients = (ids: string[]) => {
@@ -286,8 +312,11 @@ export function CaseWorkspaceView({
   // Only a team member can tick tasks, and only while the case is running.
   const canToggle = Boolean(onToggleTask && team && c.status === 'active')
 
+  // The planner is the team's, once it's in a case world.
+  const hasPlanner = Boolean(planner && team && world && workspace.planner?.enabled !== false)
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
+    ...(hasPlanner ? [{ id: 'planner' as const, label: 'Planner' }] : []),
     { id: 'case-file', label: 'Case file', count: materials.length + reports.length },
     { id: 'witnesses', label: 'Witnesses', count: witnesses.length },
     ...(clients.length ? [{ id: 'client' as const, label: 'Client email', count: unseenReplies }] : []),
@@ -461,6 +490,21 @@ export function CaseWorkspaceView({
                 )}
               </section>
 
+              {hasPlanner && (
+                <section className="cw-card cw-planner-card" aria-labelledby="cw-planner" data-tour="planner">
+                  <span className="ws-eyebrow">Where do I start?</span>
+                  <h2 id="cw-planner">Plan your case</h2>
+                  <p className="cw-summary">
+                    List the facts you have to prove, the evidence and witnesses for each, and the gaps you still need to
+                    fill. Then ask for feedback before you spend your interviews and discovery.
+                  </p>
+                  <button type="button" className="ws-btn ws-btn-primary cw-planner-open" onClick={() => setTab('planner')}>
+                    Open the planner
+                    <ArrowRight aria-hidden="true" />
+                  </button>
+                </section>
+              )}
+
               <section aria-labelledby="cw-workbench">
                 <h2 id="cw-workbench" className="cw-section-title">
                   Case workbench
@@ -553,6 +597,59 @@ export function CaseWorkspaceView({
               )}
             </aside>
           </div>
+        )}
+
+        {tab === 'planner' && hasPlanner && planner && team && world && (
+          <PlannerPanel
+            actions={planner.chart}
+            feedback={planner.feedback}
+            witnesses={witnesses}
+            rootLabel={`Team ${team.number}: ${sideLabel(world.side, c.parties ?? titleParties(c.title))}`}
+            readOnly={c.status !== 'active'}
+            toolActions={
+              c.status === 'active'
+                ? (gap, tool) => (
+                    <ToolActions
+                      gap={gap}
+                      tool={tool}
+                      witnesses={witnesses}
+                      onCompose={(kind) => setComposing({ kind, gap, tool })}
+                      onCreateTask={onCreateTask}
+                    />
+                  )
+                : undefined
+            }
+          />
+        )}
+        {composing && (
+          <ComposeModal
+            kind={composing.kind}
+            gap={composing.gap}
+            tool={composing.tool}
+            onClose={() => setComposing(null)}
+            ctx={{
+              exchange,
+              exchangeDrafts,
+              onSendRequest,
+              onServeSubpoena,
+              subpoenaForm: {
+                caseId: c.id,
+                parties: c.parties?.plaintiff && c.parties.defendant ? c.parties : titleParties(c.title),
+                attorney: auth?.user?.name || auth?.user?.email || null,
+              },
+              investigator,
+              investigatorAvailable: workspace.investigatorAvailable,
+              investigations,
+              onSendInvestigation,
+              clients,
+              clientEmails,
+              clientEmailLimit: workspace.clientEmailLimit,
+              onSendClientEmail,
+              messageDraftActions,
+              teamName: team && world ? `Team ${team.number}` : null,
+              reviewLite: c.reviewMode === 'lite',
+            }}
+          />
         )}
 
         {tab === 'case-file' && (
@@ -680,6 +777,8 @@ export function CaseWorkspaceView({
             reviewLite={c.reviewMode === 'lite'}
             composeTo={composeTo}
             onComposeOpened={() => setComposeTo(null)}
+            drafts={messageDrafts}
+            draftActions={c.status === 'active' ? messageDraftActions : undefined}
           />
         )}
 
@@ -693,6 +792,8 @@ export function CaseWorkspaceView({
             onOpenFile={setViewing}
             onSend={c.status === 'active' ? onSendInvestigation : undefined}
             reviewLite={c.reviewMode === 'lite'}
+            drafts={messageDrafts}
+            draftActions={c.status === 'active' ? messageDraftActions : undefined}
           />
         )}
 
@@ -762,7 +863,15 @@ export function CaseWorkspaceView({
         {tab === 'tasks' && (
           <ListPanel title="Tasks" sub={`Everything assigned in ${c.title}.`} empty="No tasks have been assigned yet.">
             {tasks.map((t) => (
-              <TaskRow key={t.id} task={t} canToggle={canToggle} onToggleTask={onToggleTask} now={now} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                canToggle={canToggle}
+                onToggleTask={onToggleTask}
+                onDeleteTask={canToggle ? onDeleteTask : undefined}
+                witnessName={t.team?.witnessId ? witnesses.find((w) => w.id === t.team!.witnessId)?.name : undefined}
+                now={now}
+              />
             ))}
           </ListPanel>
         )}
@@ -1104,11 +1213,17 @@ function TaskRow({
   task: t,
   canToggle,
   onToggleTask,
+  onDeleteTask,
+  witnessName,
   now,
 }: {
   task: WorkspaceTask
   canToggle: boolean
   onToggleTask?(taskId: string, done: boolean): Promise<void>
+  /** Deletes one of the team's own tasks. */
+  onDeleteTask?(taskId: string): Promise<void>
+  /** The witness a team task is for. */
+  witnessName?: string
   now: Date
 }) {
   const [saving, setSaving] = useState(false)
@@ -1146,16 +1261,35 @@ function TaskRow({
       <div className="cw-row-body">
         <strong>{t.title}</strong>
         <small className={overdue ? 'cw-overdue' : undefined}>
-          {t.dueAt ? `Due ${dueLabel(t.dueAt, now)}` : 'No due date'}
+          {t.team
+            ? `From your planner${t.team.createdBy ? `, added by ${t.team.createdBy}` : ''}${witnessName ? ` · for ${witnessName}’s interview` : ''}`
+            : t.dueAt
+              ? `Due ${dueLabel(t.dueAt, now)}`
+              : 'No due date'}
           {done && t.completedBy && ` · Completed by ${t.completedBy}`}
           {!done && t.auto && ' · Completes when you do it'}
         </small>
         {t.description && <p>{t.description}</p>}
       </div>
-      {t.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[t.audience]}</span>}
+      {t.team ? (
+        <span className="cw-badge cw-badge-client">Your team</span>
+      ) : (
+        t.audience !== 'all' && <span className="cw-badge">{AUDIENCE_LABEL[t.audience]}</span>
+      )}
       <span className={`cw-badge ${done ? 'cw-badge-done' : overdue ? 'cw-badge-overdue' : ''}`}>
         {done ? 'Complete' : overdue ? 'Overdue' : 'To do'}
       </span>
+      {t.team && onDeleteTask && (
+        <button
+          type="button"
+          className="cw-task-delete"
+          aria-label={`Delete ${t.title}`}
+          title="Delete"
+          onClick={() => window.confirm(`Delete “${t.title}”?`) && void onDeleteTask(t.id)}
+        >
+          <Trash2 aria-hidden="true" />
+        </button>
+      )}
     </li>
   )
 }

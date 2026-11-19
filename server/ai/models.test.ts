@@ -25,4 +25,9 @@ describe('modelFor', () => {
     expect(modelFor('mentor', { CLAUDE_MODEL: 'claude-haiku-5-5' })).toBe('claude-sonnet-5-5')
     expect(modelFor('mentor', { CLAUDE_MENTOR_MODEL: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
   })
+
+  it('uses Sonnet for the planner’s reviewer too', () => {
+    expect(modelFor('planner', { CLAUDE_MODEL: 'claude-haiku-5-5' })).toBe('claude-sonnet-5-5')
+    expect(modelFor('planner', { CLAUDE_PLANNER_MODEL: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
+  })
 })

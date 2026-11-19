@@ -15,6 +15,8 @@ import type {
   Investigation,
   ClientEmail,
   ClientEmailInput,
+  MessageDraft,
+  MessageDraftActions,
   ItemResponse,
   PacketFolder,
   ReviewResult,
@@ -32,6 +34,8 @@ import { AuthContext } from '../auth/AuthContext'
 import { usePageTour } from '../tour/tourContext'
 import { phaseTourKey, pickCaseTour } from '../tour/tours'
 import { introKey, pickIntro, type CaseIntro } from './intro/caseIntro'
+import type { PlannerActions } from './planner/usePlanner'
+import type { FeedbackActions } from './planner/usePlannerFeedback'
 
 /** How often the page checks for an investigator report while one is on its way. */
 const INVESTIGATION_POLL_MS = 20000
@@ -64,6 +68,7 @@ export function StudentCasePage() {
   const [exhibits, setExhibits] = useState<StudentExhibits | null>(null)
   const [exhibitsLoaded, setExhibitsLoaded] = useState(false)
   const [flags, setFlags] = useState<TeamFlag[]>([])
+  const [messageDrafts, setMessageDrafts] = useState<MessageDraft[]>([])
   const flagsMarked = useRef(false)
   const myCasesPath = `/courses/${courseId}/cases${workspace?.search ?? ''}`
   // The case tour the first time in any case; after that, one per new phase.
@@ -116,6 +121,10 @@ export function StudentCasePage() {
       .listMyClientEmails(courseId, caseId)
       .then((e) => !cancelled && setClientEmails(e))
       .catch(() => {}) // nor its client email
+    service
+      .listMessageDrafts(courseId, caseId)
+      .then((d) => !cancelled && setMessageDrafts(d))
+      .catch(() => {}) // nor its email drafts
     service
       .listMyFlags(courseId, caseId)
       .then((f) => !cancelled && setFlags(f))
@@ -230,6 +239,23 @@ export function StudentCasePage() {
     [service, courseId, caseId],
   )
 
+  const plannerActions = useMemo<{ chart: PlannerActions; feedback: FeedbackActions }>(
+    () => ({
+      chart: {
+        load: () => service.getMyPlanner(courseId, caseId),
+        sources: () => service.getPlannerSources(courseId, caseId),
+        change: (change) => service.changePlanner(courseId, caseId, change),
+      },
+      feedback: {
+        load: () => service.getMyPlannerFeedback(courseId, caseId),
+        request: () => service.requestPlannerReview(courseId, caseId),
+        retry: (reviewId) => service.retryPlannerReview(courseId, caseId, reviewId),
+        reply: (reviewId, target, text) => service.savePlannerReply(courseId, caseId, reviewId, target, text),
+      },
+    }),
+    [service, courseId, caseId],
+  )
+
   const exhibitActions = useMemo(
     () => ({
       async save(items: ExhibitListItem[]) {
@@ -305,6 +331,7 @@ export function StudentCasePage() {
 
   async function sendClientEmail(email: ClientEmailInput) {
     setClientEmails(await service.sendClientEmail(courseId, caseId, email))
+    if (email.draftId) setMessageDrafts((prev) => prev.filter((d) => d.id !== email.draftId))
   }
 
   /** Opening the client inbox marks the replies read, here and in the course notice. */
@@ -317,8 +344,40 @@ export function StudentCasePage() {
       .catch(() => {})
   }
 
-  async function sendInvestigation(assignment: string) {
-    setInvestigations(await service.sendInvestigation(courseId, caseId, assignment))
+  async function sendInvestigation(assignment: string, draftId?: string) {
+    setInvestigations(await service.sendInvestigation(courseId, caseId, assignment, draftId))
+    if (draftId) setMessageDrafts((prev) => prev.filter((d) => d.id !== draftId))
+  }
+
+  /** The team's email drafts, saved and deleted here and kept in order, newest first. */
+  const messageDraftActions = useMemo<MessageDraftActions>(
+    () => ({
+      async save(kind, id, content) {
+        const saved = await service.saveMessageDraft(courseId, caseId, kind, id, content)
+        setMessageDrafts((prev) => [saved, ...prev.filter((d) => d.id !== saved.id)])
+        return saved
+      },
+      async remove(id) {
+        await service.deleteMessageDraft(courseId, caseId, id)
+        setMessageDrafts((prev) => prev.filter((d) => d.id !== id))
+      },
+    }),
+    [service, courseId, caseId],
+  )
+
+  async function createTask(task: { title: string; witnessId: string | null; gapId: string }) {
+    setData(await service.createTeamTask(courseId, caseId, task))
+    workspace?.reloadHome()
+  }
+
+  async function deleteTask(taskId: string) {
+    try {
+      setData(await service.deleteTeamTask(courseId, caseId, taskId))
+      setError(null)
+      workspace?.reloadHome()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    }
   }
 
   /** Opening the investigator (or a report) marks his reports read, here and in the course notice. */
@@ -408,6 +467,10 @@ export function StudentCasePage() {
               loadTranscript={(reviewId) => service.getMyReviewTranscript(courseId, caseId, reviewId)}
               investigations={investigations ?? []}
               onSendInvestigation={sendInvestigation}
+              messageDrafts={messageDrafts}
+              messageDraftActions={messageDraftActions}
+              onCreateTask={createTask}
+              onDeleteTask={deleteTask}
               onOpenInvestigator={openInvestigator}
               clientEmails={clientEmails ?? []}
               onSendClientEmail={sendClientEmail}
@@ -423,6 +486,7 @@ export function StudentCasePage() {
               exchangeDrafts={exchangeDrafts}
               initialDraftId={initialDraftId}
               onOpenDraft={openDraft}
+              planner={plannerActions}
               exhibits={exhibits}
               exhibitActions={exhibitActions}
               packetActions={packetActions}

@@ -16,9 +16,10 @@ export const AUTOSAVE_MS = 800
 /**
  * Keeps a new subpoena or set saved as the team writes it: a pause in typing
  * saves it, and so does leaving (Back, another tab, closing or refreshing the
- * page). Nothing is saved until there's something in it. `submit` sends it
- * and stops saving (sending deletes the draft on the server); `discard`
- * deletes it.
+ * page). Nothing is saved until there's something in it. A new one that
+ * starts filled in (from the planner) isn't saved until it's edited or saved
+ * as a draft. `submit` sends it and stops saving (sending deletes the draft
+ * on the server); `discard` deletes it.
  */
 export function useDraft({
   kind,
@@ -41,7 +42,9 @@ export function useDraft({
   const id = useRef(initial?.id ?? null)
   // What's saved, so opening a draft (or a re-render) doesn't save it again.
   const key = JSON.stringify([content, check?.id ?? null])
-  const savedKey = useRef(key)
+  // A new one that starts filled in is nothing saved yet.
+  const savedKey = useRef(initial || empty ? key : '')
+  const startKey = useRef(key)
   const latest = useRef({ content, check, empty, key })
   const dirty = useRef(false)
   const closed = useRef(false)
@@ -83,7 +86,7 @@ export function useDraft({
 
   // Any change (the fields, or a new check) saves after a pause.
   useEffect(() => {
-    if (key === savedKey.current) return
+    if (key === savedKey.current || (!id.current && key === startKey.current)) return
     dirty.current = true
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => void save(), AUTOSAVE_MS)

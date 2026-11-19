@@ -11,6 +11,7 @@ import { readString } from '../validation.ts'
 import { WitnessRefusalError } from './deposition.ts'
 import { queueClaims, testimonyMemory } from './memory.ts'
 import { depositionSettings, isAiWitness, loadProfile, WitnessNotReadyError } from './profile.ts'
+import { witnessTasks } from '../courses/teamTasks.ts'
 
 // A team's interview of an AI witness, stored turn by turn, before the
 // deposition. Partners share one interview per witness, always as their own
@@ -66,6 +67,8 @@ export interface Interview {
   reviewLite?: boolean
   /** A team's interviews with this witness, against the instructor's limit (this one included once it counts). Null for instructor tests. */
   limit: (InteractionLimit & { used: number }) | null
+  /** The team's own tasks for this witness, as the questions from its planner; empty for instructor tests. */
+  teamTasks: { id: string; title: string; completedAt: Date | null; completedBy: string | null }[]
 }
 
 const UNIQUE_VIOLATION = '23505'
@@ -181,9 +184,10 @@ async function view(
   closed: boolean,
   limited: LimitOwner | null = null,
 ): Promise<Interview> {
-  const [turns, used] = await Promise.all([
+  const [turns, used, tasks] = await Promise.all([
     listTurns(interviewId),
     limited ? interviewsUsed(witness.id, limited, interviewId) : null,
+    owner.teamId ? witnessTasks(owner.teamId, witness.id) : [],
   ])
   const overLimit = limited && used && !used.current && used.others >= limited.limit.max
   const reason =
@@ -209,6 +213,7 @@ async function view(
     canAsk: reason === null,
     notice: reason,
     limit: limited && used ? { ...limited.limit, used: used.others + (used.current ? 1 : 0) } : null,
+    teamTasks: tasks.map((t) => ({ id: t.id, title: t.title, completedAt: t.completedAt, completedBy: t.completedBy })),
   }
 }
 

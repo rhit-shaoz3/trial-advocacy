@@ -90,6 +90,21 @@ export const DEFAULT_LIMIT: InteractionLimit = { max: 2, per: 'team' }
 /** The highest limit an instructor can set (matches the server). */
 export const MAX_LIMIT = 999
 
+export const FEEDBACK_LEVELS = ['gentle', 'balanced', 'rigorous'] as const
+/** How demanding the planner's feedback is: the big picture and generous, in between, or thorough and exacting. */
+export type FeedbackLevel = (typeof FEEDBACK_LEVELS)[number]
+
+/** Whether students get the case planner, how many rounds of AI feedback each team (or student) can ask for, and how demanding it is. */
+export interface PlannerSettings {
+  enabled: boolean
+  reviewLimit: InteractionLimit
+  /** Missing on cases from before the setting: balanced. */
+  feedbackLevel?: FeedbackLevel
+}
+
+/** The planner's default (matches the server): on, with three balanced rounds of feedback per student. */
+export const DEFAULT_PLANNER: PlannerSettings = { enabled: true, reviewLimit: { max: 3, per: 'student' }, feedbackLevel: 'balanced' }
+
 /** The case's background investigator, the same for every team. */
 export interface InvestigatorSettings {
   enabled: boolean
@@ -152,6 +167,8 @@ export interface CourseCase {
   interviewLimit?: InteractionLimit
   /** How many emails each team (or student) can send its clients; leaving it out means two per team. */
   clientEmailLimit?: InteractionLimit
+  /** The case planner; leaving it out means `DEFAULT_PLANNER`. */
+  planner?: PlannerSettings
   /** How the instructor reviews the case; leaving it out means everything. */
   reviewMode?: ReviewMode
   /** Whether the information exchange setup is finished (students see it, and the case has its phase). */
@@ -427,6 +444,8 @@ export interface Interview {
    * limit, one of theirs). Null or missing for instructor tests.
    */
   limit?: (InteractionLimit & { used: number }) | null
+  /** The team's own tasks for this witness, as the questions from its planner. */
+  teamTasks?: { id: string; title: string; completedAt: string | null; completedBy: string | null }[]
 }
 
 /**
@@ -612,6 +631,25 @@ export interface ClientEmailInput {
   to: string[]
   subject: string
   body: string
+  /** The draft it's sent from, which sending deletes. */
+  draftId?: string
+}
+
+/** A team's unsent email to the investigator (`{ assignment }`) or to its clients. Shared by the team. */
+export type MessageDraftContent = { assignment: string } | { to: string[]; subject: string; body: string }
+
+export interface MessageDraft {
+  id: string
+  kind: 'investigator' | 'client_email'
+  content: MessageDraftContent
+  updatedAt: string
+  updatedBy: string | null
+}
+
+/** Saving and deleting the team's email drafts. */
+export interface MessageDraftActions {
+  save(kind: MessageDraft['kind'], id: string | null, content: MessageDraftContent): Promise<MessageDraft>
+  remove(id: string): Promise<void>
 }
 
 /** A team's request to the background investigator, as the team sees it: never the draft or the rulings. */
@@ -723,6 +761,8 @@ export interface CaseWorkspace {
   investigatorAvailable: boolean
   /** How many emails each team (or student) can send its clients (the witnesses marked `client`); missing means two per team. */
   clientEmailLimit?: InteractionLimit
+  /** The case planner; missing means `DEFAULT_PLANNER`. */
+  planner?: PlannerSettings
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady?: boolean
   /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
@@ -734,7 +774,13 @@ export interface CaseWorkspace {
    * information exchange (initial disclosures, responding to a set) and
    * complete themselves.
    */
-  tasks: (CaseTask & { completedAt: string | null; completedBy: string | null; auto?: boolean })[]
+  tasks: (CaseTask & {
+    completedAt: string | null
+    completedBy: string | null
+    auto?: boolean
+    /** One of the team's own tasks, as from its planner, which it can delete. */
+    team?: { witnessId: string | null; createdBy: string | null }
+  })[]
   /** The instructor viewing it as a team would; nothing can be changed. */
   preview: boolean
 }
@@ -1177,6 +1223,145 @@ export interface DepositionOverview {
 }
 
 // The joint exhibit list (final steps); matches server/exhibits/exhibits.ts.
+
+// The case planner ---------------------------------------------------------------
+
+/** The tools a team can plan to fill a gap with, in the order they're offered. */
+export const PLANNER_TOOLS = [
+  'interview',
+  'client',
+  'investigator',
+  'interrogatories',
+  'rfas',
+  'document_request',
+  'subpoena',
+  'deposition',
+] as const
+export type PlannerTool = (typeof PLANNER_TOOLS)[number]
+
+/** What a team can cite: a case file, one of its interviews (or depositions), or a report it got. */
+export type EvidenceKind = 'material' | 'interview' | 'report'
+
+export interface PlannerEvidence {
+  id: string
+  kind: EvidenceKind
+  sourceId: string
+  /** The pages, turns or paragraphs chosen; null for the whole thing. */
+  parts: number[] | null
+  /** The source's title with the parts (" — pages 3–5"). */
+  title: string
+  excerpt: string
+  note: string
+}
+
+/** A fact the team must prove: a fact of consequence (no parent), or a sub-fact under one. */
+export interface PlannerCard {
+  id: string
+  parentId: string | null
+  title: string
+  notes: string
+  position: number
+  evidence: PlannerEvidence[]
+  witnessIds: string[]
+  updatedBy: string | null
+  updatedAt: string
+}
+
+export interface PlannerGapTool {
+  tool: PlannerTool
+  /** 1 is the team's first choice. */
+  priority: number
+  reason: string
+  specifics: string
+  witnessId: string | null
+}
+
+/** Something the team still needs to find out, on a card or about the case as a whole (`cardId` null). */
+export interface PlannerGap {
+  id: string
+  cardId: string | null
+  description: string
+  position: number
+  tools: PlannerGapTool[]
+  updatedBy: string | null
+  updatedAt: string
+}
+
+export interface PlannerChart {
+  cards: PlannerCard[]
+  gaps: PlannerGap[]
+}
+
+/** Something the team can cite on its planner. */
+export interface PlannerSource {
+  kind: EvidenceKind
+  id: string
+  title: string
+  group: 'case-file' | 'investigator' | 'interviews' | 'reports'
+  contentType?: string
+  filename?: string
+  /** A transcript's turns or a text's paragraphs to choose from. */
+  parts?: ExhibitPart[]
+  /** A PDF, whose parts are page numbers. */
+  paged?: boolean
+}
+
+/** One change to the team's planner; every one answers with the whole chart. */
+export type PlannerChange =
+  | { op: 'addCard'; parentId: string | null; title: string }
+  | { op: 'editCard'; cardId: string; title?: string; notes?: string }
+  /** Puts a card under another (null: a fact of consequence), at `index` among its new siblings. */
+  | { op: 'moveCard'; cardId: string; parentId: string | null; index: number }
+  | { op: 'deleteCard'; cardId: string }
+  | { op: 'setWitnesses'; cardId: string; witnessIds: string[] }
+  | { op: 'addEvidence'; cardId: string; kind: EvidenceKind; id: string; parts: number[] | null; excerpt: string; note: string }
+  | { op: 'editEvidence'; cardId: string; evidenceId: string; parts?: number[] | null; excerpt?: string; note?: string }
+  | { op: 'deleteEvidence'; cardId: string; evidenceId: string }
+  | { op: 'addGap'; cardId: string | null; description: string }
+  | { op: 'editGap'; gapId: string; description?: string; cardId?: string | null; move?: 'up' | 'down' }
+  | { op: 'deleteGap'; gapId: string }
+  | { op: 'setTools'; gapId: string; tools: Omit<PlannerGapTool, 'priority'>[] }
+
+export type PlannerTag = 'LOOKS_GOOD' | 'SMALL_EDITS' | 'NEEDS_IMPROVEMENT'
+
+/** A round of AI feedback on the team's planner: questions about the chart as a whole, and pinned to its cards and gaps. */
+export interface PlannerReview {
+  id: string
+  round: number
+  status: 'working' | 'ready' | 'failed'
+  tag: PlannerTag | null
+  overview: string | null
+  bigPicture: string | null
+  notes: { targetKind: 'card' | 'gap'; targetId: string; text: string }[]
+  /** The team's replies to the notes, which the next round reads. */
+  replies: { targetKind: 'card' | 'gap'; targetId: string; text: string; updatedBy: string | null }[]
+  askedBy: string | null
+  /** Asked for by the student viewing it. */
+  mine: boolean
+  error: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
+export interface PlannerFeedback {
+  /** Oldest first. */
+  reviews: PlannerReview[]
+  limit: InteractionLimit
+  /** Rounds used: the team's, or the student's own when the limit is per student. */
+  used: number
+}
+
+/** How far a matched team has got with its planner, for the instructor. */
+export interface TeamPlannerSummary {
+  teamId: string
+  teamNumber: number
+  worldNumber: number
+  side: Side
+  cards: number
+  gaps: number
+  tools: number
+  updatedAt: string | null
+}
 
 /** A file, a deposition transcript the team took, or one of its investigator reports. */
 export type ExhibitSourceKind = 'material' | 'deposition' | 'report'
@@ -1649,6 +1834,13 @@ export interface CourseService {
   getMyCaseWorkspace(courseId: string, caseId: string): Promise<CaseWorkspace>
   /** Marks a task done (or not) for the student's whole team. */
   setTaskDone(courseId: string, caseId: string, taskId: string, done: boolean): Promise<CaseWorkspace>
+  /** Adds one of the team's own tasks, as from its planner. */
+  createTeamTask(courseId: string, caseId: string, task: { title: string; witnessId?: string | null; gapId?: string | null }): Promise<CaseWorkspace>
+  deleteTeamTask(courseId: string, caseId: string, taskId: string): Promise<CaseWorkspace>
+  /** The team's unsent emails to the investigator and its clients, newest first. */
+  listMessageDrafts(courseId: string, caseId: string): Promise<MessageDraft[]>
+  saveMessageDraft(courseId: string, caseId: string, kind: MessageDraft['kind'], id: string | null, content: MessageDraftContent): Promise<MessageDraft>
+  deleteMessageDraft(courseId: string, caseId: string, id: string): Promise<void>
   myMaterialDownloadUrl(courseId: string, caseId: string, materialId: string): string
   /** A case file's text version, for the viewer, if the student can see the file. */
   myMaterialText(courseId: string, caseId: string, materialId: string): Promise<MaterialTextResult>
@@ -1671,7 +1863,8 @@ export interface CourseService {
   /** The student's team's requests to the background investigator, newest first. */
   listMyInvestigations(courseId: string, caseId: string): Promise<Investigation[]>
   /** Emails the investigator an assignment; returns the team's requests. */
-  sendInvestigation(courseId: string, caseId: string, assignment: string): Promise<Investigation[]>
+  /** Sends an assignment, deleting the draft it's sent from. */
+  sendInvestigation(courseId: string, caseId: string, assignment: string, draftId?: string): Promise<Investigation[]>
   markInvestigationsSeen(courseId: string, caseId: string): Promise<void>
   /** The student's team's emails with its clients, newest first. */
   listMyClientEmails(courseId: string, caseId: string): Promise<ClientEmail[]>
@@ -1768,6 +1961,22 @@ export interface CourseService {
   getReviewTranscript(courseId: string, reviewId: string): Promise<ReviewTranscript>
   /** One of the student's team's completed reviews, with what rests on denied facts struck out. */
   getMyReviewTranscript(courseId: string, caseId: string, reviewId: string): Promise<ReviewTranscript>
+
+  // The case planner
+  /** The team's chart, or null when there's none for it (the planner is off, or the team isn't matched). */
+  getMyPlanner(courseId: string, caseId: string): Promise<PlannerChart | null>
+  /** What the team can cite as evidence. */
+  getPlannerSources(courseId: string, caseId: string): Promise<PlannerSource[]>
+  /** Makes one change; answers with the whole chart, and the new card's or gap's id. */
+  changePlanner(courseId: string, caseId: string, change: PlannerChange): Promise<{ planner: PlannerChart; id?: string }>
+  getMyPlannerFeedback(courseId: string, caseId: string): Promise<PlannerFeedback | null>
+  /** Asks for the next round of feedback on the chart as it is now. */
+  requestPlannerReview(courseId: string, caseId: string): Promise<PlannerFeedback>
+  retryPlannerReview(courseId: string, caseId: string, reviewId: string): Promise<PlannerFeedback>
+  savePlannerReply(courseId: string, caseId: string, reviewId: string, target: { kind: 'card' | 'gap'; id: string }, text: string): Promise<PlannerFeedback>
+  savePlannerSettings(courseId: string, caseId: string, settings: PlannerSettings): Promise<CourseCase>
+  listTeamPlanners(courseId: string, caseId: string): Promise<TeamPlannerSummary[]>
+  getTeamPlanner(courseId: string, caseId: string, teamId: string): Promise<{ planner: PlannerChart; feedback: PlannerFeedback }>
 
   // The joint exhibit list
   /** The team's exhibits, or null when there are none for it (not the final steps phase, or turned off). */

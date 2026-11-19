@@ -368,3 +368,65 @@
   color: var(--ws-muted);
   font-size: 0.85rem;
 }
+
+/* The team's own tasks for this witness, from its planner. */
+.iv-plan {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--tint-blue-fg);
+  border-radius: 0.6rem;
+  background: var(--tint-blue-bg);
+}
+
+.iv-plan summary {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--tint-blue-fg);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.iv-plan summary svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.iv-plan ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.iv-plan li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.iv-plan label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  min-width: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.iv-plan input {
+  margin-top: 0.2rem;
+}
+
+.iv-plan small,
+.iv-plan .iv-plan-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.iv-plan .iv-plan-note {
+  margin: 0.5rem 0 0;
+}

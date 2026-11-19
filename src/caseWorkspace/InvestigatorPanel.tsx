@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { Clock, Download, FileText, Lock, Mail, Paperclip, Send } from 'lucide-react'
+import { Clock, Download, FilePen, FileText, Lock, Mail, Paperclip, Send, Trash2 } from 'lucide-react'
 import type { ViewableFile } from '../components/FileViewer'
 import { WitnessAvatar } from '../components/WitnessAvatar'
 import { fileTypeLabel, formatSize, shortDate } from '../courses/caseLabels'
-import type { InteractionLimit, Investigation } from '../courses/types'
+import type { InteractionLimit, Investigation, MessageDraft, MessageDraftActions } from '../courses/types'
 import { DictationTextarea } from '../components/Dictation'
 import { FlagButton } from './flags'
 
@@ -33,6 +33,8 @@ export function InvestigatorPanel({
   onOpenFile,
   onSend,
   reviewLite,
+  drafts,
+  draftActions,
 }: {
   investigator: { name: string; avatarUrl: string; limit?: InteractionLimit }
   available: boolean
@@ -43,11 +45,17 @@ export function InvestigatorPanel({
   downloadUrl(materialId: string): string
   /** Opens an attached file in the viewer; leave out to only offer downloads. */
   onOpenFile?(file: ViewableFile): void
-  /** Sends an assignment; leave out (the preview, or a closed case) to hide the email. */
-  onSend?(assignment: string): Promise<void>
+  /** Sends an assignment (from a draft, which sending deletes); leave out (the preview, or a closed case) to hide the email. */
+  onSend?(assignment: string, draftId?: string): Promise<void>
   /** Review lite: reports come straight back, without the instructor's review. */
   reviewLite?: boolean
+  /** The team's unsent emails to him; leave out (the preview) to not keep drafts. */
+  drafts?: MessageDraft[]
+  draftActions?: MessageDraftActions
 }) {
+  const ours = (drafts ?? []).filter((d) => d.kind === 'investigator')
+  /** The draft open in the email, if any. */
+  const [editing, setEditing] = useState<MessageDraft | null>(null)
   const reports = investigations?.filter((i) => i.status === 'completed') ?? []
   const working = investigations?.find((i) => i.status === 'working')
   const [latest, ...earlier] = reports
@@ -125,7 +133,44 @@ export function InvestigatorPanel({
             </p>
           )}
           {onSend && !working && teamName && !usedUp && (
-            <InvestigatorEmail name={investigator.name} teamName={teamName} onSend={onSend} reviewLite={reviewLite} />
+            <InvestigatorEmail
+              key={editing?.id ?? 'new'}
+              name={investigator.name}
+              teamName={teamName}
+              draft={editing ?? undefined}
+              draftActions={draftActions}
+              onSend={async (assignment, draftId) => {
+                await onSend(assignment, draftId)
+                setEditing(null)
+              }}
+              onDraftSaved={() => setEditing(null)}
+              reviewLite={reviewLite}
+            />
+          )}
+          {ours.length > 0 && onSend && teamName && (
+            <section className="cw-investigator-drafts" aria-labelledby="cw-investigator-drafts">
+              <h3 id="cw-investigator-drafts">Drafts</h3>
+              <ul>
+                {ours.map((d) => (
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      className="cw-draft-open"
+                      aria-current={editing?.id === d.id ? 'true' : undefined}
+                      disabled={Boolean(working) || usedUp}
+                      onClick={() => setEditing(d)}
+                    >
+                      <FilePen aria-hidden="true" />
+                      <span>{draftLine(d)}</span>
+                      <small>
+                        {shortDate(d.updatedAt)}
+                        {d.updatedBy && ` · ${d.updatedBy}`}
+                      </small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           {onSend && !working && teamName && usedUp && (
             <p className="cw-empty">
@@ -254,19 +299,38 @@ export function InvestigatorReport({
   )
 }
 
-/** The email to the investigator: the team's next assignment. */
-function InvestigatorEmail({
+const draftLine = (d: MessageDraft) => {
+  const text = 'assignment' in d.content ? d.content.assignment.trim() : ''
+  return text ? (text.length > 90 ? `${text.slice(0, 89).trimEnd()}…` : text) : 'Empty draft'
+}
+
+/**
+ * The email to the investigator: the team's next assignment. With
+ * `draftActions`, it can be saved as a draft to finish later. Also opened
+ * from the planner, filled in from a gap (`prefill`).
+ */
+export function InvestigatorEmail({
   name,
   teamName,
+  draft,
+  prefill,
+  draftActions,
   onSend,
+  onDraftSaved,
   reviewLite,
 }: {
   name: string
   teamName: string
-  onSend(assignment: string): Promise<void>
+  /** The draft to carry on with. */
+  draft?: MessageDraft
+  prefill?: string
+  draftActions?: MessageDraftActions
+  onSend(assignment: string, draftId?: string): Promise<void>
+  /** After Save as draft (or deleting the draft). */
+  onDraftSaved?(): void
   reviewLite?: boolean
 }) {
-  const [assignment, setAssignment] = useState('')
+  const [assignment, setAssignment] = useState(() => (draft && 'assignment' in draft.content ? draft.content.assignment : (prefill ?? '')))
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -277,8 +341,21 @@ function InvestigatorEmail({
     setSending(true)
     setError(null)
     try {
-      await onSend(text)
+      await onSend(text, draft?.id)
       setAssignment('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function keep(action: () => Promise<unknown>) {
+    setSending(true)
+    setError(null)
+    try {
+      await action()
+      onDraftSaved?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -317,10 +394,34 @@ function InvestigatorEmail({
         <small className="muted">
           One assignment at a time.{reviewLite ? '' : ' Your instructor reviews his report first.'}
         </small>
-        <button type="submit" className="ws-btn ws-btn-primary" disabled={sending || !assignment.trim()}>
-          <Send aria-hidden="true" />
-          {sending ? 'Sending…' : `Send to ${name}`}
-        </button>
+        <span className="cw-email-buttons">
+          {draft && draftActions && (
+            <button
+              type="button"
+              className="ws-btn ws-btn-secondary"
+              disabled={sending}
+              onClick={() => window.confirm('Delete this draft?') && void keep(() => draftActions.remove(draft.id))}
+            >
+              <Trash2 aria-hidden="true" />
+              Delete draft
+            </button>
+          )}
+          {draftActions && (
+            <button
+              type="button"
+              className="ws-btn ws-btn-secondary"
+              disabled={sending || !assignment.trim()}
+              onClick={() => void keep(() => draftActions.save('investigator', draft?.id ?? null, { assignment }))}
+            >
+              <FilePen aria-hidden="true" />
+              Save as draft
+            </button>
+          )}
+          <button type="submit" className="ws-btn ws-btn-primary" disabled={sending || !assignment.trim()}>
+            <Send aria-hidden="true" />
+            {sending ? 'Sending…' : `Send to ${name}`}
+          </button>
+        </span>
       </div>
     </form>
   )

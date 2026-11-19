@@ -5,7 +5,18 @@
 
 export const DEFAULT_MODEL = 'claude-haiku-5-5'
 
-export type AiStep = 'witness' | 'investigator' | 'client' | 'subpoena' | 'mentor' | 'transcribe' | 'review' | 'memory' | 'setup' | 'eval'
+export type AiStep =
+  | 'witness'
+  | 'investigator'
+  | 'client'
+  | 'subpoena'
+  | 'mentor'
+  | 'planner'
+  | 'transcribe'
+  | 'review'
+  | 'memory'
+  | 'setup'
+  | 'eval'
 
 const STEP_VARIABLE: Record<AiStep, string> = {
   witness: 'CLAUDE_WITNESS_MODEL',
@@ -13,6 +24,7 @@ const STEP_VARIABLE: Record<AiStep, string> = {
   client: 'CLAUDE_CLIENT_MODEL',
   subpoena: 'CLAUDE_SUBPOENA_MODEL',
   mentor: 'CLAUDE_MENTOR_MODEL',
+  planner: 'CLAUDE_PLANNER_MODEL',
   transcribe: 'CLAUDE_TRANSCRIBE_MODEL',
   review: 'CLAUDE_REVIEW_MODEL',
   memory: 'CLAUDE_MEMORY_MODEL',
@@ -23,10 +35,12 @@ const STEP_VARIABLE: Record<AiStep, string> = {
 /**
  * Steps that use their own model unless their own variable says otherwise,
  * whatever CLAUDE_MODEL is: the discovery mentor needs Sonnet to keep its
- * feedback in proportion (Haiku quibbles over wording students can't improve).
+ * feedback in proportion (Haiku quibbles over wording students can't improve),
+ * and the planner's reviewer is the same kind of mentor.
  */
 const STEP_DEFAULT: Partial<Record<AiStep, string>> = {
   mentor: 'claude-sonnet-5-5',
+  planner: 'claude-sonnet-5-5',
 }
 
 /**

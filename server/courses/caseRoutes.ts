@@ -19,7 +19,10 @@ import {
   setInvestigator,
   setExhibitListEnabled,
   setExhibitJudicialReview,
+  setPlanner,
   setReviewMode,
+  FEEDBACK_LEVELS,
+  type FeedbackLevel,
   SETUP_STEPS,
   updateCase,
   type CaseFields,
@@ -43,6 +46,7 @@ import { contentSuggestions, finishWitnessSuggestions, witnessSuggestions } from
 import { exchangeRouter } from '../exchange/exchangeRoutes.ts'
 import { caseExhibitsRouter } from '../exhibits/exhibitRoutes.ts'
 import { packetsRouter } from '../packets/packetRoutes.ts'
+import { casePlannersRouter } from '../planner/plannerRoutes.ts'
 import { duplicateCase, shareCase } from './caseCopy.ts'
 import { caseFacts } from '../reviews/caseFacts.ts'
 
@@ -186,6 +190,7 @@ caseRouter.use('/tasks', tasksRouter)
 caseRouter.use('/exchange', exchangeRouter)
 caseRouter.use('/exhibits', caseExhibitsRouter)
 caseRouter.use('/packets', packetsRouter)
+caseRouter.use('/planners', casePlannersRouter)
 
 /** The witnesses the AI suggests from the initial file, offered once while setting up the case. */
 caseRouter.get('/witness-suggestions', async (req, res) => {
@@ -279,6 +284,21 @@ caseRouter.put('/investigator', async (req, res) => {
   res.json({
     case: await setInvestigator(req.course!.id, req.courseCase!.id, { enabled: body.enabled, name, instructions, limit }),
   })
+})
+
+/**
+ * The case planner: `{ enabled }`, and optionally `reviewLimit` (how many
+ * rounds of AI feedback each team or student can ask for) and
+ * `feedbackLevel` (gentle, balanced, or rigorous); left out, each stays as it is.
+ */
+caseRouter.put('/planner', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  if (typeof body.enabled !== 'boolean') throw new HttpError(400, 'Say whether students get the case planner.')
+  const reviewLimit =
+    body.reviewLimit === undefined ? req.courseCase!.planner.reviewLimit : readLimit(body.reviewLimit, 'feedback rounds')
+  const feedbackLevel = body.feedbackLevel === undefined ? req.courseCase!.planner.feedbackLevel : (body.feedbackLevel as FeedbackLevel)
+  if (!FEEDBACK_LEVELS.includes(feedbackLevel)) throw new HttpError(400, 'Choose how demanding the feedback is.')
+  res.json({ case: await setPlanner(req.course!.id, req.courseCase!.id, { enabled: body.enabled, reviewLimit, feedbackLevel }) })
 })
 
 /** `{ reviewMode }`: all (the instructor reviews everything) or lite (only what students flag). */

@@ -100,7 +100,7 @@ export function SubpoenasSection({
 
   if (view.mode === 'compose' && onServe) {
     return (
-      <Compose
+      <SubpoenaCompose
         key={view.draft?.id ?? 'new'}
         part={part}
         form={form}
@@ -254,10 +254,11 @@ function StatusBadge({ subpoena: s, now }: { subpoena: TeamSubpoena; now: Date }
  * the kinds the case allows; fixed when there's one), and what it wants, shown
  * as it fills in on the federal form.
  */
-function Compose({
+export function SubpoenaCompose({
   part,
   form,
   draft,
+  prefill,
   actions,
   onOpenDraft,
   onServe,
@@ -269,6 +270,8 @@ function Compose({
   form: SubpoenaFormContext
   /** The draft to carry on with. */
   draft?: DiscoveryDraft
+  /** What to start a new subpoena with, as from the planner. */
+  prefill?: Partial<SubpoenaDraftContent>
   actions?: DraftActions
   onOpenDraft?(draftId: string | null): void
   onServe(subpoena: SubpoenaInput, checkId?: string, draftId?: string): Promise<void>
@@ -276,7 +279,7 @@ function Compose({
   onWarm?(): void
   onBack(): void
 }) {
-  const saved = draft?.content as SubpoenaDraftContent | undefined
+  const saved = (draft?.content as SubpoenaDraftContent | undefined) ?? prefill
   const [recipient, setRecipient] = useState(saved?.recipient ?? '')
   const [recipientDescription, setRecipientDescription] = useState(saved?.recipientDescription ?? '')
   const [requestType, setRequestType] = useState<SubpoenaType | ''>(() => {

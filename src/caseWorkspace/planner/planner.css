@@ -1,0 +1,1219 @@
+/* The team's case planner (PlannerPanel): the steps, their guidance, and the chart as a tree of cards. */
+
+.pl {
+  display: grid;
+  gap: 1.1rem;
+  container: pl / inline-size;
+  --pl-line: var(--ws-line);
+}
+
+.pl h2,
+.pl h3,
+.pl p {
+  margin: 0;
+}
+
+.pl-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.pl-status {
+  padding: 0.25rem 0.65rem;
+  border-radius: 1rem;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.pl-status-error {
+  background: var(--tint-rose-bg);
+  color: var(--ws-red);
+}
+
+/* The to-do list beside the feedback; one column when narrow. */
+
+.pl-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.pl-top-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container pl (max-width: 46rem) {
+  .pl-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.pl-card {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.65rem;
+  background: var(--surface);
+}
+
+.pl-card h3 {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--ws-navy);
+  font: 400 1.15rem var(--ws-serif);
+}
+
+.pl-card h3 svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--ws-blue);
+}
+
+.pl-todo ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pl-todo summary {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.35rem 0.2rem;
+  border-radius: 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.pl-todo summary::-webkit-details-marker {
+  display: none;
+}
+
+.pl-todo summary:hover {
+  background: var(--surface-hover);
+}
+
+.pl-todo-box {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--ws-line);
+  border-radius: 0.3rem;
+}
+
+.pl-todo-box svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.pl-todo-done .pl-todo-box {
+  border-color: var(--tint-green-fg);
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.pl-todo-done summary > span:last-child {
+  color: var(--ws-muted);
+  text-decoration: line-through;
+}
+
+.pl .pl-todo details p {
+  margin: 0.2rem 0 0.5rem 2rem;
+  color: var(--fg-soft);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.pl-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pl .pl-feedback-intro {
+  color: var(--fg-soft);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.pl-bottom-ask {
+  display: flex;
+  justify-content: center;
+  padding: 0.9rem;
+  border: 1px dashed var(--ws-line);
+  border-radius: 0.65rem;
+}
+
+.pl-back {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  justify-self: start;
+  padding: 0.3rem 0.6rem 0.3rem 0.4rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--ws-blue);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pl-back svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.pl-place {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  margin: 0;
+  padding: 0.9rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--ws-line);
+}
+
+.pl-place legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 0.4rem;
+}
+
+.pl-place .pl-field {
+  flex: 1 1 14rem;
+}
+
+.pl-note-head {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.pl-note-check {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.pl-note-check svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.pl-round-notes .pl-note-replied {
+  border-left-color: var(--tint-green-fg);
+}
+
+/* The chart */
+
+.pl-chart {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.1rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.7rem;
+  background: var(--ws-paper, var(--surface));
+}
+
+/* A wide tree scrolls inside the chart, never the page. */
+.pl-tree-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+
+.pl-tree,
+.pl-tree ul {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pl-tree {
+  width: max-content;
+  min-width: 100%;
+}
+
+.pl-tree ul {
+  position: relative;
+  padding-top: 1.25rem;
+}
+
+.pl-tree li {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.25rem 0.45rem 0;
+}
+
+/* The lines: each card's half of the bar above it, and the drop to it. */
+.pl-tree li::before,
+.pl-tree li::after {
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 50%;
+  height: 1.25rem;
+  border-top: 2px solid var(--pl-line);
+  content: '';
+}
+
+.pl-tree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 2px solid var(--pl-line);
+}
+
+.pl-tree li:only-child {
+  padding-top: 0;
+}
+
+.pl-tree li:only-child::before,
+.pl-tree li:only-child::after,
+.pl-tree > li::before,
+.pl-tree > li::after {
+  display: none;
+}
+
+.pl-tree > li {
+  padding-top: 0;
+}
+
+.pl-tree li:first-child::before,
+.pl-tree li:last-child::after {
+  border: 0;
+}
+
+.pl-tree li:last-child::before {
+  border-right: 2px solid var(--pl-line);
+  border-radius: 0 0.4rem 0 0;
+}
+
+.pl-tree li:first-child::after {
+  border-radius: 0.4rem 0 0 0;
+}
+
+/* The drop from a card to the bar over its sub-facts. */
+.pl-tree ul::before {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 1.25rem;
+  border-left: 2px solid var(--pl-line);
+  content: '';
+}
+
+.pl-node-stack {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+}
+
+.pl-root {
+  padding: 0.55rem 1rem;
+  border-radius: 0.55rem;
+  background: var(--ws-navy);
+  color: var(--surface);
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.pl-node,
+.pl-gap {
+  display: grid;
+  gap: 0.25rem;
+  width: 12.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.55rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pl-node:hover,
+.pl-gap:hover {
+  border-color: var(--ws-blue);
+}
+
+.pl-node:focus-visible,
+.pl-gap:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pl-node-fact {
+  border-top: 3px solid var(--ws-navy);
+}
+
+.pl-node-sub {
+  border-top: 3px solid var(--ws-blue);
+}
+
+.pl-node-kind,
+.pl-gap-kind {
+  color: var(--ws-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pl-gap-kind {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  color: var(--tint-amber-fg);
+}
+
+.pl-gap-kind svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.pl-node-title,
+.pl-gap-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.pl-node-untitled .pl-node-title {
+  color: var(--ws-muted);
+  font-style: italic;
+}
+
+.pl-node-meta,
+.pl-gap-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  color: var(--ws-muted);
+  font-size: 0.74rem;
+}
+
+.pl-node-meta span,
+.pl-gap-meta span {
+  display: inline-flex;
+  gap: 0.2rem;
+  align-items: center;
+}
+
+.pl-node-meta svg,
+.pl-gap-meta svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.pl-node-notes {
+  color: var(--tint-blue-fg);
+  font-weight: 700;
+}
+
+.pl-gap {
+  width: 11.5rem;
+  border-style: dashed;
+  border-color: var(--tint-amber-fg);
+  background: var(--tint-amber-bg);
+}
+
+.pl-chart-empty {
+  color: var(--ws-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.pl-chart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.pl-chart-actions svg,
+.pl-detail .ws-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pl-loose {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--ws-line);
+}
+
+.pl-loose h3 {
+  color: var(--ws-navy);
+  font-size: 0.9rem;
+}
+
+.pl-loose-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Narrow: the tree becomes an indented list, each level on a rail. */
+@container pl (max-width: 40rem) {
+  .pl-tree,
+  .pl-tree ul {
+    display: block;
+    width: auto;
+  }
+
+  .pl-tree ul {
+    margin-left: 0.9rem;
+    padding: 0 0 0 0.9rem;
+    border-left: 2px solid var(--pl-line);
+  }
+
+  .pl-tree li {
+    display: block;
+    padding: 0.5rem 0 0;
+  }
+
+  .pl-tree li::before,
+  .pl-tree li::after,
+  .pl-tree ul::before {
+    display: none;
+  }
+
+  .pl-node-stack {
+    justify-items: stretch;
+  }
+
+  .pl-node,
+  .pl-gap {
+    width: 100%;
+  }
+
+  .pl-gap {
+    width: calc(100% - 1rem);
+    margin-left: 1rem;
+  }
+
+  .pl-loose .pl-gap {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+/* A card's or gap's details */
+
+.pl-detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.pl-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.pl-field-label {
+  color: var(--ws-text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.pl-field input,
+.pl-field textarea,
+.pl-field select {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 0.92rem;
+  box-sizing: border-box;
+}
+
+.pl-field textarea {
+  resize: vertical;
+}
+
+.pl-field-hint {
+  color: var(--ws-muted);
+  font-size: 0.78rem;
+}
+
+.pl-field-error,
+.pl .pl-error,
+.pl-detail .pl-error {
+  color: var(--ws-red);
+  font-size: 0.82rem;
+}
+
+.pl-field-text {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.pl-field-empty {
+  color: var(--ws-muted);
+}
+
+.pl-detail-parent {
+  margin: 0;
+  color: var(--ws-muted);
+  font-size: 0.85rem;
+}
+
+.pl-link {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ws-blue);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pl-link:hover {
+  text-decoration: underline;
+}
+
+.pl-link svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.pl-detail-section {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: start;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--ws-line);
+}
+
+.pl-detail-section > * {
+  justify-self: stretch;
+}
+
+.pl-detail-section > .ws-btn {
+  justify-self: start;
+}
+
+.pl-detail-section h3 {
+  margin: 0;
+  color: var(--ws-navy);
+  font-size: 1rem;
+}
+
+.pl-detail-section p {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.pl-evidence,
+.pl-links,
+.pl-tools,
+.pl-part-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pl-evidence > li,
+.pl-tool {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.5rem;
+  background: var(--ws-paper, var(--surface));
+}
+
+.pl-evidence-head,
+.pl-tool-head {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.pl-evidence-head strong {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.pl-icon-btn {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--fg-soft);
+  cursor: pointer;
+}
+
+.pl-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pl-icon-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.pl-chips,
+.pl-tool-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pl-chip {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 1rem;
+  background: var(--surface);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.pl-chip small {
+  color: var(--ws-muted);
+}
+
+.pl-chip-on {
+  border-color: var(--tint-blue-fg);
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+  font-weight: 700;
+}
+
+.pl-tool-head > div {
+  display: grid;
+  flex: 1;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.pl-tool-head small {
+  color: var(--ws-muted);
+  font-size: 0.78rem;
+}
+
+.pl-tool-rank {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--ws-navy);
+  color: var(--surface);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.pl-tool-move {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.pl-tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pl-tool-actions .ws-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.pl-evidence-picker {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border: 1px solid var(--tint-blue-fg);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.pl-parts {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pl-parts > label {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.88rem;
+}
+
+.pl-part-list {
+  gap: 0.3rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.4rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.45rem;
+}
+
+.pl-part-list label {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.pl-part-list input {
+  margin-top: 0.2rem;
+}
+
+.pl-actions,
+.pl-detail-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pl-detail-footer {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--ws-line);
+}
+
+.pl .pl-btn-danger,
+.pl-detail .pl-btn-danger {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: var(--ws-red);
+}
+
+/* Feedback: asking for a round, the rounds, and the questions pinned to a card or gap. */
+
+.pl-feedback {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 0.4rem;
+}
+
+.pl-feedback-ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.pl-feedback-ask .ws-btn,
+.pl-feedback .pl-link {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.pl-feedback-ask svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pl .pl-feedback-waiting {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+  font-size: 0.86rem;
+}
+
+.pl-spinner {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: pl-spin 0.9s linear infinite;
+}
+
+@keyframes pl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-spinner {
+    animation: none;
+  }
+}
+
+.pl-tag {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 1rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.pl-tag svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.pl-tag-good {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.pl-tag-edits {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.pl-tag-work {
+  background: var(--tint-rose-bg);
+  color: var(--ws-red);
+}
+
+.pl-round {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.55rem;
+  background: var(--surface);
+}
+
+.pl-round-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.7rem;
+  align-items: center;
+  margin: 0;
+  color: var(--ws-navy);
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: default;
+}
+
+details.pl-round > summary {
+  cursor: pointer;
+}
+
+.pl-round-head small {
+  color: var(--ws-muted);
+  font-weight: 600;
+}
+
+.pl .pl-round-text {
+  color: var(--fg-soft);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.pl-round-notes {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pl-round-notes li {
+  display: grid;
+  gap: 0.2rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--tint-blue-fg);
+}
+
+.pl-round-big {
+  display: grid;
+  gap: 0.2rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--ws-line);
+  font-size: 0.88rem;
+}
+
+.pl-pinned {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.pl-pinned-round {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--tint-blue-fg);
+  border-radius: 0.55rem;
+  background: var(--tint-blue-bg);
+}
+
+.pl-pinned-head {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  color: var(--tint-blue-fg);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+details.pl-pinned-round > summary {
+  cursor: pointer;
+}
+
+.pl-pinned-head svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.pl-detail .pl-round-text {
+  margin: 0;
+  color: var(--ws-text);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+/* Acting on a gap's tool: the regular forms in a window, and adding a task. */
+
+.pl-added {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  color: var(--tint-green-fg);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.pl-added svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pl-compose {
+  display: grid;
+  gap: 1rem;
+}
+
+.pl-compose .cw-card {
+  padding: 0;
+  border: 0;
+}
+
+.pl-compose-blocked {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+  font-size: 0.9rem;
+}
+
+/* Dragging cards: the card under the pointer lights up to take it as a sub-fact; its edges put it beside. */
+
+.pl .pl-chart-hint {
+  color: var(--ws-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.pl-node-wrap {
+  display: grid;
+  position: relative;
+  justify-items: center;
+  border-radius: 0.65rem;
+}
+
+.pl-node {
+  touch-action: none;
+}
+
+.pl-node-kind {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pl-node-grip {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--ws-muted);
+  cursor: grab;
+}
+
+.pl-node-moving {
+  opacity: 0.35;
+}
+
+.pl-chart-dragging .pl-node-wrap.pl-drop-ready > .pl-node {
+  border-style: dashed;
+}
+
+.pl-node-wrap.pl-drop-over > .pl-node,
+.pl-root.pl-drop-over {
+  outline: 3px solid var(--tint-blue-fg);
+  outline-offset: 2px;
+  background: var(--tint-blue-bg);
+}
+
+.pl-node-ghost {
+  width: 12.5rem;
+  box-shadow: 0 0.6rem 1.5rem rgb(0 0 0 / 25%);
+  cursor: grabbing;
+}
+
+.pl-root {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: center;
+}
+
+.pl-root small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.pl-root.pl-drop-ready {
+  outline: 2px dashed var(--tint-blue-fg);
+  outline-offset: 3px;
+}
+
+/* The edges of a card: left and right on the tree, top and bottom in the narrow list. */
+.pl-zone {
+  position: absolute;
+  top: 0;
+  bottom: 1.6rem;
+  width: 1.4rem;
+  border-radius: 0.4rem;
+}
+
+.pl-zone-before {
+  left: -0.7rem;
+}
+
+.pl-zone-after {
+  right: -0.7rem;
+}
+
+.pl-zone-over {
+  background: var(--tint-blue-fg);
+  opacity: 0.55;
+}
+
+.pl-zone-before.pl-zone-over {
+  box-shadow: -2px 0 0 var(--tint-blue-fg);
+}
+
+@container pl (max-width: 40rem) {
+  .pl-node-wrap {
+    justify-items: stretch;
+  }
+
+  .pl-zone {
+    right: 0;
+    left: 0;
+    width: auto;
+    height: 1rem;
+  }
+
+  .pl-zone-before {
+    top: -0.5rem;
+    bottom: auto;
+  }
+
+  .pl-zone-after {
+    top: auto;
+    bottom: 1.1rem;
+  }
+}
+
+/* The plus under a card: a new sub-fact. */
+.pl-add-sub {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-top: -0.55rem;
+  padding: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ws-blue);
+  cursor: pointer;
+  z-index: 1;
+}
+
+.pl-add-sub:hover {
+  border-color: var(--ws-blue);
+  background: var(--tint-blue-bg);
+}
+
+.pl-add-sub:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pl-add-sub svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.pl-node-replied {
+  color: var(--tint-green-fg);
+}

@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Clock, Download, FileText, Inbox, Mail, MailOpen, Paperclip, PenSquare, Send, X } from 'lucide-react'
+import { Clock, Download, FilePen, FileText, Inbox, Mail, MailOpen, Paperclip, PenSquare, Send, Trash2, X } from 'lucide-react'
 import type { ViewableFile } from '../../components/FileViewer'
 import { WitnessAvatar } from '../../components/WitnessAvatar'
 import { DictationTextarea } from '../../components/Dictation'
 import { dueLabel, fileTypeLabel, formatSize, shortDate } from '../../courses/caseLabels'
-import type { ClientEmail, ClientEmailInput, InteractionLimit, WorkspaceWitness } from '../../courses/types'
+import type { ClientEmail, ClientEmailInput, InteractionLimit, MessageDraft, MessageDraftActions, WorkspaceWitness } from '../../courses/types'
 import { TeachMe } from '../exchange/TeachMe'
 import { TeachMeButton } from '../exchange/TeachMeButton'
 import { FlagButton } from '../flags'
@@ -16,7 +16,9 @@ import { splitReply } from './splitReply'
 const MAX_SUBJECT_LENGTH = 200
 const MAX_BODY_LENGTH = 4000
 
-type Folder = 'inbox' | 'sent'
+type Folder = 'inbox' | 'sent' | 'drafts'
+
+type EmailContent = { to: string[]; subject: string; body: string }
 
 /** One message in the inbox: the team's email (sent), or the clients' reply to it (received). */
 interface Message {
@@ -51,6 +53,8 @@ export function ClientInbox({
   reviewLite,
   composeTo,
   onComposeOpened,
+  drafts,
+  draftActions,
 }: {
   clients: WorkspaceWitness[]
   /** The team's emails, newest first; leave out (the preview) to show the inbox empty. */
@@ -68,6 +72,9 @@ export function ClientInbox({
   composeTo?: string[] | null
   /** Called once `composeTo` has opened Compose, so it isn't opened again. */
   onComposeOpened?(): void
+  /** The team's unsent emails to its clients; leave out (the preview) to have no Drafts folder. */
+  drafts?: MessageDraft[]
+  draftActions?: MessageDraftActions
 }) {
   const list = emails ?? []
   const [folder, setFolder] = useState<Folder>('inbox')
@@ -75,7 +82,8 @@ export function ClientInbox({
   const shown = messages.filter((m) => (folder === 'inbox' ? m.kind === 'received' : m.kind === 'sent'))
   const [selected, setSelected] = useState<string | null>(null)
   const open = shown.find((m) => m.key === selected) ?? shown[0] ?? null
-  const [composing, setComposing] = useState<string[] | null>(null)
+  const [composing, setComposing] = useState<{ to: string[]; draft?: MessageDraft } | null>(null)
+  const emailDrafts = (drafts ?? []).filter((d) => d.kind === 'client_email')
   const [teach, setTeach] = useState<DOMRect | null>(null)
 
   const waiting = list.find((e) => e.status === 'working')
@@ -86,7 +94,7 @@ export function ClientInbox({
 
   useEffect(() => {
     if (!composeTo) return
-    if (canCompose) setComposing(composeTo)
+    if (canCompose) setComposing({ to: composeTo })
     onComposeOpened?.()
   }, [composeTo, canCompose, onComposeOpened])
 
@@ -116,7 +124,7 @@ export function ClientInbox({
             <button
               type="button"
               className="ws-btn ws-btn-primary"
-              onClick={() => setComposing(clients.map((c) => c.id))}
+              onClick={() => setComposing({ to: clients.map((c) => c.id) })}
               disabled={!canCompose}
               title={waiting ? 'Wait for the reply to your last email first.' : usedUp ? 'Your team has used its emails.' : undefined}
             >
@@ -137,17 +145,23 @@ export function ClientInbox({
       {!teamName && <p className="cw-empty">Your team can email its client once it&rsquo;s in a case world.</p>}
 
       {composing && onSend && teamName && (
-        <Compose
-          key={composing.join(' ')}
+        <ClientCompose
+          key={composing.draft?.id ?? composing.to.join(' ')}
           clients={clients}
-          initialTo={composing}
+          initialTo={composing.to}
+          draft={composing.draft}
           teamName={teamName}
           reviewLite={reviewLite}
+          draftActions={draftActions}
           onSend={async (email) => {
             await onSend(email)
             setComposing(null)
             setFolder('sent')
             setSelected(null)
+          }}
+          onDraftSaved={() => {
+            setComposing(null)
+            setFolder('drafts')
           }}
           onCancel={() => setComposing(null)}
         />
@@ -165,8 +179,45 @@ export function ClientInbox({
               <Send aria-hidden="true" />
               Sent
             </button>
+            {drafts && (
+              <button type="button" role="tab" aria-selected={folder === 'drafts'} onClick={() => setFolder('drafts')}>
+                <FilePen aria-hidden="true" />
+                Drafts
+                {emailDrafts.length > 0 && <span className="ci-count">{emailDrafts.length}</span>}
+              </button>
+            )}
           </div>
-          {shown.length === 0 ? (
+          {folder === 'drafts' ? (
+            emailDrafts.length === 0 ? (
+              <p className="ci-none">No drafts. Save an email as a draft to finish it later.</p>
+            ) : (
+              <ul>
+                {emailDrafts.map((d) => {
+                  const c = d.content as EmailContent
+                  return (
+                    <li key={d.id}>
+                      <button
+                        type="button"
+                        className="ci-item"
+                        disabled={!canCompose}
+                        title={canCompose ? 'Open the draft' : 'You can finish it once you can send another email.'}
+                        onClick={() => setComposing({ to: c.to, draft: d })}
+                      >
+                        <span className="ci-item-top">
+                          <span className="ci-item-who">
+                            To: {clients.filter((w) => c.to.includes(w.id)).map((w) => w.name).join(', ') || 'no one yet'}
+                          </span>
+                          <small>{shortDate(d.updatedAt)}</small>
+                        </span>
+                        <span className="ci-item-subject">{c.subject.trim() || '(no subject)'}</span>
+                        {d.updatedBy && <small className="ci-item-waiting">Saved by {d.updatedBy}</small>}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )
+          ) : shown.length === 0 ? (
             <p className="ci-none">{folder === 'inbox' ? 'No replies yet.' : 'Nothing sent yet.'}</p>
           ) : (
             <ul>
@@ -207,7 +258,12 @@ export function ClientInbox({
           )}
         </nav>
         <div className="ci-read">
-          {open ? (
+          {folder === 'drafts' ? (
+            <p className="ci-none ci-read-none">
+              <FilePen aria-hidden="true" />
+              Open a draft to finish and send it. Your partner sees your drafts too.
+            </p>
+          ) : open ? (
             <Reading message={open} names={names} teamName={teamName} downloadUrl={downloadUrl} onOpenFile={onOpenFile} />
           ) : (
             <p className="ci-none ci-read-none">
@@ -324,25 +380,40 @@ function Reading({
   )
 }
 
-/** A new email to the team's clients: whom to, the subject, and what to ask. */
-function Compose({
+/**
+ * A new email to the team's clients: whom to, the subject, and what to ask.
+ * With `draftActions`, it can be saved as a draft to finish later. Also
+ * opened from the planner, filled in from a gap (`prefill`).
+ */
+export function ClientCompose({
   clients,
   initialTo,
+  draft,
+  prefill,
   teamName,
   reviewLite,
+  draftActions,
   onSend,
+  onDraftSaved,
   onCancel,
 }: {
   clients: WorkspaceWitness[]
   initialTo: string[]
+  /** The draft to carry on with. */
+  draft?: MessageDraft
+  prefill?: { subject?: string; body?: string }
   teamName: string
   reviewLite?: boolean
+  draftActions?: MessageDraftActions
   onSend(email: ClientEmailInput): Promise<void>
+  /** After Save as draft. */
+  onDraftSaved?(): void
   onCancel(): void
 }) {
-  const [to, setTo] = useState<string[]>(initialTo)
-  const [subject, setSubject] = useState('')
-  const [body, setBody] = useState('')
+  const saved = draft?.content as EmailContent | undefined
+  const [to, setTo] = useState<string[]>(saved?.to.length ? saved.to : initialTo)
+  const [subject, setSubject] = useState(saved?.subject ?? prefill?.subject ?? '')
+  const [body, setBody] = useState(saved?.body ?? prefill?.body ?? '')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -352,7 +423,19 @@ function Compose({
     setSending(true)
     setError(null)
     try {
-      await onSend({ to, subject: subject.trim(), body: body.trim() })
+      await onSend({ to, subject: subject.trim(), body: body.trim(), ...(draft && { draftId: draft.id }) })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      setSending(false)
+    }
+  }
+
+  async function keep(action: () => Promise<unknown>) {
+    setSending(true)
+    setError(null)
+    try {
+      await action()
+      onDraftSaved?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setSending(false)
@@ -422,10 +505,34 @@ function Compose({
         <small className="muted">
           {to.length === 0 ? 'Choose at least one client.' : `One email at a time.${reviewLite ? '' : ' Your instructor reviews the reply first.'}`}
         </small>
-        <button type="submit" className="ws-btn ws-btn-primary" disabled={sending || !to.length || !subject.trim() || !body.trim()}>
-          <Send aria-hidden="true" />
-          {sending ? 'Sending…' : 'Send'}
-        </button>
+        <span className="ci-compose-buttons">
+          {draft && draftActions && (
+            <button
+              type="button"
+              className="ws-btn ws-btn-secondary"
+              disabled={sending}
+              onClick={() => window.confirm('Delete this draft?') && void keep(() => draftActions.remove(draft.id))}
+            >
+              <Trash2 aria-hidden="true" />
+              Delete draft
+            </button>
+          )}
+          {draftActions && (
+            <button
+              type="button"
+              className="ws-btn ws-btn-secondary"
+              disabled={sending || (!subject.trim() && !body.trim())}
+              onClick={() => void keep(() => draftActions.save('client_email', draft?.id ?? null, { to, subject, body }))}
+            >
+              <FilePen aria-hidden="true" />
+              Save as draft
+            </button>
+          )}
+          <button type="submit" className="ws-btn ws-btn-primary" disabled={sending || !to.length || !subject.trim() || !body.trim()}>
+            <Send aria-hidden="true" />
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </span>
       </div>
     </form>
   )

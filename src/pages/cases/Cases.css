@@ -1795,3 +1795,66 @@ a.case-row:hover {
 .content-form .limit-field {
   flex-basis: 100%;
 }
+
+/* Each team's planner, for the instructor (PlannersTab). */
+.planner-teams {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-teams li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--surface);
+}
+
+.planner-teams li > div {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.planner-teams small {
+  color: var(--muted);
+}
+
+.planner-view {
+  margin-top: 1.25rem;
+}
+
+/* How demanding the planner's feedback is: a slider from gentle to rigorous. */
+.planner-level {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 30rem;
+}
+
+.planner-level label {
+  font-weight: 600;
+}
+
+.planner-level input[type='range'] {
+  width: 100%;
+  accent-color: var(--ws-blue);
+}
+
+.planner-level-ticks {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.planner-level-ticks .planner-level-on {
+  color: var(--ws-navy);
+  font-weight: 700;
+}

@@ -397,7 +397,7 @@ describe('the background investigator', () => {
     await user.type(within(email).getByLabelText('Your assignment'), 'Find who else was on the ride.')
     await user.click(send)
 
-    expect(onSendInvestigation).toHaveBeenCalledWith('Find who else was on the ride.')
+    expect(onSendInvestigation).toHaveBeenCalledWith('Find who else was on the ride.', undefined)
     expect(within(email).getByLabelText('Your assignment')).toHaveValue('')
   })
 

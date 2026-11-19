@@ -22,6 +22,7 @@ import { DepositionCard, ExhibitCard, InvestigatorCard } from './PhaseCards'
 import { FinalStepsTab } from './finalSteps/FinalStepsTab'
 import { ExchangeSetupFlow, type ExchangeStep } from './exchange/ExchangeSetupFlow'
 import { ExchangeTab } from './exchange/ExchangeTab'
+import { PlannersTab } from './planner/PlannersTab'
 import { TeamsSection } from './TeamsSection'
 import { usePageTour } from '../../tour/tourContext'
 import { INSTRUCTOR_CASE } from '../../tour/tours'
@@ -37,6 +38,7 @@ const TABS = [
   { id: 'witnesses', label: 'Witnesses' },
   { id: 'final-steps', label: 'Final steps' },
   { id: 'tasks', label: 'Tasks' },
+  { id: 'planners', label: 'Planners' },
   { id: 'student-view', label: 'Student view' },
 ] as const
 type TabId = (typeof TABS)[number]['id']
@@ -367,6 +369,7 @@ function CaseDetail() {
               <FinalStepsTab courseId={courseId} courseCase={courseCase} onCaseChange={setCourseCase} />
             )}
             {tab === 'tasks' && <TasksSection courseId={courseId} caseId={courseCase.id} />}
+            {tab === 'planners' && <PlannersTab courseId={courseId} courseCase={courseCase} onCaseChange={setCourseCase} />}
             {tab === 'student-view' && (
               <StudentViewSection
                 courseId={courseId}

@@ -135,7 +135,7 @@ export function RequestsSection({
 
   if (view.mode === 'compose' && onSend) {
     return (
-      <Compose
+      <RequestCompose
         key={view.draft?.id ?? 'new'}
         kind={kind}
         part={part}
@@ -370,12 +370,13 @@ export function SubHead({
   )
 }
 
-/** Writing a set: one per line. Return starts a new line, until the team's limit. */
-function Compose({
+/** Writing a set: one per line. Return starts a new line, until the team's limit. Also opened from the planner. */
+export function RequestCompose({
   kind,
   part,
   to,
   draft,
+  prefill,
   actions,
   onOpenDraft,
   onSend,
@@ -389,6 +390,8 @@ function Compose({
   to: string
   /** The draft to carry on with. */
   draft?: DiscoveryDraft
+  /** Lines to start a new set with, as from the planner. */
+  prefill?: string[]
   actions?: DraftActions
   onOpenDraft?(draftId: string | null): void
   onSend(items: string[], checkId?: string, draftId?: string): Promise<void>
@@ -400,7 +403,7 @@ function Compose({
 }) {
   const copy = COPY[kind]
   const [lines, setLines] = useState<string[]>(() => {
-    const saved = draft && 'items' in draft.content ? draft.content.items : []
+    const saved = draft && 'items' in draft.content ? draft.content.items : (prefill ?? [])
     return saved.length > 0 ? saved : ['']
   })
   const [lastCheck, setLastCheck] = useState<KeyedCheck | null>(draft?.lastCheck ?? null)

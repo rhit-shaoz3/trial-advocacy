@@ -815,6 +815,8 @@ export const httpCourseService: CourseService = {
         return send('DELETE', gap(change.gapId))
       case 'setTools':
         return send('PUT', `${gap(change.gapId)}/tools`, { tools: change.tools })
+      case 'finalize':
+        return send('PUT', `${base}/finalized`, { finalized: change.finalized })
     }
   },
 

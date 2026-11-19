@@ -18,6 +18,7 @@ const card = (id: string, parentId: string | null, position: number): PlannerCar
 const chart: PlannerChart = {
   cards: [card('A', null, 0), card('B', null, 1), card('A1', 'A', 0), card('A2', 'A', 1), card('A1x', 'A1', 0)],
   gaps: [],
+  finalized: null,
 }
 
 describe('dropping a dragged card', () => {

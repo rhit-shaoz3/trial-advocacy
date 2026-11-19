@@ -86,6 +86,7 @@ export function PlannersTab({
                           t.tools === 1 ? 'tool' : 'tools'
                         }`}
                     {t.updatedAt && ` · last changed ${shortDate(t.updatedAt)}`}
+                    {t.finalizedAt && ` · plan finalized ${shortDate(t.finalizedAt)}`}
                   </small>
                 </div>
                 <button

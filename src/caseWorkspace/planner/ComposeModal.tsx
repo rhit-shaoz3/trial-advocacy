@@ -177,7 +177,8 @@ export function ComposeModal({
     )
   }
   return (
-    <Modal eyebrow="From your planner" title={TITLE[kind]} icon={icon} wide={kind === 'subpoena'} onClose={onClose}>
+    // Only the subpoena form itself needs the full-height window; a line saying why it can't be used doesn't.
+    <Modal eyebrow="From your planner" title={TITLE[kind]} icon={icon} wide={kind === 'subpoena' && form !== null} onClose={onClose}>
       <div className="pl-compose">
         {reason ? (
           <p className="pl-compose-blocked" role="status">

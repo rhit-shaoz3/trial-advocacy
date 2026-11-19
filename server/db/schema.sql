@@ -1322,3 +1322,8 @@ CREATE INDEX IF NOT EXISTS message_drafts_team_idx ON message_drafts (case_id, t
 -- generous about what the team fixed), balanced, or rigorous.
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS planner_feedback_level text NOT NULL DEFAULT 'balanced'
   CHECK (planner_feedback_level IN ('gentle', 'balanced', 'rigorous'));
+
+-- When a team finalized its planner, and who did: the chart stays editable,
+-- and its gaps' tools turn into requests, emails and tasks to send.
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS planner_finalized_at timestamptz;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS planner_finalized_by uuid REFERENCES users (id) ON DELETE SET NULL;

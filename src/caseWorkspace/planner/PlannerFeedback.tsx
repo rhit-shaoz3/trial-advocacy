@@ -1,4 +1,4 @@
-import { Check, MessageCircleQuestion, RotateCcw, X } from 'lucide-react'
+import { Check, ChevronRight, MessageCircleQuestion, RotateCcw, X } from 'lucide-react'
 import type { PlannerChart, PlannerReview, PlannerTag } from '../../courses/types'
 import { AutoField } from './AutoField'
 import { cardTitle, gapTitle } from './plannerLabels'
@@ -21,8 +21,8 @@ function TagBadge({ tag }: { tag: PlannerTag }) {
   )
 }
 
-/** Asking for the next round, with how many are left; at the top of the feedback, and under the chart. */
-export function AskFeedback({ state }: { state: FeedbackState }) {
+/** Asking for the next round, with how many are left. */
+function AskFeedback({ state }: { state: FeedbackState }) {
   const { feedback, busy, waiting, ask } = state
   if (!feedback) return null
   const { limit, used } = feedback
@@ -42,35 +42,15 @@ export function AskFeedback({ state }: { state: FeedbackState }) {
 }
 
 /**
- * The feedback: asking for the next round, and the rounds so far, newest
- * first. Each question on a card or gap opens it, and shows a check once
- * the team has replied to it.
+ * Asking for the next round, and where the latest one stands: on its way,
+ * failed (with Try again), or not asked for yet. The rounds themselves are
+ * in `FeedbackRounds`.
  */
-export function FeedbackPanel({
-  state,
-  chart,
-  readOnly,
-  onOpen,
-}: {
-  state: FeedbackState
-  chart: PlannerChart
-  readOnly: boolean
-  onOpen(kind: 'card' | 'gap', id: string): void
-}) {
+export function FeedbackStatus({ state, readOnly }: { state: FeedbackState; readOnly: boolean }) {
   const { feedback, error, busy, waiting, retry } = state
   if (!feedback) return null
   const { reviews } = feedback
   const failed = reviews.at(-1)?.status === 'failed' ? reviews.at(-1) : null
-  const rounds = ready(feedback).reverse()
-
-  const target = (kind: 'card' | 'gap', id: string) => {
-    if (kind === 'card') {
-      const card = chart.cards.find((c) => c.id === id)
-      return card ? cardTitle(card) : null
-    }
-    const gap = chart.gaps.find((g) => g.id === id)
-    return gap ? gapTitle(gap) : null
-  }
 
   return (
     <div className="pl-feedback">
@@ -98,13 +78,67 @@ export function FeedbackPanel({
           )}
         </p>
       )}
-      {rounds.length === 0 && !waiting && (
+      {ready(feedback).length === 0 && !waiting && (
         <p className="muted">{readOnly ? 'The team hasn’t asked for feedback yet.' : 'No feedback yet.'}</p>
       )}
-      {rounds.map((r, i) => (
-        <Round key={r.id} review={r} target={target} onOpen={onOpen} open={i === 0} />
-      ))}
     </div>
+  )
+}
+
+/**
+ * The rounds of feedback so far, newest first, in a card of their own that
+ * folds up to its title line. Each question on a card or gap opens it, and
+ * shows a check once the team has replied to it.
+ */
+export function FeedbackRounds({
+  state,
+  chart,
+  readOnly,
+  open,
+  onToggle,
+  onOpen,
+}: {
+  state: FeedbackState
+  chart: PlannerChart
+  readOnly: boolean
+  open: boolean
+  onToggle(open: boolean): void
+  onOpen(kind: 'card' | 'gap', id: string): void
+}) {
+  const rounds = ready(state.feedback).reverse()
+  if (rounds.length === 0) return null
+
+  const target = (kind: 'card' | 'gap', id: string) => {
+    if (kind === 'card') {
+      const card = chart.cards.find((c) => c.id === id)
+      return card ? cardTitle(card) : null
+    }
+    const gap = chart.gaps.find((g) => g.id === id)
+    return gap ? gapTitle(gap) : null
+  }
+
+  return (
+    <section className="pl-card pl-rounds-card" aria-labelledby="pl-rounds-title">
+      <details open={open} onToggle={(e) => e.currentTarget.open !== open && onToggle(e.currentTarget.open)}>
+        <summary>
+          <ChevronRight className="pl-rounds-arrow" aria-hidden="true" />
+          <h3 id="pl-rounds-title">
+            <MessageCircleQuestion aria-hidden="true" />
+            {readOnly ? 'The mentor’s feedback' : 'Your mentor’s feedback'}
+          </h3>
+          {!open && (
+            <small className="muted">
+              {rounds.length} {rounds.length === 1 ? 'round' : 'rounds'}
+            </small>
+          )}
+        </summary>
+        <div className="pl-rounds">
+          {rounds.map((r, i) => (
+            <Round key={r.id} review={r} target={target} onOpen={onOpen} open={i === 0} />
+          ))}
+        </div>
+      </details>
+    </section>
   )
 }
 

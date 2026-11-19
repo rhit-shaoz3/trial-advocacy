@@ -93,6 +93,8 @@ export interface PlannerGap {
 export interface PlannerChart {
   cards: PlannerCard[]
   gaps: PlannerGap[]
+  /** When the team finalized its plan, and who did; null until it has. */
+  finalized: { at: Date; by: string | null } | null
 }
 
 /** Something the team can cite: a case file it can see, one of its interviews, or a report it got. */
@@ -185,7 +187,7 @@ export async function plannerSources(team: PlannerTeam, db: Db = pool): Promise<
 
 /** The team's chart: its cards (each with evidence and witnesses) and gaps (each with tools), in order. */
 export async function loadChart(team: Pick<PlannerTeam, 'caseId' | 'teamId'>, db: Db = pool): Promise<PlannerChart> {
-  const [cards, evidence, witnesses, gaps, tools] = await Promise.all([
+  const [cards, evidence, witnesses, gaps, tools, finalized] = await Promise.all([
     db.query<Omit<PlannerCard, 'evidence' | 'witnessIds'>>(
       `SELECT c.id, c.parent_id AS "parentId", c.title, c.notes, c.position, u.name AS "updatedBy", c.updated_at AS "updatedAt"
        FROM planner_cards c LEFT JOIN users u ON u.id = c.updated_by
@@ -224,6 +226,12 @@ export async function loadChart(team: Pick<PlannerTeam, 'caseId' | 'teamId'>, db
        ORDER BY t.priority`,
       [team.caseId, team.teamId],
     ),
+    db.query<{ at: Date; by: string | null }>(
+      `SELECT t.planner_finalized_at AS at, u.name AS by
+       FROM teams t LEFT JOIN users u ON u.id = t.planner_finalized_by
+       WHERE t.id = $1 AND t.case_id = $2 AND t.planner_finalized_at IS NOT NULL`,
+      [team.teamId, team.caseId],
+    ),
   ])
   const evidenceBy = groupBy(evidence.rows, (e) => e.cardId)
   const witnessesBy = groupBy(witnesses.rows, (w) => w.cardId)
@@ -252,6 +260,7 @@ export async function loadChart(team: Pick<PlannerTeam, 'caseId' | 'teamId'>, db
         witnessId: t.witnessId,
       })),
     })),
+    finalized: finalized.rows[0] ?? null,
   }
 }
 
@@ -630,6 +639,20 @@ export async function setGapTools(team: PlannerTeam, gapId: string, body: unknow
   })
 }
 
+/**
+ * Finalizes the team's plan (`{ finalized: true }`), so its gaps' tools offer
+ * the requests, emails and tasks they call for, or takes that back.
+ */
+export async function setFinalized(team: PlannerTeam, body: unknown) {
+  const finalized = (body as Record<string, unknown> | undefined)?.finalized
+  if (typeof finalized !== 'boolean') throw new HttpError(400, 'Say whether the plan is finalized.')
+  await pool.query(
+    `UPDATE teams SET planner_finalized_at = CASE WHEN $3 THEN now() END, planner_finalized_by = CASE WHEN $3 THEN $4::uuid END
+     WHERE id = $1 AND case_id = $2`,
+    [team.teamId, team.caseId, finalized, team.userId],
+  )
+}
+
 // For the instructor -----------------------------------------------------------------
 
 /** How far each matched team in the case has got with its planner. */
@@ -643,6 +666,7 @@ export async function plannerOverview(caseId: string) {
     gaps: number
     tools: number
     updatedAt: Date | null
+    finalizedAt: Date | null
   }>(
     `SELECT t.id AS "teamId", t.number AS "teamNumber", mu.number AS "worldNumber", mt.side,
             (SELECT count(*)::int FROM planner_cards c WHERE c.team_id = t.id AND c.case_id = $1) AS cards,
@@ -650,7 +674,8 @@ export async function plannerOverview(caseId: string) {
             (SELECT count(*)::int FROM planner_gap_tools x JOIN planner_gaps g ON g.id = x.gap_id
              WHERE g.team_id = t.id AND g.case_id = $1) AS tools,
             greatest((SELECT max(updated_at) FROM planner_cards c WHERE c.team_id = t.id AND c.case_id = $1),
-                     (SELECT max(updated_at) FROM planner_gaps g WHERE g.team_id = t.id AND g.case_id = $1)) AS "updatedAt"
+                     (SELECT max(updated_at) FROM planner_gaps g WHERE g.team_id = t.id AND g.case_id = $1)) AS "updatedAt",
+            t.planner_finalized_at AS "finalizedAt"
      FROM matchup_teams mt
      JOIN matchups mu ON mu.id = mt.matchup_id
      JOIN teams t ON t.id = mt.team_id

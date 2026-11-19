@@ -1,12 +1,13 @@
-import { useState, type ReactNode } from 'react'
-import { Check, ListChecks, MessageCircleQuestion } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import { Check, ClipboardCheck, ListChecks, MessageCircleQuestion } from 'lucide-react'
 import type { PlannerGap, PlannerGapTool, WorkspaceWitness } from '../../courses/types'
 import { CardDetail } from './CardDetail'
 import { GapDetail } from './GapDetail'
+import { PlanActions } from './PlanActions'
 import { PlannerChart } from './PlannerChart'
 import { STEPS, cardTitle, gapTitle, stepsDone } from './plannerLabels'
 import { usePlanner, type PlannerActions } from './usePlanner'
-import { AskFeedback, FeedbackPanel, PinnedNotes } from './PlannerFeedback'
+import { FeedbackRounds, FeedbackStatus, PinnedNotes } from './PlannerFeedback'
 import { noteMarks, usePlannerFeedback, type FeedbackActions } from './usePlannerFeedback'
 import './planner.css'
 
@@ -17,11 +18,13 @@ const TODO = STEPS.filter((s) => s.id !== 'feedback')
 
 /**
  * The team's case planner: a to-do list of the steps (checked off as the
- * chart fills in, each with what good lawyers do) beside the feedback, and
- * the chart below, with a second way to ask for feedback under it. A card or
- * gap opens in its own window, where everything saves itself; one opened
- * from another has a Back button to it. Read-only for the instructor and
- * once the case closes.
+ * chart fills in, each with what good lawyers do) beside a card for asking
+ * for feedback, the rounds of feedback across the width below them, and the
+ * chart. Under the chart, the team finalizes its plan; then its gaps' tools
+ * are listed there, each with the request, email or task it calls for, and
+ * the feedback folds away. A card or gap opens in its own window, where
+ * everything saves itself; one opened from another has a Back button to it.
+ * Read-only for the instructor and once the case closes.
  */
 export function PlannerPanel({
   actions,
@@ -44,6 +47,9 @@ export function PlannerPanel({
   /** The card or gap open now, and the ones it was opened from, for Back. */
   const [trail, setTrail] = useState<Target[]>([])
   const [addError, setAddError] = useState<string | null>(null)
+  /** Whether the feedback is unfolded, once someone has folded or unfolded it; it starts folded once the plan is finalized. */
+  const [roundsOpen, setRoundsOpen] = useState<boolean | null>(null)
+  const plan = useRef<HTMLElement>(null)
 
   if (chart === undefined) return <p className="muted" role="status">{error ?? 'Loading your planner…'}</p>
   if (chart === null) return <p className="muted">Your team gets its planner once it is in a case world.</p>
@@ -75,6 +81,16 @@ export function PlannerPanel({
   }
   const addSubFact = (parentId: string, fromOpen: boolean) => add({ op: 'addCard', parentId, title: '' }, 'card', fromOpen)
   const addGap = (cardId: string | null, fromOpen: boolean) => add({ op: 'addGap', cardId, description: '' }, 'gap', fromOpen)
+  const finalize = async (finalized: boolean) => {
+    setAddError(null)
+    try {
+      await change({ op: 'finalize', finalized })
+      setRoundsOpen(!finalized)
+      if (finalized) requestAnimationFrame(() => plan.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }))
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Something went wrong.')
+    }
+  }
   const pinned = (kind: 'card' | 'gap', id: string) => feedback && <PinnedNotes state={review} kind={kind} id={id} readOnly={readOnly} />
 
   return (
@@ -130,10 +146,20 @@ export function PlannerPanel({
               Feedback
             </h3>
             {!readOnly && <p className="pl-feedback-intro">{STEPS.find((s) => s.id === 'feedback')!.guide[0]}</p>}
-            <FeedbackPanel state={review} chart={chart} readOnly={readOnly} onOpen={(kind, id) => openFresh({ kind, id })} />
+            <FeedbackStatus state={review} readOnly={readOnly} />
           </section>
         )}
       </div>
+      {feedback && (
+        <FeedbackRounds
+          state={review}
+          chart={chart}
+          readOnly={readOnly}
+          open={roundsOpen ?? !chart.finalized}
+          onToggle={setRoundsOpen}
+          onOpen={(kind, id) => openFresh({ kind, id })}
+        />
+      )}
 
       {addError && (
         <p className="pl-error" role="alert">
@@ -151,10 +177,25 @@ export function PlannerPanel({
         onAddGap={readOnly ? undefined : () => void addGap(null, false)}
         onMove={readOnly ? undefined : (m) => void change({ op: 'moveCard', ...m }).catch((err: Error) => setAddError(err.message))}
       />
-      {feedback && !readOnly && chart.cards.length > 0 && (
+      {!readOnly && !chart.finalized && chart.cards.length > 0 && (
         <div className="pl-bottom-ask">
-          <AskFeedback state={review} />
+          <p>When your chart tells your story and each gap has its tools, finalize your plan to turn the tools into requests, emails and tasks.</p>
+          <button type="button" className="ws-btn ws-btn-primary" disabled={status === 'saving'} onClick={() => void finalize(true)}>
+            <ClipboardCheck aria-hidden="true" />
+            Finalize plan
+          </button>
         </div>
+      )}
+      {chart.finalized && (
+        <PlanActions
+          ref={plan}
+          chart={chart}
+          witnesses={witnesses}
+          readOnly={readOnly}
+          toolActions={toolActions}
+          onOpenGap={(g) => openFresh({ kind: 'gap', id: g.id })}
+          onReopen={() => void finalize(false)}
+        />
       )}
 
       {card && (
@@ -186,7 +227,7 @@ export function PlannerPanel({
           readOnly={readOnly}
           feedback={pinned('gap', gap.id)}
           back={back}
-          toolActions={toolActions && ((tool) => toolActions(gap, tool))}
+          toolActions={chart.finalized && toolActions ? (tool) => toolActions(gap, tool) : undefined}
           onOpenCard={(id) => openFrom({ kind: 'card', id })}
           onClose={() => setTrail([])}
         />

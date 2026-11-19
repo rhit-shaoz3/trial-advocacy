@@ -99,6 +99,7 @@ afterAll(async () => {
 interface Chart {
   cards: { id: string; parentId: string | null; title: string; notes: string; evidence: { title: string; parts: number[] | null; excerpt: string }[]; witnessIds: string[]; updatedBy: string }[]
   gaps: { id: string; cardId: string | null; description: string; tools: { tool: string; priority: number; reason: string; witnessId: string | null }[] }[]
+  finalized: { at: string; by: string | null } | null
 }
 
 const chart = async (agent: request.Agent) => (await agent.get(plannerUrl())).body.planner as Chart
@@ -241,6 +242,19 @@ describe('the case planner', () => {
     await prof.patch(caseUrl()).send({ title: 'Ramirez v. Thrillville', summary: 'A harness opened.', status: 'closed' })
     expect((await chart(ada)).cards).toHaveLength(1)
     expect((await ada.post(`${plannerUrl()}/cards`).send({ title: 'B' })).status).toBe(409)
+  })
+
+  it('is finalized for the whole team, and can be reopened', async () => {
+    expect((await chart(bo)).finalized).toBeNull()
+    expect((await ada.put(`${plannerUrl()}/finalized`).send({ finalized: 'yes' })).status).toBe(400)
+    const done = await ada.put(`${plannerUrl()}/finalized`).send({ finalized: true })
+    expect(done.body.planner.finalized).toMatchObject({ by: 'Ada Lawyer' })
+    // The partner sees it; the other side's plan isn't touched, and the instructor sees when.
+    expect((await chart(bo)).finalized?.by).toBe('Ada Lawyer')
+    expect((await chart(cy)).finalized).toBeNull()
+    const seen = (await prof.get(`${caseUrl()}/planners`)).body.teams
+    expect(seen.map((t: { finalizedAt: string | null }) => Boolean(t.finalizedAt))).toEqual([true, false])
+    expect((await bo.put(`${plannerUrl()}/finalized`).send({ finalized: false })).body.planner.finalized).toBeNull()
   })
 
   it('shows the instructor each team’s planner', async () => {

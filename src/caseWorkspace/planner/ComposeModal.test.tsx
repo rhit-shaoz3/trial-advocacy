@@ -100,6 +100,13 @@ describe('opening a form from the planner', () => {
     expect(screen.queryByLabelText('Question 1')).not.toBeInTheDocument()
   })
 
+  it('shows a used-up subpoena as one line in a small window, not the full-height form', () => {
+    const subpoenas = { types: [], limit: 1, days: 14, used: 1, remaining: 0, served: [], notices: [], drafts: [] }
+    const { dialog } = open('subpoena', ctx({ exchange: exchange({ subpoenas }) }), tool({ tool: 'subpoena' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Your team has used all it’s allowed of these.')
+    expect(dialog).not.toHaveClass('modal-wide')
+  })
+
   it('stops at the investigator’s limit, and while he’s on an assignment', () => {
     const sent = { id: 'i1', status: 'working', mine: true } as Investigation
     open('investigator', ctx({ investigations: [sent] }))

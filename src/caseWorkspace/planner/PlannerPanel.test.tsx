@@ -73,6 +73,8 @@ function fake(initial: PlannerChart) {
           ...chart,
           gaps: chart.gaps.map((g) => (g.id === change.gapId ? { ...g, tools: change.tools.map((t, i) => ({ ...t, priority: i + 1 })) } : g)),
         }
+      } else if (change.op === 'finalize') {
+        chart = { ...chart, finalized: change.finalized ? { at: '2026-11-19T12:00:00Z', by: 'Ada Lawyer' } : null }
       } else if (change.op === 'setWitnesses') {
         chart = { ...chart, cards: chart.cards.map((c) => (c.id === change.cardId ? { ...c, witnessIds: change.witnessIds } : c)) }
       }
@@ -95,6 +97,23 @@ const chart: PlannerChart = {
     card({ id: 'c2', parentId: 'c1', title: 'The light was red.', evidence: [{ id: 'e1', kind: 'material', sourceId: 'm1', parts: [3], title: 'Medical records.pdf — page 3', excerpt: '', note: '' }] }),
   ],
   gaps: [gap({ id: 'g1', cardId: 'c2', description: 'Was the light working?' }), gap({ id: 'g2', description: 'Why did she ride twice?' })],
+  finalized: null,
+}
+
+/** The chart with tools chosen for its first gap. */
+const planned: PlannerChart = {
+  ...chart,
+  gaps: chart.gaps.map((g) =>
+    g.id === 'g1'
+      ? {
+          ...g,
+          tools: [
+            { tool: 'investigator', priority: 1, reason: '', specifics: 'Find the maintenance log.', witnessId: null },
+            { tool: 'deposition', priority: 2, reason: '', specifics: 'Ask about the light.', witnessId: 'w1' },
+          ],
+        }
+      : g,
+  ),
 }
 
 describe('the case planner', () => {
@@ -121,7 +140,7 @@ describe('the case planner', () => {
   })
 
   it('adds a fact and saves what’s typed into it', async () => {
-    const { user, changes } = renderPanel({ cards: [], gaps: [] })
+    const { user, changes } = renderPanel({ cards: [], gaps: [], finalized: null })
     expect(await screen.findByText(/No facts of consequence yet/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Add a fact of consequence' }))
     const dialog = await screen.findByRole('dialog')
@@ -192,6 +211,42 @@ describe('the case planner', () => {
     await waitFor(() => expect(changes.at(-1)).toEqual({ op: 'moveCard', cardId: 'c2', parentId: null, index: 1 }))
   })
 
+  it('offers each tool’s request, email or task only once the plan is finalized, all together under the chart', async () => {
+    const f = fake(planned)
+    const user = userEvent.setup()
+    render(
+      <PlannerPanel
+        actions={f.actions}
+        witnesses={witnesses}
+        rootLabel="Team 1: Plaintiff"
+        toolActions={(g, t) => <button type="button">{`Act on ${t.tool} for ${g.id}`}</button>}
+      />,
+    )
+    await user.click(await screen.findByRole('button', { name: /^Gap: Was the light working\?/ }))
+    expect(within(await screen.findByRole('dialog')).queryByRole('button', { name: /^Act on/ })).not.toBeInTheDocument()
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('region', { name: 'Your plan' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Finalize plan' }))
+    expect(f.changes.at(-1)).toEqual({ op: 'finalize', finalized: true })
+    const plan = await screen.findByRole('region', { name: 'Your plan' })
+    expect(plan).toHaveTextContent('Finalized Nov 19 by Ada Lawyer')
+    expect(plan).toHaveTextContent('On “The light was red.”')
+    const tools = within(plan).getAllByRole('listitem').filter((li) => li.classList.contains('pl-plan-tool'))
+    expect(tools.map((li) => li.querySelector('strong')?.textContent)).toEqual(['Investigator', 'Deposition: Tom Becker'])
+    expect(within(plan).getByRole('button', { name: 'Act on deposition for g1' })).toBeInTheDocument()
+    // The gap with no tools isn't listed, but is counted.
+    expect(plan).toHaveTextContent('1 gap has no tools yet')
+    expect(screen.queryByRole('button', { name: 'Finalize plan' })).not.toBeInTheDocument()
+    // The gap's own window has them now too, and the plan can be reopened.
+    await user.click(within(plan).getByRole('button', { name: 'Was the light working?' }))
+    expect(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Act on investigator for g1' })).toBeInTheDocument()
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
+    await user.click(within(plan).getByRole('button', { name: 'Reopen the plan' }))
+    expect(f.changes.at(-1)).toEqual({ op: 'finalize', finalized: false })
+    expect(await screen.findByRole('button', { name: 'Finalize plan' })).toBeInTheDocument()
+  })
+
   it('is read-only for the instructor', async () => {
     const { user } = renderPanel(chart, true)
     await user.click(await screen.findByRole('button', { name: /^Tom sent the ride/ }))
@@ -225,7 +280,7 @@ const round = (over: Partial<PlannerReview>): PlannerReview => ({
 
 describe('feedback on the planner', () => {
   const renderWithFeedback = (initial: PlannerFeedback, readOnly = false) => {
-    const f = fake(chart)
+    const f = fake(planned)
     let state = structuredClone(initial)
     const feedback: FeedbackActions = {
       load: vi.fn(async () => structuredClone(state)),
@@ -242,6 +297,18 @@ describe('feedback on the planner', () => {
     render(<PlannerPanel actions={f.actions} feedback={feedback} witnesses={witnesses} rootLabel="Team 1: Plaintiff" readOnly={readOnly} />)
     return { user, feedback }
   }
+
+  it('folds the feedback away once the plan is finalized, and unfolds it from its arrow', async () => {
+    const { user } = renderWithFeedback({ reviews: [round({})], limit: { max: 3, per: 'student' }, used: 0 })
+    const card = await screen.findByRole('region', { name: 'Your mentor’s feedback' })
+    const folds = card.querySelector('details')!
+    expect(folds).toHaveAttribute('open')
+    await user.click(screen.getByRole('button', { name: 'Finalize plan' }))
+    await waitFor(() => expect(folds).not.toHaveAttribute('open'))
+    expect(card).toHaveTextContent('1 round')
+    await user.click(card.querySelector('summary')!)
+    expect(folds).toHaveAttribute('open')
+  })
 
   it('pins each question to its card, and saves the team’s reply for the next round', async () => {
     const { user, feedback } = renderWithFeedback({ reviews: [round({})], limit: { max: 3, per: 'student' }, used: 0 })
@@ -262,18 +329,20 @@ describe('feedback on the planner', () => {
     expect(shown).toHaveTextContent('asked by Bo Partner')
     expect(shown).toHaveTextContent('Your elements are covered.')
     expect(shown).toHaveTextContent('What is the park’s story?')
-    // Above, beside the to-do list, and again under the chart.
-    expect(screen.getAllByText('0 of 3 rounds used by you · 3 left')).toHaveLength(2)
+    // The rounds have a card of their own, apart from the one for asking.
+    expect(within(screen.getByRole('region', { name: 'Your mentor’s feedback' })).getByRole('region', { name: 'Feedback, round 1' })).toBe(shown)
+    expect(within(screen.getByRole('region', { name: 'Feedback' })).queryByRole('region', { name: 'Feedback, round 1' })).not.toBeInTheDocument()
+    expect(screen.getByText('0 of 3 rounds used by you · 3 left')).toBeInTheDocument()
     // A question opens what it's about.
     await user.click(within(shown).getByRole('button', { name: 'Gap: Was the light working?' }))
     expect(await screen.findByRole('dialog')).toHaveTextContent('What cheaper tool might tell you first?')
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
 
-    await user.click(screen.getAllByRole('button', { name: 'Ask for another round' })[1])
+    await user.click(screen.getByRole('button', { name: 'Ask for another round' }))
     expect(feedback.request).toHaveBeenCalled()
     expect(await screen.findByText(/A mentor is reading your chart/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Feedback on its way…' })[0]).toBeDisabled()
-    expect(screen.getAllByText('1 of 3 rounds used by you · 2 left')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Feedback on its way…' })).toBeDisabled()
+    expect(screen.getByText('1 of 3 rounds used by you · 2 left')).toBeInTheDocument()
   })
 
   it('checks off a question once the team has replied to it', async () => {
@@ -289,8 +358,8 @@ describe('feedback on the planner', () => {
 
   it('stops at the limit', async () => {
     renderWithFeedback({ reviews: [round({ mine: true })], limit: { max: 1, per: 'team' }, used: 1 })
-    for (const button of await screen.findAllByRole('button', { name: 'Ask for another round' })) expect(button).toBeDisabled()
-    expect(screen.getAllByText('1 of 1 round used by your team')).toHaveLength(2)
+    expect(await screen.findByRole('button', { name: 'Ask for another round' })).toBeDisabled()
+    expect(screen.getByText('1 of 1 round used by your team')).toBeInTheDocument()
   })
 
   it('shows the instructor the rounds and replies, read-only', async () => {

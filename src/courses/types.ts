@@ -1290,6 +1290,8 @@ export interface PlannerGap {
 export interface PlannerChart {
   cards: PlannerCard[]
   gaps: PlannerGap[]
+  /** When the team finalized its plan, and who did; null until it has. Its tools' actions show once it has. */
+  finalized: { at: string; by: string | null } | null
 }
 
 /** Something the team can cite on its planner. */
@@ -1321,6 +1323,7 @@ export type PlannerChange =
   | { op: 'editGap'; gapId: string; description?: string; cardId?: string | null; move?: 'up' | 'down' }
   | { op: 'deleteGap'; gapId: string }
   | { op: 'setTools'; gapId: string; tools: Omit<PlannerGapTool, 'priority'>[] }
+  | { op: 'finalize'; finalized: boolean }
 
 export type PlannerTag = 'LOOKS_GOOD' | 'SMALL_EDITS' | 'NEEDS_IMPROVEMENT'
 
@@ -1361,6 +1364,7 @@ export interface TeamPlannerSummary {
   gaps: number
   tools: number
   updatedAt: string | null
+  finalizedAt: string | null
 }
 
 /** A file, a deposition transcript the team took, or one of its investigator reports. */

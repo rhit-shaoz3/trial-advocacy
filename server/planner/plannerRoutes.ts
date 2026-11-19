@@ -13,6 +13,7 @@ import {
   plannerOverview,
   plannerSources,
   setCardWitnesses,
+  setFinalized,
   setGapTools,
   updateCard,
   updateEvidence,
@@ -150,6 +151,13 @@ myPlannerRouter.delete('/gaps/:gapId', async (req, res) => {
 myPlannerRouter.put('/gaps/:gapId/tools', async (req, res) => {
   const team = (await plannerTeam(req, true))!
   await setGapTools(team, req.params.gapId as string, req.body)
+  res.json(await changed(team))
+})
+
+/** Finalizes the plan, or takes that back: `{ finalized }`. */
+myPlannerRouter.put('/finalized', async (req, res) => {
+  const team = (await plannerTeam(req, true))!
+  await setFinalized(team, req.body)
   res.json(await changed(team))
 })
 

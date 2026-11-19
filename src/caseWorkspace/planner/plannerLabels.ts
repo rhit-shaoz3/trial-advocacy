@@ -140,3 +140,10 @@ export function dropTarget(chart: PlannerChart, cardId: string, over: string): C
   const at = siblings.findIndex((c) => c.id === target.id)
   return { cardId, parentId: target.parentId, index: zone === 'before' ? at : at + 1 }
 }
+
+/** The chart's gaps in the order the tree reads: each card's under it, top to bottom, then the ones about the whole case. */
+export function gapsInOrder(chart: PlannerChart): PlannerGap[] {
+  const byCard = (cardId: string | null) => chart.gaps.filter((g) => g.cardId === cardId).sort((a, b) => a.position - b.position)
+  const walk = (parentId: string | null): PlannerGap[] => childrenOf(chart, parentId).flatMap((c) => [...byCard(c.id), ...walk(c.id)])
+  return [...walk(null), ...byCard(null)]
+}

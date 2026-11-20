@@ -334,6 +334,27 @@ describe('CaseWorkspaceView phases', () => {
     expect(screen.getByRole('link', { name: 'Interview Elena Torres' })).toBeInTheDocument()
   })
 
+  it('offers practice beside each witness the team can talk to, unless the instructor turned it off', async () => {
+    const { user } = renderView({
+      workspace: { ...sampleWorkspace, witnesses: [elena, { ...rider, canInterview: false, locked: true }] },
+      interviewHref: (id) => `/interview/${id}`,
+      practiceHref: (id) => `/practice/${id}`,
+    })
+    await user.click(screen.getByRole('tab', { name: 'Witnesses, 2' }))
+    expect(screen.getByRole('link', { name: 'Practice with Elena Torres' })).toHaveAttribute('href', '/practice/w1')
+    expect(screen.queryByRole('link', { name: 'Practice with Riley Rivera' })).not.toBeInTheDocument()
+  })
+
+  it('hides practice when it’s off', async () => {
+    const { user } = renderView({
+      workspace: { ...sampleWorkspace, witnesses: [elena], practice: { enabled: false, limit: 5 } },
+      interviewHref: (id) => `/interview/${id}`,
+      practiceHref: (id) => `/practice/${id}`,
+    })
+    await user.click(screen.getByRole('tab', { name: 'Witnesses, 1' }))
+    expect(screen.queryByRole('link', { name: /Practice with/ })).not.toBeInTheDocument()
+  })
+
   it("shows the other side's witnesses locked before the deposition phase, marking the disclosed ones", async () => {
     const { user } = renderView({
       workspace: { ...sampleWorkspace, witnesses: [elena, { ...rider, canInterview: false, locked: true, disclosed: true }] },

@@ -79,6 +79,11 @@ export const STUDENT_COURSE: Tour = {
     },
     { target: nav('cases'), title: 'My cases', body: 'Every case you’re on, in one list.' },
     { target: nav('calendar'), title: 'Calendar', body: 'Tasks, case dates, and your own events, by month.' },
+    {
+      target: nav('library'),
+      title: 'Learning library',
+      body: 'Every piece of AI feedback you get: your practice sessions, and your team’s discovery checks and planner feedback, to read again or download.',
+    },
     launcherStep,
   ],
 }

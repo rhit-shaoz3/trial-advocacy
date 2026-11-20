@@ -47,6 +47,8 @@ import { exhibitReviewsRouter, myExhibitsRouter } from '../exhibits/exhibitRoute
 import { myPacketRouter } from '../packets/packetRoutes.ts'
 import { openExhibitReviewCount } from '../exhibits/exhibits.ts'
 import { myPlannerRouter } from '../planner/plannerRoutes.ts'
+import { myPracticeRouter } from '../practice/practiceRoutes.ts'
+import { libraryRouter } from '../library/libraryRoutes.ts'
 import { createTeamTask, deleteTeamTask, setTeamTaskDone } from './teamTasks.ts'
 import { createMessageDraft, deleteMessageDraft, listMessageDrafts, updateMessageDraft } from './messageDrafts.ts'
 
@@ -504,6 +506,8 @@ coursesRouter.use('/:courseId/my-cases/:caseId/exchange', myExchangeRouter)
 coursesRouter.use('/:courseId/my-cases/:caseId/exhibits', myExhibitsRouter)
 coursesRouter.use('/:courseId/my-cases/:caseId/packet', myPacketRouter)
 coursesRouter.use('/:courseId/my-cases/:caseId/planner', myPlannerRouter)
+coursesRouter.use('/:courseId/my-cases/:caseId/practice', myPracticeRouter)
+coursesRouter.use('/:courseId/library', libraryRouter)
 coursesRouter.use('/:courseId/calendar', calendarRouter)
 
 // Everything below manages one course and is only for the instructor who teaches it.

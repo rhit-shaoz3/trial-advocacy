@@ -2,6 +2,10 @@ import { LayoutDashboard } from 'lucide-react'
 import { Outlet, Route, Routes } from 'react-router'
 import { useAuth } from './auth/useAuth'
 import { InterviewPage } from './caseWorkspace/InterviewPage'
+import { PracticePage } from './caseWorkspace/practice/PracticePage'
+import { LibraryEntryPage } from './caseWorkspace/library/LibraryEntryPage'
+import { LibraryPage } from './caseWorkspace/library/LibraryPage'
+import { PracticeSetup } from './caseWorkspace/practice/PracticeSetup'
 import { StudentCasePage } from './caseWorkspace/StudentCasePage'
 import { AppShell } from './components/AppShell'
 import { AuthPage } from './pages/AuthPage'
@@ -54,7 +58,11 @@ function App() {
             element={isInstructor ? <CaseDetailPage /> : <StudentCasePage />}
           />
           <Route path="cases/:caseId/witnesses/:witnessId" element={<InterviewPage />} />
+          <Route path="cases/:caseId/witnesses/:witnessId/practice" element={<PracticeSetup />} />
+          <Route path="cases/:caseId/practice/:sessionId" element={<PracticePage />} />
           <Route path="calendar" element={<CalendarPage />} />
+          <Route path="library" element={<LibraryPage />} />
+          <Route path="library/:kind/:id" element={<LibraryEntryPage />} />
           {isInstructor && <Route path="review" element={<ReviewPage />} />}
           {isInstructor && <Route path="manage" element={<CoursePage />} />}
           <Route

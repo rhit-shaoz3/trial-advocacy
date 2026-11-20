@@ -460,6 +460,7 @@ export function StudentCasePage() {
               loadText={(id) => service.myMaterialText(courseId, caseId, id)}
               onToggleTask={toggleTask}
               interviewHref={(id) => `/courses/${courseId}/cases/${caseId}/witnesses/${id}${workspace?.search ?? ''}`}
+              practiceHref={(id) => `/courses/${courseId}/cases/${caseId}/witnesses/${id}/practice${workspace?.search ?? ''}`}
               instructorName={workspace?.home.course.instructorName}
               instructorAvatarUrl={workspace?.home.course.instructorAvatarUrl}
               reviews={reviews ?? []}

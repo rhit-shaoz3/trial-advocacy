@@ -88,6 +88,12 @@ export const SETUP_HELP: Record<SetupStep, ReactNode> = {
         <strong>Interviews with each witness:</strong> how many times each team (or each student) can interview each
         witness, depositions included. Two per team unless you change it.
       </li>
+      <li>
+        <strong>Practice:</strong> each student can practice with the AI witnesses, as an interview, deposition, direct,
+        cross, or redirect, with a coach commenting on each question (and at trial, objections and rulings). Practice
+        doesn&rsquo;t count toward interviews, and nothing said in it reaches the case. Five sessions per student unless
+        you change it.
+      </li>
     </ul>
   ),
   investigator: (

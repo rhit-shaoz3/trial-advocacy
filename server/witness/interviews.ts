@@ -316,6 +316,18 @@ async function earlierTestimony(ctx: InterviewContext, interviewId: string, ques
   }
 }
 
+/** What the asker is told when the witness can't answer: the error as an HTTP error, or as it was. */
+export function witnessHttpError(err: unknown) {
+  if (err instanceof WitnessNotReadyError) return new HttpError(409, err.message)
+  if (err instanceof AiNotConfiguredError) return new HttpError(503, 'The AI witness is not set up on this server yet.')
+  if (err instanceof WitnessRefusalError) return new HttpError(422, 'The witness could not answer that question. Try rephrasing it.')
+  if (err instanceof Anthropic.APIError) {
+    console.error('AI witness request failed:', err.message)
+    return new HttpError(502, 'The witness could not answer just now. Try again in a moment.')
+  }
+  return err
+}
+
 /** Asks the next question (`{ question }`) and stores the witness's reply. */
 export async function askQuestion(ctx: InterviewContext, body: unknown) {
   const question = readString(body, 'question').trim()
@@ -346,14 +358,7 @@ export async function askQuestion(ctx: InterviewContext, body: unknown) {
       memory,
     })
   } catch (err) {
-    if (err instanceof WitnessNotReadyError) throw new HttpError(409, err.message)
-    if (err instanceof AiNotConfiguredError) throw new HttpError(503, 'The AI witness is not set up on this server yet.')
-    if (err instanceof WitnessRefusalError) throw new HttpError(422, 'The witness could not answer that question. Try rephrasing it.')
-    if (err instanceof Anthropic.APIError) {
-      console.error('AI witness request failed:', err.message)
-      throw new HttpError(502, 'The witness could not answer just now. Try again in a moment.')
-    }
-    throw err
+    throw witnessHttpError(err)
   }
 
   try {

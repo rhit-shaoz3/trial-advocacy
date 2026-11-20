@@ -731,6 +731,9 @@ describe('checking with AI', () => {
     const first = await check(ada, { kind: 'subpoena', mode: 'draft', draft: subpoena })
     expect(first.status).toBe(200)
     expect(first.body.check).toEqual({ id: expect.any(String), tag: 'NEEDS_IMPROVEMENT', feedback: 'Request 1: How far back do you need?', round: 1 })
+    // What was checked is kept, for the student's learning library.
+    const kept = await pool.query('SELECT content FROM discovery_checks WHERE id = $1', [first.body.check.id])
+    expect(kept.rows[0].content).toMatchObject({ kind: 'subpoena', mode: 'draft', subpoena: { records: 'ER records for June 10.' } })
 
     const context = seen[0]
     expect(context).toMatchObject({

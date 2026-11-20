@@ -8,6 +8,7 @@ import { suggestFromComplaint, type ComplaintSuggestions, type SuggestInput } fr
 import { respondToSubpoena } from '../exchange/subpoenaResponse.ts'
 import { replyAsClient, type ClientReplyInput } from '../client/reply.ts'
 import { reviewPlanner } from '../planner/reviewer.ts'
+import { practiceTurn, type PracticeReply } from '../practice/turn.ts'
 import type { PlannerReviewContext } from '../planner/prompt.ts'
 import type { SubpoenaContext } from '../exchange/subpoenaPrompt.ts'
 import { reviewDiscovery, warmMentorCache, type MentorProgress, type MentorReview } from '../exchange/mentor.ts'
@@ -38,6 +39,8 @@ export const ai = {
   transcribe: (file: FileToTranscribe): Promise<string | null> => transcribeFile(anthropic(), file),
   /** The AI witness's reply to the next deposition question. */
   askWitness: (options: Parameters<typeof askWitness>[1]): Promise<WitnessReply> => askWitness(anthropic(), options),
+  /** The reply to a student's turn in a practice session: the witness, opposing counsel, the judge and the coach, as tagged blocks. */
+  practiceTurn: (options: Parameters<typeof practiceTurn>[1]): Promise<PracticeReply> => practiceTurn(anthropic(), options),
   /** The new facts a witness added in an ended interview, for the instructor to rule on. */
   findNewFacts: (input: NewFactsInput): Promise<NewFact[]> => findNewFacts(anthropic(), input),
   /** What the witness committed to in one answer, for later sessions to stay consistent with. */

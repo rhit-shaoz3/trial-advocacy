@@ -390,6 +390,17 @@ button.cw-interview {
   outline-offset: 2px;
 }
 
+/* Practice, beside Interview: outlined, so the real interview stays the main action. */
+.cw-practice {
+  border: 1px solid var(--button);
+  background: var(--surface);
+  color: var(--button);
+}
+
+.cw-practice:hover {
+  background: var(--tint-blue-bg);
+}
+
 .cw-interview-off {
   opacity: 0.55;
   cursor: default;

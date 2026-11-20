@@ -10,7 +10,7 @@ import {
   type MaterialViewer,
   type Witness,
 } from './caseContent.ts'
-import { phaseAtLeast, type CasePhase, type InteractionLimit, type PlannerSettings } from './cases.ts'
+import { phaseAtLeast, type CasePhase, type InteractionLimit, type PlannerSettings, type PracticeModeSettings } from './cases.ts'
 import {
   disclosedWitnessIds,
   findSubmission,
@@ -78,6 +78,8 @@ export interface CaseWorkspace {
   clientEmailLimit: InteractionLimit
   /** Whether the team has the case planner, and how many rounds of AI feedback each team (or student) can ask for. */
   planner: PlannerSettings
+  /** Whether students can practice with the witnesses, and how many sessions each gets in the case. */
+  practice: PracticeModeSettings
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady: boolean
   /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
@@ -109,6 +111,7 @@ type CaseRow = CaseWorkspace['case'] & {
   investigatorLimit: InteractionLimit
   clientEmailLimit: InteractionLimit
   planner: PlannerSettings
+  practice: PracticeModeSettings
   exchangeReady: boolean
   exhibitListEnabled: boolean
   exhibitJudicialReview: boolean
@@ -125,6 +128,7 @@ async function findCaseRow(courseId: string, caseId: string) {
             json_build_object('enabled', planner_enabled,
                               'reviewLimit', json_build_object('max', planner_review_limit, 'per', planner_review_limit_per),
                               'feedbackLevel', planner_feedback_level) AS planner,
+            json_build_object('enabled', practice_enabled, 'limit', practice_limit) AS practice,
             exhibit_list_enabled AS "exhibitListEnabled", exhibit_judicial_review AS "exhibitJudicialReview",
             EXISTS (SELECT 1 FROM information_exchange ie
                     WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady"
@@ -218,6 +222,7 @@ async function assemble(
     investigatorLimit,
     clientEmailLimit,
     planner,
+    practice,
     exchangeReady,
     exhibitListEnabled,
     exhibitJudicialReview,
@@ -270,6 +275,7 @@ async function assemble(
     investigatorAvailable: investigatorEnabled && phaseAtLeast(caseRow.phase, 'investigate'),
     clientEmailLimit,
     planner,
+    practice,
     exchangeReady,
     exhibitListEnabled,
     exhibitJudicialReview,

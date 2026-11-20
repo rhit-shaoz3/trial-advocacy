@@ -69,6 +69,7 @@ describe('creating', () => {
       interviewLimit: { max: 2, per: 'team' },
       clientEmailLimit: { max: 2, per: 'team' },
       planner: { enabled: true, reviewLimit: { max: 3, per: 'student' }, feedbackLevel: 'balanced' },
+      practice: { enabled: true, limit: 5 },
       reviewMode: 'all',
       exchangeReady: false,
       exhibitListEnabled: true,

@@ -787,6 +787,26 @@ describe('WitnessesSection', () => {
       clientEmailLimit: { max: 2, per: 'team' },
     })
   })
+
+  it('turns practice off, or sets each student’s practice sessions', async () => {
+    const saveWitnessSettings = vi.fn().mockResolvedValue(coaster)
+    const savePracticeSettings = vi.fn().mockResolvedValue({ ...coaster, practice: { enabled: true, limit: 8 } })
+    const { user } = renderSection({ saveWitnessSettings, savePracticeSettings })
+
+    const form = await screen.findByRole('form', { name: 'AI witness settings' })
+    expect(within(form).getByRole('checkbox', { name: 'Let students practice' })).toBeChecked()
+    const sessions = within(form).getByLabelText('Practice sessions for each student')
+    expect(sessions).toHaveValue(5)
+    await user.clear(sessions)
+    expect(within(form).getByRole('button', { name: 'Save settings' })).toBeDisabled()
+    await user.type(sessions, '8')
+    await user.click(within(form).getByRole('button', { name: 'Save settings' }))
+    expect(savePracticeSettings).toHaveBeenCalledWith('c1', 'k1', { enabled: true, limit: 8 })
+    expect(await within(form).findByText('Saved.')).toBeInTheDocument()
+
+    await user.click(within(form).getByRole('checkbox', { name: 'Let students practice' }))
+    expect(sessions).toBeDisabled()
+  })
 })
 
 describe('TasksSection', () => {

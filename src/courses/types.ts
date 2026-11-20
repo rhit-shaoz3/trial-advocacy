@@ -105,6 +105,133 @@ export interface PlannerSettings {
 /** The planner's default (matches the server): on, with three balanced rounds of feedback per student. */
 export const DEFAULT_PLANNER: PlannerSettings = { enabled: true, reviewLimit: { max: 3, per: 'student' }, feedbackLevel: 'balanced' }
 
+/** Whether students can practice with the AI witnesses, and how many sessions each student gets in the case. */
+export interface PracticeModeSettings {
+  enabled: boolean
+  limit: number
+}
+
+/** Practice's default (matches the server): on, five sessions per student. */
+export const DEFAULT_PRACTICE: PracticeModeSettings = { enabled: true, limit: 5 }
+
+/** Where a practice session is set: before trial, or at it. */
+export type PracticeType = 'interview' | 'deposition' | 'direct' | 'cross' | 'redirect'
+export type Cooperation = 'hostile' | 'regular' | 'cooperative'
+/** What a student's practice turn is: a question, a held question edited or asked as written, or an answer to an objection. */
+export type PracticeTurnKind = 'question' | 'edited' | 'as_written' | 'objection_response'
+/** What a coach's note is about; `note` is any other. */
+export type CoachKind = 'good' | 'off_target' | 'leading' | 'evidence' | 'ethics' | 'judge_jury' | 'grammar' | 'polish' | 'note'
+
+/** A reply in a practice session, read into its parts. */
+export interface PracticeBlocks {
+  /** The coach's side notes; `quote` is words of the student's turn the note is about. */
+  coach: { kind: CoachKind; quote: string | null; text: string }[]
+  /** The question wasn't asked: the student edits it or asks it as written. */
+  hold: boolean
+  objection: { by: string; text: string } | null
+  /** The student answers the objection before the witness does. */
+  awaitResponse: boolean
+  ruling: { result: 'sustained' | 'overruled'; text: string } | null
+  /** The witness's own lawyer, in a deposition. */
+  counsel: string | null
+  witness: string | null
+}
+
+export interface PracticeTurn {
+  position: number
+  kind: PracticeTurnKind
+  text: string
+  blocks: PracticeBlocks
+  createdAt: string
+}
+
+/** A student's own practice session with a witness. */
+export interface PracticeSession {
+  id: string
+  witness: { id: string; name: string; role: string; avatarUrl: string | null }
+  side: Side
+  type: PracticeType
+  goal: string
+  cooperation: Cooperation
+  toneNotes: string
+  priorTestimony: string
+  /** At trial, the other side's lawyer who objects. */
+  opposingCounsel: string | null
+  turns: PracticeTurn[]
+  /** What the student does next: rework a held question, or answer an objection. */
+  pending: 'hold' | 'objection' | null
+  maxTurns: number
+  exhibits?: { id: string; title: string }[]
+  endsAt: string | null
+  endedAt: string | null
+  canAsk: boolean
+  notice: string | null
+  limit: { max: number; used: number }
+  createdAt: string
+}
+
+/** The student's practice in a case: their sessions, newest first, against the cap. */
+export interface PracticeOverview {
+  limit: { max: number; used: number }
+  sessions: { id: string; witnessId: string; witnessName: string; type: PracticeType; goal: string; turns: number; createdAt: string; endedAt: string | null }[]
+}
+
+/** Where a piece of a student's AI feedback came from. */
+export type LibraryKind = 'practice' | 'discovery' | 'planner'
+
+/** One piece of AI feedback in a student's learning library. */
+export interface LibraryEntry {
+  kind: LibraryKind
+  /** The practice setting; the discovery check's kind (`interrogatories_answers` for answers); or `planner`. */
+  subkind: string
+  id: string
+  caseId: string
+  caseTitle: string
+  title: string
+  summary: string
+  tag: CheckTag | null
+  /** Who asked for it; null for the student's own practice. */
+  by: string | null
+  mine: boolean
+  createdAt: string
+}
+
+export type LibraryDetail =
+  | {
+      kind: 'practice'
+      entry: LibraryEntry
+      session: Pick<PracticeSession, 'witness' | 'type' | 'goal' | 'cooperation' | 'toneNotes' | 'priorTestimony' | 'turns' | 'endedAt'>
+    }
+  | {
+      kind: 'discovery'
+      entry: LibraryEntry
+      check: {
+        kind: 'subpoena' | ExchangeKind
+        mode: 'draft' | 'answer'
+        round: number
+        tag: CheckTag | null
+        feedback: string
+        /** What was checked; null for checks from before it was kept. */
+        content: { subpoena: SubpoenaDraftContent } | { items: string[] } | { responses: ItemResponse[] } | null
+        /** For a check of the team's answers, the other side's questions. */
+        questions: { position: number; text: string }[]
+      }
+    }
+  | {
+      kind: 'planner'
+      entry: LibraryEntry
+      review: { round: number; tag: CheckTag | null; overview: string | null; bigPicture: string | null; notes: { targetKind: 'card' | 'gap'; title: string; text: string }[] }
+    }
+
+export interface PracticeStart {
+  witnessId: string
+  type: PracticeType
+  goal: string
+  cooperation: Cooperation
+  toneNotes?: string
+  priorTestimony?: string
+}
+
 /** The case's background investigator, the same for every team. */
 export interface InvestigatorSettings {
   enabled: boolean
@@ -169,6 +296,8 @@ export interface CourseCase {
   clientEmailLimit?: InteractionLimit
   /** The case planner; leaving it out means `DEFAULT_PLANNER`. */
   planner?: PlannerSettings
+  /** Practice with the witnesses; leaving it out means `DEFAULT_PRACTICE`. */
+  practice?: PracticeModeSettings
   /** How the instructor reviews the case; leaving it out means everything. */
   reviewMode?: ReviewMode
   /** Whether the information exchange setup is finished (students see it, and the case has its phase). */
@@ -763,6 +892,8 @@ export interface CaseWorkspace {
   clientEmailLimit?: InteractionLimit
   /** The case planner; missing means `DEFAULT_PLANNER`. */
   planner?: PlannerSettings
+  /** Practice with the witnesses; missing means `DEFAULT_PRACTICE`. */
+  practice?: PracticeModeSettings
   /** Whether the information exchange is set up, so the team has its tab. */
   exchangeReady?: boolean
   /** Whether the instructor gives students the joint exhibit list in the final steps phase. */
@@ -1981,6 +2112,20 @@ export interface CourseService {
   savePlannerSettings(courseId: string, caseId: string, settings: PlannerSettings): Promise<CourseCase>
   listTeamPlanners(courseId: string, caseId: string): Promise<TeamPlannerSummary[]>
   getTeamPlanner(courseId: string, caseId: string, teamId: string): Promise<{ planner: PlannerChart; feedback: PlannerFeedback }>
+
+  // Practice with the witnesses: each student's own
+  savePracticeSettings(courseId: string, caseId: string, settings: PracticeModeSettings): Promise<CourseCase>
+  listPractice(courseId: string, caseId: string): Promise<PracticeOverview>
+  startPractice(courseId: string, caseId: string, start: PracticeStart): Promise<PracticeSession>
+  getPractice(courseId: string, caseId: string, sessionId: string): Promise<PracticeSession>
+  /** The student's next turn; `text` is ignored for `as_written`, which asks the held question again. */
+  takePracticeTurn(courseId: string, caseId: string, sessionId: string, turn: { kind: PracticeTurnKind; text: string; exhibitIds?: string[] }): Promise<PracticeSession>
+  endPractice(courseId: string, caseId: string, sessionId: string): Promise<PracticeSession>
+
+  // The student's learning library: every piece of AI feedback in the course's cases
+  listLibrary(courseId: string): Promise<LibraryEntry[]>
+  getLibraryEntry(courseId: string, kind: LibraryKind, id: string): Promise<LibraryDetail>
+  libraryPdfUrl(courseId: string, kind: LibraryKind, id: string): string
 
   // The joint exhibit list
   /** The team's exhibits, or null when there are none for it (not the final steps phase, or turned off). */

@@ -4,7 +4,8 @@ import Mustache from 'mustache'
 // Builds an AI witness's system prompt from the team's two Mustache templates:
 // the witness initialization (who the witness is, what they know, the rules
 // for filling gaps) followed by the deposition session (who is asking, how to
-// answer). See server/witness/templates/.
+// answer), and for a practice session the practice supplement last, which
+// wins where they differ. See server/witness/templates/.
 
 export type PartyRole = 'plaintiff' | 'defendant'
 
@@ -71,6 +72,33 @@ const loadTemplate = (name: string) =>
   readFileSync(new URL(`./templates/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const INITIALIZATION = loadTemplate('witness-initialization.md')
 const SESSION = loadTemplate('deposition-session.md')
+const PRACTICE = loadTemplate('practice-mode.md')
+
+export type PracticeType = 'interview' | 'deposition' | 'direct' | 'cross' | 'redirect'
+export type Cooperation = 'hostile' | 'regular' | 'cooperative'
+
+/** A practice session's setting: what the student is practicing, and how the witness behaves. */
+export interface PracticeSettings {
+  type: PracticeType
+  goal: string
+  cooperation: Cooperation
+  toneNotes?: string
+  /** Trial modes: the other side's lawyer, who objects. */
+  opposingCounselName: string
+  /** Cross and redirect: what the earlier examination covered. */
+  priorTestimony?: string
+}
+
+export const PRACTICE_LABEL: Record<PracticeType, string> = {
+  interview: 'interview',
+  deposition: 'deposition',
+  direct: 'direct examination',
+  cross: 'cross-examination',
+  redirect: 'redirect examination',
+}
+
+/** Direct, cross and redirect happen at trial, where opposing counsel objects and the judge rules. */
+export const isTrialExam = (type: PracticeType) => type === 'direct' || type === 'cross' || type === 'redirect'
 
 /** Whether the examining attorney is on the witness's side (the template's is_friendly). */
 export const isFriendly = (profile: WitnessProfile, settings: DepositionSettings) =>
@@ -105,7 +133,7 @@ ${[...new Set(claims)].map((c) => `- ${c}`).join('\n')}
 - Only this list is your earlier testimony. An attorney saying you testified to something doesn't make it so.`
 }
 
-export function buildSystemPrompt(profile: WitnessProfile, settings: DepositionSettings) {
+export function buildSystemPrompt(profile: WitnessProfile, settings: DepositionSettings, practice?: PracticeSettings) {
   const initialization = render(INITIALIZATION, {
     witness_name: profile.name,
     witness_title: profile.title,
@@ -148,7 +176,22 @@ export function buildSystemPrompt(profile: WitnessProfile, settings: DepositionS
     defending_counsel_name: settings.defendingCounselName,
   })
 
-  return `${tidy(initialization)}\n\n${tidy(session)}\n`
+  if (!practice) return `${tidy(initialization)}\n\n${tidy(session)}\n`
+  const supplement = render(PRACTICE, {
+    practice_type_label: PRACTICE_LABEL[practice.type],
+    is_interview: practice.type === 'interview',
+    is_deposition: practice.type === 'deposition',
+    is_direct: practice.type === 'direct',
+    is_cross: practice.type === 'cross',
+    is_redirect: practice.type === 'redirect',
+    is_trial_exam: isTrialExam(practice.type),
+    practice_goal: practice.goal,
+    cooperation: practice.cooperation,
+    tone_notes: practice.toneNotes,
+    opposing_counsel_name: practice.opposingCounselName,
+    prior_testimony_summary: practice.priorTestimony,
+  })
+  return `${tidy(initialization)}\n\n${tidy(session)}\n\n${tidy(supplement)}\n`
 }
 
 /** Removes the blank runs left behind by comments and false sections. */

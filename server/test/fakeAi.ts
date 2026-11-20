@@ -31,6 +31,9 @@ beforeEach(() => {
   ai.reviewPlanner = async () => {
     throw new Error('This test did not set up a fake planner reviewer.')
   }
+  ai.practiceTurn = async () => {
+    throw new Error('This test did not set up a fake practice session.')
+  }
   // Edits nothing; tests that check the edit swap in their own.
   ai.finalizeReport = async (input) => input.body
   ai.suggestFromComplaint = async () => ({ witnesses: [], content: { disputedIssues: '', instructorNote: '', tasks: [] } })

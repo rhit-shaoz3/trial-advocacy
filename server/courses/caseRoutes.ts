@@ -20,6 +20,7 @@ import {
   setExhibitListEnabled,
   setExhibitJudicialReview,
   setPlanner,
+  setPractice,
   setReviewMode,
   FEEDBACK_LEVELS,
   type FeedbackLevel,
@@ -299,6 +300,20 @@ caseRouter.put('/planner', async (req, res) => {
   const feedbackLevel = body.feedbackLevel === undefined ? req.courseCase!.planner.feedbackLevel : (body.feedbackLevel as FeedbackLevel)
   if (!FEEDBACK_LEVELS.includes(feedbackLevel)) throw new HttpError(400, 'Choose how demanding the feedback is.')
   res.json({ case: await setPlanner(req.course!.id, req.courseCase!.id, { enabled: body.enabled, reviewLimit, feedbackLevel }) })
+})
+
+/**
+ * Practice mode: `{ enabled }`, and optionally `limit` (how many practice
+ * sessions each student gets in the case); left out, it stays as it is.
+ */
+caseRouter.put('/practice', async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  if (typeof body.enabled !== 'boolean') throw new HttpError(400, 'Say whether students can practice with the witnesses.')
+  const limit = body.limit === undefined ? req.courseCase!.practice.limit : body.limit
+  if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+    throw new HttpError(400, `The practice sessions must be a whole number from 1 to ${MAX_LIMIT}.`)
+  }
+  res.json({ case: await setPractice(req.course!.id, req.courseCase!.id, { enabled: body.enabled, limit }) })
 })
 
 /** `{ reviewMode }`: all (the instructor reviews everything) or lite (only what students flag). */

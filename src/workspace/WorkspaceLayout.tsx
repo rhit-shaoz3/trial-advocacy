@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  BookOpen,
   BriefcaseBusiness,
   CalendarDays,
   ChevronLeft,
@@ -73,6 +74,8 @@ export function WorkspaceLayout() {
     },
     { to: `${base}/calendar${search}`, label: 'Calendar', icon: CalendarDays, tourId: 'calendar' },
   ]
+  // Students keep every piece of AI feedback they've had here.
+  if (!isInstructor) nav.push({ to: `${base}/library${search}`, label: 'Learning library', icon: BookOpen, tourId: 'library' })
   if (isInstructor) {
     // Instructors judge the facts AI witnesses add.
     nav.push(

@@ -843,6 +843,43 @@ export const httpCourseService: CourseService = {
     return body.case
   },
 
+  async savePracticeSettings(courseId, caseId, settings) {
+    return (await apiRequest(`${casePath(courseId, caseId)}/practice`, { method: 'PUT', body: JSON.stringify(settings) })).case
+  },
+
+  async listPractice(courseId, caseId) {
+    return apiRequest(`${myCasePath(courseId, caseId)}/practice`)
+  },
+
+  async startPractice(courseId, caseId, start) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/practice`, { method: 'POST', body: JSON.stringify(start) })).session
+  },
+
+  async getPractice(courseId, caseId, sessionId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/practice/${encodeURIComponent(sessionId)}`)).session
+  },
+
+  async takePracticeTurn(courseId, caseId, sessionId, turn) {
+    const path = `${myCasePath(courseId, caseId)}/practice/${encodeURIComponent(sessionId)}/turns`
+    return (await apiRequest(path, { method: 'POST', body: JSON.stringify(turn) })).session
+  },
+
+  async endPractice(courseId, caseId, sessionId) {
+    return (await apiRequest(`${myCasePath(courseId, caseId)}/practice/${encodeURIComponent(sessionId)}/end`, { method: 'POST' })).session
+  },
+
+  async listLibrary(courseId) {
+    return (await apiRequest(`${coursePath(courseId)}/library`)).entries
+  },
+
+  async getLibraryEntry(courseId, kind, id) {
+    return (await apiRequest(`${coursePath(courseId)}/library/${kind}/${encodeURIComponent(id)}`)).detail
+  },
+
+  libraryPdfUrl(courseId, kind, id) {
+    return `/api${coursePath(courseId)}/library/${kind}/${encodeURIComponent(id)}/pdf`
+  },
+
   async listTeamPlanners(courseId, caseId) {
     return (await apiRequest(`${casePath(courseId, caseId)}/planners`)).teams
   },

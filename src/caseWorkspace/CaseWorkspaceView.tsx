@@ -12,6 +12,7 @@ import {
   Download,
   FileText,
   Gavel,
+  GraduationCap,
   Inbox,
   Lock,
   Mail,
@@ -43,6 +44,7 @@ import {
 } from '../courses/caseLabels'
 import {
   DEFAULT_INVESTIGATOR_NAME,
+  DEFAULT_PRACTICE,
   casePhases,
   INVESTIGATOR_AVATAR_URL,
   type CaseMaterial,
@@ -117,6 +119,7 @@ export function CaseWorkspaceView({
   downloadUrl,
   onToggleTask,
   interviewHref,
+  practiceHref,
   instructorName,
   instructorAvatarUrl,
   reviews,
@@ -157,6 +160,8 @@ export function CaseWorkspaceView({
   downloadUrl(materialId: string): string
   /** Where a team interviews an AI witness; leave out (the preview) and the Interview buttons do nothing. */
   interviewHref?(witnessId: string): string
+  /** Where a student practices with a witness, when the instructor allows it; leave out (the preview) to hide the Practice buttons. */
+  practiceHref?(witnessId: string): string
   /** Marks a task done or not done for the team; leave out to make tasks read-only. */
   onToggleTask?(taskId: string, done: boolean): Promise<void>
   instructorName?: string | null
@@ -759,6 +764,17 @@ export function CaseWorkspaceView({
                       {action}
                     </span>
                   ))}
+                {w.canInterview && practiceHref && (workspace.practice ?? DEFAULT_PRACTICE).enabled && (
+                  <Link
+                    to={practiceHref(w.id)}
+                    className="cw-interview cw-practice"
+                    aria-label={`Practice with ${w.name}`}
+                    title="Practice with a coach. It doesn't count toward your interviews."
+                  >
+                    <GraduationCap aria-hidden="true" />
+                    Practice
+                  </Link>
+                )}
               </li>
               )
             })}

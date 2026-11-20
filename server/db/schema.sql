@@ -1327,3 +1327,51 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS planner_feedback_level text NOT NULL 
 -- and its gaps' tools turn into requests, emails and tasks to send.
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS planner_finalized_at timestamptz;
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS planner_finalized_by uuid REFERENCES users (id) ON DELETE SET NULL;
+
+-- Practice mode: a student's own sessions with an AI witness, with a coach
+-- (and at trial, opposing counsel and the judge). They don't count toward the
+-- interview limit, and nothing in them reaches the case: no new facts, no
+-- witness memory, no other session. The instructor turns practice on or off
+-- and caps the sessions each student has in the case.
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS practice_enabled boolean NOT NULL DEFAULT true;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS practice_limit integer NOT NULL DEFAULT 5 CHECK (practice_limit >= 1);
+
+CREATE TABLE IF NOT EXISTS practice_sessions (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id         uuid        NOT NULL REFERENCES cases (id) ON DELETE CASCADE,
+  team_id         uuid        NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+  user_id         uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  witness_id      uuid        NOT NULL REFERENCES case_witnesses (id) ON DELETE CASCADE,
+  side            text        NOT NULL CHECK (side IN ('plaintiff', 'defense')),
+  practice_type   text        NOT NULL CHECK (practice_type IN ('interview', 'deposition', 'direct', 'cross', 'redirect')),
+  goal            text        NOT NULL,
+  cooperation     text        NOT NULL DEFAULT 'regular' CHECK (cooperation IN ('hostile', 'regular', 'cooperative')),
+  tone_notes      text        NOT NULL DEFAULT '',
+  prior_testimony text        NOT NULL DEFAULT '',
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  ended_at        timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS practice_sessions_user_idx ON practice_sessions (user_id, case_id, created_at);
+
+-- Each student turn and the reply to it: the raw reply for the model's
+-- transcript, and its blocks (witness, objection, ruling, coach notes) parsed.
+CREATE TABLE IF NOT EXISTS practice_turns (
+  session_id         uuid        NOT NULL REFERENCES practice_sessions (id) ON DELETE CASCADE,
+  position           integer     NOT NULL,
+  kind               text        NOT NULL CHECK (kind IN ('question', 'edited', 'as_written', 'objection_response')),
+  text               text        NOT NULL,
+  reply              text        NOT NULL,
+  blocks             jsonb       NOT NULL,
+  model              text,
+  input_tokens       integer,
+  output_tokens      integer,
+  cache_read_tokens  integer,
+  cache_write_tokens integer,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (session_id, position)
+);
+
+-- What a discovery check read, so the student's learning library can show it
+-- beside the feedback. Checks from before this was kept have none.
+ALTER TABLE discovery_checks ADD COLUMN IF NOT EXISTS content jsonb;

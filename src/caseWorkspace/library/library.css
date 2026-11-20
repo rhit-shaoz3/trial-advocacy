@@ -1,0 +1,246 @@
+/* The learning library: every piece of AI feedback a student has had in the course. */
+
+.lib-page {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.lib-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: center;
+}
+
+.lib-filters select {
+  max-width: 100%;
+}
+
+.lib-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.lib-kind {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lib-kind[aria-pressed='true'] {
+  border-color: var(--button);
+  background: var(--button);
+  color: var(--on-brand);
+}
+
+.lib-kind:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.lib-mine {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.86rem;
+}
+
+.lib-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lib-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.3rem 0.9rem;
+  align-items: start;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.lib-row:hover {
+  border-color: var(--ws-muted);
+}
+
+.lib-row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.lib-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.5rem;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-fg);
+}
+
+.lib-icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.lib-icon-practice {
+  background: var(--tint-purple-bg);
+  color: var(--tint-purple-fg);
+}
+
+.lib-icon-planner {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.lib-row-body {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.lib-row-body strong {
+  color: var(--ws-navy, var(--ws-text));
+}
+
+.lib-row-body p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg-soft, var(--ws-text));
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lib-row-body small {
+  color: var(--ws-muted);
+  font-size: 0.78rem;
+}
+
+.lib-tag {
+  padding: 0.12rem 0.6rem;
+  border-radius: 999px;
+  background: var(--tint-grey-bg);
+  color: var(--tint-grey-fg);
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.lib-tag-looks_good {
+  background: var(--tint-green-bg);
+  color: var(--tint-green-fg);
+}
+
+.lib-tag-small_edits {
+  background: var(--tint-amber-bg);
+  color: var(--tint-amber-fg);
+}
+
+.lib-tag-needs_improvement {
+  background: var(--tint-rose-bg);
+  color: var(--tint-rose-fg);
+}
+
+@media (max-width: 40rem) {
+  .lib-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .lib-row .lib-tag {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* One entry in full. */
+
+.lib-detail {
+  display: grid;
+  gap: 1rem;
+  max-width: 72rem;
+}
+
+.lib-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.lib-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.8rem;
+  align-items: center;
+  color: var(--ws-muted);
+  font-size: 0.88rem;
+}
+
+.lib-download {
+  display: inline-flex;
+  text-decoration: none;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.lib-download svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.lib-section {
+  display: grid;
+  font-variant-ligatures: none;
+  font-feature-settings: 'calt' 0;
+  gap: 0.6rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 0.65rem;
+  background: var(--surface);
+}
+
+.lib-section h2 {
+  margin: 0;
+  color: var(--ws-navy, var(--ws-text));
+  font-size: 1rem;
+}
+
+.lib-section p,
+.lib-section li {
+  margin: 0;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.lib-section ol,
+.lib-section ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.3rem;
+}
+
+.lib-note-title {
+  font-weight: 800;
+}
+
+.lib-muted {
+  color: var(--ws-muted);
+  font-size: 0.86rem;
+}

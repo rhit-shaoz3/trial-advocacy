@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ChevronRight, ClipboardList, Clock, FileText, Gavel, RotateCcw, Send, X } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { ChevronRight, ClipboardList, Clock, Gavel, RotateCcw, Send } from 'lucide-react'
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
-import { Avatar } from '../components/Avatar'
 import { WitnessAvatar } from '../components/WitnessAvatar'
 import { useCourseService } from '../courses/CourseServiceContext'
 import type { Interview, InterviewAs, Side } from '../courses/types'
@@ -10,6 +9,8 @@ import { ROLE_LABEL } from '../courses/worldLabel'
 import type { WorkspaceContext } from '../workspace/useWorkspace'
 import './interview.css'
 import { DictationTextarea } from '../components/Dictation'
+import { Answer, ExhibitPicker, Question, Thinking } from './interview/InterviewParts'
+import { clock, withExhibits, type Exhibit } from './interview/exhibits'
 
 /** Matches INTERVIEW_MINUTES on the server: a team's interview lasts an hour from its first question. */
 const INTERVIEW_MINUTES = 60
@@ -18,12 +19,6 @@ const WARNING_MS = 5 * 60 * 1000
 const TIME_UP_NOTE = "Time's up. This interview was sent to your instructor for review."
 /** In review lite, the new facts stand without the instructor; the team can flag them. */
 const TIME_UP_NOTE_LITE = "Time's up. This interview ended, and its new facts are in the case's Reviews tab."
-
-/** 47:12 */
-function clock(ms: number) {
-  const seconds = Math.ceil(ms / 1000)
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
 
 /**
  * A team's interview of an AI witness, as a chat: each question goes to the
@@ -310,14 +305,7 @@ export function InterviewPage() {
               <li className="iv-turn" aria-busy="true">
                 <Question text={asking} name={user?.name ?? null} avatarUrl={user?.avatarUrl} you />
                 <Answer name={witness!.name} avatarUrl={witness!.avatarUrl} thinking>
-                  <p role="status">
-                    <span className="iv-dots" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                    <span>{witness!.name} is answering…</span>
-                  </p>
+                  <Thinking label={`${witness!.name} is answering…`} />
                 </Answer>
               </li>
             )}
@@ -369,132 +357,6 @@ export function InterviewPage() {
         </section>
       )}
     </main>
-  )
-}
-
-/** A question, on the right, with the photo (or initials) of whoever asked it. */
-function Question({ text, name, avatarUrl, you }: { text: string; name: string | null; avatarUrl?: string | null; you: boolean }) {
-  return (
-    <div className="iv-msg iv-msg-q">
-      <div className="iv-bubble-wrap">
-        <span className="iv-who">
-          <span className="iv-sr">Question from </span>
-          {you ? 'You' : (name ?? 'Your team')}
-        </span>
-        <p className="iv-bubble">
-          <QuestionText text={text} />
-        </p>
-      </div>
-      <Avatar name={name ?? '?'} src={avatarUrl} size="sm" />
-    </div>
-  )
-}
-
-/** The witness's answer, on the left, beside their picture. */
-function Answer({
-  name,
-  avatarUrl,
-  thinking = false,
-  children,
-}: {
-  name: string
-  avatarUrl?: string | null
-  thinking?: boolean
-  children: ReactNode
-}) {
-  return (
-    <div className={`iv-msg iv-msg-a${thinking ? ' iv-thinking' : ''}`}>
-      <WitnessAvatar src={avatarUrl} size="sm" />
-      <div className="iv-bubble-wrap">
-        <span className="iv-who">
-          <span className="iv-sr">Answer from </span>
-          {name}
-        </span>
-        <div className="iv-bubble">{children}</div>
-      </div>
-    </div>
-  )
-}
-
-type Exhibit = { id: string; title: string }
-
-/** The most documents one question can show (matches MAX_EXHIBITS on the server). */
-const MAX_EXHIBITS = 3
-
-/** The question as the server stores it: a marker for each document shown, then the question. */
-const withExhibits = (text: string, shown: Exhibit[]) => [...shown.map((e) => `[Exhibit: "${e.title}"]`), text].join(' ')
-
-const EXHIBIT_MARKER = /^\[Exhibit: "([^"]*)"\]\s*/
-
-/** A question, with any documents shown to the witness as chips before it. */
-function QuestionText({ text }: { text: string }) {
-  const titles: string[] = []
-  let rest = text
-  for (let m = rest.match(EXHIBIT_MARKER); m; m = rest.match(EXHIBIT_MARKER)) {
-    titles.push(m[1])
-    rest = rest.slice(m[0].length)
-  }
-  return (
-    <>
-      {titles.map((t, i) => (
-        <span key={i} className="iv-exhibit">
-          <FileText aria-hidden="true" />
-          <span className="iv-sr">Shown: </span>
-          {t}
-        </span>
-      ))}
-      {rest}
-    </>
-  )
-}
-
-/**
- * Pick case files to show the witness with the next question ("Do you
- * recognize this document?"). Nothing is uploaded: the witness already has
- * every case file, so the question just names the one handed over.
- */
-function ExhibitPicker({
-  exhibits,
-  shown,
-  disabled,
-  onShow,
-  onRemove,
-}: {
-  exhibits: Exhibit[]
-  shown: Exhibit[]
-  disabled: boolean
-  onShow(exhibit: Exhibit): void
-  onRemove(id: string): void
-}) {
-  const left = exhibits.filter((e) => !shown.some((s) => s.id === e.id))
-  return (
-    <div className="iv-exhibits">
-      <select
-        aria-label="Show the witness a document"
-        value=""
-        disabled={disabled || shown.length >= MAX_EXHIBITS || left.length === 0}
-        onChange={(e) => {
-          const exhibit = exhibits.find((x) => x.id === e.target.value)
-          if (exhibit) onShow(exhibit)
-        }}
-      >
-        <option value="">{shown.length >= MAX_EXHIBITS ? `Up to ${MAX_EXHIBITS} documents` : 'Show a document…'}</option>
-        {left.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.title}
-          </option>
-        ))}
-      </select>
-      {shown.map((e) => (
-        <span key={e.id} className="iv-exhibit">
-          <FileText aria-hidden="true" />
-          {e.title}
-          <button type="button" aria-label={`Don't show ${e.title}`} onClick={() => onRemove(e.id)}>
-            <X aria-hidden="true" />
-          </button>
-        </span>
-      ))}
-    </div>
   )
 }
 

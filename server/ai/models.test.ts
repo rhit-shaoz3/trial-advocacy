@@ -30,4 +30,9 @@ describe('modelFor', () => {
     expect(modelFor('planner', { CLAUDE_MODEL: 'claude-haiku-5-5' })).toBe('claude-sonnet-5-5')
     expect(modelFor('planner', { CLAUDE_PLANNER_MODEL: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
   })
+
+  it('uses Sonnet for practice sessions, whose coach and judge need the same judgment', () => {
+    expect(modelFor('practice', { CLAUDE_MODEL: 'claude-haiku-5-5' })).toBe('claude-sonnet-5-5')
+    expect(modelFor('practice', { CLAUDE_PRACTICE_MODEL: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
+  })
 })

@@ -4,6 +4,8 @@ import { useCourseService } from '../../../courses/CourseServiceContext'
 import { AUDIENCE_LABEL } from '../../../courses/caseLabels'
 import {
   DEFAULT_LIMIT,
+  DEFAULT_PRACTICE,
+  MAX_LIMIT,
   type CaseMaterial,
   type CourseCase,
   type Side,
@@ -251,29 +253,40 @@ function WitnessSettings({
   const savedEmailLimit = courseCase.clientEmailLimit ?? DEFAULT_LIMIT
   const [emailLimit, setEmailLimit] = useState(() => limitDraft(savedEmailLimit))
   const parsedEmailLimit = parseLimit(emailLimit)
+  const savedPractice = courseCase.practice ?? DEFAULT_PRACTICE
+  const [practiceOn, setPracticeOn] = useState(savedPractice.enabled)
+  const [practiceLimit, setPracticeLimit] = useState(String(savedPractice.limit))
+  const parsedPracticeLimit = /^\d+$/.test(practiceLimit.trim()) && Number(practiceLimit) >= 1 && Number(practiceLimit) <= MAX_LIMIT ? Number(practiceLimit) : null
+  const practiceChanged = practiceOn !== savedPractice.enabled || parsedPracticeLimit !== savedPractice.limit
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null)
   const changed =
     issues.trim() !== courseCase.disputedIssues ||
     !sameLimit(parsedLimit, savedLimit) ||
-    !sameLimit(parsedEmailLimit, savedEmailLimit)
+    !sameLimit(parsedEmailLimit, savedEmailLimit) ||
+    practiceChanged
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
     setMessage(null)
     try {
-      const saved = await service.saveWitnessSettings(courseId, courseCase.id, {
+      let saved = await service.saveWitnessSettings(courseId, courseCase.id, {
         // The witnesses always use the real date now.
         inWorldDate: null,
         disputedIssues: issues,
         interviewLimit: parsedLimit ?? undefined,
         clientEmailLimit: parsedEmailLimit ?? undefined,
       })
+      if (practiceChanged && parsedPracticeLimit) {
+        saved = await service.savePracticeSettings(courseId, courseCase.id, { enabled: practiceOn, limit: parsedPracticeLimit })
+      }
       onSaved(saved)
       field.reset(saved.disputedIssues)
       setLimit(limitDraft(saved.interviewLimit ?? DEFAULT_LIMIT))
       setEmailLimit(limitDraft(saved.clientEmailLimit ?? DEFAULT_LIMIT))
+      setPracticeOn((saved.practice ?? DEFAULT_PRACTICE).enabled)
+      setPracticeLimit(String((saved.practice ?? DEFAULT_PRACTICE).limit))
       setMessage({ error: false, text: 'Saved.' })
     } catch (err) {
       setMessage({ error: true, text: err instanceof Error ? err.message : 'Something went wrong.' })
@@ -313,8 +326,46 @@ function WitnessSettings({
           setMessage(null)
         }}
       />
+      <fieldset className="limit-field">
+        <legend>Practice with the witnesses</legend>
+        <label className="investigator-toggle">
+          <input
+            type="checkbox"
+            checked={practiceOn}
+            onChange={(e) => {
+              setPracticeOn(e.target.checked)
+              setMessage(null)
+            }}
+          />
+          Let students practice
+        </label>
+        <div className="limit-field-inputs">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={MAX_LIMIT}
+            step={1}
+            value={practiceLimit}
+            disabled={!practiceOn}
+            onChange={(e) => {
+              setPracticeLimit(e.target.value)
+              setMessage(null)
+            }}
+            aria-label="Practice sessions for each student"
+            aria-invalid={parsedPracticeLimit === null}
+            aria-describedby="practice-limit-hint"
+          />
+          <span>sessions per student</span>
+        </div>
+        <span id="practice-limit-hint" className={parsedPracticeLimit === null ? 'form-error field-hint' : 'muted field-hint'}>
+          {parsedPracticeLimit === null
+            ? `Enter a whole number from 1 to ${MAX_LIMIT}.`
+            : 'A student picks a witness, a setting (interview, deposition, direct, cross, or redirect), and what to practice; a coach comments on each question. Practice doesn’t count toward interviews, and nothing said in it reaches the case. A session counts once it has a question.'}
+        </span>
+      </fieldset>
       <div className="panel-form-actions">
-        <button type="submit" className="btn-secondary" disabled={saving || !changed || !parsedLimit || !parsedEmailLimit}>
+        <button type="submit" className="btn-secondary" disabled={saving || !changed || !parsedLimit || !parsedEmailLimit || !parsedPracticeLimit}>
           {saving ? 'Saving…' : 'Save settings'}
         </button>
         {message && (

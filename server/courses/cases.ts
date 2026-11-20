@@ -55,6 +55,12 @@ export interface PlannerSettings {
 /** Three rounds of feedback for each student. */
 export const DEFAULT_PLANNER_REVIEW_LIMIT: InteractionLimit = { max: 3, per: 'student' }
 
+/** Whether students can practice with the AI witnesses, and how many sessions each student gets in the case. */
+export interface PracticeModeSettings {
+  enabled: boolean
+  limit: number
+}
+
 /** The case's background investigator, the same for every team. */
 export interface InvestigatorSettings {
   enabled: boolean
@@ -112,6 +118,8 @@ export interface CourseCase {
   clientEmailLimit: InteractionLimit
   /** Whether students get the case planner, and how many rounds of AI feedback each team (or student) can ask for. */
   planner: PlannerSettings
+  /** Whether students can practice with the witnesses, and how many sessions each gets. */
+  practice: PracticeModeSettings
   reviewMode: ReviewMode
   /** Whether the information exchange setup is finished (so students see it, and the case has its phase). */
   exchangeReady: boolean
@@ -164,6 +172,7 @@ const CASE_COLUMNS = `id, title, summary, status, phase, instructor_note AS "ins
   json_build_object('enabled', planner_enabled,
                     'reviewLimit', json_build_object('max', planner_review_limit, 'per', planner_review_limit_per),
                     'feedbackLevel', planner_feedback_level) AS planner,
+  json_build_object('enabled', practice_enabled, 'limit', practice_limit) AS practice,
   review_mode AS "reviewMode",
   EXISTS (SELECT 1 FROM information_exchange ie
           WHERE ie.case_id = cases.id AND ie.setup_completed_at IS NOT NULL) AS "exchangeReady",
@@ -290,6 +299,17 @@ export async function setPlanner(courseId: string, id: string, settings: Planner
      WHERE course_id = $1 AND id = $2
      RETURNING ${CASE_COLUMNS}`,
     [courseId, id, settings.enabled, settings.reviewLimit.max, settings.reviewLimit.per, settings.feedbackLevel],
+  )
+  return rows[0] ?? null
+}
+
+/** Turns practice mode on or off and sets each student's sessions. Returns null if there was no such case. */
+export async function setPractice(courseId: string, id: string, settings: PracticeModeSettings) {
+  const { rows } = await pool.query<CourseCase>(
+    `UPDATE cases SET practice_enabled = $3, practice_limit = $4, updated_at = now()
+     WHERE course_id = $1 AND id = $2
+     RETURNING ${CASE_COLUMNS}`,
+    [courseId, id, settings.enabled, settings.limit],
   )
   return rows[0] ?? null
 }

@@ -340,8 +340,8 @@ export async function finishCheck({ ctx, draft, context, round, previousId }: Pr
   }
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO discovery_checks (case_id, team_id, kind, mode, request_id, content_hash, tag, feedback, checked_by, round, previous_id,
-                                   duration_ms, first_text_ms, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+                                   duration_ms, first_text_ms, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, content)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id`,
     [
       ctx.caseId,
       ctx.teamId,
@@ -360,6 +360,8 @@ export async function finishCheck({ ctx, draft, context, round, previousId }: Pr
       u?.cacheReadTokens ?? null,
       u?.cacheWriteTokens ?? null,
       u?.outputTokens ?? null,
+      // What was checked, for the student's learning library.
+      JSON.stringify(draft),
     ],
   )
   return { id: rows[0].id, tag: result.tag, feedback: result.feedback, round }
